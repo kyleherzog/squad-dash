@@ -97,6 +97,22 @@ internal static class NativeMethods {
 
     /// <summary>
     /// Returns the work area (excludes taskbar) for the monitor that contains
+    /// the given window handle.  Falls back to the primary work area if the
+    /// call fails.  Returned values are in physical pixels.
+    /// </summary>
+    public static Rect GetWorkAreaForWindow(nint hwnd) {
+        var hMon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        var info = new MONITORINFO { cbSize = (uint)Marshal.SizeOf<MONITORINFO>() };
+        if (hMon != nint.Zero && GetMonitorInfo(hMon, ref info)) {
+            var wa = info.rcWork;
+            return new Rect(wa.Left, wa.Top, wa.Right - wa.Left, wa.Bottom - wa.Top);
+        }
+        var primary = SystemParameters.WorkArea;
+        return new Rect(primary.Left, primary.Top, primary.Width, primary.Height);
+    }
+
+    /// <summary>
+    /// Returns the work area (excludes taskbar) for the monitor that contains
     /// the given physical-pixel point.  Falls back to the primary work area if
     /// the call fails.  Returned values are in physical pixels.
     /// </summary>

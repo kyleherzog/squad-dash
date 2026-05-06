@@ -4,6 +4,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -83,16 +84,15 @@ internal sealed class PromptAttachmentViewerWindow : Window
     }
 
     /// <summary>
-    /// Sizes the window to fit the image. If the image fits in 90% of the work area it sizes
-    /// exactly to image content; otherwise it fills the work area and relies on scrollbars.
+    /// Sizes the window to fit the image, always on the same monitor as the owner.
+    /// Each dimension is clamped independently to 90% of the work area so a tall
+    /// but narrow image never forces a wide window, and vice-versa.
     /// </summary>
     private void SizeToImage(BitmapImage bmp, Window? owner)
     {
-        // Logical (DIP) size of the image at 100% zoom.
         double imgW = bmp.Width;
         double imgH = bmp.Height;
 
-        // Use the work area of the monitor the owner is on, falling back to primary.
         var workArea = GetOwnerWorkArea(owner);
 
         const double MaxFraction = 0.90;
@@ -102,26 +102,39 @@ internal sealed class PromptAttachmentViewerWindow : Window
         double wantW = imgW + ChromeW;
         double wantH = imgH + ChromeH;
 
-        if (wantW <= workArea.Width * MaxFraction && wantH <= workArea.Height * MaxFraction)
-        {
-            // Image fits — size the window to content.
-            Width  = wantW;
-            Height = wantH;
-        }
-        else
-        {
-            // Image doesn't fit — fill the work area. ScrollViewer handles overflow.
-            Left   = workArea.Left;
-            Top    = workArea.Top;
-            Width  = workArea.Width;
-            Height = workArea.Height;
-        }
+        // Clamp each dimension independently — never force full width just because height overflows.
+        double finalW = Math.Min(wantW, workArea.Width  * MaxFraction);
+        double finalH = Math.Min(wantH, workArea.Height * MaxFraction);
+
+        Width  = finalW;
+        Height = finalH;
+
+        // Center on the correct monitor.
+        Left = workArea.Left + (workArea.Width  - finalW) / 2;
+        Top  = workArea.Top  + (workArea.Height - finalH) / 2;
     }
 
     private static Rect GetOwnerWorkArea(Window? owner)
     {
-        // SystemParameters.WorkArea returns the primary monitor's work area in logical pixels.
-        // That's good enough — if someone is on a secondary monitor they still get a sane size.
+        // Try to get the work area of the monitor the owner window is on.
+        if (owner is not null)
+        {
+            try
+            {
+                var hwnd = new WindowInteropHelper(owner).Handle;
+                if (hwnd != nint.Zero)
+                {
+                    var physRect = NativeMethods.GetWorkAreaForWindow(hwnd);
+                    // Convert from physical pixels to WPF logical units using the owner's DPI.
+                    var origin = DpiHelper.PhysicalToLogical(owner, new Point(physRect.Left, physRect.Top));
+                    var corner = DpiHelper.PhysicalToLogical(owner, new Point(physRect.Right, physRect.Bottom));
+                    return new Rect(origin, corner);
+                }
+            }
+            catch { }
+        }
+
+        // Fallback: primary monitor logical work area.
         var wa = SystemParameters.WorkArea;
         return new Rect(wa.Left, wa.Top, wa.Width, wa.Height);
     }
