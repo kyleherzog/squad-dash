@@ -1996,6 +1996,8 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private bool _queuePausedNotificationFired;
     private bool _rightmostTabHoldNotificationFired;
+    private Paragraph? _queuePausedLine1;
+    private Paragraph? _queuePausedLine2;
 
     private void HandleQueuePausedForInput()
     {
@@ -2003,10 +2005,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (_queuePausedNotificationFired) return;
         _queuePausedNotificationFired = true;
 
-        AppendLine("⏸ Queue paused — AI is waiting for your response before continuing.",
-                   (Brush)FindResource("SubtleText"));
-        AppendLine("You can also select or enter a prompt below and click Send.",
-                   (Brush)FindResource("SubtleText"));
+        // Build paragraphs directly so we can hold references for later removal.
+        _queuePausedLine1 = AppendQueuePausedParagraph(
+            "⏸ Queue paused — AI is waiting for your response before continuing.");
+        _queuePausedLine2 = AppendQueuePausedParagraph(
+            "You can also select or enter a prompt below and click Send.");
 
         SyncSendButton();
 
@@ -2016,11 +2019,45 @@ public partial class MainWindow : Window, ILiveElementLocator
             "AI needs your input before the queue continues.");
     }
 
+    private Paragraph? AppendQueuePausedParagraph(string text)
+    {
+        // If a turn is in progress the text goes into the response flow — don't track it.
+        if (CoordinatorThread.CurrentTurn is not null)
+        {
+            AppendLine(text, (Brush)FindResource("SubtleText"));
+            return null;
+        }
+
+        var paragraph = CreateTranscriptParagraph();
+        paragraph.Inlines.Add(new Run(text) { Foreground = (Brush)FindResource("SubtleText") });
+        CoordinatorThread.Document.Blocks.Add(paragraph);
+        ScrollToEndIfAtBottom(CoordinatorThread);
+        return paragraph;
+    }
+
     private void ResetQueuePausedState()
     {
         _queuePausedNotificationFired = false;
         _rightmostTabHoldNotificationFired = false;
+
+        // Remove the "queue paused" status lines from the transcript now that we're resuming.
+        RemoveQueuePausedLines();
+
         SyncSendButton();
+    }
+
+    private void RemoveQueuePausedLines()
+    {
+        if (_queuePausedLine1 is not null)
+        {
+            CoordinatorThread.Document.Blocks.Remove(_queuePausedLine1);
+            _queuePausedLine1 = null;
+        }
+        if (_queuePausedLine2 is not null)
+        {
+            CoordinatorThread.Document.Blocks.Remove(_queuePausedLine2);
+            _queuePausedLine2 = null;
+        }
     }
 
     /// <summary>
