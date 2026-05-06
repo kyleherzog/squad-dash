@@ -396,13 +396,14 @@ internal sealed class CommitApprovalPanel {
     private ToolTip BuildDescriptionTooltip(CommitApprovalItem item) {
         var cleaned = CommitPhraseSuffix.Replace(item.Description, string.Empty).Trim();
 
-        var container = new StackPanel();
+        var container = new StackPanel { Margin = new Thickness(2) };
 
         var summaryBlock = new TextBlock {
             Text        = cleaned,
             FontWeight  = FontWeights.Bold,
             TextWrapping = TextWrapping.Wrap,
         };
+        summaryBlock.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
         container.Children.Add(summaryBlock);
 
         string? rawPrompt = null;
@@ -415,15 +416,20 @@ internal sealed class CommitApprovalPanel {
             var promptText = DictationAnnotation.Replace(rawPrompt, string.Empty).Trim();
             if (!string.IsNullOrWhiteSpace(promptText) &&
                 !promptText.Equals(cleaned, StringComparison.OrdinalIgnoreCase)) {
-                container.Children.Add(new TextBlock {
+                var promptBlock = new TextBlock {
                     Text         = promptText,
                     TextWrapping = TextWrapping.Wrap,
                     Margin       = new Thickness(0, 6, 0, 0),
-                });
+                };
+                promptBlock.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+                container.Children.Add(promptBlock);
             }
         }
 
-        var tooltip = new ToolTip { Content = container };
+        var tooltip = new ToolTip { Content = container, Padding = new Thickness(8, 6, 8, 6) };
+        tooltip.SetResourceReference(ToolTip.BackgroundProperty, "PopupSurface");
+        tooltip.SetResourceReference(ToolTip.BorderBrushProperty, "ActivePanelBorder");
+        tooltip.BorderThickness = new Thickness(1);
         tooltip.Opened += (_, _) =>
             container.MaxWidth = Math.Max(300, _needsApprovalPanel.ActualWidth * 3);
         return tooltip;
