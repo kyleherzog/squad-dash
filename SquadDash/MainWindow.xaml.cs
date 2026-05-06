@@ -4356,7 +4356,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             StartLoopButton.Content = "Start Loop";
         }
 
-        StopLoopButton.IsEnabled = running;
+        StopLoopButton.IsEnabled = running || _loopQueued;
+        StopLoopButton.Content = (_loopQueued && !running) ? "✕ Dequeue Loop" : "■ Stop After This";
         AbortLoopButton.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
 
         LoopModeNativeRadio.IsEnabled = !running;
@@ -5010,6 +5011,17 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try
         {
+            if (_loopQueued && !IsLoopRunning)
+            {
+                _loopQueued = false;
+                _conversationManager.UpdateQueuedPromptsState(
+                    _promptQueue.Items, _followUpAttachments,
+                    queueRightmostHeld: IsRightmostQueueTabActive(),
+                    loopQueuedToDequeue: false);
+                AppendLoopOutputLine("⏹ Loop dequeued — will not resume after queue drains.", LoopLifecycleBrush);
+                SyncLoopPanel();
+                return;
+            }
             if (_settingsSnapshot.LoopMode == LoopMode.NativeAgents)
             {
                 AppendLoopOutputLine("⏹ Clean loop termination requested — current iteration will finish then stop.", LoopLifecycleBrush);
@@ -8095,6 +8107,24 @@ public partial class MainWindow : Window, ILiveElementLocator
             OpenOrCreateLoopMd(loopMdPath);
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(LoopPanelEditLoopMdMenuItem_Click), ex); }
+    }
+
+    private void LoopPanelShowInFolderMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_currentWorkspace is null) return;
+            var loopMdPath = GetEffectiveLoopMdPath();
+            if (File.Exists(loopMdPath))
+                System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{loopMdPath}\"");
+            else
+            {
+                var dir = Path.GetDirectoryName(loopMdPath);
+                if (dir is not null && Directory.Exists(dir))
+                    System.Diagnostics.Process.Start("explorer.exe", dir);
+            }
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(LoopPanelShowInFolderMenuItem_Click), ex); }
     }
 
     private void TasksPanelCloseButton_Click(object sender, RoutedEventArgs e)
