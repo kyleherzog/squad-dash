@@ -814,6 +814,11 @@ internal sealed class ClipboardImageEditorWindow : Window
             PerformRedo();
             e.Handled = true;
         }
+        else if (e.Key is Key.Return or Key.Enter && Keyboard.Modifiers == ModifierKeys.None)
+        {
+            DoInsertImage();
+            e.Handled = true;
+        }
     }
 
     // ── Arrow mode ────────────────────────────────────────────────────────────
