@@ -164,6 +164,11 @@ public partial class MainWindow : Window, ILiveElementLocator
     private string? _activeTabId;   // null = Active Draft; otherwise a queued item Id
     private string? _priorityFeedbackId;        // Id of the recently-prioritized queue item
     private DispatcherTimer? _priorityFeedbackTimer;
+
+    // ── Prompt shortcuts hint ────────────────────────────────────────────────
+    private static readonly TimeSpan HintCooldown = TimeSpan.FromMinutes(10);
+    private readonly Dictionary<PromptHintFeature, DateTime> _promptHintLastUsed = new();
+    private DispatcherTimer? _hintRefreshTimer;
     private readonly Dictionary<string, List<FollowUpAttachment>> _followUpAttachments = new();
     // Captured by ApplyFollowUpHeader; consumed by CreateTranscriptTurnView for the paperclip UI.
     private IReadOnlyList<FollowUpAttachment>? _pendingTranscriptAttachments;
@@ -556,6 +561,14 @@ public partial class MainWindow : Window, ILiveElementLocator
                 HandleUiCallbackException("HistoryHintTimer.Tick", ex);
             }
         };
+
+        _hintRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
+        _hintRefreshTimer.Tick += (_, _) =>
+        {
+            try { BuildShortcutsHint(); }
+            catch (Exception ex) { HandleUiCallbackException("HintRefreshTimer.Tick", ex); }
+        };
+        _hintRefreshTimer.Start();
 
         _toolSpinnerTimer = new DispatcherTimer
         {
@@ -1714,6 +1727,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             var text = PromptTextBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(text)) return;
 
+            RecordHintFeatureUsed(PromptHintFeature.CtrlEnterPrioritize);
+
             var isDictated = _promptHasVoiceInput;
             _promptHasVoiceInput = false;
 
@@ -1734,8 +1749,12 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
         else
         {
-            // Queued tab — move it to the front.
+            // Queued tab — move it to the front (no-op if already first).
             var capturedId = _activeTabId;
+            if (!IsCtrlEnterPrioritizeApplicable()) return;
+
+            RecordHintFeatureUsed(PromptHintFeature.CtrlEnterPrioritize);
+
             _promptQueue.MoveToFront(capturedId);
             _promptQueue.RenumberSequentially();
             ShowPriorityFeedback(capturedId);
@@ -2088,6 +2107,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         _conversationManager.UpdateQueuedPromptsState(items, _followUpAttachments, queueRightmostHeld: IsRightmostQueueTabActive());
         SyncSendButton();
+        BuildShortcutsHint();
         SquadDashTrace.Write(TraceCategory.Performance,
             $"SyncQueuePanel: full rebuild of {items.Count} queued tabs in {swFull.ElapsedMilliseconds}ms");
     }
@@ -5881,6 +5901,12 @@ public partial class MainWindow : Window, ILiveElementLocator
         try
         {
             var modifiers = Keyboard.Modifiers;
+
+            // Record Shift+Enter before dispatching so the hint hides even though WPF
+            // handles the newline insertion itself (action resolves to None for Shift+Enter).
+            if ((e.Key is Key.Return or Key.Enter) && modifiers == ModifierKeys.Shift)
+                RecordHintFeatureUsed(PromptHintFeature.ShiftEnterNewline);
+
             var action = PromptInputBehavior.ResolveAction(
                 MapPromptInputKey(e.Key),
                 ctrlPressed: modifiers.HasFlag(ModifierKeys.Control),
@@ -5897,16 +5923,19 @@ public partial class MainWindow : Window, ILiveElementLocator
                     break;
 
                 case PromptInputAction.SubmitPrompt:
+                    RecordHintFeatureUsed(PromptHintFeature.EnterSend);
                     RunButton_Click(sender, new RoutedEventArgs());
                     e.Handled = true;
                     break;
 
                 case PromptInputAction.NavigateHistoryPrevious:
+                    RecordHintFeatureUsed(PromptHintFeature.CtrlArrowHistory);
                     _conversationManager.NavigateHistory(-1);
                     e.Handled = true;
                     break;
 
                 case PromptInputAction.NavigateHistoryNext:
+                    RecordHintFeatureUsed(PromptHintFeature.CtrlArrowHistory);
                     _conversationManager.NavigateHistory(1);
                     e.Handled = true;
                     break;
@@ -6291,6 +6320,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private async Task StartPushToTalkAsync()
     {
         var target = _pttTargetTextBox ?? PromptTextBox;
+        RecordHintFeatureUsed(PromptHintFeature.PushToTalk);
 
         // In fullscreen transcript mode, peek the prompt so the user can see dictated text.
         if (_transcriptFullScreenEnabled && !_fullScreenPromptVisible)
@@ -6513,49 +6543,95 @@ public partial class MainWindow : Window, ILiveElementLocator
             Environment.GetEnvironmentVariable("SQUAD_SPEECH_KEY", EnvironmentVariableTarget.User));
         var hasRegion = !string.IsNullOrWhiteSpace(_settingsSnapshot.SpeechRegion);
         VoiceHintText.Visibility = hasKey && hasRegion ? Visibility.Collapsed : Visibility.Visible;
-        BuildShortcutsHint(hasKey && hasRegion);
+        BuildShortcutsHint();
     }
 
     private static Run Bold(string text) => new Run(text) { FontWeight = FontWeights.Bold };
     private static Run Normal(string text) => new Run(text);
     private static Run Gap() => new Run("  ");
 
-    private void BuildShortcutsHint(bool includePtt)
+    /// <summary>
+    /// Rebuilds the shortcuts hint line below the prompt box. Each sentence is only included
+    /// when its feature has not been used in the last <see cref="HintCooldown"/>. The
+    /// Ctrl+Enter hint is additionally gated on there being queued items that precede the
+    /// active prompt in the dispatch order.
+    /// </summary>
+    private void BuildShortcutsHint()
     {
+        var hasKey = !string.IsNullOrWhiteSpace(
+            Environment.GetEnvironmentVariable("SQUAD_SPEECH_KEY", EnvironmentVariableTarget.User));
+        var includePtt = hasKey && !string.IsNullOrWhiteSpace(_settingsSnapshot?.SpeechRegion);
+
         var inlines = PromptShortcutsHintTextBlock.Inlines;
         inlines.Clear();
 
-        // Sentence 1
-        inlines.Add(Bold("Enter"));
-        inlines.Add(Normal(" sends."));
+        bool any = false;
+        void AddGap() { if (any) inlines.Add(Gap()); }
 
-        // Sentence 2
-        inlines.Add(Gap());
-        inlines.Add(Bold("Shift"));
-        inlines.Add(Normal("+"));
-        inlines.Add(Bold("Enter"));
-        inlines.Add(Normal(" adds a new line."));
-
-        // Sentence 3
-        inlines.Add(Gap());
-        inlines.Add(Bold("Ctrl"));
-        inlines.Add(Normal("+"));
-        inlines.Add(Bold("Up"));
-        inlines.Add(Normal("/"));
-        inlines.Add(Bold("Down"));
-        inlines.Add(Normal(" reviews prompt history."));
-
-        // Sentence 4 — PTT (only when voice is configured)
-        if (includePtt)
+        if (IsHintVisible(PromptHintFeature.EnterSend))
         {
-            inlines.Add(Gap());
-            inlines.Add(Bold("Double-tap"));
-            inlines.Add(Normal(" "));
-            inlines.Add(Bold("Ctrl"));
-            inlines.Add(Normal(" (and "));
-            inlines.Add(Bold("hold"));
-            inlines.Add(Normal(") for push to talk."));
+            AddGap();
+            inlines.Add(Bold("Enter")); inlines.Add(Normal(" sends."));
+            any = true;
         }
+
+        if (IsHintVisible(PromptHintFeature.ShiftEnterNewline))
+        {
+            AddGap();
+            inlines.Add(Bold("Shift")); inlines.Add(Normal("+"));
+            inlines.Add(Bold("Enter")); inlines.Add(Normal(" adds a new line."));
+            any = true;
+        }
+
+        if (IsHintVisible(PromptHintFeature.CtrlArrowHistory))
+        {
+            AddGap();
+            inlines.Add(Bold("Ctrl")); inlines.Add(Normal("+"));
+            inlines.Add(Bold("Up")); inlines.Add(Normal("/"));
+            inlines.Add(Bold("Down")); inlines.Add(Normal(" reviews prompt history."));
+            any = true;
+        }
+
+        if (includePtt && IsHintVisible(PromptHintFeature.PushToTalk))
+        {
+            AddGap();
+            inlines.Add(Bold("Double-tap")); inlines.Add(Normal(" "));
+            inlines.Add(Bold("Ctrl")); inlines.Add(Normal(" (and "));
+            inlines.Add(Bold("hold")); inlines.Add(Normal(") for push to talk."));
+            any = true;
+        }
+
+        if (IsHintVisible(PromptHintFeature.CtrlEnterPrioritize) && IsCtrlEnterPrioritizeApplicable())
+        {
+            AddGap();
+            inlines.Add(Bold("Ctrl")); inlines.Add(Normal("+"));
+            inlines.Add(Bold("Enter")); inlines.Add(Normal(" moves this to the front of the queue."));
+        }
+    }
+
+    private bool IsHintVisible(PromptHintFeature feature) =>
+        !_promptHintLastUsed.TryGetValue(feature, out var last) ||
+        DateTime.UtcNow - last >= HintCooldown;
+
+    /// <summary>
+    /// Returns true when Ctrl+Enter would have a meaningful effect — i.e., there are queue
+    /// items that would be dispatched before the current prompt (either on the Active Draft
+    /// tab with a non-empty queue, or on a queued tab that isn't already first).
+    /// </summary>
+    private bool IsCtrlEnterPrioritizeApplicable()
+    {
+        if (_activeTabId is null)
+            return _promptQueue.Count > 0;
+        var items = _promptQueue.Items;
+        for (int i = 0; i < items.Count; i++)
+            if (items[i].Id == _activeTabId) return i > 0;
+        return false;
+    }
+
+    private void RecordHintFeatureUsed(PromptHintFeature feature)
+    {
+        _promptHintLastUsed[feature] = DateTime.UtcNow;
+        BuildShortcutsHint();
     }
 
     private void VoiceHintLink_Click(object sender, RoutedEventArgs e)

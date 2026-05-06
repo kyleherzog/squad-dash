@@ -3,6 +3,14 @@ using System.Collections.Generic;
 
 namespace SquadDash;
 
+internal enum PromptHintFeature {
+    EnterSend,
+    ShiftEnterNewline,
+    CtrlArrowHistory,
+    PushToTalk,
+    CtrlEnterPrioritize
+}
+
 internal enum PromptInputKey {
     Other,
     Enter,
