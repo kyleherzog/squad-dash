@@ -1038,6 +1038,8 @@ internal sealed record ApplicationSettingsSnapshot(
             RemoteAccessActiveOnExit = RemoteAccessActiveOnExit,
             RcPersistentToken = string.IsNullOrWhiteSpace(RcPersistentToken) ? null : RcPersistentToken.Trim(),
             RcPersistentPort = RcPersistentPort,
+            ApprovalShowApproved = ApprovalShowApproved,
+            ApprovalShowRejected = ApprovalShowRejected,
         };
     }
 
