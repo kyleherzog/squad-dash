@@ -1712,7 +1712,7 @@ internal sealed class PromptExecutionController {
         var supplemental = parts.Length == 0 ? null : string.Join("\n\n", parts);
         var buildResult = SquadBridgePromptBuilder.Build(
             prompt,
-            QuickReplyInstruction,
+            BuildQuickReplyInstruction(PendingQueueItemCount),
             _getPendingQuickReplyRoutingInstruction(),
             _getPendingQuickReplyRouteMode(),
             supplemental,
@@ -1744,6 +1744,28 @@ internal sealed class PromptExecutionController {
             $"{QueueAwaitInputSentinel}\n" +
             $"SquadDash will pause the queue and wait for user input before continuing. " +
             $"If you do not need human input, do not include the sentinel; the next queued prompt will run automatically.";
+    }
+
+    private static string BuildQuickReplyInstruction(int pendingQueueCount) {
+        if (pendingQueueCount <= 0)
+            return QuickReplyInstruction;
+
+        // When a queue is running, quick reply buttons pause the queue and interrupt the
+        // automatic flow. Append a strong advisory so the model only reaches for a button
+        // when a genuine blocking decision is needed — not for convenience or confirmation.
+        var itemWord = pendingQueueCount == 1 ? "item" : "items";
+        var queueCaveat =
+            $"IMPORTANT — there {(pendingQueueCount == 1 ? "is" : "are")} {pendingQueueCount} queued " +
+            $"{itemWord} that will run automatically after this turn. " +
+            $"Quick reply buttons pause the queue and require the user to click before those items continue. " +
+            $"Only emit a quick reply button if you face a genuine blocking decision that you cannot resolve " +
+            $"with good judgment — something where proceeding without explicit user input would risk going " +
+            $"in the wrong direction entirely. " +
+            $"If you can handle it yourself (add a task to the backlog, pick a reasonable default, " +
+            $"take the safe conservative action), do so and let the queue continue. " +
+            $"When in doubt, decide rather than ask.";
+
+        return QuickReplyInstruction + "\n\n" + queueCaveat;
     }
 
     private void MarkActiveToolsAsFailed(string errorMessage) {
