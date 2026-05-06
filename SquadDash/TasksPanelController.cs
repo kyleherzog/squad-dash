@@ -469,16 +469,23 @@ internal sealed class TasksPanelController {
     }
 
     private void ApplyFilterToPanel(StackPanel panel, bool syncHeadings) {
-        var ownerName = TryResolveOwnerFilter(_filterText);
+        var (ownerFilter, textFilter) = ParseFilter(_filterText);
 
         // Pass 1: show/hide item rows.
         foreach (UIElement child in panel.Children) {
             if (child is System.Windows.Controls.Border { Tag: TaskItem item }) {
-                bool visible = ownerName is not null
-                    ? (ownerName == UserOwnedSentinel
+                bool visible = true;
+
+                // Owner filter (from @handle or @me).
+                if (ownerFilter is not null)
+                    visible = ownerFilter == UserOwnedSentinel
                         ? item.IsUserOwned
-                        : string.Equals(item.Owner?.Trim(), ownerName, StringComparison.OrdinalIgnoreCase))
-                    : PanelFilterHelper.Matches(item.Text, _filterText);
+                        : string.Equals(item.Owner?.Trim(), ownerFilter, StringComparison.OrdinalIgnoreCase);
+
+                // Text filter applied on top — both conditions must hold.
+                if (visible && !string.IsNullOrEmpty(textFilter))
+                    visible = PanelFilterHelper.Matches(item.Text, textFilter);
+
                 child.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
             }
         }
@@ -504,20 +511,47 @@ internal sealed class TasksPanelController {
             currentHeading.Visibility = headingHasVisible ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    // Sentinel returned by TryResolveOwnerFilter when the filter is "@me".
+    // Sentinel returned by ParseFilter when the owner filter is "@me".
     private const string UserOwnedSentinel = "\u0002USER_OWNED";
 
     /// <summary>
-    /// If <paramref name="filter"/> is of the form <c>@handle</c>, resolves the handle to the
-    /// corresponding agent's display name via the roster, and returns it. Returns null when the
-    /// filter is not an @-filter or the handle cannot be resolved.
+    /// Parses <paramref name="filter"/> into an optional owner filter and an optional text filter.
+    /// <list type="bullet">
+    ///   <item><c>""</c> or <c>"@"</c> alone → (null, "") — show everything</item>
+    ///   <item><c>"@handle"</c> → (resolvedOwner, "") — owner-only filter</item>
+    ///   <item><c>"@handle text"</c> → (resolvedOwner, "text") — both must match</item>
+    ///   <item><c>"text"</c> → (null, "text") — plain text filter</item>
+    ///   <item>unresolved <c>"@handle"</c> → (null, full filter string) — plain text fallback</item>
+    /// </list>
     /// </summary>
-    private string? TryResolveOwnerFilter(string filter) {
-        if (!filter.StartsWith('@')) return null;
-        var handle = filter[1..].Trim();
-        if (string.IsNullOrEmpty(handle)) return null;
+    private (string? ownerFilter, string textFilter) ParseFilter(string filter) {
+        if (string.IsNullOrEmpty(filter))
+            return (null, string.Empty);
 
-        // Special: @me → match tasks where IsUserOwned is true.
+        if (!filter.StartsWith('@'))
+            return (null, filter);
+
+        // Extract handle = first token after '@'.
+        int spaceIdx = filter.IndexOf(' ');
+        string handle   = spaceIdx < 0 ? filter[1..] : filter[1..spaceIdx];
+        string remaining = spaceIdx < 0
+            ? string.Empty
+            : string.Join(' ', filter[(spaceIdx + 1)..].Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+        // Bare "@" (no handle yet) — show all tasks.
+        if (string.IsNullOrEmpty(handle))
+            return (null, remaining);
+
+        var ownerName = ResolveHandle(handle);
+        if (ownerName is not null)
+            return (ownerName, remaining);
+
+        // Unresolved handle — treat the whole filter as plain text.
+        return (null, filter);
+    }
+
+    /// <summary>Resolves an @-handle to the agent display name, or the user-owned sentinel for "me".</summary>
+    private string? ResolveHandle(string handle) {
         if (string.Equals(handle, "me", StringComparison.OrdinalIgnoreCase))
             return UserOwnedSentinel;
 
