@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 
@@ -12,13 +13,13 @@ internal sealed class NotesPanelController {
 
     private readonly StackPanel          _listPanel;
     private readonly FrameworkElement    _scrollContainer;
-    private readonly Action<NoteItem>    _openNote;
-    private readonly Action<NoteItem>    _editNote;
+    private readonly Action<NoteItem>         _openNote;
+    private readonly Action<NoteItem>         _editNote;
     private readonly Action<NoteItem, string> _renameNote;
-    private readonly Action<NoteItem>    _deleteNote;
-    private readonly Action              _newNote;
-    private readonly Action<NoteItem>?   _attachFollowUp;
-    private readonly Func<NoteItem, string>? _loadPreview;
+    private readonly Action<NoteItem>         _deleteNote;
+    private readonly Action                   _newNote;
+    private readonly Action<NoteItem>?        _attachFollowUp;
+    private readonly Func<NoteItem, string>?  _loadPreview;
 
     private List<NoteItem> _notes = [];
     private string _filterText = string.Empty;
