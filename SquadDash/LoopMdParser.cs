@@ -113,4 +113,38 @@ internal static class LoopMdParser {
             sb.ToString().Trim(),
             commands);
     }
+
+    /// <summary>
+    /// Scans <paramref name="squadFolder"/> for all loop*.md files and returns
+    /// display entries sorted with loop.md first, then alphabetically.
+    /// Display name = Description from frontmatter, or filename without extension as fallback.
+    /// </summary>
+    public static IReadOnlyList<LoopFileEntry> ScanForLoopFiles(string squadFolder)
+    {
+        if (!Directory.Exists(squadFolder))
+            return Array.Empty<LoopFileEntry>();
+
+        var files = Directory.GetFiles(squadFolder, "loop*.md");
+        var entries = new List<LoopFileEntry>(files.Length);
+        foreach (var path in files)
+        {
+            var config = Parse(path);
+            var displayName = config is { Description.Length: > 0 }
+                ? config.Description
+                : Path.GetFileNameWithoutExtension(path);
+            entries.Add(new LoopFileEntry(path, displayName));
+        }
+
+        entries.Sort((a, b) =>
+        {
+            bool aIsDefault = string.Equals(Path.GetFileName(a.FilePath), "loop.md", StringComparison.OrdinalIgnoreCase);
+            bool bIsDefault = string.Equals(Path.GetFileName(b.FilePath), "loop.md", StringComparison.OrdinalIgnoreCase);
+            if (aIsDefault != bIsDefault) return aIsDefault ? -1 : 1;
+            return string.Compare(Path.GetFileName(a.FilePath), Path.GetFileName(b.FilePath), StringComparison.OrdinalIgnoreCase);
+        });
+
+        return entries;
+    }
 }
+
+internal sealed record LoopFileEntry(string FilePath, string DisplayName);

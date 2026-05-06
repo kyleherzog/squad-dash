@@ -775,7 +775,7 @@
                             </Border.Height>
                             <Border.ContextMenu>
                                 <ContextMenu Style="{StaticResource ThemedContextMenuStyle}">
-                                    <MenuItem Header="Edit loop.md"
+                                    <MenuItem Header="Edit selected loop file"
                                               Style="{StaticResource ThemedMenuItemStyle}"
                                               Click="LoopPanelEditLoopMdMenuItem_Click" />
                                     <Separator Style="{StaticResource ThemedMenuSeparatorStyle}" />
@@ -793,12 +793,21 @@
                             </Border.ContextMenu>
                             <DockPanel LastChildFill="False">
                                 <Grid DockPanel.Dock="Top">
-                                    <TextBlock Text="Loop"
-                                               FontSize="15"
-                                               FontWeight="SemiBold"
-                                               Foreground="{DynamicResource RosterPanelTitle}"
-                                               HorizontalAlignment="Left"
-                                               VerticalAlignment="Center" />
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                                        <TextBlock Text="Loop"
+                                                   FontSize="15"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource RosterPanelTitle}" />
+                                        <TextBlock x:Name="LoopFileSubtitle"
+                                                   FontSize="12"
+                                                   FontWeight="Normal"
+                                                   Foreground="{DynamicResource LabelText}"
+                                                   VerticalAlignment="Center"
+                                                   Margin="6,0,0,0"
+                                                   Text=""
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxWidth="120" />
+                                    </StackPanel>
                                     <Button x:Name="LoopPanelCloseButton"
                                             Content="×"
                                             Width="22"
@@ -815,6 +824,12 @@
                                            Text=""
                                            Margin="0,4,0,6"
                                            Foreground="{DynamicResource BodyText}" />
+                                <ComboBox x:Name="LoopFilePicker"
+                                          DockPanel.Dock="Top"
+                                          Margin="0,0,0,6"
+                                          Visibility="Collapsed"
+                                          ToolTip="Select which loop file to run"
+                                          SelectionChanged="LoopFilePicker_SelectionChanged" />
                                 <StackPanel DockPanel.Dock="Top"
                                             Margin="0,0,0,6">
                                     <RadioButton x:Name="LoopModeNativeRadio"

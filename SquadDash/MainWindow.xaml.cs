@@ -266,6 +266,9 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _loopInterruptedByQueue; // set when user enqueues a prompt while native loop is running
     private bool _startupShiftHeld;       // set in MainWindow_Loaded when Shift is down; suppresses auto-resume
     private string? _loopMdPathForConfig; // stored when loop config flyout is shown
+    private string? _selectedLoopMdPath;  // null = use loop.md (default)
+    private IReadOnlyList<LoopFileEntry> _loopFileEntries = Array.Empty<LoopFileEntry>();
+    private bool _suppressLoopPickerChange;
     private bool _tasksPanelVisible = false;
     private bool _approvalPanelVisible = false;
     private bool _notesPanelVisible = false;
@@ -4321,6 +4324,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         LoopModeNativeRadio.IsEnabled = !running;
         LoopModeCliRadio.IsEnabled = !running;
+        if (LoopFilePicker is not null) LoopFilePicker.IsEnabled = !running;
         LoopModeNativeRadio.IsChecked = nativeMode;
         LoopModeCliRadio.IsChecked = _settingsSnapshot.LoopMode == LoopMode.SquadCli;
 
@@ -4375,6 +4379,78 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         var state = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
         _docsPanelState = state with { LoopPanelVisible = _loopPanelVisible };
+        _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
+    }
+
+    private void PopulateLoopFilePicker()
+    {
+        if (_currentWorkspace is null) return;
+        var squadPath = _currentWorkspace.SquadFolderPath;
+        _suppressLoopPickerChange = true;
+        try
+        {
+            _loopFileEntries = LoopMdParser.ScanForLoopFiles(squadPath);
+            LoopFilePicker.ItemsSource = _loopFileEntries.Select(e => e.DisplayName).ToList();
+            LoopFilePicker.Visibility = _loopFileEntries.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+
+            var targetPath = _selectedLoopMdPath ?? _loopFileEntries.FirstOrDefault()?.FilePath;
+            var idx = 0;
+            for (int i = 0; i < _loopFileEntries.Count; i++)
+            {
+                if (string.Equals(_loopFileEntries[i].FilePath, targetPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    idx = i;
+                    break;
+                }
+            }
+            if (_loopFileEntries.Count > 0)
+                LoopFilePicker.SelectedIndex = idx;
+        }
+        finally
+        {
+            _suppressLoopPickerChange = false;
+        }
+        UpdateLoopFileSubtitle();
+    }
+
+    private void UpdateLoopFileSubtitle()
+    {
+        var entry = GetSelectedLoopFileEntry();
+        LoopFileSubtitle.Text = entry is not null && _loopFileEntries.Count > 0
+            ? "— " + entry.DisplayName
+            : "";
+    }
+
+    private LoopFileEntry? GetSelectedLoopFileEntry()
+    {
+        var idx = LoopFilePicker.SelectedIndex;
+        if (idx >= 0 && idx < _loopFileEntries.Count)
+            return _loopFileEntries[idx];
+        return _loopFileEntries.FirstOrDefault();
+    }
+
+    private string GetEffectiveLoopMdPath()
+    {
+        var entry = GetSelectedLoopFileEntry();
+        if (entry is not null)
+            return entry.FilePath;
+        return Path.Combine(_currentWorkspace?.SquadFolderPath ?? "", "loop.md");
+    }
+
+    private void LoopFilePicker_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (_suppressLoopPickerChange) return;
+        var entry = GetSelectedLoopFileEntry();
+        _selectedLoopMdPath = entry?.FilePath;
+        PersistLoopFileSelection();
+        UpdateLoopFileSubtitle();
+        UpdateLoopPanelButtonStates();
+    }
+
+    private void PersistLoopFileSelection()
+    {
+        var state = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
+        _docsPanelState = state with { SelectedLoopFile = _selectedLoopMdPath };
         _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
     }
 
@@ -4497,7 +4573,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         if (_currentWorkspace is null) return;
         BackupAndClearLoopOutput();
-        var loopMdPath = Path.Combine(_currentWorkspace.SquadFolderPath, "loop.md");
+        var loopMdPath = GetEffectiveLoopMdPath();
 
         if (_settingsSnapshot.LoopMode == LoopMode.NativeAgents)
         {
@@ -7984,7 +8060,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         try
         {
             if (_currentWorkspace is null) return;
-            var loopMdPath = Path.Combine(_currentWorkspace.SquadFolderPath, "loop.md");
+            var loopMdPath = GetEffectiveLoopMdPath();
             OpenOrCreateLoopMd(loopMdPath);
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(LoopPanelEditLoopMdMenuItem_Click), ex); }
@@ -16223,6 +16299,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
         _squadFileMenuEntries.Clear();
 
+        PopulateLoopFilePicker();
         UpdateLoopPanelButtonStates();
         _pec.TasksFilePath = tasksMdPath;
 
@@ -16364,6 +16441,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                     "  { \"command\": \"stop_loop\" }\n" +
                     "]\n" +
                     "```\n");
+                PopulateLoopFilePicker();
                 UpdateLoopPanelButtonStates();
             }
 
@@ -16398,7 +16476,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void UpdateLoopPanelButtonStates()
     {
         if (_currentWorkspace is null) return;
-        var loopMdPath = Path.Combine(_currentWorkspace.SquadFolderPath, "loop.md");
+        var loopMdPath = GetEffectiveLoopMdPath();
         var loopExists = File.Exists(loopMdPath);
 
         if (StartLoopButton is not null)
@@ -16504,10 +16582,14 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         if (_currentWorkspace is null) return;
 
-        // Always check if loop.md existence changed so loop panel buttons stay current.
+        // Always refresh the loop picker and button states when any loop*.md file changes.
         if (fullPath is not null &&
-            fullPath.EndsWith("loop.md", StringComparison.OrdinalIgnoreCase))
+            System.Text.RegularExpressions.Regex.IsMatch(
+                Path.GetFileName(fullPath),
+                @"^loop.*\.md$",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase))
         {
+            PopulateLoopFilePicker();
             UpdateLoopPanelButtonStates();
         }
 
@@ -17949,6 +18031,10 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (ViewLoopPanelMenuItem is not null)
                 ViewLoopPanelMenuItem.IsChecked = false;
         }
+
+        // Restore selected loop file and populate the file picker.
+        _selectedLoopMdPath = _docsPanelState.SelectedLoopFile;
+        PopulateLoopFilePicker();
 
         // Restore draft follow-up attachments if any were persisted.
         var restoredList = new List<FollowUpAttachment>();

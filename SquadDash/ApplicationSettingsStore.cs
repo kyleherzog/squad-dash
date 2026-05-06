@@ -621,6 +621,7 @@ internal sealed class ApplicationSettingsStore {
                 NotesPanelVisible = state.NotesPanelVisible ?? existing.NotesPanelVisible,
                 LoopPanelVisible = state.LoopPanelVisible ?? existing.LoopPanelVisible,
                 DraftFollowUpsJson = state.DraftFollowUpsJson ?? existing.DraftFollowUpsJson,
+                SelectedLoopFile = state.SelectedLoopFile ?? existing.SelectedLoopFile,
             };
         }
         dict[key] = state;
@@ -678,6 +679,12 @@ internal sealed record WorkspaceDocsPanelState
     /// JSON-serialized list of <see cref="FollowUpAttachmentDto"/>. Null when no attachments are present.
     /// </summary>
     public string? DraftFollowUpsJson { get; init; }
+
+    /// <summary>
+    /// The last loop file selected in the loop panel file picker.
+    /// Null means use the default (loop.md).
+    /// </summary>
+    public string? SelectedLoopFile { get; init; }
 
     /// <summary>
     /// Legacy single-item follow-up fields — kept for reading old settings files.
