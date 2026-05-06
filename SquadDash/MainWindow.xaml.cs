@@ -4369,6 +4369,13 @@ public partial class MainWindow : Window, ILiveElementLocator
         _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
     }
 
+    private void PersistLoopPanelVisible()
+    {
+        var state = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
+        _docsPanelState = state with { LoopPanelVisible = _loopPanelVisible };
+        _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
+    }
+
     private void LoadTasksPanel()
     {
         if (TasksActivePanel is null) return;
@@ -7838,6 +7845,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             SyncLoopPanel();
             if (ViewLoopPanelMenuItem is not null)
                 ViewLoopPanelMenuItem.IsChecked = false;
+            PersistLoopPanelVisible();
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(LoopPanelCloseButton_Click), ex); }
     }
@@ -7894,6 +7902,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             SyncLoopPanel();
             if (ViewLoopPanelMenuItem is not null)
                 ViewLoopPanelMenuItem.IsChecked = _loopPanelVisible;
+            PersistLoopPanelVisible();
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(ViewLoopPanelMenuItem_Click), ex); }
     }
@@ -17773,6 +17782,16 @@ public partial class MainWindow : Window, ILiveElementLocator
             SyncNotesPanel();
             if (ViewNotesMenuItem is not null)
                 ViewNotesMenuItem.IsChecked = true;
+        }
+
+        // Restore loop panel visibility. Default is visible (true); only hide if
+        // the user explicitly closed it (LoopPanelVisible == false).
+        if (_docsPanelState.LoopPanelVisible == false)
+        {
+            _loopPanelVisible = false;
+            SyncLoopPanel();
+            if (ViewLoopPanelMenuItem is not null)
+                ViewLoopPanelMenuItem.IsChecked = false;
         }
 
         // Restore draft follow-up attachments if any were persisted.

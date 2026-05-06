@@ -619,6 +619,7 @@ internal sealed class ApplicationSettingsStore {
                 TasksPanelVisible = state.TasksPanelVisible ?? existing.TasksPanelVisible,
                 ApprovalPanelVisible = state.ApprovalPanelVisible ?? existing.ApprovalPanelVisible,
                 NotesPanelVisible = state.NotesPanelVisible ?? existing.NotesPanelVisible,
+                LoopPanelVisible = state.LoopPanelVisible ?? existing.LoopPanelVisible,
                 DraftFollowUpsJson = state.DraftFollowUpsJson ?? existing.DraftFollowUpsJson,
             };
         }
@@ -664,6 +665,13 @@ internal sealed record WorkspaceDocsPanelState
     /// <c>true</c> = user had the panel open and wants it restored on next startup.
     /// </summary>
     public bool? NotesPanelVisible { get; init; }
+
+    /// <summary>
+    /// Whether the Loop inline panel was explicitly closed by the user.
+    /// <c>null</c> = never changed (show by default). <c>false</c> = user closed it (hide on startup).
+    /// <c>true</c> = user explicitly opened it via menu.
+    /// </summary>
+    public bool? LoopPanelVisible { get; init; }
 
     /// <summary>
     /// Follow-up attachments on the active draft tab. Persisted so they survive restart.
