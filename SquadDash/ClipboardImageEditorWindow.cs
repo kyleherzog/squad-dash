@@ -212,8 +212,9 @@ internal sealed class ClipboardImageEditorWindow : Window
         Canvas.SetLeft(imageCtrl, 0);
         Canvas.SetTop(imageCtrl, 0);
 
-        // Initial selection = full image.
-        _sel = new Rect(0, 0, dispW, dispH);
+        // No initial crop selection — user drags one if they want to crop.
+        // DoInsertImage falls back to the full canvas rect when _sel.IsEmpty.
+        _sel = Rect.Empty;
 
         // ── Dim strips (outside selection) ───────────────────────────────────
         var dimBrush = new SolidColorBrush(Color.FromArgb(128, 0, 0, 0));
