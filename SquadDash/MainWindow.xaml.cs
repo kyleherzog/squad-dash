@@ -19439,7 +19439,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                 renameNote:      (note, title) => RenameNote(note, title),
                 deleteNote:      note => DeleteNote(note),
                 newNote:         () => CreateNewNote(),
-                attachFollowUp:  note => AttachNoteFollowUp(note));
+                attachFollowUp:  note => AttachNoteFollowUp(note),
+                loadPreview:     note => _notesStore?.LoadContent(note.Id) ?? "");
             _notesPanel.Refresh(_noteItems);
         }
     }

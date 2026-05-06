@@ -18,6 +18,7 @@ internal sealed class NotesPanelController {
     private readonly Action<NoteItem>    _deleteNote;
     private readonly Action              _newNote;
     private readonly Action<NoteItem>?   _attachFollowUp;
+    private readonly Func<NoteItem, string>? _loadPreview;
 
     private List<NoteItem> _notes = [];
     private string _filterText = string.Empty;
@@ -32,7 +33,8 @@ internal sealed class NotesPanelController {
         Action<NoteItem, string> renameNote,
         Action<NoteItem>         deleteNote,
         Action                   newNote,
-        Action<NoteItem>?        attachFollowUp = null) {
+        Action<NoteItem>?        attachFollowUp = null,
+        Func<NoteItem, string>?  loadPreview    = null) {
 
         _listPanel       = listPanel;
         _scrollContainer = scrollContainer;
@@ -42,6 +44,7 @@ internal sealed class NotesPanelController {
         _deleteNote      = deleteNote;
         _newNote         = newNote;
         _attachFollowUp  = attachFollowUp;
+        _loadPreview     = loadPreview;
 
         AttachPanelContextMenu();
     }
@@ -116,6 +119,20 @@ internal sealed class NotesPanelController {
 
         row.Child = titleLabel;
 
+        // ── Hover tooltip ─────────────────────────────────────────────────────
+        if (_loadPreview is not null)
+        {
+            var tooltip = new ToolTip { MaxWidth = 280, Placement = System.Windows.Controls.Primitives.PlacementMode.Right };
+            tooltip.SetResourceReference(ToolTip.BackgroundProperty, "PopupSurface");
+
+            tooltip.Opened += (_, _) =>
+            {
+                tooltip.Content = BuildTooltipContent(note);
+            };
+            row.ToolTip = tooltip;
+            ToolTipService.SetInitialShowDelay(row, 600);
+        }
+
         // Single click → open note
         row.MouseLeftButtonUp += (_, e) => {
             if (e.Source is TextBox) return; // don't open during rename
@@ -126,6 +143,57 @@ internal sealed class NotesPanelController {
         row.ContextMenu = BuildRowContextMenu(note, row, titleLabel);
 
         return row;
+    }
+
+    private object BuildTooltipContent(NoteItem note)
+    {
+        var panel = new StackPanel { Margin = new Thickness(4, 4, 4, 6), MaxWidth = 268 };
+
+        // Header: title — relative time
+        var ts = DateTimeOffset.FromUnixTimeSeconds(note.CreatedAt);
+        var relTime = StatusTimingPresentation.FormatRelativeTimestamp(ts);
+
+        var headerPanel = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+        var titleBlock = new TextBlock
+        {
+            Text       = note.Title,
+            FontWeight = FontWeights.SemiBold,
+            FontSize   = 12,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth   = 160,
+        };
+        titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "ImportantText");
+        var separatorBlock = new TextBlock { Text = " — ", FontSize = 12 };
+        separatorBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+        var timeBlock = new TextBlock { Text = relTime, FontSize = 11 };
+        timeBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+        headerPanel.Children.Add(titleBlock);
+        headerPanel.Children.Add(separatorBlock);
+        headerPanel.Children.Add(timeBlock);
+        panel.Children.Add(headerPanel);
+
+        // Content preview
+        var content = _loadPreview!(note);
+        var preview = string.IsNullOrWhiteSpace(content) ? "(empty)" : TruncatePreview(content, 300);
+        var bodyBlock = new TextBlock
+        {
+            Text         = preview,
+            FontSize     = 11,
+            TextWrapping = TextWrapping.Wrap,
+            MaxWidth     = 268,
+        };
+        bodyBlock.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+        panel.Children.Add(bodyBlock);
+
+        return panel;
+    }
+
+    private static string TruncatePreview(string text, int maxChars)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Length <= maxChars) return trimmed;
+        var cut = trimmed.LastIndexOf(' ', maxChars);
+        return cut > 0 ? trimmed[..cut] + "…" : trimmed[..maxChars] + "…";
     }
 
     private ContextMenu BuildRowContextMenu(NoteItem note, Border row, TextBlock titleLabel) {
