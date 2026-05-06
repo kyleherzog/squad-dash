@@ -145,6 +145,12 @@
     <Compile Include="..\SquadDash\BuiltInPromptInjections.cs" Link="Source\BuiltInPromptInjections.cs" />
     <Compile Include="..\SquadDash\NoteItem.cs" Link="Source\NoteItem.cs" />
     <Compile Include="..\SquadDash\NotesStore.cs" Link="Source\NotesStore.cs" />
+
+    <Compile Include="..\SquadDash\CommitApprovalStore.cs" Link="Source\CommitApprovalStore.cs" />
+    <Compile Include="..\SquadDash\CommitApprovalItem.cs" Link="Source\CommitApprovalItem.cs" />
+    <Compile Include="..\SquadDash\DocStatusStore.cs" Link="Source\DocStatusStore.cs" />
+    <Compile Include="..\SquadDash\LoopOutputStore.cs" Link="Source\LoopOutputStore.cs" />
+    <Compile Include="..\SquadDash\DocTopicsLoader.cs" Link="Source\DocTopicsLoader.cs" />
   </ItemGroup>
 
 </Project>
