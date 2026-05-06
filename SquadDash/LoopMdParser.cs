@@ -159,6 +159,24 @@ internal static class LoopMdParser {
 
         return entries;
     }
+
+    /// <summary>Returns the file content with any leading YAML frontmatter block removed.</summary>
+    public static string StripFrontmatter(string content)
+    {
+        var lines = content.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+        int i = 0;
+        while (i < lines.Length && lines[i].Trim() != "---")
+            i++;
+        if (i >= lines.Length) return content; // no opening ---
+        i++; // skip opening ---
+        while (i < lines.Length && lines[i].Trim() != "---")
+            i++;
+        if (i >= lines.Length) return content; // no closing ---
+        i++; // skip closing ---
+        while (i < lines.Length && string.IsNullOrWhiteSpace(lines[i]))
+            i++;
+        return string.Join("\n", lines, i, lines.Length - i);
+    }
 }
 
 internal sealed record LoopFileEntry(string FilePath, string DisplayName, string TooltipText = "");

@@ -266,6 +266,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _loopInterruptedByQueue; // set when user enqueues a prompt while native loop is running
     private bool _startupShiftHeld;       // set in MainWindow_Loaded when Shift is down; suppresses auto-resume
     private string? _loopMdPathForConfig; // stored when loop config flyout is shown
+    private LoopConfigFlyoutMode _loopConfigFlyoutMode = LoopConfigFlyoutMode.Configure;
     private string? _selectedLoopMdPath;  // null = use loop.md (default)
     private IReadOnlyList<LoopFileEntry> _loopFileEntries = Array.Empty<LoopFileEntry>();
     private bool _suppressLoopPickerChange;
@@ -4617,12 +4618,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             var config = LoopMdParser.Parse(loopMdPath);
             if (config == null)
             {
-                _loopMdPathForConfig = loopMdPath;
-                // Reset field validation state
-                LoopConfigIntervalBox.ClearValue(System.Windows.Controls.TextBox.BorderBrushProperty);
-                LoopConfigTimeoutBox.ClearValue(System.Windows.Controls.TextBox.BorderBrushProperty);
-                _loopConfigFlyout.PlacementTarget = StartLoopButton;
-                _loopConfigFlyout.IsOpen = true;
+                OpenLoopConfigFlyout(loopMdPath, LoopConfigFlyoutMode.Configure, existingConfig: null);
                 return;
             }
             await _loopController.StartAsync(config, _settingsSnapshot.LoopContinuousContext);
@@ -4634,7 +4630,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
     }
 
-    // ── Loop config flyout handlers ───────────────────────────────────────────
+    // ── Loop config flyout helpers ───────────────────────────────────────────
 
     private void _LoopConfigFlyout_Opened(object sender, EventArgs e)
     {
@@ -4645,6 +4641,33 @@ public partial class MainWindow : Window, ILiveElementLocator
             _loopConfigFlyout.HorizontalOffset =
                 StartLoopButton.ActualWidth - _loopConfigFlyoutBorder.ActualWidth;
         }, System.Windows.Threading.DispatcherPriority.Render);
+    }
+
+    private void OpenLoopConfigFlyout(string loopMdPath, LoopConfigFlyoutMode mode, LoopMdConfig? existingConfig)
+    {
+        _loopMdPathForConfig   = loopMdPath;
+        _loopConfigFlyoutMode  = mode;
+
+        LoopConfigIntervalBox.ClearValue(System.Windows.Controls.TextBox.BorderBrushProperty);
+        LoopConfigTimeoutBox.ClearValue(System.Windows.Controls.TextBox.BorderBrushProperty);
+
+        if (mode == LoopConfigFlyoutMode.Edit && existingConfig is not null)
+        {
+            LoopConfigHeaderText.Text     = "Edit loop settings:";
+            LoopConfigIntervalBox.Text    = ((int)existingConfig.IntervalMinutes).ToString();
+            LoopConfigTimeoutBox.Text     = ((int)existingConfig.TimeoutMinutes).ToString();
+            LoopConfigDescriptionBox.Text = existingConfig.Description;
+        }
+        else
+        {
+            LoopConfigHeaderText.Text     = "loop.md is not configured. Click OK to start the loop with this configuration:";
+            LoopConfigIntervalBox.Text    = "1";
+            LoopConfigTimeoutBox.Text     = "60";
+            LoopConfigDescriptionBox.Text = "My loop";
+        }
+
+        _loopConfigFlyout.PlacementTarget = StartLoopButton;
+        _loopConfigFlyout.IsOpen = true;
     }
 
     private async void LoopConfigOk_Click(object sender, RoutedEventArgs e)
@@ -4686,9 +4709,23 @@ public partial class MainWindow : Window, ILiveElementLocator
         var existingContent = File.Exists(loopMdPath)
             ? await File.ReadAllTextAsync(loopMdPath)
             : string.Empty;
-        await File.WriteAllTextAsync(loopMdPath, frontmatter + existingContent);
+
+        // Strip old frontmatter so we don't double-up when editing an already-configured file.
+        var bodyContent = _loopConfigFlyoutMode == LoopConfigFlyoutMode.Edit
+            ? LoopMdParser.StripFrontmatter(existingContent)
+            : existingContent;
+
+        await File.WriteAllTextAsync(loopMdPath, frontmatter + (bodyContent.Length > 0 ? "\n" + bodyContent : ""));
 
         _loopConfigFlyout.IsOpen = false;
+
+        if (_loopConfigFlyoutMode == LoopConfigFlyoutMode.Edit)
+        {
+            // Just refresh the picker labels to reflect the new description.
+            PopulateLoopFilePicker();
+            UpdateLoopFileSubtitle();
+            return;
+        }
 
         try
         {
@@ -8112,6 +8149,18 @@ public partial class MainWindow : Window, ILiveElementLocator
             OpenOrCreateLoopMd(loopMdPath);
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(LoopPanelEditLoopMdMenuItem_Click), ex); }
+    }
+
+    private void LoopPanelLoopSettingsMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_currentWorkspace is null) return;
+            var loopMdPath = GetEffectiveLoopMdPath();
+            var config = LoopMdParser.Parse(loopMdPath);
+            OpenLoopConfigFlyout(loopMdPath, LoopConfigFlyoutMode.Edit, existingConfig: config);
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(LoopPanelLoopSettingsMenuItem_Click), ex); }
     }
 
     private void LoopPanelShowInFolderMenuItem_Click(object sender, RoutedEventArgs e)

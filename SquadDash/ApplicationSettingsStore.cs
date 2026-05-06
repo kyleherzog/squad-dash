@@ -1073,6 +1073,8 @@ internal sealed record ApplicationSettingsSnapshot(
 
 public enum LoopMode { NativeAgents, SquadCli }
 
+internal enum LoopConfigFlyoutMode { Configure, Edit }
+
 internal enum DeveloperStartupIssueSimulation {
     None,
     MissingNodeTooling,

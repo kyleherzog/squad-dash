@@ -778,6 +778,9 @@
                                     <MenuItem Header="Edit selected loop"
                                               Style="{StaticResource ThemedMenuItemStyle}"
                                               Click="LoopPanelEditLoopMdMenuItem_Click" />
+                                    <MenuItem Header="Loop settings…"
+                                              Style="{StaticResource ThemedMenuItemStyle}"
+                                              Click="LoopPanelLoopSettingsMenuItem_Click" />
                                     <MenuItem Header="Show selected loop in folder"
                                               Style="{StaticResource ThemedMenuItemStyle}"
                                               Click="LoopPanelShowInFolderMenuItem_Click" />
@@ -889,7 +892,8 @@
                                 Padding="14"
                                 MinWidth="260">
                             <StackPanel>
-                                <TextBlock Text="loop.md is not configured. Click OK to start the loop with this configuration:"
+                                <TextBlock x:Name="LoopConfigHeaderText"
+                                           Text="loop.md is not configured. Click OK to start the loop with this configuration:"
                                            Foreground="{DynamicResource BodyText}"
                                            TextWrapping="Wrap"
                                            MaxWidth="260"
