@@ -1180,6 +1180,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                             sbLayer.Add(_scrollbarAdorner);
                         }
                     }
+
+                    _transcriptScrollViewer.ScrollChanged += TranscriptScrollViewer_ScrollChanged;
                 }
             }
 
@@ -13401,6 +13403,74 @@ public partial class MainWindow : Window, ILiveElementLocator
         });
     }
 
+    private void TranscriptScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (e.VerticalChange != 0)
+            SyncPromptNavButtons();
+    }
+
+    /// <summary>
+    /// Returns scroll-based nav state for the active thread.
+    /// All indices are into <c>thread.PromptParagraphs</c>.
+    /// </summary>
+    /// <param name="nearestAboveIdx">
+    ///   Index of the prompt closest to (and strictly above) the viewport top.
+    ///   -1 if no prompt is above the viewport.
+    /// </param>
+    /// <param name="nearestBelowIdx">
+    ///   Index of the prompt closest to (and strictly below) the viewport top.
+    ///   -1 if no prompt is below the viewport.
+    /// </param>
+    private void GetScrollBasedNavState(
+        out bool canGoUp, out bool canGoDown,
+        out int nearestAboveIdx, out int nearestBelowIdx)
+    {
+        canGoUp       = false;
+        canGoDown     = false;
+        nearestAboveIdx = -1;
+        nearestBelowIdx = -1;
+
+        var thread = _selectedTranscriptThread ?? CoordinatorThread;
+        if (_transcriptScrollViewer is null || thread.PromptParagraphs.Count == 0)
+            return;
+
+        // A prompt is "above" (UP target) when it's scrolled above the viewport top.
+        // A prompt is "below" (DOWN target) when it's below the viewport top.
+        // Use a 50px dead-zone so that a prompt sitting exactly at the viewport top
+        // (e.g. just navigated to) isn't immediately treated as "below" us.
+        const double DeadZone = 50.0;
+        var viewportTop = _transcriptScrollViewer.VerticalOffset;
+
+        double bestAboveY = double.MinValue;
+        double bestBelowY = double.MaxValue;
+
+        for (int i = 0; i < thread.PromptParagraphs.Count; i++)
+        {
+            var para = thread.PromptParagraphs[i].Paragraph;
+            var rect = para.ContentStart.GetCharacterRect(System.Windows.Documents.LogicalDirection.Forward);
+            if (rect.IsEmpty) continue;
+
+            // Absolute Y in the document.
+            var absY = viewportTop + rect.Top;
+
+            if (absY < viewportTop - DeadZone)
+            {
+                // Prompt is above the viewport — candidate for ↑ (go up/back).
+                // Pick the one with the LARGEST absoluteY (nearest from above).
+                if (absY > bestAboveY) { bestAboveY = absY; nearestAboveIdx = i; }
+            }
+            else if (absY > viewportTop + DeadZone)
+            {
+                // Prompt is below the viewport top — candidate for ↓ (go down/forward).
+                // Pick the one with the SMALLEST absoluteY (nearest from below).
+                if (absY < bestBelowY) { bestBelowY = absY; nearestBelowIdx = i; }
+            }
+        }
+
+        canGoUp   = nearestAboveIdx >= 0;
+        canGoDown = nearestBelowIdx >= 0;
+    }
+
     private void SyncPromptNavButtons()
     {
         var thread = _selectedTranscriptThread ?? CoordinatorThread;
@@ -13412,8 +13482,20 @@ public partial class MainWindow : Window, ILiveElementLocator
             ? Visibility.Visible
             : Visibility.Collapsed;
 
-        PromptNavUpButton.IsEnabled = count > 0 && (idx == -1 || idx > 0);
-        PromptNavDownButton.IsEnabled = count > 0 && idx != -1 && idx < count - 1;
+        // Base enabled state on scroll position so that manual scrolling keeps
+        // both buttons in sync — not just on which button was last clicked.
+        GetScrollBasedNavState(out bool canGoUp, out bool canGoDown, out _, out _);
+
+        // Fall back to the index-based check when the scroll viewer isn't ready yet
+        // (e.g. during initial layout before the template is applied).
+        if (_transcriptScrollViewer is null)
+        {
+            canGoUp   = count > 0 && (idx == -1 || idx > 0);
+            canGoDown = count > 0 && idx != -1 && idx < count - 1;
+        }
+
+        PromptNavUpButton.IsEnabled   = canGoUp;
+        PromptNavDownButton.IsEnabled = canGoDown;
 
         if (idx == -1)
         {
@@ -13470,15 +13552,28 @@ public partial class MainWindow : Window, ILiveElementLocator
         try
         {
             var thread = _selectedTranscriptThread ?? CoordinatorThread;
-            var count = thread.PromptParagraphs.Count;
-            if (count == 0) return;
+            if (thread.PromptParagraphs.Count == 0) return;
 
-            // First ↑ from no position → jump to most-recent prompt; subsequent ↑ → go back
-            thread.PromptNavIndex = thread.PromptNavIndex == -1
-                ? count - 1
-                : Math.Max(0, thread.PromptNavIndex - 1);
+            GetScrollBasedNavState(out _, out _, out int nearestAboveIdx, out _);
 
-            ScrollToPromptParagraph(thread.PromptParagraphs[thread.PromptNavIndex].Paragraph);
+            int target;
+            if (nearestAboveIdx >= 0)
+            {
+                // Jump to the nearest prompt above the viewport.
+                target = nearestAboveIdx;
+            }
+            else
+            {
+                // No prompt above the viewport yet (e.g. first press from the bottom):
+                // jump to the most-recent prompt, falling back to index-based if already at one.
+                var count = thread.PromptParagraphs.Count;
+                target = thread.PromptNavIndex == -1
+                    ? count - 1
+                    : Math.Max(0, thread.PromptNavIndex - 1);
+            }
+
+            thread.PromptNavIndex = target;
+            ScrollToPromptParagraph(thread.PromptParagraphs[target].Paragraph);
         }
         catch (Exception ex)
         {
@@ -13491,11 +13586,13 @@ public partial class MainWindow : Window, ILiveElementLocator
         try
         {
             var thread = _selectedTranscriptThread ?? CoordinatorThread;
-            var count = thread.PromptParagraphs.Count;
-            if (count == 0 || thread.PromptNavIndex < 0) return;
+            if (thread.PromptParagraphs.Count == 0) return;
 
-            thread.PromptNavIndex = Math.Min(count - 1, thread.PromptNavIndex + 1);
-            ScrollToPromptParagraph(thread.PromptParagraphs[thread.PromptNavIndex].Paragraph);
+            GetScrollBasedNavState(out _, out _, out _, out int nearestBelowIdx);
+            if (nearestBelowIdx < 0) return;
+
+            thread.PromptNavIndex = nearestBelowIdx;
+            ScrollToPromptParagraph(thread.PromptParagraphs[nearestBelowIdx].Paragraph);
         }
         catch (Exception ex)
         {
