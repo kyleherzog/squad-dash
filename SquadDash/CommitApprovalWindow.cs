@@ -406,6 +406,16 @@ internal sealed class CommitApprovalPanel {
         summaryBlock.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
         container.Children.Add(summaryBlock);
 
+        var relTime = StatusTimingPresentation.FormatRelativeTimestamp(item.TurnStartedAt);
+        var relBlock = new TextBlock {
+            Text         = relTime,
+            FontSize     = 11,
+            Margin       = new Thickness(0, 3, 0, 0),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        relBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+        container.Children.Add(relBlock);
+
         string? rawPrompt = null;
         if (!string.IsNullOrWhiteSpace(item.OriginalPrompt))
             rawPrompt = item.OriginalPrompt.Trim();
@@ -431,7 +441,7 @@ internal sealed class CommitApprovalPanel {
         tooltip.SetResourceReference(ToolTip.BorderBrushProperty, "ActivePanelBorder");
         tooltip.BorderThickness = new Thickness(1);
         tooltip.Opened += (_, _) =>
-            container.MaxWidth = Math.Max(300, _needsApprovalPanel.ActualWidth * 3);
+            container.MaxWidth = Math.Max(300, _needsApprovalPanel.ActualWidth * 1.5);
         return tooltip;
     }
 
