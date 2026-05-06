@@ -13418,8 +13418,10 @@ public partial class MainWindow : Window, ILiveElementLocator
     ///   -1 if no prompt is above the viewport.
     /// </param>
     /// <param name="nearestBelowIdx">
-    ///   Index of the prompt closest to (and strictly below) the viewport top.
-    ///   -1 if no prompt is below the viewport.
+    ///   Index of the nearest prompt below the viewport top that can actually be
+    ///   scrolled to the top of the viewport (i.e. enough document content exists
+    ///   below it to fill the remaining viewport height).
+    ///   -1 if no such prompt exists.
     /// </param>
     private void GetScrollBasedNavState(
         out bool canGoUp, out bool canGoDown,
@@ -13435,11 +13437,17 @@ public partial class MainWindow : Window, ILiveElementLocator
             return;
 
         // A prompt is "above" (UP target) when it's scrolled above the viewport top.
-        // A prompt is "below" (DOWN target) when it's below the viewport top.
-        // Use a 50px dead-zone so that a prompt sitting exactly at the viewport top
-        // (e.g. just navigated to) isn't immediately treated as "below" us.
+        // A prompt is a "below" (DOWN target) when it is:
+        //   (a) below the viewport top by more than the dead-zone, AND
+        //   (b) can actually be scrolled to the viewport top — i.e. its absolute Y is
+        //       within the scrollable range (≤ ScrollableHeight). Prompts near the very
+        //       bottom of the document cannot be placed at the top because the scroll
+        //       viewer hits its maximum offset; navigating to them would produce no
+        //       meaningful movement, so the ↓ button should be disabled for them.
         const double DeadZone = 50.0;
-        var viewportTop = _transcriptScrollViewer.VerticalOffset;
+        var sv         = _transcriptScrollViewer;
+        var viewportTop    = sv.VerticalOffset;
+        var scrollableMax  = sv.ScrollableHeight; // ExtentHeight − ViewportHeight
 
         double bestAboveY = double.MinValue;
         double bestBelowY = double.MaxValue;
@@ -13459,9 +13467,10 @@ public partial class MainWindow : Window, ILiveElementLocator
                 // Pick the one with the LARGEST absoluteY (nearest from above).
                 if (absY > bestAboveY) { bestAboveY = absY; nearestAboveIdx = i; }
             }
-            else if (absY > viewportTop + DeadZone)
+            else if (absY > viewportTop + DeadZone && absY <= scrollableMax)
             {
-                // Prompt is below the viewport top — candidate for ↓ (go down/forward).
+                // Prompt is below the viewport top AND can be brought to the top
+                // (there is enough content below it to fill the viewport).
                 // Pick the one with the SMALLEST absoluteY (nearest from below).
                 if (absY < bestBelowY) { bestBelowY = absY; nearestBelowIdx = i; }
             }
