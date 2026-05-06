@@ -92,6 +92,7 @@ See **[Fullscreen Transcript Mode](../features/fullscreen-transcript.md)** for f
 |---|---|
 | **Ctrl+Tab** | Cycle to the next queue tab (requires 2+ queued items) |
 | **Ctrl+Shift+Tab** | Cycle to the previous queue tab |
+| **Ctrl+Enter** | Move the active tab (or Active Draft) to the front of the queue (#1). No-op if already first. Shows a transient "« Now at the front of the queue." label. |
 
 ---
 
