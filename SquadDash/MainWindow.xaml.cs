@@ -11805,7 +11805,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (turn.AgentReports is { Count: > 0 } && ReferenceEquals(thread, CoordinatorThread))
         {
             foreach (var report in turn.AgentReports)
-                AppendAgentReportButton(report.AgentLabel, report.ReportPath);
+                AppendAgentReportButton(report.AgentLabel, report.ReportPath, view);
         }
     }
 
@@ -12457,7 +12457,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         AppendAgentReportButton(agentLabel, reportPath);
     }
 
-    private void AppendAgentReportButton(string agentLabel, string reportPath)
+    private void AppendAgentReportButton(string agentLabel, string reportPath, TranscriptTurnView? view = null)
     {
         var button = new Button
         {
@@ -12495,7 +12495,14 @@ public partial class MainWindow : Window, ILiveElementLocator
         var panel = new StackPanel { Orientation = Orientation.Horizontal };
         panel.Children.Add(button);
         var container = new BlockUIContainer(panel) { Margin = new Thickness(0, 4, 0, 6) };
-        CoordinatorThread.Document.Blocks.Add(container);
+
+        // Scope the button to the owning turn's NarrativeSection so it stays
+        // with the turn both during live streaming and on transcript reload.
+        var targetView = view ?? CoordinatorThread.CurrentTurn;
+        if (targetView is not null)
+            targetView.NarrativeSection.Blocks.Add(container);
+        else
+            CoordinatorThread.Document.Blocks.Add(container);
     }
 
     // ── End agent report button ───────────────────────────────────────────────
