@@ -548,6 +548,21 @@ internal sealed class MarkdownDocumentRenderer {
                 continue;
             }
 
+            if (TryReadWindowsEnvPath(text, i, out var pathEnd, out var envPath)) {
+                flush(buffer.ToString());
+                buffer.Clear();
+                var capturedPath = envPath;
+                var pathLink = new Hyperlink(new Run(envPath)) {
+                    Tag = envPath,
+                    ToolTip = $"Open in Explorer: {Environment.ExpandEnvironmentVariables(envPath)}"
+                };
+                pathLink.SetResourceReference(TextElement.ForegroundProperty, "DocumentLinkText");
+                pathLink.Click += (_, _) => _onLinkClicked("app://open-path:" + capturedPath);
+                inlines.Add(pathLink);
+                i = pathEnd;
+                continue;
+            }
+
             var workspaceGitHubUrl = _getWorkspaceGitHubUrl();
             if (!string.IsNullOrWhiteSpace(workspaceGitHubUrl) &&
                 TryReadCommitHash(text, i, out var hashEnd, out var hash)) {
@@ -607,6 +622,18 @@ internal sealed class MarkdownDocumentRenderer {
                     codeLink.SetResourceReference(TextElement.BackgroundProperty, "CodeSurface");
                     codeLink.Click += (_, _) => _onLinkClicked(codeUrl);
                     inlines.Add(codeLink);
+                } else if (TryReadWindowsEnvPath(codeText, 0, out var codePathEnd, out var codeEnvPath) && codePathEnd == codeText.Length) {
+                    // Entire code span is a Windows env-var path — render as a clickable link with code styling
+                    var capturedCodePath = codeEnvPath;
+                    var codePathLink = new Hyperlink(new Run(codeText)) {
+                        Tag = codeEnvPath,
+                        FontFamily = new FontFamily("Consolas"),
+                        ToolTip = $"Open in Explorer: {Environment.ExpandEnvironmentVariables(codeEnvPath)}"
+                    };
+                    codePathLink.SetResourceReference(TextElement.ForegroundProperty, "DocumentLinkText");
+                    codePathLink.SetResourceReference(TextElement.BackgroundProperty, "CodeSurface");
+                    codePathLink.Click += (_, _) => _onLinkClicked("app://open-path:" + capturedCodePath);
+                    inlines.Add(codePathLink);
                 } else {
                     var codeRun = new Run(codeText) {
                         FontFamily = new FontFamily("Consolas")
@@ -730,6 +757,56 @@ internal sealed class MarkdownDocumentRenderer {
 
     private static bool IsUrlTerminator(char c) =>
         char.IsWhiteSpace(c) || c == '<' || c == '>' || c == '"' || c == '\'' || c == '→';
+
+    /// <summary>
+    /// Detects a Windows path that starts with a %-delimited environment variable prefix,
+    /// e.g. <c>%AppData%\BetterVoice\trace.log</c> or <c>%LocalAppData%\Temp\out.txt</c>.
+    /// The variable name must be followed by a backslash so that bare tokens like
+    /// <c>%AppData%</c> alone do not match.
+    /// Path characters are consumed until whitespace or common prose punctuation.
+    /// </summary>
+    private static bool TryReadWindowsEnvPath(string text, int startIndex, out int nextIndex, out string path) {
+        nextIndex = startIndex;
+        path = string.Empty;
+
+        // Must start with %
+        if (startIndex >= text.Length || text[startIndex] != '%')
+            return false;
+
+        // Find the closing %
+        var varEnd = text.IndexOf('%', startIndex + 1);
+        if (varEnd <= startIndex + 1) // need at least one char between %
+            return false;
+
+        // Variable name must be followed by a backslash
+        if (varEnd + 1 >= text.Length || text[varEnd + 1] != '\\')
+            return false;
+
+        // Variable name must be non-empty alphanumeric+underscore (no spaces)
+        var varName = text[(startIndex + 1)..varEnd];
+        if (string.IsNullOrEmpty(varName) || !varName.All(c => char.IsLetterOrDigit(c) || c == '_'))
+            return false;
+
+        // Consume the rest of the path (until whitespace or prose-terminating chars)
+        var end = varEnd + 1;
+        while (end < text.Length && !IsWindowsPathTerminator(text[end]))
+            end++;
+
+        // Trim trailing punctuation unlikely to be part of the path
+        while (end > varEnd + 1 && IsTrailingPunctuation(text[end - 1]))
+            end--;
+
+        // Must have at least the backslash after the variable
+        if (end <= varEnd + 1)
+            return false;
+
+        path = text[startIndex..end];
+        nextIndex = end;
+        return true;
+    }
+
+    private static bool IsWindowsPathTerminator(char c) =>
+        char.IsWhiteSpace(c) || c == '<' || c == '>' || c == '"' || c == '\'' || c == '→' || c == '`';
 
     private static bool IsTrailingPunctuation(char c) =>
         c == '.' || c == ',' || c == ')' || c == ']' || c == '!' || c == '?' || c == ';' || c == ':';

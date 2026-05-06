@@ -11941,6 +11941,13 @@ public partial class MainWindow : Window, ILiveElementLocator
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(filePath) { UseShellExecute = true });
             return;
         }
+        if (target.StartsWith("app://open-path:", StringComparison.OrdinalIgnoreCase))
+        {
+            var rawPath = target["app://open-path:".Length..];
+            if (!string.IsNullOrWhiteSpace(rawPath))
+                OpenWindowsPath(rawPath);
+            return;
+        }
         if (target.StartsWith("app://show-rc-panel", StringComparison.OrdinalIgnoreCase))
         {
             ShowRcPanel();
@@ -11956,7 +11963,43 @@ public partial class MainWindow : Window, ILiveElementLocator
     }
 
     /// <summary>
-    /// Adds runs and hyperlinks to <paramref name="inlines"/> by parsing inline
+    /// Expands environment variables in <paramref name="rawPath"/> and opens it in Explorer.
+    /// For files: opens the containing folder with the file selected.
+    /// For directories: opens the directory directly.
+    /// For non-existent paths: walks up to the nearest existing ancestor and opens that.
+    /// </summary>
+    private static void OpenWindowsPath(string rawPath)
+    {
+        var expanded = Environment.ExpandEnvironmentVariables(rawPath);
+        if (string.IsNullOrWhiteSpace(expanded)) return;
+
+        try
+        {
+            if (File.Exists(expanded))
+            {
+                System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{expanded}\"");
+                return;
+            }
+
+            if (Directory.Exists(expanded))
+            {
+                System.Diagnostics.Process.Start("explorer.exe", $"\"{expanded}\"");
+                return;
+            }
+
+            // Path doesn't exist — climb to the nearest existing ancestor
+            var parent = System.IO.Path.GetDirectoryName(expanded);
+            while (!string.IsNullOrEmpty(parent) && !Directory.Exists(parent))
+                parent = System.IO.Path.GetDirectoryName(parent);
+
+            if (!string.IsNullOrEmpty(parent))
+                System.Diagnostics.Process.Start("explorer.exe", $"\"{parent}\"");
+        }
+        catch (Exception ex)
+        {
+            SquadDashTrace.Write(TraceCategory.General, $"OpenWindowsPath failed for '{rawPath}': {ex.Message}");
+        }
+    }
     /// markdown link syntax (<c>[text](url)</c>) in <paramref name="text"/>.
     /// Plain-text segments get a <see cref="Run"/> with the specified style;
     /// link segments become a <see cref="System.Windows.Documents.Hyperlink"/> that
