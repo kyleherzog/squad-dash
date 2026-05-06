@@ -7294,8 +7294,10 @@ public partial class MainWindow : Window, ILiveElementLocator
             _intelliSenseState, targetBox.Text, targetBox.CaretIndex);
 
         // For @ trigger: replace accepted display name with @handle + trailing space.
+        // Never submit on @ accept — the user is mentioning an agent mid-prompt.
         if (_intelliSenseState.TriggerChar == '@')
         {
+            andSubmit = false;
             var displayName = _intelliSenseState.FilteredSuggestions[_intelliSenseState.SelectedIndex];
             if (_agentHandleByDisplayName.TryGetValue(displayName, out var handle))
             {
