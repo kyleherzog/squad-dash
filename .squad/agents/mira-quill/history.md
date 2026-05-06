@@ -64,3 +64,12 @@ Created new guide: `visual-studio-external-tool.md` — how to configure SquadDa
 
 Created `images/.gitkeep` files for concepts/, reference/, contributing/ (getting-started/images/ already existed). All committed and pushed.
 
+### 2026 — Smooth Dictation feature documentation
+
+Documented the **Smooth Dictation** feature (Shift+Space keyboard shortcut for cleaning up voice-dictated text):
+- Added detailed section to `docs/features/voice-input.md` explaining how it solves unwanted sentence breaks
+- Added entry to `docs/reference/keyboard-shortcuts.md` Prompt Editor Shortcuts table with link to feature doc
+- Included usage instructions, before/after example, pronoun "I" exception, and list of supported text areas
+
+Placement rationale: Feature is a complement to voice input (though accessible from text editor everywhere), so primary doc lives in `voice-input.md` with keyboard shortcut reference in the shortcuts table. Commit: `65bbbb3`.
+
