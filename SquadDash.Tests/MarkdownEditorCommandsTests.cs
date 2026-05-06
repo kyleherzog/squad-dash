@@ -111,7 +111,7 @@ internal sealed class MarkdownEditorCommandsTests {
     public void ApplyBulletList_AlreadyBulleted_ReplacesMarker() {
         var tb = MakeBox("* old");
         Select(tb, 0, 5);
-        MarkdownEditorCommands.ApplyBulletList(tb, '-');
+        MarkdownEditorCommands.ApplyBulletList(tb);
         Assert.That(tb.Text, Is.EqualTo("- old"));
     }
 
