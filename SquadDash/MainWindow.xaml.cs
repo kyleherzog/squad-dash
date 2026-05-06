@@ -122,6 +122,9 @@ public partial class MainWindow : Window, ILiveElementLocator
     private AgentStatusCard? _leadAgent;
     private bool _isApplyingIntelliSenseAccept;
     private IntelliSenseState? _intelliSenseState;
+    private TextBox? _intelliSenseOwnerBox; // null = PromptTextBox; set when another box owns IntelliSense
+    private Dictionary<string, string> _agentHandleByDisplayName = new(StringComparer.OrdinalIgnoreCase);
+    private string[] _agentDisplayNames = [];
     private string[] _currentQuickReplyOptions = [];
     private TranscriptResponseEntry? _lastQuickReplyEntry;
     private TranscriptResponseEntry? _routingIssueQuickReplyEntry;
@@ -704,7 +707,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             try
             {
-                PromptTextBox.Focus();
+                (_intelliSenseOwnerBox ?? PromptTextBox).Focus();
             }
             catch (Exception ex)
             {
@@ -6258,6 +6261,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
                 case PromptInputAction.IntelliSenseDismiss:
                     _intelliSenseState = null;
+                    _intelliSenseOwnerBox = null;
                     UpdateIntelliSensePopup();
                     e.Handled = true;
                     break;
@@ -7076,6 +7080,78 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
     }
 
+    private void BuildAgentSuggestions()
+    {
+        if (_currentWorkspace is null)
+        {
+            _agentDisplayNames = [];
+            _agentHandleByDisplayName.Clear();
+            return;
+        }
+        var members = _teamRosterLoader.Load(_currentWorkspace.FolderPath);
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var member in members)
+        {
+            if (member.IsUtilityAgent) continue;
+            if (string.Equals(member.Status, "Retired", StringComparison.OrdinalIgnoreCase)) continue;
+            var handle = member.FolderPath is not null
+                ? Path.GetFileName(member.FolderPath)
+                : member.Name.ToLowerInvariant().Replace(" ", "-");
+            if (!string.IsNullOrEmpty(handle))
+                dict[member.Name] = handle;
+        }
+        _agentHandleByDisplayName = dict;
+        _agentDisplayNames = [.. dict.Keys.OrderBy(k => k)];
+    }
+
+    /// <summary>
+    /// Searches backward from <paramref name="caret"/> for an '@' that is preceded by
+    /// start-of-text or whitespace (i.e. not embedded in a word like an email address).
+    /// Returns the index of '@', or -1 if not found.
+    /// </summary>
+    private static int FindAtTriggerPosition(string text, int caret)
+    {
+        if (caret <= 0) return -1;
+        int i = caret - 1;
+        while (i >= 0 && !char.IsWhiteSpace(text[i]))
+        {
+            if (text[i] == '@')
+                return (i == 0 || char.IsWhiteSpace(text[i - 1])) ? i : -1;
+            i--;
+        }
+        return -1;
+    }
+
+    private void TryUpdateTasksIntelliSense()
+    {
+        if (_isApplyingIntelliSenseAccept) return;
+
+        var text  = TasksFilterBox.Text;
+        var caret = TasksFilterBox.CaretIndex;
+
+        if (_intelliSenseState is not null && _intelliSenseOwnerBox == TasksFilterBox)
+        {
+            _intelliSenseState = IntelliSenseController.UpdateFromText(_intelliSenseState, text, caret);
+            UpdateIntelliSensePopup();
+            return;
+        }
+
+        // If IntelliSense is owned by another box, leave it alone.
+        if (_intelliSenseState is not null) return;
+
+        var atPos = FindAtTriggerPosition(text, caret);
+        if (atPos >= 0 && _agentDisplayNames.Length > 0)
+        {
+            var activated = IntelliSenseController.TryActivate('@', atPos, _agentDisplayNames);
+            if (activated is not null)
+            {
+                _intelliSenseOwnerBox = TasksFilterBox;
+                _intelliSenseState = IntelliSenseController.UpdateFromText(activated, text, caret);
+                UpdateIntelliSensePopup();
+            }
+        }
+    }
+
     private void TryUpdateIntelliSense()
     {
         if (_conversationManager.IsApplyingHistoryEntry || _isApplyingIntelliSenseAccept)
@@ -7086,9 +7162,20 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         if (_intelliSenseState is not null)
         {
-            _intelliSenseState = IntelliSenseController.UpdateFromText(_intelliSenseState, text, caret);
-            UpdateIntelliSensePopup();
-            return;
+            // If IntelliSense belongs to another box, typing in PromptTextBox clears it.
+            if (_intelliSenseOwnerBox is not null)
+            {
+                _intelliSenseState = null;
+                _intelliSenseOwnerBox = null;
+                UpdateIntelliSensePopup();
+                // Fall through to check for a new trigger.
+            }
+            else
+            {
+                _intelliSenseState = IntelliSenseController.UpdateFromText(_intelliSenseState, text, caret);
+                UpdateIntelliSensePopup();
+                return;
+            }
         }
 
         // Check for [ trigger — only when [ is the first char (prompt is otherwise empty)
@@ -7124,6 +7211,20 @@ public partial class MainWindow : Window, ILiveElementLocator
                 ? IntelliSenseController.UpdateFromText(activated, text, text.Length)
                 : null;
             UpdateIntelliSensePopup();
+            return;
+        }
+
+        // @ trigger for agent names — works anywhere in the text (not just at position 0).
+        var atPos = FindAtTriggerPosition(text, caret);
+        if (atPos >= 0 && _agentDisplayNames.Length > 0)
+        {
+            var activated = IntelliSenseController.TryActivate('@', atPos, _agentDisplayNames);
+            if (activated is not null)
+            {
+                _intelliSenseOwnerBox = null; // PromptTextBox owns this
+                _intelliSenseState = IntelliSenseController.UpdateFromText(activated, text, caret);
+                UpdateIntelliSensePopup();
+            }
         }
     }
 
@@ -7153,9 +7254,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (IntelliSenseList.SelectedItem is not null)
             IntelliSenseList.ScrollIntoView(IntelliSenseList.SelectedItem);
 
+        var ownerBox = _intelliSenseOwnerBox ?? PromptTextBox;
+        IntelliSensePopup.PlacementTarget = ownerBox;
         IntelliSensePopup.CustomPopupPlacementCallback = (popupSize, targetSize, offset) =>
         {
-            var caretRect = PromptTextBox.GetRectFromCharacterIndex(PromptTextBox.CaretIndex);
+            var caretRect = ownerBox.GetRectFromCharacterIndex(ownerBox.CaretIndex);
             return new[] {
                 new CustomPopupPlacement(
                     new Point(caretRect.Left, caretRect.Bottom),
@@ -7168,8 +7271,25 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void ApplyIntelliSenseAccept(bool andSubmit)
     {
         if (_intelliSenseState is null) return;
+
+        var targetBox = _intelliSenseOwnerBox ?? PromptTextBox;
         var (newText, newCaret) = IntelliSenseController.Accept(
-            _intelliSenseState, PromptTextBox.Text, PromptTextBox.CaretIndex);
+            _intelliSenseState, targetBox.Text, targetBox.CaretIndex);
+
+        // For @ trigger: replace accepted display name with @handle + trailing space.
+        if (_intelliSenseState.TriggerChar == '@')
+        {
+            var displayName = _intelliSenseState.FilteredSuggestions[_intelliSenseState.SelectedIndex];
+            if (_agentHandleByDisplayName.TryGetValue(displayName, out var handle))
+            {
+                var before = targetBox.Text[.._intelliSenseState.TriggerPosition];
+                var after  = targetBox.CaretIndex < targetBox.Text.Length
+                    ? targetBox.Text[targetBox.CaretIndex..]
+                    : string.Empty;
+                newText  = before + "@" + handle + " " + after;
+                newCaret = _intelliSenseState.TriggerPosition + 1 + handle.Length + 1;
+            }
+        }
 
         // If Tab-completing a slash command that requires a parameter, insert a trailing
         // space and keep focus in the prompt so the user can type the argument.
@@ -7180,19 +7300,21 @@ public partial class MainWindow : Window, ILiveElementLocator
             andSubmit = false;
         }
 
+        var ownerBox = _intelliSenseOwnerBox;
         _isApplyingIntelliSenseAccept = true;
         try
         {
             _intelliSenseState = null;
-            PromptTextBox.Text = newText;
-            PromptTextBox.CaretIndex = newCaret;
+            _intelliSenseOwnerBox = null;
+            targetBox.Text = newText;
+            targetBox.CaretIndex = newCaret;
         }
         finally
         {
             _isApplyingIntelliSenseAccept = false;
         }
         UpdateIntelliSensePopup();
-        if (andSubmit)
+        if (andSubmit && ownerBox is null)
             RunButton_Click(this, new RoutedEventArgs());
     }
 
@@ -10671,7 +10793,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _startupWorkspaceLease = null;
 
         _currentWorkspace = targetWorkspace;
-        _currentSolutionPath = _currentWorkspace.SolutionPath;
+        BuildAgentSuggestions();
         _currentSolutionName = _currentWorkspace.SolutionName;
         _workspaceGitHubUrl = TryResolveGitHubUrl(_currentWorkspace.FolderPath);
         ViewPagesButton.Visibility = _workspaceGitHubUrl is not null ? Visibility.Visible : Visibility.Collapsed;
@@ -19792,9 +19914,46 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (TasksFilterClearButton is not null)
                 TasksFilterClearButton.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _tasksPanelController?.SetFilter(text);
+            if (TasksFilterBox is not null)
+                TryUpdateTasksIntelliSense();
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(TasksFilterBox_TextChanged), ex); }
     }
+
+    private void TasksFilterBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        try
+        {
+            if (_intelliSenseState is null || _intelliSenseOwnerBox != TasksFilterBox) return;
+            switch (e.Key)
+            {
+                case Key.Up:
+                    _intelliSenseState = IntelliSenseController.MoveSelection(_intelliSenseState, -1);
+                    UpdateIntelliSensePopup();
+                    e.Handled = true;
+                    break;
+                case Key.Down:
+                    _intelliSenseState = IntelliSenseController.MoveSelection(_intelliSenseState, +1);
+                    UpdateIntelliSensePopup();
+                    e.Handled = true;
+                    break;
+                case Key.Return:
+                case Key.Tab:
+                    ApplyIntelliSenseAccept(andSubmit: false);
+                    e.Handled = true;
+                    break;
+                case Key.Escape:
+                    _intelliSenseState = null;
+                    _intelliSenseOwnerBox = null;
+                    UpdateIntelliSensePopup();
+                    e.Handled = true;
+                    break;
+            }
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(TasksFilterBox_PreviewKeyDown), ex); }
+    }
+
+
 
     private void TasksFilterClearButton_Click(object sender, RoutedEventArgs e)
     {

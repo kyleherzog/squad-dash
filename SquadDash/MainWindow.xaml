@@ -1027,6 +1027,7 @@
                                              BorderBrush="{DynamicResource InputBorder}"
                                              BorderThickness="1"
                                              Style="{StaticResource PanelFilterBoxStyle}"
+                                             PreviewKeyDown="TasksFilterBox_PreviewKeyDown"
                                              TextChanged="TasksFilterBox_TextChanged" />
                                     <Button x:Name="TasksFilterClearButton"
                                             Content="×"

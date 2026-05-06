@@ -469,11 +469,16 @@ internal sealed class TasksPanelController {
     }
 
     private void ApplyFilterToPanel(StackPanel panel, bool syncHeadings) {
+        var ownerName = TryResolveOwnerFilter(_filterText);
+
         // Pass 1: show/hide item rows.
         foreach (UIElement child in panel.Children) {
-            if (child is System.Windows.Controls.Border { Tag: TaskItem item })
-                child.Visibility = PanelFilterHelper.Matches(item.Text, _filterText)
-                    ? Visibility.Visible : Visibility.Collapsed;
+            if (child is System.Windows.Controls.Border { Tag: TaskItem item }) {
+                bool visible = ownerName is not null
+                    ? string.Equals(item.Owner?.Trim(), ownerName, StringComparison.OrdinalIgnoreCase)
+                    : PanelFilterHelper.Matches(item.Text, _filterText);
+                child.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            }
         }
 
         if (!syncHeadings) return;
@@ -496,6 +501,30 @@ internal sealed class TasksPanelController {
         if (currentHeading is not null)
             currentHeading.Visibility = headingHasVisible ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    /// <summary>
+    /// If <paramref name="filter"/> is of the form <c>@handle</c>, resolves the handle to the
+    /// corresponding agent's display name via the roster, and returns it. Returns null when the
+    /// filter is not an @-filter or the handle cannot be resolved.
+    /// </summary>
+    private string? TryResolveOwnerFilter(string filter) {
+        if (!filter.StartsWith('@')) return null;
+        var handle = filter[1..].Trim();
+        if (string.IsNullOrEmpty(handle)) return null;
+
+        var roster = _getRoster?.Invoke();
+        if (roster is null) return null;
+
+        foreach (var member in roster) {
+            var memberHandle = member.FolderPath is not null
+                ? System.IO.Path.GetFileName(member.FolderPath)
+                : member.Name.ToLowerInvariant().Replace(" ", "-");
+            if (string.Equals(memberHandle, handle, StringComparison.OrdinalIgnoreCase))
+                return member.Name;
+        }
+        return null;
+    }
+
 
     // ── Empty state ───────────────────────────────────────────────────────────
     private void ShowEmptyInPanel(string message) {
