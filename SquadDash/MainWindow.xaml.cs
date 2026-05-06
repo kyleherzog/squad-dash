@@ -10827,6 +10827,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         _currentWorkspace = targetWorkspace;
         BuildAgentSuggestions();
+        _currentSolutionPath = _currentWorkspace.SolutionPath;
         _currentSolutionName = _currentWorkspace.SolutionName;
         _workspaceGitHubUrl = TryResolveGitHubUrl(_currentWorkspace.FolderPath);
         ViewPagesButton.Visibility = _workspaceGitHubUrl is not null ? Visibility.Visible : Visibility.Collapsed;
