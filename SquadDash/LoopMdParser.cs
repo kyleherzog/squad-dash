@@ -129,10 +129,24 @@ internal static class LoopMdParser {
         foreach (var path in files)
         {
             var config = Parse(path);
-            var displayName = config is { Description.Length: > 0 }
+            string rawDescription = config is { Description.Length: > 0 }
                 ? config.Description
                 : Path.GetFileNameWithoutExtension(path);
-            entries.Add(new LoopFileEntry(path, displayName));
+
+            string displayName;
+            string tooltipText = "";
+            var dashIdx = rawDescription.IndexOfAny(['-', '\u2013', '\u2014', '\u2012', '\u2015']);
+            if (dashIdx > 0)
+            {
+                displayName = rawDescription[..dashIdx].Trim();
+                tooltipText = rawDescription[(dashIdx + 1)..].Trim();
+            }
+            else
+            {
+                displayName = rawDescription;
+            }
+
+            entries.Add(new LoopFileEntry(path, displayName, tooltipText));
         }
 
         entries.Sort((a, b) =>
@@ -147,4 +161,4 @@ internal static class LoopMdParser {
     }
 }
 
-internal sealed record LoopFileEntry(string FilePath, string DisplayName);
+internal sealed record LoopFileEntry(string FilePath, string DisplayName, string TooltipText = "");

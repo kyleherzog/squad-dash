@@ -4428,7 +4428,12 @@ public partial class MainWindow : Window, ILiveElementLocator
         try
         {
             _loopFileEntries = LoopMdParser.ScanForLoopFiles(squadPath);
-            LoopFilePicker.ItemsSource = _loopFileEntries.Select(e => e.DisplayName).ToList();
+            LoopFilePicker.ItemsSource = _loopFileEntries.Select(e => {
+                var item = new System.Windows.Controls.ComboBoxItem { Content = e.DisplayName };
+                if (!string.IsNullOrEmpty(e.TooltipText))
+                    item.ToolTip = e.TooltipText;
+                return item;
+            }).ToList();
             LoopFilePicker.Visibility = _loopFileEntries.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
 
             var targetPath = _selectedLoopMdPath ?? _loopFileEntries.FirstOrDefault()?.FilePath;
