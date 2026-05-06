@@ -4447,16 +4447,10 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             _suppressLoopPickerChange = false;
         }
-        UpdateLoopFileSubtitle();
+        UpdateLoopPanelButtonStates();
     }
 
-    private void UpdateLoopFileSubtitle()
-    {
-        var entry = GetSelectedLoopFileEntry();
-        LoopFileSubtitle.Text = entry is not null && _loopFileEntries.Count > 0
-            ? "— " + entry.DisplayName
-            : "";
-    }
+    private void UpdateLoopFileSubtitle() { }  // subtitle removed; kept to avoid call-site churn
 
     private LoopFileEntry? GetSelectedLoopFileEntry()
     {

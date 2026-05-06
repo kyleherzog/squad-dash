@@ -798,15 +798,6 @@
                                                    FontSize="15"
                                                    FontWeight="SemiBold"
                                                    Foreground="{DynamicResource RosterPanelTitle}" />
-                                        <TextBlock x:Name="LoopFileSubtitle"
-                                                   FontSize="12"
-                                                   FontWeight="Normal"
-                                                   Foreground="{DynamicResource LabelText}"
-                                                   VerticalAlignment="Center"
-                                                   Margin="6,0,0,0"
-                                                   Text=""
-                                                   TextTrimming="CharacterEllipsis"
-                                                   MaxWidth="120" />
                                     </StackPanel>
                                     <Button x:Name="LoopPanelCloseButton"
                                             Content="×"
