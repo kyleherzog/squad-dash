@@ -26,6 +26,16 @@ Known keyboard shortcuts and hotkeys in SquadDash.
 
 ---
 
+## Startup Modifier Keys
+
+These keys are checked **once** as the main window loads. They are not toggles or persistent settings.
+
+| Key held at launch | Effect |
+|---|---|
+| **Shift** (Left or Right) | Suppresses queue auto-dispatch and loop auto-resume for that session. A `⏸` transcript message confirms when something was suppressed. |
+
+---
+
 ## Push-to-Talk (PTT)
 
 **Double-tap Ctrl** to activate voice input:

@@ -51,6 +51,18 @@ Once you reply, the queue resumes and dispatches the next item normally.
 
 ---
 
+## Pausing Auto-Resume at Startup (Shift key)
+
+If SquadDash closed while items were still in the queue, it normally re-dispatches them automatically on the next launch. To suppress this, **hold either Shift key while SquadDash is starting up** (at the moment the window loads).
+
+- The Shift state is read once — releasing Shift after the window appears has no effect.
+- If queue auto-dispatch was suppressed, the transcript shows: `⏸ Startup paused — Shift was held. Queue and loop auto-resume suppressed.`
+- The queued items remain in place; you can review or edit them before dispatching manually.
+
+This is useful when you want to inspect or revise queued prompts before they run rather than having them fire immediately on startup.
+
+---
+
 ## Voice Dictation and the Queue
 
 If a prompt was dictated by voice, the queue tab shows **clean text only** — the voice annotation (`some or all of this prompt was dictated by voice`) is not visible while the item is waiting in the queue.
@@ -70,6 +82,7 @@ See **[Voice Input](voice-input.md)** for details on the voice annotation.
 | Agent outputs `[[AWAITING_INPUT]]` | Queue pauses; resumes after user responds |
 | Edit a queued tab | Changes apply when that item dispatches |
 | Voice-dictated queued prompt | Tab shows clean text; annotation added after dispatch |
+| Shift held at startup | Queue auto-dispatch suppressed; items remain for manual review |
 
 ---
 

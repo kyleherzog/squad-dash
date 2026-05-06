@@ -110,6 +110,7 @@ Agent output for each iteration appears in the **coordinator transcript** in the
 - Leave **Continuous Context** unchecked unless the agent explicitly needs memory of previous iterations — accumulated context slows responses and can confuse the agent.
 - Sending a prompt from the main prompt box while the native loop is running pauses the loop, drains the queue, then resumes — the status label shows `🔁 Queue items pending — loop will resume after queue drains.`
 - The `stop_loop` command is the cleanest way to have the agent self-terminate when its work is done.
+- **Hold Shift while launching SquadDash** to prevent a previously active or queued loop from auto-resuming on startup. The transcript will confirm suppression with `⏸ Startup paused — Shift was held. Queue and loop auto-resume suppressed.`
 
 ---
 
