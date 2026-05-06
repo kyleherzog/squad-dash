@@ -96,12 +96,35 @@ internal sealed class ClipboardImageEditorWindow : Window
     // Color picker
     private StackPanel? _colorPickerPanel;
     private AnnotationArrow? _colorPickerArrow;
+    private AnnotationRect? _colorPickerRect;
 
     // Arrow creation defaults (shared with ScreenshotOverlayWindow via the same JSON file)
     private Color _defaultArrowColor = Color.FromRgb(255, 120, 20);
     private double _defaultArrowAngleDeg = 225.0;
     private double _defaultArrowLength = 15.0;
     private double _defaultTailLength = -1.0;
+
+    // ── Annotation — rectangles ───────────────────────────────────────────────
+
+    private readonly List<AnnotationRect> _annotRects = new();
+    private AnnotationRect? _selectedAnnotRect;
+    private bool _inRectMode;
+    private Button? _addRectBtn;
+
+    // Rect drag sub-state
+    private AnnotationRect? _draggingAnnotRect;
+    private int _draggingAnnotRectHandleIdx = -1; // -1=body, 0=NW,1=NE,2=SW,3=SE
+    private Point _annotRectDragStart;
+    private Rect _annotRectDragOriginal;
+    private bool _annotRectBodyDragging;
+
+    // Rubber-band state for drawing a new annotation rect
+    private bool _creatingAnnotRect;
+    private Point _annotRectAnchor;
+    private Rectangle? _annotRectPreview;
+
+    // Rect annotation defaults
+    private Color _defaultRectColor = Color.FromRgb(255, 80, 80);
 
     // ── Annotation — cursor overlay ───────────────────────────────────────────
 
@@ -286,12 +309,13 @@ internal sealed class ClipboardImageEditorWindow : Window
     private Border BuildToolbar()
     {
         _addArrowBtn = new Button { Content = "↗ Arrow", Width = 80, Height = 28, Margin = new Thickness(0, 0, 4, 0) };
+        _addRectBtn = new Button { Content = "□ Rect", Width = 70, Height = 28, Margin = new Thickness(0, 0, 4, 0) };
         var cursorBtn = new Button { Content = "⌖ Cursor", Width = 80, Height = 28, Margin = new Thickness(0, 0, 4, 0) };
         var roundCornersBtn = new Button { Content = "⌐ Round Corners", Width = 112, Height = 28, Margin = new Thickness(0, 0, 4, 0), ToolTip = $"Mask the {CornerRadiusPx}px corners transparent in the output PNG" };
         var insertBtn = new Button { Content = "Insert Image", Width = 96, Height = 28, Margin = new Thickness(0, 0, 4, 0) };
         var cancelBtn = new Button { Content = "Cancel", Width = 70, Height = 28 };
 
-        foreach (var btn in new[] { _addArrowBtn, cursorBtn, roundCornersBtn, insertBtn, cancelBtn })
+        foreach (var btn in new[] { _addArrowBtn, _addRectBtn, cursorBtn, roundCornersBtn, insertBtn, cancelBtn })
             btn.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
 
         _addArrowBtn.Click += (_, _) =>
@@ -299,6 +323,13 @@ internal sealed class ClipboardImageEditorWindow : Window
             if (_inArrowMode) { ExitArrowMode(); return; }
             EnterArrowMode();
             _addArrowBtn.Content = "✓ ↗ Arrow";
+        };
+
+        _addRectBtn.Click += (_, _) =>
+        {
+            if (_inRectMode) { ExitRectMode(); return; }
+            EnterRectMode();
+            _addRectBtn.Content = "✓ □ Rect";
         };
 
         cursorBtn.Click += (_, _) =>
@@ -362,7 +393,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(8, 6, 8, 6)
         };
-        foreach (var btn in new[] { _addArrowBtn, cursorBtn, roundCornersBtn, insertBtn, cancelBtn })
+        foreach (var btn in new[] { _addArrowBtn, _addRectBtn, cursorBtn, roundCornersBtn, insertBtn, cancelBtn })
             row.Children.Add(btn);
         row.Children.Add(_zoomLabel);
         row.Children.Add(resetZoomBtn);
@@ -533,6 +564,7 @@ internal sealed class ClipboardImageEditorWindow : Window
     {
         if (e.LeftButton != MouseButtonState.Pressed) return;
         SelectArrow(null);
+        SelectAnnotationRect(null);
 
         var pt = e.GetPosition(_canvas);
         var zone = HitTest(pt);
@@ -567,6 +599,23 @@ internal sealed class ClipboardImageEditorWindow : Window
             return;
         }
 
+        // Rect drawing mode: start rubber-band.
+        if (_inRectMode)
+        {
+            _creatingAnnotRect = true;
+            _annotRectAnchor = pt;
+            _preDragSnapshot = CaptureSnapshot();
+            _canvas.CaptureMouse();
+            var preview = EnsureAnnotRectPreview();
+            preview.Visibility = Visibility.Visible;
+            Canvas.SetLeft(preview, pt.X);
+            Canvas.SetTop(preview, pt.Y);
+            preview.Width = 1;
+            preview.Height = 1;
+            e.Handled = true;
+            return;
+        }
+
         // Move the selection.
         if (zone == HitZone.Move)
         {
@@ -581,7 +630,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         }
 
         // Draw a new crop region from scratch when no selection exists.
-        if (_sel.IsEmpty && !_inArrowMode && !_inCursorPlacementMode)
+        if (_sel.IsEmpty && !_inArrowMode && !_inCursorPlacementMode && !_inRectMode)
         {
             _creatingNewSel = true;
             _newSelAnchor = pt;
@@ -594,6 +643,25 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     private void Canvas_MouseMove(object sender, MouseEventArgs e)
     {
+        // Rubber-band draw of an annotation rectangle.
+        if (_creatingAnnotRect)
+        {
+            var pt2 = e.GetPosition(_canvas);
+            var l = Math.Max(0, Math.Min(_annotRectAnchor.X, pt2.X));
+            var t = Math.Max(0, Math.Min(_annotRectAnchor.Y, pt2.Y));
+            var r = Math.Min(_canvas.Width, Math.Max(_annotRectAnchor.X, pt2.X));
+            var b2 = Math.Min(_canvas.Height, Math.Max(_annotRectAnchor.Y, pt2.Y));
+            if (r - l < 4) r = l + 4;
+            if (b2 - t < 4) b2 = t + 4;
+            var preview = EnsureAnnotRectPreview();
+            Canvas.SetLeft(preview, l);
+            Canvas.SetTop(preview, t);
+            preview.Width = r - l;
+            preview.Height = b2 - t;
+            e.Handled = true;
+            return;
+        }
+
         // Rubber-band draw of a brand-new crop region.
         if (_creatingNewSel)
         {
@@ -637,7 +705,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         }
 
         // Update cursor shape based on hover zone (not during arrow/cursor drag).
-        if (!_draggingCursor && _draggingArrow == null && !_bodyDragging)
+        if (!_draggingCursor && _draggingArrow == null && !_bodyDragging && _draggingAnnotRect == null)
         {
             if (_sel.IsEmpty)
                 _canvas.Cursor = Cursors.Cross;
@@ -651,6 +719,30 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     private void Canvas_MouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (_creatingAnnotRect)
+        {
+            _creatingAnnotRect = false;
+            _canvas.ReleaseMouseCapture();
+            _canvas.Cursor = Cursors.Arrow;
+            if (_annotRectPreview != null)
+            {
+                _annotRectPreview.Visibility = Visibility.Hidden;
+                if (_annotRectPreview.Width >= MinSize && _annotRectPreview.Height >= MinSize)
+                {
+                    var bounds = new Rect(
+                        Canvas.GetLeft(_annotRectPreview),
+                        Canvas.GetTop(_annotRectPreview),
+                        _annotRectPreview.Width,
+                        _annotRectPreview.Height);
+                    CreateAnnotationRect(bounds);
+                }
+            }
+            CommitDragUndo();
+            ExitRectMode();
+            e.Handled = true;
+            return;
+        }
+
         if (_creatingNewSel)
         {
             _creatingNewSel = false;
@@ -678,6 +770,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         if (e.Key == Key.Escape)
         {
             if (_inArrowMode) { ExitArrowMode(); e.Handled = true; return; }
+            if (_inRectMode) { ExitRectMode(); e.Handled = true; return; }
             if (_inCursorPlacementMode)
             {
                 _inCursorPlacementMode = false;
@@ -694,6 +787,13 @@ internal sealed class ClipboardImageEditorWindow : Window
             PushUndo();
             RemoveArrow(_selectedArrow);
             _selectedArrow = null;
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Delete && _selectedAnnotRect != null)
+        {
+            PushUndo();
+            RemoveAnnotationRect(_selectedAnnotRect);
+            _selectedAnnotRect = null;
             e.Handled = true;
         }
         else if (e.Key == Key.Delete && !_sel.IsEmpty)
@@ -1184,6 +1284,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             _colorPickerPanel = null;
         }
         _colorPickerArrow = null;
+        _colorPickerRect = null;
     }
 
     private void RemoveArrow(AnnotationArrow arrow)
@@ -1197,6 +1298,316 @@ internal sealed class ClipboardImageEditorWindow : Window
         _canvas.Children.Remove(arrow.TipHandle);
         _canvas.Children.Remove(arrow.TailHandle);
         _arrows.Remove(arrow);
+    }
+
+    // ── Rect mode ─────────────────────────────────────────────────────────────
+
+    private void EnterRectMode()
+    {
+        _inRectMode = true;
+        Cursor = Cursors.Cross;
+        ShowModeHint("Drag to draw a rectangle");
+    }
+
+    private void ExitRectMode()
+    {
+        _inRectMode = false;
+        Cursor = Cursors.Arrow;
+        HideModeHint();
+        if (_addRectBtn != null) _addRectBtn.Content = "□ Rect";
+    }
+
+    private Rectangle EnsureAnnotRectPreview()
+    {
+        if (_annotRectPreview != null) return _annotRectPreview;
+        _annotRectPreview = new Rectangle
+        {
+            Stroke = new SolidColorBrush(_defaultRectColor),
+            StrokeThickness = 2,
+            StrokeDashArray = new DoubleCollection { 4, 2 },
+            Fill = Brushes.Transparent,
+            RadiusX = 4,
+            RadiusY = 4,
+            IsHitTestVisible = false,
+            Visibility = Visibility.Hidden
+        };
+        Panel.SetZIndex(_annotRectPreview, 50);
+        _canvas.Children.Add(_annotRectPreview);
+        return _annotRectPreview;
+    }
+
+    private AnnotationRect CreateAnnotationRect(Rect bounds, Color? color = null)
+    {
+        if (!_suppressUndo) PushUndo();
+
+        var rectColor = color ?? _defaultRectColor;
+        var brush = new SolidColorBrush(rectColor);
+
+        var shadow = new Rectangle
+        {
+            Fill = Brushes.Transparent,
+            Stroke = new SolidColorBrush(Color.FromArgb(102, 0, 0, 0)),
+            StrokeThickness = 2.5,
+            RadiusX = 4,
+            RadiusY = 4,
+            IsHitTestVisible = false
+        };
+
+        var border = new Rectangle
+        {
+            Fill = Brushes.Transparent,
+            Stroke = brush,
+            StrokeThickness = 2.5,
+            RadiusX = 4,
+            RadiusY = 4,
+            Cursor = Cursors.SizeAll,
+            IsHitTestVisible = true
+        };
+
+        var handles = new Ellipse[4];
+        for (int i = 0; i < 4; i++)
+        {
+            handles[i] = new Ellipse
+            {
+                Width = 8,
+                Height = 8,
+                Fill = brush,
+                Stroke = Brushes.White,
+                StrokeThickness = 1.5,
+                Cursor = Cursors.SizeAll,
+                Visibility = Visibility.Hidden
+            };
+            _canvas.Children.Add(handles[i]);
+            Panel.SetZIndex(handles[i], 10);
+        }
+
+        _canvas.Children.Add(shadow);
+        _canvas.Children.Add(border);
+        Panel.SetZIndex(shadow, 2);
+        Panel.SetZIndex(border, 5);
+
+        var annotRect = new AnnotationRect
+        {
+            Bounds = bounds,
+            RectColor = rectColor,
+            Border = border,
+            Shadow = shadow,
+            Handles = handles
+        };
+
+        border.MouseLeftButtonDown += (_, e) =>
+        {
+            if (_draggingAnnotRect != null || _inArrowMode || _inRectMode) return;
+            SelectAnnotationRect(annotRect);
+            _preDragSnapshot = CaptureSnapshot();
+            _draggingAnnotRect = annotRect;
+            _annotRectBodyDragging = true;
+            _draggingAnnotRectHandleIdx = -1;
+            _annotRectDragStart = e.GetPosition(_canvas);
+            _annotRectDragOriginal = annotRect.Bounds;
+            border.CaptureMouse();
+            e.Handled = true;
+        };
+        border.MouseMove += (_, e) =>
+        {
+            if (_draggingAnnotRect != annotRect || !_annotRectBodyDragging) return;
+            var pt = e.GetPosition(_canvas);
+            var dx = pt.X - _annotRectDragStart.X;
+            var dy = pt.Y - _annotRectDragStart.Y;
+            var cw = _canvas.Width;
+            var ch = _canvas.Height;
+            var nb = new Rect(
+                Math.Max(0, Math.Min(_annotRectDragOriginal.X + dx, cw - _annotRectDragOriginal.Width)),
+                Math.Max(0, Math.Min(_annotRectDragOriginal.Y + dy, ch - _annotRectDragOriginal.Height)),
+                _annotRectDragOriginal.Width,
+                _annotRectDragOriginal.Height);
+            annotRect.Bounds = nb;
+            UpdateRectGeometry(annotRect);
+            if (_colorPickerRect == annotRect) ShowColorPickerForRect(annotRect);
+            e.Handled = true;
+        };
+        border.MouseLeftButtonUp += (_, e) =>
+        {
+            if (_draggingAnnotRect != annotRect || !_annotRectBodyDragging) return;
+            CommitDragUndo();
+            _draggingAnnotRect = null;
+            _annotRectBodyDragging = false;
+            border.ReleaseMouseCapture();
+            e.Handled = true;
+        };
+        border.MouseRightButtonDown += (_, e) =>
+        {
+            PushUndo();
+            RemoveAnnotationRect(annotRect);
+            if (_selectedAnnotRect == annotRect) { _selectedAnnotRect = null; HideColorPicker(); }
+            e.Handled = true;
+        };
+
+        for (int i = 0; i < 4; i++)
+        {
+            int handleIdx = i;
+            var handle = handles[i];
+
+            handle.MouseLeftButtonDown += (_, e) =>
+            {
+                if (_draggingAnnotRect != null) return;
+                _preDragSnapshot = CaptureSnapshot();
+                _draggingAnnotRect = annotRect;
+                _draggingAnnotRectHandleIdx = handleIdx;
+                _annotRectBodyDragging = false;
+                _annotRectDragStart = e.GetPosition(_canvas);
+                _annotRectDragOriginal = annotRect.Bounds;
+                handle.CaptureMouse();
+                e.Handled = true;
+            };
+            handle.MouseMove += (_, e) =>
+            {
+                if (_draggingAnnotRect != annotRect || _annotRectBodyDragging || _draggingAnnotRectHandleIdx != handleIdx) return;
+                var pt = e.GetPosition(_canvas);
+                var dx = pt.X - _annotRectDragStart.X;
+                var dy = pt.Y - _annotRectDragStart.Y;
+                var o = _annotRectDragOriginal;
+                var cw = _canvas.Width;
+                var ch = _canvas.Height;
+
+                double nl = o.Left, nt = o.Top, nr = o.Right, nb2 = o.Bottom;
+                // 0=NW(left+top), 1=NE(right+top), 2=SW(left+bottom), 3=SE(right+bottom)
+                if (handleIdx == 0 || handleIdx == 2) nl = Math.Max(0, Math.Min(nl + dx, nr - MinSize));
+                if (handleIdx == 1 || handleIdx == 3) nr = Math.Max(nl + MinSize, Math.Min(nr + dx, cw));
+                if (handleIdx == 0 || handleIdx == 1) nt = Math.Max(0, Math.Min(nt + dy, nb2 - MinSize));
+                if (handleIdx == 2 || handleIdx == 3) nb2 = Math.Max(nt + MinSize, Math.Min(nb2 + dy, ch));
+
+                annotRect.Bounds = new Rect(nl, nt, nr - nl, nb2 - nt);
+                UpdateRectGeometry(annotRect);
+                if (_colorPickerRect == annotRect) ShowColorPickerForRect(annotRect);
+                e.Handled = true;
+            };
+            handle.MouseLeftButtonUp += (_, e) =>
+            {
+                if (_draggingAnnotRect != annotRect || _annotRectBodyDragging || _draggingAnnotRectHandleIdx != handleIdx) return;
+                CommitDragUndo();
+                _draggingAnnotRect = null;
+                _draggingAnnotRectHandleIdx = -1;
+                handle.ReleaseMouseCapture();
+                e.Handled = true;
+            };
+            handle.MouseRightButtonDown += (_, e) =>
+            {
+                PushUndo();
+                RemoveAnnotationRect(annotRect);
+                if (_selectedAnnotRect == annotRect) { _selectedAnnotRect = null; HideColorPicker(); }
+                e.Handled = true;
+            };
+        }
+
+        _annotRects.Add(annotRect);
+        UpdateRectGeometry(annotRect);
+        SelectAnnotationRect(annotRect);
+        return annotRect;
+    }
+
+    private static void UpdateRectGeometry(AnnotationRect rect)
+    {
+        var b = rect.Bounds;
+        var brush = new SolidColorBrush(rect.RectColor);
+        rect.Border.Stroke = brush;
+        foreach (var h in rect.Handles) h.Fill = brush;
+
+        Canvas.SetLeft(rect.Shadow, b.Left + 2);
+        Canvas.SetTop(rect.Shadow, b.Top + 2);
+        rect.Shadow.Width = b.Width;
+        rect.Shadow.Height = b.Height;
+
+        Canvas.SetLeft(rect.Border, b.Left);
+        Canvas.SetTop(rect.Border, b.Top);
+        rect.Border.Width = b.Width;
+        rect.Border.Height = b.Height;
+
+        // Handles: NW(0), NE(1), SW(2), SE(3)
+        PlaceRectHandle(rect.Handles[0], b.Left, b.Top);
+        PlaceRectHandle(rect.Handles[1], b.Right, b.Top);
+        PlaceRectHandle(rect.Handles[2], b.Left, b.Bottom);
+        PlaceRectHandle(rect.Handles[3], b.Right, b.Bottom);
+    }
+
+    private static void PlaceRectHandle(Ellipse h, double cx, double cy)
+    {
+        Canvas.SetLeft(h, cx - 4);
+        Canvas.SetTop(h, cy - 4);
+    }
+
+    private void RemoveAnnotationRect(AnnotationRect rect)
+    {
+        if (!_suppressUndo) PushUndo();
+        if (rect == _colorPickerRect) HideColorPicker();
+        _canvas.Children.Remove(rect.Shadow);
+        _canvas.Children.Remove(rect.Border);
+        foreach (var h in rect.Handles) _canvas.Children.Remove(h);
+        _annotRects.Remove(rect);
+    }
+
+    private void SelectAnnotationRect(AnnotationRect? rect)
+    {
+        if (_selectedAnnotRect != null && _selectedAnnotRect != rect)
+            foreach (var h in _selectedAnnotRect.Handles) h.Visibility = Visibility.Hidden;
+
+        _selectedAnnotRect = rect;
+        if (rect != null)
+        {
+            SelectArrow(null);
+            foreach (var h in rect.Handles) h.Visibility = Visibility.Visible;
+            ShowColorPickerForRect(rect);
+        }
+        else
+        {
+            HideColorPicker();
+        }
+    }
+
+    private void ShowColorPickerForRect(AnnotationRect rect)
+    {
+        HideColorPicker();
+        _colorPickerRect = rect;
+        bool isDark = _themeName.IndexOf("dark", StringComparison.OrdinalIgnoreCase) >= 0;
+        var palette = GetArrowPalette(isDark);
+
+        _colorPickerPanel = new StackPanel { Orientation = Orientation.Horizontal };
+        Panel.SetZIndex(_colorPickerPanel, 300);
+
+        foreach (var color in palette)
+        {
+            var c = color;
+            var dot = new Ellipse
+            {
+                Width = 16,
+                Height = 16,
+                Fill = new SolidColorBrush(c),
+                Stroke = c == rect.RectColor
+                    ? (isDark ? Brushes.White : Brushes.Black)
+                    : Brushes.Transparent,
+                StrokeThickness = 2,
+                Margin = new Thickness(3, 0, 3, 0),
+                Cursor = Cursors.Hand
+            };
+            dot.MouseLeftButtonDown += (_, e) =>
+            {
+                rect.RectColor = c;
+                _defaultRectColor = c;
+                UpdateRectGeometry(rect);
+                ShowColorPickerForRect(rect);
+                e.Handled = true;
+            };
+            _colorPickerPanel.Children.Add(dot);
+        }
+
+        _canvas.Children.Add(_colorPickerPanel);
+
+        double cx = rect.Bounds.Left + rect.Bounds.Width / 2;
+        double cy = rect.Bounds.Top;
+        _colorPickerPanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double pw = _colorPickerPanel.DesiredSize.Width;
+        Canvas.SetLeft(_colorPickerPanel, Math.Max(0, cx - pw / 2));
+        Canvas.SetTop(_colorPickerPanel, Math.Max(0, cy - 30));
     }
 
     // ── Cursor overlay ────────────────────────────────────────────────────────
@@ -1394,6 +1805,9 @@ internal sealed class ClipboardImageEditorWindow : Window
             _selectedArrow.TailHandle.Visibility = Visibility.Collapsed;
         }
 
+        foreach (var ar in _annotRects)
+            foreach (var h in ar.Handles) h.Visibility = Visibility.Collapsed;
+
         try
         {
             var dpi = VisualTreeHelper.GetDpi(this);
@@ -1498,6 +1912,7 @@ internal sealed class ClipboardImageEditorWindow : Window
                            a.ArrowheadAngleDeg, a.ArrowLength, a.TailLength,
                            a.UserTailLength, a.ArrowColor, a.TargetCenterOnCanvas,
                            a.OffsetX, a.OffsetY)).ToList(),
+        Rects: _annotRects.Select(r => new RectSnap(r.Bounds, r.RectColor)).ToList(),
         CursorEnabled: _cursorEnabled,
         CursorPos: _cursorImage != null
                            ? new Point(Canvas.GetLeft(_cursorImage), Canvas.GetTop(_cursorImage))
@@ -1549,7 +1964,9 @@ internal sealed class ClipboardImageEditorWindow : Window
         try
         {
             SelectArrow(null);
+            SelectAnnotationRect(null);
             foreach (var a in _arrows.ToList()) RemoveArrow(a);
+            foreach (var r in _annotRects.ToList()) RemoveAnnotationRect(r);
 
             foreach (var s in snap.Arrows)
             {
@@ -1566,6 +1983,12 @@ internal sealed class ClipboardImageEditorWindow : Window
             }
 
             SelectArrow(null);
+            SelectAnnotationRect(null);
+
+            foreach (var rs in snap.Rects)
+                CreateAnnotationRect(rs.Bounds, rs.RectColor);
+
+            SelectAnnotationRect(null);
             _sel = snap.Sel;
             _cursorEnabled = snap.CursorEnabled;
 
@@ -1641,6 +2064,7 @@ internal sealed class ClipboardImageEditorWindow : Window
     private sealed record EditorSnapshot(
         Rect Sel,
         IReadOnlyList<ArrowSnap> Arrows,
+        IReadOnlyList<RectSnap> Rects,
         bool CursorEnabled,
         Point CursorPos);
 
@@ -1655,4 +2079,6 @@ internal sealed class ClipboardImageEditorWindow : Window
         Point TargetCenterOnCanvas,
         double OffsetX,
         double OffsetY);
+
+    private sealed record RectSnap(Rect Bounds, Color RectColor);
 }

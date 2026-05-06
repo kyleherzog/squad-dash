@@ -5915,8 +5915,10 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try
         {
-            // ── Ctrl+V clipboard-image intercept ──────────────────────────────────
-            if (e.Key == Key.V && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            // ── Ctrl+V / Shift+Insert clipboard-image intercept ───────────────────
+            var isCtrlV = e.Key == Key.V && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+            var isShiftIns = e.Key == Key.Insert && (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+            if (isCtrlV || isShiftIns)
             {
                 if (Clipboard.ContainsImage())
                 {
@@ -5924,12 +5926,33 @@ public partial class MainWindow : Window, ILiveElementLocator
                     var bitmap = Clipboard.GetImage();
                     if (bitmap is not null && _currentWorkspace is not null)
                     {
-                        var path = _pastedImageStore.SaveImage(bitmap, _currentWorkspace.FolderPath);
-                        var att  = new FollowUpAttachment("", "Image", null, null, null, ImagePath: path);
-                        var list = GetOrCreateFollowUpList(_activeTabId ?? "");
-                        list.Add(att);
-                        UpdateFollowUpStrip();
-                        PersistDraftFollowUp();
+                        var editor = new ClipboardImageEditorWindow(this, bitmap);
+                        editor.ShowDialog();
+                        var edited = editor.Result;
+                        if (edited is not null)
+                        {
+                            var path = _pastedImageStore.SaveImage(edited, _currentWorkspace.FolderPath);
+                            var att  = new FollowUpAttachment("", "Image", null, null, null, ImagePath: path);
+                            var list = GetOrCreateFollowUpList(_activeTabId ?? "");
+                            list.Add(att);
+                            UpdateFollowUpStrip();
+                            PersistDraftFollowUp();
+                        }
+                    }
+                    return;
+                }
+                // If it's Shift+Insert and there's no image, fall through to let the
+                // default text-paste handler deal with it (isShiftIns only — Ctrl+V is
+                // handled by the textbox natively for text).
+                if (isShiftIns)
+                {
+                    e.Handled = true;
+                    var text = Clipboard.GetText();
+                    if (!string.IsNullOrEmpty(text))
+                    {
+                        var tb = sender as System.Windows.Controls.TextBox;
+                        tb?.Focus();
+                        System.Windows.Input.ApplicationCommands.Paste.Execute(null, tb);
                     }
                     return;
                 }
