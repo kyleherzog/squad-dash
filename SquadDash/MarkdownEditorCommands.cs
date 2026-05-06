@@ -44,6 +44,14 @@ internal static class MarkdownEditorCommands
         var m = ListBulletRegex.Match(lineText);
         if (!m.Success) return false;
 
+        // If the line is nothing but the bullet prefix (no content typed yet),
+        // escape the list: remove the prefix and leave an empty line.
+        if (lineText.Length == m.Length) {
+            box.Text       = text[..lineStart] + text[caret..];
+            box.CaretIndex = lineStart;
+            return true;
+        }
+
         var indent = m.Groups["indent"].Value;
         string nextPrefix;
         if (m.Groups["num"].Success && int.TryParse(m.Groups["num"].Value, out int n))
@@ -75,6 +83,13 @@ internal static class MarkdownEditorCommands
 
         var m = ListBulletRegex.Match(lineText);
         if (!m.Success) return false;
+
+        // Escape the list when the line has no content beyond the bullet prefix.
+        if (lineText.Length == m.Length) {
+            box.SetPlainText(text[..lineStart] + text[caret..]);
+            box.SetCaretOffset(lineStart);
+            return true;
+        }
 
         var indent = m.Groups["indent"].Value;
         string nextPrefix;

@@ -309,6 +309,46 @@ internal sealed class MarkdownEditorCommandsTests {
         Assert.That(tb.Text, Is.EqualTo("  - nested\n  - "));
     }
 
+    [Test]
+    public void ContinueListOnEnter_EmptyHyphenBullet_EscapesList() {
+        var tb = MakeBox("- item\n- ");
+        tb.CaretIndex = tb.Text.Length; // end of "- "
+        var handled = MarkdownEditorCommands.ContinueListOnEnter(tb);
+        Assert.That(handled, Is.True);
+        Assert.That(tb.Text, Is.EqualTo("- item\n"));
+        Assert.That(tb.CaretIndex, Is.EqualTo(7));
+    }
+
+    [Test]
+    public void ContinueListOnEnter_EmptyAsteriskBullet_EscapesList() {
+        var tb = MakeBox("* ");
+        tb.CaretIndex = 2;
+        var handled = MarkdownEditorCommands.ContinueListOnEnter(tb);
+        Assert.That(handled, Is.True);
+        Assert.That(tb.Text, Is.EqualTo(""));
+        Assert.That(tb.CaretIndex, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ContinueListOnEnter_EmptyNumberedBullet_EscapesList() {
+        var tb = MakeBox("1. first\n2. ");
+        tb.CaretIndex = tb.Text.Length;
+        var handled = MarkdownEditorCommands.ContinueListOnEnter(tb);
+        Assert.That(handled, Is.True);
+        Assert.That(tb.Text, Is.EqualTo("1. first\n"));
+        Assert.That(tb.CaretIndex, Is.EqualTo(9));
+    }
+
+    [Test]
+    public void ContinueListOnEnter_EmptyBulletFollowedByMoreText_EscapesOnlyPrefix() {
+        var tb = MakeBox("- item\n- \nmore");
+        tb.CaretIndex = 9; // end of "- " on second line
+        var handled = MarkdownEditorCommands.ContinueListOnEnter(tb);
+        Assert.That(handled, Is.True);
+        Assert.That(tb.Text, Is.EqualTo("- item\n\nmore"));
+        Assert.That(tb.CaretIndex, Is.EqualTo(7));
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private static TextBox MakeBox(string text) => new() { Text = text };
