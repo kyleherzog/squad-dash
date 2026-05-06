@@ -19118,13 +19118,17 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (_notesStore is null) return;
         var path = _notesStore.GetNotePath(note.Id);
         if (!File.Exists(path)) return;
+        var liveNote = note;
         MarkdownDocumentWindow.Show(
             CanShowOwnedWindow() ? this : null,
-            note.Title,
+            liveNote.Title,
             path,
             showSource: true,
             BuildMarkdownCaptureContext(),
-            autoSave: true);
+            autoSave: true,
+            noteContext: new NoteEditContext(
+                InitialTitle: liveNote.Title,
+                OnTitleCommit: newTitle => RenameNote(liveNote, newTitle)));
     }
 
     private void EditNote(NoteItem note)
@@ -19174,7 +19178,10 @@ public partial class MainWindow : Window, ILiveElementLocator
             path,
             showSource: true,
             BuildMarkdownCaptureContext(),
-            autoSave: true);
+            autoSave: true,
+            noteContext: new NoteEditContext(
+                InitialTitle: note.Title,
+                OnTitleCommit: newTitle => RenameNote(note, newTitle)));
     }
 
     private void RenameNote(NoteItem oldNote, string newTitle)
