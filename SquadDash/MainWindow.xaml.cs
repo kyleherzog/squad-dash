@@ -3636,6 +3636,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _pec.SetIsLoopRunning(false);
         _settingsSnapshot = _settingsStore.SaveLoopActive(false);
         _loopCurrentIteration = 0;
+        AppendLoopOutputLine("✅ Loop stopped.", LoopLifecycleBrush);
         AppendLine("✅ Loop stopped");
         SquadDashTrace.Write("UI", $"Loop stopped mdPath={evt.LoopMdPath ?? "(none)"}");
         SyncLoopPanel();
@@ -3650,6 +3651,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         var errorLabel = string.IsNullOrWhiteSpace(evt.Message)
             ? "❌ Loop error"
             : $"❌ Loop error: {evt.Message}";
+        AppendLoopOutputLine(errorLabel, new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFF, 0x88, 0x44)));
         AppendLine(errorLabel, ThemeBrush("SystemErrorText"));
         SquadDashTrace.Write("UI", $"Loop error message={evt.Message ?? "(none)"}");
         SyncLoopPanel();
