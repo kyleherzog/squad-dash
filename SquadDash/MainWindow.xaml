@@ -834,6 +834,7 @@
                                     <RadioButton x:Name="LoopModeCliRadio"
                                                  Content="Squad CLI"
                                                  GroupName="LoopMode"
+                                                 ToolTipService.ShowOnDisabled="True"
                                                  Style="{StaticResource ThemedRadioButtonStyle}"
                                                  Click="LoopModeCliRadio_Click" />
                                     <RadioButton x:Name="LoopModeNativeRadio"

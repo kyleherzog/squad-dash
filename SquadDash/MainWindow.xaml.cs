@@ -1241,6 +1241,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                     resolveVersionSw.Stop();
                     SquadDashTrace.Write(TraceCategory.Startup, $"MainWindow_Loaded: ResolveSquadVersionAsync {resolveVersionSw.ElapsedMilliseconds}ms (async complete).");
                     UpdateStatusTitle();
+                    SyncLoopPanel();
                 }));
             SquadDashTrace.Write(TraceCategory.Startup, "MainWindow_Loaded: ResolveSquadVersionAsync started (non-blocking).");
             _ = _squadCliAdapter.CheckForSquadUpdateAsync().ContinueWith(_ => Dispatcher.Invoke(UpdateSquadUpdateBadge));
@@ -4378,7 +4379,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         AbortLoopButton.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
 
         LoopModeNativeRadio.IsEnabled = !running;
-        LoopModeCliRadio.IsEnabled = !running;
+        bool cliLoopSupported = SquadCliSupportsLoop(_squadCliAdapter.SquadVersion);
+        LoopModeCliRadio.IsEnabled = !running && cliLoopSupported;
+        LoopModeCliRadio.ToolTip = cliLoopSupported
+            ? null
+            : "Disabled (upgrade Squad for CLI looping)";
         if (LoopFilePicker is not null) LoopFilePicker.IsEnabled = !running;
         LoopModeNativeRadio.IsChecked = nativeMode;
         LoopModeCliRadio.IsChecked = _settingsSnapshot.LoopMode == LoopMode.SquadCli;
@@ -15954,6 +15959,25 @@ public partial class MainWindow : Window, ILiveElementLocator
             WorkspaceIssueActionKind.LaunchPowerShellCommand,
             $"npm install @bradygaster/squad-cli@{targetVersion}");
         _squadCliAdapter.LaunchPowerShellCommandWindow(action);
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> if the installed Squad CLI version supports <c>squad loop</c>.
+    /// The <c>--agent-cmd</c> flag required for Windows CLI looping was added in 0.9.5.
+    /// When the version is unknown (null/empty) we allow it so we don't block users whose
+    /// version resolution is still pending or failed.
+    /// </summary>
+    private static bool SquadCliSupportsLoop(string? version)
+    {
+        if (string.IsNullOrWhiteSpace(version)) return true;
+        var v = ParseSimpleVersion(version);
+        if (v is null) return true;
+        // Minimum: 0.9.5
+        if (v[0] > 0) return true;
+        if (v[0] < 0) return false;
+        if (v[1] > 9) return true;
+        if (v[1] < 9) return false;
+        return v[2] >= 5;
     }
 
     private static bool IsNewerSquadVersion(string candidate, string? current)
