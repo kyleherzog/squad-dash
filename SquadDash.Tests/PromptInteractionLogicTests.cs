@@ -42,6 +42,30 @@ internal sealed class PromptInteractionLogicTests {
     }
 
     [Test]
+    public void ResolveAction_CtrlEnterReturnsPrioritizeInQueue() {
+        var action = PromptInputBehavior.ResolveAction(
+            PromptInputKey.Enter,
+            ctrlPressed: true,
+            shiftPressed: false,
+            runButtonEnabled: true,
+            isMultiLinePrompt: false);
+
+        Assert.That(action, Is.EqualTo(PromptInputAction.PrioritizeInQueue));
+    }
+
+    [Test]
+    public void ResolveAction_CtrlEnterPrioritizesEvenWhenRunIsDisabled() {
+        var action = PromptInputBehavior.ResolveAction(
+            PromptInputKey.Enter,
+            ctrlPressed: true,
+            shiftPressed: false,
+            runButtonEnabled: false,
+            isMultiLinePrompt: false);
+
+        Assert.That(action, Is.EqualTo(PromptInputAction.PrioritizeInQueue));
+    }
+
+    [Test]
     public void Navigate_CapturesDraftAndRestoresItWhenReturningToTop() {
         var history = new[] { "first", "second" };
 

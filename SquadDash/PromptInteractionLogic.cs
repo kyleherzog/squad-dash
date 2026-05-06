@@ -15,6 +15,7 @@ internal enum PromptInputKey {
 internal enum PromptInputAction {
     None,
     SubmitPrompt,
+    PrioritizeInQueue,
     NavigateHistoryPrevious,
     NavigateHistoryNext,
     IntelliSenseUp,
@@ -46,6 +47,9 @@ internal static class PromptInputBehavior {
         bool shiftPressed,
         bool runButtonEnabled,
         bool isMultiLinePrompt) {
+        if (key == PromptInputKey.Enter && ctrlPressed && !shiftPressed)
+            return PromptInputAction.PrioritizeInQueue;
+
         if (key == PromptInputKey.Enter && !ctrlPressed && !shiftPressed && runButtonEnabled)
             return PromptInputAction.SubmitPrompt;
 

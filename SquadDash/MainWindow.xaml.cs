@@ -162,6 +162,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private int _queuePreEditDraftSelectionStart;
     private int _queuePreEditDraftSelectionLength;
     private string? _activeTabId;   // null = Active Draft; otherwise a queued item Id
+    private string? _priorityFeedbackId;        // Id of the recently-prioritized queue item
+    private DispatcherTimer? _priorityFeedbackTimer;
     private readonly Dictionary<string, List<FollowUpAttachment>> _followUpAttachments = new();
     // Captured by ApplyFollowUpHeader; consumed by CreateTranscriptTurnView for the paperclip UI.
     private IReadOnlyList<FollowUpAttachment>? _pendingTranscriptAttachments;
@@ -1699,6 +1701,81 @@ public partial class MainWindow : Window, ILiveElementLocator
         _ = DrainQueueIfNeededAsync();
     }
 
+    /// <summary>
+    /// Ctrl+Enter handler. Moves the active tab to the front of the queue.
+    /// If the user is on the Active Draft tab, enqueues the current text at the front.
+    /// Shows a transient "« Now at the front of the queue." label in the tab strip.
+    /// </summary>
+    private void PrioritizeActiveTabToFront()
+    {
+        if (_activeTabId is null)
+        {
+            // Active Draft — enqueue at front if there is text.
+            var text = PromptTextBox.Text.Trim();
+            if (string.IsNullOrWhiteSpace(text)) return;
+
+            var isDictated = _promptHasVoiceInput;
+            _promptHasVoiceInput = false;
+
+            var item = _promptQueue.EnqueueAtFront(text, ++_promptQueueSeq);
+            _promptQueue.RenumberSequentially();
+
+            if (_followUpAttachments.TryGetValue("", out var draftList) && draftList.Count > 0)
+            {
+                _followUpAttachments.Remove("");
+                _followUpAttachments[item.Id] = draftList;
+            }
+
+            PromptTextBox.Clear();
+            UpdateFollowUpStrip();
+            PersistDraftFollowUp();
+            ShowPriorityFeedback(item.Id);
+            SyncQueuePanel();
+        }
+        else
+        {
+            // Queued tab — move it to the front.
+            var capturedId = _activeTabId;
+            _promptQueue.MoveToFront(capturedId);
+            _promptQueue.RenumberSequentially();
+            ShowPriorityFeedback(capturedId);
+            SyncQueuePanel();
+
+            // Restore prompt box state for the still-active tab.
+            var activeItem = _promptQueue.Items.FirstOrDefault(i => i.Id == capturedId);
+            if (activeItem is not null)
+            {
+                PromptTextBox.Text = activeItem.Text;
+                PromptTextBox.SelectionStart = activeItem.SelectionStart;
+                PromptTextBox.SelectionLength = activeItem.SelectionLength;
+                if (activeItem.SelectionLength == 0)
+                    PromptTextBox.CaretIndex = activeItem.CaretIndex;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Records <paramref name="id"/> as the recently-prioritized item and starts a 3-second
+    /// timer that clears the feedback label once it expires. <see cref="SyncQueuePanel"/> reads
+    /// <c>_priorityFeedbackId</c> to inject the "« Now at the front of the queue." label.
+    /// </summary>
+    private void ShowPriorityFeedback(string id)
+    {
+        _priorityFeedbackTimer?.Stop();
+        _priorityFeedbackId = id;
+
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            _priorityFeedbackTimer = null;
+            _priorityFeedbackId = null;
+            SyncQueuePanel();
+        };
+        _priorityFeedbackTimer = timer;
+        timer.Start();
+    }
+
     private async Task DispatchQueuedTabAsync(string id)
     {
         var item = _promptQueue.Items.FirstOrDefault(i => i.Id == id);
@@ -1988,6 +2065,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                 QueueTabStrip.Children.Add(CreateQueueTab(item.Id, label, tooltip));
                 if (item.Id == _activeTabId)
                     activeTabLabel = label;
+                if (item.Id == _priorityFeedbackId)
+                    QueueTabStrip.Children.Add(CreatePriorityFeedbackLabel());
             }
 
             // When a queued tab (not Active Draft) is selected, show a hint that the queue
@@ -2170,6 +2249,20 @@ public partial class MainWindow : Window, ILiveElementLocator
     // Two vertical bars — standard pause symbol
     private static readonly Geometry s_pauseGeometry = Geometry.Parse(
         "M3,1 H6 V13 H3 Z M8,1 H11 V13 H8 Z");
+
+    private UIElement CreatePriorityFeedbackLabel()
+    {
+        var tb = new TextBlock
+        {
+            Text              = "« Now at the front of the queue.",
+            FontSize          = 11,
+            FontStyle         = FontStyles.Italic,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(8, 0, 8, 0),
+        };
+        tb.SetResourceReference(TextBlock.ForegroundProperty, "QueueTabActiveBorder");
+        return tb;
+    }
 
     private UIElement CreatePaperclipIcon(bool isActive)
     {
@@ -5798,6 +5891,11 @@ public partial class MainWindow : Window, ILiveElementLocator
 
             switch (action)
             {
+                case PromptInputAction.PrioritizeInQueue:
+                    PrioritizeActiveTabToFront();
+                    e.Handled = true;
+                    break;
+
                 case PromptInputAction.SubmitPrompt:
                     RunButton_Click(sender, new RoutedEventArgs());
                     e.Handled = true;
