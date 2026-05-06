@@ -2,6 +2,7 @@ namespace SquadDash;
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -23,6 +24,8 @@ internal sealed class NotesPanelController {
 
     private List<NoteItem> _notes = [];
     private string _filterText = string.Empty;
+    private NotesSortOrder _sortOrder = NotesSortOrder.MostRecentOnTop;
+    private Action<NotesSortOrder>? _onSortOrderChanged;
 
     // ── Construction ─────────────────────────────────────────────────────────
 
@@ -34,18 +37,22 @@ internal sealed class NotesPanelController {
         Action<NoteItem, string> renameNote,
         Action<NoteItem>         deleteNote,
         Action                   newNote,
-        Action<NoteItem>?        attachFollowUp = null,
-        Func<NoteItem, string>?  loadPreview    = null) {
+        Action<NoteItem>?        attachFollowUp      = null,
+        Func<NoteItem, string>?  loadPreview         = null,
+        NotesSortOrder           initialSortOrder    = NotesSortOrder.MostRecentOnTop,
+        Action<NotesSortOrder>?  onSortOrderChanged  = null) {
 
-        _listPanel       = listPanel;
-        _scrollContainer = scrollContainer;
-        _openNote        = openNote;
-        _editNote        = editNote;
-        _renameNote      = renameNote;
-        _deleteNote      = deleteNote;
-        _newNote         = newNote;
-        _attachFollowUp  = attachFollowUp;
-        _loadPreview     = loadPreview;
+        _listPanel            = listPanel;
+        _scrollContainer      = scrollContainer;
+        _openNote             = openNote;
+        _editNote             = editNote;
+        _renameNote           = renameNote;
+        _deleteNote           = deleteNote;
+        _newNote              = newNote;
+        _attachFollowUp       = attachFollowUp;
+        _loadPreview          = loadPreview;
+        _sortOrder            = initialSortOrder;
+        _onSortOrderChanged   = onSortOrderChanged;
 
         AttachPanelContextMenu();
     }
@@ -85,7 +92,11 @@ internal sealed class NotesPanelController {
             return;
         }
 
-        foreach (var note in _notes)
+        var sorted = _sortOrder == NotesSortOrder.Alphabetical
+            ? _notes.OrderBy(n => n.Title, StringComparer.OrdinalIgnoreCase).ToList()
+            : _notes.OrderByDescending(n => n.CreatedAt).ToList();
+
+        foreach (var note in sorted)
             _listPanel.Children.Add(BuildRow(note));
 
         ApplyFilterToList();
@@ -226,6 +237,9 @@ internal sealed class NotesPanelController {
             menu.Items.Add(followUpItem);
         }
 
+        menu.Items.Add(MakeSep());
+        menu.Items.Add(BuildSortSubmenu());
+
         return menu;
     }
 
@@ -293,6 +307,8 @@ internal sealed class NotesPanelController {
         var newItem = MakeItem("New Note");
         newItem.Click += (_, _) => _newNote();
         menu.Items.Add(newItem);
+        menu.Items.Add(MakeSep());
+        menu.Items.Add(BuildSortSubmenu());
         _listPanel.ContextMenu = menu;
         // Also attach to the ScrollViewer (and its parent Grid) so right-clicking
         // anywhere in the panel — not just over existing note rows — shows the menu.
@@ -300,6 +316,33 @@ internal sealed class NotesPanelController {
             parent.ContextMenu = menu;
         if (_listPanel.Parent is FrameworkElement { Parent: FrameworkElement grandParent })
             grandParent.ContextMenu = menu;
+    }
+
+    private MenuItem BuildSortSubmenu() {
+        var sortMenu = MakeItem("Sort");
+
+        var alphabetItem = MakeItem("Alphabetically");
+        alphabetItem.IsCheckable = true;
+        alphabetItem.IsChecked   = _sortOrder == NotesSortOrder.Alphabetical;
+
+        var recentItem = MakeItem("Most Recent on Top");
+        recentItem.IsCheckable = true;
+        recentItem.IsChecked   = _sortOrder == NotesSortOrder.MostRecentOnTop;
+
+        alphabetItem.Click += (_, _) => ApplySortOrder(NotesSortOrder.Alphabetical,   alphabetItem, recentItem);
+        recentItem.Click   += (_, _) => ApplySortOrder(NotesSortOrder.MostRecentOnTop, alphabetItem, recentItem);
+
+        sortMenu.Items.Add(alphabetItem);
+        sortMenu.Items.Add(recentItem);
+        return sortMenu;
+    }
+
+    private void ApplySortOrder(NotesSortOrder order, MenuItem alphabetItem, MenuItem recentItem) {
+        _sortOrder = order;
+        alphabetItem.IsChecked = order == NotesSortOrder.Alphabetical;
+        recentItem.IsChecked   = order == NotesSortOrder.MostRecentOnTop;
+        RebuildList();
+        _onSortOrderChanged?.Invoke(order);
     }
 
     // ── Menu helpers ──────────────────────────────────────────────────────────

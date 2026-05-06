@@ -19462,15 +19462,21 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (_notesPanelVisible && _notesPanel is null)
         {
             _notesPanel = new NotesPanelController(
-                listPanel:       NotesListPanel!,
-                scrollContainer: (FrameworkElement)NotesListPanel!.Parent,
-                openNote:        note => OpenNote(note),
-                editNote:        note => EditNote(note),
-                renameNote:      (note, title) => RenameNote(note, title),
-                deleteNote:      note => DeleteNote(note),
-                newNote:         () => CreateNewNote(),
-                attachFollowUp:  note => AttachNoteFollowUp(note),
-                loadPreview:     note => _notesStore?.LoadContent(note.Id) ?? "");
+                listPanel:           NotesListPanel!,
+                scrollContainer:     (FrameworkElement)NotesListPanel!.Parent,
+                openNote:            note => OpenNote(note),
+                editNote:            note => EditNote(note),
+                renameNote:          (note, title) => RenameNote(note, title),
+                deleteNote:          note => DeleteNote(note),
+                newNote:             () => CreateNewNote(),
+                attachFollowUp:      note => AttachNoteFollowUp(note),
+                loadPreview:         note => _notesStore?.LoadContent(note.Id) ?? "",
+                initialSortOrder:    _docsPanelState?.NotesSortOrder ?? NotesSortOrder.MostRecentOnTop,
+                onSortOrderChanged:  order => {
+                    var st = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
+                    _docsPanelState = st with { NotesSortOrder = order };
+                    _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
+                });
             _notesPanel.Refresh(_noteItems);
         }
     }

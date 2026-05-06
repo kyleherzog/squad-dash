@@ -622,6 +622,7 @@ internal sealed class ApplicationSettingsStore {
                 LoopPanelVisible = state.LoopPanelVisible ?? existing.LoopPanelVisible,
                 DraftFollowUpsJson = state.DraftFollowUpsJson ?? existing.DraftFollowUpsJson,
                 SelectedLoopFile = state.SelectedLoopFile ?? existing.SelectedLoopFile,
+                NotesSortOrder = state.NotesSortOrder ?? existing.NotesSortOrder,
             };
         }
         dict[key] = state;
@@ -685,6 +686,11 @@ internal sealed record WorkspaceDocsPanelState
     /// Null means use the default (loop.md).
     /// </summary>
     public string? SelectedLoopFile { get; init; }
+
+    /// <summary>
+    /// Sort order for the Notes panel. Null = default (MostRecentOnTop).
+    /// </summary>
+    public NotesSortOrder? NotesSortOrder { get; init; }
 
     /// <summary>
     /// Legacy single-item follow-up fields — kept for reading old settings files.
