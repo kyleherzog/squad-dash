@@ -6325,6 +6325,38 @@ public partial class MainWindow : Window, ILiveElementLocator
         _ctrlFirstReleaseTime = default;
     }
 
+    /// <summary>
+    /// Called when another application takes focus away from SquadDash.
+    /// WPF does not deliver KeyUp events while the window is inactive, so a Ctrl key
+    /// released while focus belongs to another app would leave PTT running indefinitely.
+    /// Stopping here ensures the voice UI always collapses on window deactivation.
+    /// </summary>
+    private void Window_Deactivated(object sender, EventArgs e)
+    {
+        try
+        {
+            switch (_pttState)
+            {
+                case PttState.Active:
+                    // Stop without sending — the user lost focus mid-dictation.
+                    _ = StopPushToTalkAsync(send: false);
+                    break;
+
+                case PttState.TapDown:
+                case PttState.TapReleased:
+                    // Reset the tap sequence — any pending Ctrl tap is now stale.
+                    _pttState = PttState.Idle;
+                    _ctrlFirstDownTime = default;
+                    _ctrlFirstReleaseTime = default;
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            HandleUiCallbackException(nameof(Window_Deactivated), ex);
+        }
+    }
+
     private void Window_PreviewKeyUp(object sender, KeyEventArgs e)
     {
         try

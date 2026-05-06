@@ -12,7 +12,8 @@
         WindowStyle="None"
         Background="{DynamicResource AppSurface}"
         PreviewKeyDown="Window_PreviewKeyDown"
-        PreviewKeyUp="Window_PreviewKeyUp">
+        PreviewKeyUp="Window_PreviewKeyUp"
+        Deactivated="Window_Deactivated">
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="34"
                             ResizeBorderThickness="4"
