@@ -2098,6 +2098,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         SyncLoopPanel();
         try
         {
+            AppendLoopOutputLine($"▶ Loop starting — {LoopTimestamp()} — queue drained.", LoopLifecycleBrush);
             AppendLine("▶ Starting queued loop…", (Brush)FindResource("SubtleText"));
             await StartLoopImmediateAsync();
         }
@@ -3621,6 +3622,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             ? "🔁 Loop started"
             : $"🔁 Loop started: {evt.LoopMdPath.Replace('\\', '/')}";
         AppendLine(label);
+        AppendLoopOutputLine($"▶ Loop started — {LoopTimestamp()}", LoopLifecycleBrush);
         SquadDashTrace.Write("UI", $"Loop started mdPath={evt.LoopMdPath ?? "(none)"}");
         SyncLoopPanel();
     }
@@ -3639,7 +3641,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _pec.SetIsLoopRunning(false);
         _settingsSnapshot = _settingsStore.SaveLoopActive(false);
         _loopCurrentIteration = 0;
-        AppendLoopOutputLine("✅ Loop stopped.", LoopLifecycleBrush);
+        AppendLoopOutputLine($"✅ Loop stopped — {LoopTimestamp()}", LoopLifecycleBrush);
         AppendLine("✅ Loop stopped");
         SquadDashTrace.Write("UI", $"Loop stopped mdPath={evt.LoopMdPath ?? "(none)"}");
         SyncLoopPanel();
@@ -3668,6 +3670,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _loopIsWaiting = false;
         _pec.SetIsLoopRunning(true);
         _settingsSnapshot = _settingsStore.SaveLoopActive(true);
+        AppendLoopOutputLine($"▶ Round {iteration} started — {LoopTimestamp()}", LoopLifecycleBrush);
         AppendLine($"↩ Round {iteration}");
         SyncLoopPanel();
     }
@@ -3678,6 +3681,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _loopCurrentIteration = 0;
         _loopIsWaiting = false;
         _settingsSnapshot = _settingsStore.SaveLoopActive(false);
+        AppendLoopOutputLine($"✅ Loop stopped — {LoopTimestamp()}", LoopLifecycleBrush);
         AppendLine("✅ Loop stopped");
 
         // If queue items arrived while the loop was running (or are still pending),
@@ -3710,6 +3714,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void OnNativeLoopIterationCompleted(int iteration)
     {
+        AppendLoopOutputLine($"✓ Round {iteration} completed — {LoopTimestamp()}", LoopLifecycleBrush);
         AppendLine($"  ✓ Round {iteration} complete");
         SyncLoopPanel();
     }
@@ -3724,6 +3729,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private static readonly Regex AnsiEscapeRegex = new(@"\x1B\[[0-9;]*[A-Za-z]", RegexOptions.Compiled);
     private static readonly SolidColorBrush LoopStderrBrush = new(Color.FromRgb(0xFF, 0x44, 0x44));
     private static readonly SolidColorBrush LoopLifecycleBrush = new(Color.FromRgb(0x88, 0x88, 0x88));
+
+    private static string LoopTimestamp() => DateTime.Now.ToString("h:mm tt");
 
     private void HandleLoopOutput(SquadSdkEvent evt)
     {
@@ -3788,7 +3795,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 _promptQueue.Items, _followUpAttachments,
                 queueRightmostHeld: IsRightmostQueueTabActive(),
                 loopQueuedToDequeue: false);
-            AppendLoopOutputLine("⏹ Loop dequeued — will not resume after queue drains.", LoopLifecycleBrush);
+            AppendLoopOutputLine($"⏹ Loop dequeued — {LoopTimestamp()} — will not resume after queue drains.", LoopLifecycleBrush);
             SyncLoopPanel();
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(LoopPanelDequeueMenuItem_Click), ex); }
@@ -4604,6 +4611,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                     _promptQueue.Items, _followUpAttachments,
                     queueRightmostHeld: IsRightmostQueueTabActive(),
                     loopQueuedToDequeue: true);
+                AppendLoopOutputLine($"⏳ Loop queued — {LoopTimestamp()} — will start after queue drains.", LoopLifecycleBrush);
                 SyncLoopPanel();
                 return;
             }
@@ -5070,7 +5078,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                     _promptQueue.Items, _followUpAttachments,
                     queueRightmostHeld: IsRightmostQueueTabActive(),
                     loopQueuedToDequeue: false);
-                AppendLoopOutputLine("⏹ Loop dequeued — will not resume after queue drains.", LoopLifecycleBrush);
+                AppendLoopOutputLine($"⏹ Loop dequeued — {LoopTimestamp()} — will not resume after queue drains.", LoopLifecycleBrush);
                 SyncLoopPanel();
                 return;
             }
