@@ -12379,11 +12379,23 @@ public partial class MainWindow : Window, ILiveElementLocator
         // completed turn are in unrelated blocks and must be left untouched.
         if (!OutputTextBox.Selection.IsEmpty)
         {
-            var selStart = OutputTextBox.Selection.Start;
-            bool inThisSection = entry.Section.ContentStart.CompareTo(selStart) <= 0 &&
-                                 entry.Section.ContentEnd.CompareTo(selStart)   >= 0;
-            if (inThisSection)
-                OutputTextBox.Selection.Select(OutputTextBox.CaretPosition, OutputTextBox.CaretPosition);
+            try
+            {
+                var selStart = OutputTextBox.Selection.Start;
+                bool inThisSection = entry.Section.ContentStart.CompareTo(selStart) <= 0 &&
+                                     entry.Section.ContentEnd.CompareTo(selStart)   >= 0;
+                if (inThisSection)
+                    OutputTextBox.Selection.Select(OutputTextBox.CaretPosition, OutputTextBox.CaretPosition);
+            }
+            catch (ArgumentException)
+            {
+                // entry.Section and the selection's TextPointer belong to different TextTrees.
+                // This can happen when a subagent message arrives while a workspace/tab switch
+                // is in-flight: the section was added to a prior document instance that has
+                // since been replaced, so its ContentStart is no longer in the same tree as
+                // OutputTextBox.Selection.Start.  The selection is no longer relevant to this
+                // entry, so it is safe to skip the clear.
+            }
         }
 
         // Swap blocks in-place so the section never empties — Blocks.Clear() collapses the
