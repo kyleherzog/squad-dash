@@ -13075,13 +13075,15 @@ public partial class MainWindow : Window, ILiveElementLocator
         var capturedPath  = reportPath;
         var capturedLabel = agentLabel;
 
-        var link = new Hyperlink(new Run($"📋 {agentLabel}'s report"))
+        var button = new Button
         {
-            ToolTip = "Click to open the full agent report",
-            Cursor  = Cursors.Hand,
+            Content   = $"📋 {agentLabel}'s report",
+            ToolTip   = "Click to open the full agent report",
+            Cursor    = Cursors.Hand,
+            Margin    = new Thickness(0, 0, 0, 0),
         };
-        link.SetResourceReference(TextElement.ForegroundProperty, "DocumentLinkText");
-        link.Click += (_, _) =>
+        button.SetResourceReference(Control.StyleProperty, "TranscriptActionButtonStyle");
+        button.Click += (_, _) =>
         {
             if (File.Exists(capturedPath))
                 MarkdownDocumentWindow.Show(
@@ -13096,7 +13098,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                     MessageBoxImage.Information);
         };
 
-        var para = new Paragraph(link) { Margin = new Thickness(0, 4, 0, 6) };
+        var para = new Paragraph { Margin = new Thickness(0, 4, 0, 6) };
+        para.Inlines.Add(new InlineUIContainer(button) { BaselineAlignment = BaselineAlignment.Center });
 
         // Scope the link to the owning turn's NarrativeSection so it stays
         // with the turn both during live streaming and on transcript reload.
@@ -14494,9 +14497,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        transcriptButton.SetResourceReference(Control.StyleProperty, "TranscriptInlineButtonStyle");
-        transcriptButton.SetResourceReference(Control.ForegroundProperty, "ToolActionLink");
-        transcriptButton.SetResourceReference(Control.BorderBrushProperty, "ToolActionLinkBorder");
+        transcriptButton.SetResourceReference(Control.StyleProperty, "TranscriptActionButtonStyle");
         headerPanel.Children.Add(transcriptButton);
 
         var detailTextBox = new TextBox

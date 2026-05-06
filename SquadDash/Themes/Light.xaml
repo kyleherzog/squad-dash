@@ -109,6 +109,11 @@
     <SolidColorBrush x:Key="ToolFailureText" Color="#B22222"/>
     <SolidColorBrush x:Key="ToolActionLink" Color="#4682B4"/>
     <SolidColorBrush x:Key="ToolActionLinkBorder" Color="#B0C8E0"/>
+    <!-- Transcript Action Button Tokens (agent launch chip / report button) -->
+    <SolidColorBrush x:Key="TranscriptActionSurface" Color="#EAF2FC"/>
+    <SolidColorBrush x:Key="TranscriptActionHoverSurface" Color="#D4E8F6"/>
+    <SolidColorBrush x:Key="TranscriptActionBorder" Color="#B0C8E0"/>
+    <SolidColorBrush x:Key="TranscriptActionText" Color="#2E70B4"/>
     <SolidColorBrush x:Key="DiffAddedText" Color="#4682B4"/>
     <SolidColorBrush x:Key="DiffRemovedText" Color="#CD5C5C"/>
     <SolidColorBrush x:Key="DiffDeletedFileText" Color="#A77575"/>

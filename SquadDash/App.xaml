@@ -183,6 +183,45 @@
                 </Setter>
             </Style>
 
+            <!-- Transcript action button (agent launch / report viewer).
+                 Faint blue tint at rest so it reads as a button; hover deepens the tint.
+                 No text decoration — used for both the tool-transcript "Transcript" chip
+                 and the agent-report "📋 … report" button. -->
+            <Style x:Key="TranscriptActionButtonStyle" TargetType="Button">
+                <Setter Property="Background"       Value="{DynamicResource TranscriptActionSurface}"/>
+                <Setter Property="Foreground"       Value="{DynamicResource TranscriptActionText}"/>
+                <Setter Property="BorderBrush"      Value="{DynamicResource TranscriptActionBorder}"/>
+                <Setter Property="BorderThickness"  Value="1"/>
+                <Setter Property="Padding"          Value="6,2"/>
+                <Setter Property="Cursor"           Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="border"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="3"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="border" Property="Background" Value="{DynamicResource TranscriptActionHoverSurface}"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="border" Property="Background" Value="{DynamicResource TranscriptActionHoverSurface}"/>
+                                    <Setter TargetName="border" Property="Opacity" Value="0.8"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="border" Property="Opacity" Value="0.5"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- Danger button style — for destructive actions (e.g. "Close Now").
                  Background/hover/pressed use DangerButton* theme tokens so the red
                  tones invert correctly between light (hover = darker red) and
