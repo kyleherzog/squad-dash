@@ -189,12 +189,26 @@ internal sealed class SquadInstallerService {
             Directory.CreateDirectory(templateUniversesDir);
             EnsureUniverseMarkdown(templateUniversesDir, "squaddash.md", squadDashMd);
 
+            EnsureLoopFiles(activeDirectory);
             EnsureCastingStateFiles(activeDirectory);
             PatchCastingPolicy(activeDirectory);
         }
         catch {
             // Non-fatal — Squad installed successfully; user can add universe files manually.
         }
+    }
+
+    private static void EnsureLoopFiles(string activeDirectory) {
+        var squadDir = Path.Combine(activeDirectory, ".squad");
+        var loopTasksPath = Path.Combine(squadDir, "loop-tasks.md");
+        if (File.Exists(loopTasksPath))
+            return;
+
+        var content = LoadEmbeddedMarkdown("loop-tasks.md");
+        if (content is null)
+            return;
+
+        File.WriteAllText(loopTasksPath, content, Encoding.UTF8);
     }
 
     public static string? LoadEmbeddedSquadDashMdPublic() => LoadEmbeddedSquadDashMd();
