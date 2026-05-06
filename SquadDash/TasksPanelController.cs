@@ -23,6 +23,7 @@ internal sealed class TasksPanelController {
     private readonly Action          _editTasksAction;
     private readonly Func<string, Brush> _priorityDotColor;
     private readonly Action<TaskItem>?  _attachFollowUp;
+    private readonly Func<IReadOnlyList<SquadTeamMember>>? _getRoster;
 
     private bool      _showCompleted;
     private string    _filterText = string.Empty;
@@ -40,7 +41,8 @@ internal sealed class TasksPanelController {
         Action               editTasksAction,
         Func<string, Brush>  priorityDotColor,
         Action               reloadPanel,
-        Action<TaskItem>?    attachFollowUp = null) {
+        Action<TaskItem>?    attachFollowUp = null,
+        Func<IReadOnlyList<SquadTeamMember>>? getRoster = null) {
 
         _activePanel      = activePanel;
         _completedPanel   = completedPanel;
@@ -50,6 +52,7 @@ internal sealed class TasksPanelController {
         _priorityDotColor = priorityDotColor;
         _reloadPanel      = reloadPanel;
         _attachFollowUp   = attachFollowUp;
+        _getRoster        = getRoster;
 
         AttachPanelContextMenu(outerBorder);
     }
@@ -183,6 +186,8 @@ internal sealed class TasksPanelController {
         var markCompleteItem = MakeItem("Mark as Complete");
         markCompleteItem.Click += (_, _) => _ = HandleMarkCompleteAsync(item, isDone: true);
         menu.Items.Add(markCompleteItem);
+        menu.Items.Add(MakeSep());
+        menu.Items.Add(BuildAssignToMenuItem(item));
         if (_attachFollowUp is not null)
         {
             menu.Items.Add(MakeSep());
@@ -481,6 +486,90 @@ internal sealed class TasksPanelController {
                 wrote = true;
                 break;
             }
+        }
+
+        if (wrote)
+            _reloadPanel();
+    }
+
+    private MenuItem BuildAssignToMenuItem(TaskItem item) {
+        var assignItem = MakeItem("Assign to");
+        var subMenu = MakeMenu();
+        assignItem.Items.Add(subMenu); // placeholder so WPF treats it as a parent
+
+        assignItem.SubmenuOpened += (_, _) => {
+            assignItem.Items.Clear();
+
+            // "Me / You" always first
+            var meItem = MakeItem("Me / You");
+            meItem.Click += (_, _) => _ = HandleAssignOwnerAsync(item, "you");
+            if (string.Equals(item.Owner, "you", StringComparison.OrdinalIgnoreCase) ||
+                item.IsUserOwned)
+                meItem.IsChecked = true;
+            assignItem.Items.Add(meItem);
+
+            // Roster members (non-utility, non-retired)
+            var roster = _getRoster?.Invoke() ?? [];
+            var candidates = roster
+                .Where(m => !m.IsUtilityAgent &&
+                            !string.Equals(m.Status, "Retired", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (candidates.Count > 0) {
+                assignItem.Items.Add(MakeSep());
+                foreach (var member in candidates) {
+                    var agentItem = MakeItem(member.Name);
+                    agentItem.Click += (_, _) => _ = HandleAssignOwnerAsync(item, member.Name);
+                    if (item.Owner is not null &&
+                        string.Equals(item.Owner.Trim(), member.Name, StringComparison.OrdinalIgnoreCase))
+                        agentItem.IsChecked = true;
+                    assignItem.Items.Add(agentItem);
+                }
+            }
+
+            // "Remove owner" only if task currently has an owner
+            if (!string.IsNullOrWhiteSpace(item.Owner)) {
+                assignItem.Items.Add(MakeSep());
+                var removeItem = MakeItem("Remove owner");
+                removeItem.Click += (_, _) => _ = HandleAssignOwnerAsync(item, null);
+                assignItem.Items.Add(removeItem);
+            }
+        };
+
+        return assignItem;
+    }
+
+    private async Task HandleAssignOwnerAsync(TaskItem item, string? ownerName) {
+        var path = _getTasksPath();
+        if (path is null || !File.Exists(path)) return;
+
+        var lines = await Task.Run(() => File.ReadAllLines(path));
+        bool wrote = false;
+        for (int i = 0; i < lines.Length; i++) {
+            if (lines[i].TrimEnd() != item.RawLine) continue;
+
+            // Strip any existing *(Owner: ...)* suffix
+            const string marker = " *(Owner:";
+            var line = lines[i].TrimEnd();
+            var ownerIdx = line.IndexOf(marker, StringComparison.Ordinal);
+            if (ownerIdx >= 0) {
+                // Find closing ')' after the marker
+                var after = line[(ownerIdx + marker.Length)..];
+                var closeIdx = after.IndexOf(')', StringComparison.Ordinal);
+                if (closeIdx >= 0)
+                    line = line[..ownerIdx];
+                else
+                    line = line[..ownerIdx];
+            }
+
+            if (!string.IsNullOrWhiteSpace(ownerName))
+                line = $"{line} *(Owner: {ownerName})*";
+
+            lines[i] = line;
+            await Task.Run(() => File.WriteAllLines(path, lines));
+            wrote = true;
+            break;
         }
 
         if (wrote)

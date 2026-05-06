@@ -4253,7 +4253,10 @@ public partial class MainWindow : Window, ILiveElementLocator
             reloadPanel: () => Dispatcher.BeginInvoke(LoadTasksPanel),
             attachFollowUp: task => AttachContextFollowUp(
                 $"Task: {task.Text}",
-                BuildTaskContentBlock(task)));
+                BuildTaskContentBlock(task)),
+            getRoster: () => _currentWorkspace is null
+                                 ? []
+                                 : _teamRosterLoader.Load(_currentWorkspace.FolderPath));
 
         var workspace = _currentWorkspace;
         if (workspace is null) { _tasksPanelController.ShowEmpty("No workspace open"); return; }
