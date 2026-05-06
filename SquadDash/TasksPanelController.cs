@@ -494,8 +494,9 @@ internal sealed class TasksPanelController {
 
     private MenuItem BuildAssignToMenuItem(TaskItem item) {
         var assignItem = MakeItem("Assign to");
-        var subMenu = MakeMenu();
-        assignItem.Items.Add(subMenu); // placeholder so WPF treats it as a parent
+        // A MenuItem (not ContextMenu) placeholder — WPF needs at least one item to render the
+        // submenu arrow. It is replaced with real items when the submenu opens.
+        assignItem.Items.Add(MakeItem(string.Empty));
 
         assignItem.SubmenuOpened += (_, _) => {
             assignItem.Items.Clear();
