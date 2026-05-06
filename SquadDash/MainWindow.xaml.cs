@@ -125,6 +125,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private TextBox? _intelliSenseOwnerBox; // null = PromptTextBox; set when another box owns IntelliSense
     private Dictionary<string, string> _agentHandleByDisplayName = new(StringComparer.OrdinalIgnoreCase);
     private string[] _agentDisplayNames = [];
+    private string[] _tasksAgentSuggestions = [];
     private string[] _currentQuickReplyOptions = [];
     private TranscriptResponseEntry? _lastQuickReplyEntry;
     private TranscriptResponseEntry? _routingIssueQuickReplyEntry;
@@ -4541,6 +4542,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         catch { _tasksPanelController.ShowEmpty("Could not read tasks.md"); return; }
 
         var parseResult = TasksPanelParser.Parse(lines);
+        BuildTasksAgentSuggestions(parseResult);
 
         // Also gather completed items from completed-tasks.md (most-recent-first by file order)
         var completedTasksPath = Path.Combine(workspace.SquadFolderPath, "completed-tasks.md");
@@ -7122,6 +7124,39 @@ public partial class MainWindow : Window, ILiveElementLocator
     }
 
     /// <summary>
+    /// Rebuilds <see cref="_tasksAgentSuggestions"/> from the owners that appear in
+    /// <paramref name="result"/>. Adds "me" first if any task is user-owned, then adds
+    /// the display names (alphabetically) of agents that own at least one task and whose
+    /// display name is in <see cref="_agentHandleByDisplayName"/>.
+    /// </summary>
+    private void BuildTasksAgentSuggestions(TaskParseResult result)
+    {
+        var seen   = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var names  = new List<string>();
+        bool hasMe = false;
+
+        foreach (var group in result.OpenGroups)
+        {
+            foreach (var item in group.Items)
+            {
+                if (item.IsUserOwned)
+                    hasMe = true;
+
+                if (item.Owner is not null &&
+                    _agentHandleByDisplayName.ContainsKey(item.Owner) &&
+                    seen.Add(item.Owner))
+                {
+                    names.Add(item.Owner);
+                }
+            }
+        }
+
+        names.Sort(StringComparer.OrdinalIgnoreCase);
+        if (hasMe) names.Insert(0, "me");
+        _tasksAgentSuggestions = [.. names];
+    }
+
+    /// <summary>
     /// Searches backward from <paramref name="caret"/> for an '@' that is preceded by
     /// start-of-text or whitespace (i.e. not embedded in a word like an email address).
     /// Returns the index of '@', or -1 if not found.
@@ -7157,9 +7192,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (_intelliSenseState is not null) return;
 
         var atPos = FindAtTriggerPosition(text, caret);
-        if (atPos >= 0 && _agentDisplayNames.Length > 0)
+        if (atPos >= 0 && _tasksAgentSuggestions.Length > 0)
         {
-            var activated = IntelliSenseController.TryActivate('@', atPos, _agentDisplayNames);
+            var activated = IntelliSenseController.TryActivate('@', atPos, _tasksAgentSuggestions);
             if (activated is not null)
             {
                 _intelliSenseOwnerBox = TasksFilterBox;
@@ -7299,7 +7334,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             andSubmit = false;
             var displayName = _intelliSenseState.FilteredSuggestions[_intelliSenseState.SelectedIndex];
-            if (_agentHandleByDisplayName.TryGetValue(displayName, out var handle))
+            // "me" is a special suggestion that maps to itself as the filter handle.
+            var handle = string.Equals(displayName, "me", StringComparison.OrdinalIgnoreCase)
+                ? "me"
+                : (_agentHandleByDisplayName.TryGetValue(displayName, out var h) ? h : null);
+            if (handle is not null)
             {
                 var before = targetBox.Text[.._intelliSenseState.TriggerPosition];
                 var after  = targetBox.CaretIndex < targetBox.Text.Length
@@ -19949,7 +19988,12 @@ public partial class MainWindow : Window, ILiveElementLocator
             var text = TasksFilterBox?.Text ?? string.Empty;
             if (TasksFilterClearButton is not null)
                 TasksFilterClearButton.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-            _tasksPanelController?.SetFilter(text);
+            // Suppress filtering while @ IntelliSense is open in the tasks filter — only commit
+            // the filter once the user accepts (text changes) or dismisses (Escape handler below).
+            var filterText = (_intelliSenseState is not null && _intelliSenseOwnerBox == TasksFilterBox)
+                ? string.Empty
+                : text;
+            _tasksPanelController?.SetFilter(filterText);
             if (TasksFilterBox is not null)
                 TryUpdateTasksIntelliSense();
         }
@@ -19982,6 +20026,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                     _intelliSenseState = null;
                     _intelliSenseOwnerBox = null;
                     UpdateIntelliSensePopup();
+                    // IntelliSense was suppressing the filter; now apply it with current text.
+                    _tasksPanelController?.SetFilter(TasksFilterBox.Text.Trim());
                     e.Handled = true;
                     break;
             }

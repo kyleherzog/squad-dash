@@ -475,7 +475,9 @@ internal sealed class TasksPanelController {
         foreach (UIElement child in panel.Children) {
             if (child is System.Windows.Controls.Border { Tag: TaskItem item }) {
                 bool visible = ownerName is not null
-                    ? string.Equals(item.Owner?.Trim(), ownerName, StringComparison.OrdinalIgnoreCase)
+                    ? (ownerName == UserOwnedSentinel
+                        ? item.IsUserOwned
+                        : string.Equals(item.Owner?.Trim(), ownerName, StringComparison.OrdinalIgnoreCase))
                     : PanelFilterHelper.Matches(item.Text, _filterText);
                 child.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
             }
@@ -502,6 +504,9 @@ internal sealed class TasksPanelController {
             currentHeading.Visibility = headingHasVisible ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    // Sentinel returned by TryResolveOwnerFilter when the filter is "@me".
+    private const string UserOwnedSentinel = "\u0002USER_OWNED";
+
     /// <summary>
     /// If <paramref name="filter"/> is of the form <c>@handle</c>, resolves the handle to the
     /// corresponding agent's display name via the roster, and returns it. Returns null when the
@@ -511,6 +516,10 @@ internal sealed class TasksPanelController {
         if (!filter.StartsWith('@')) return null;
         var handle = filter[1..].Trim();
         if (string.IsNullOrEmpty(handle)) return null;
+
+        // Special: @me → match tasks where IsUserOwned is true.
+        if (string.Equals(handle, "me", StringComparison.OrdinalIgnoreCase))
+            return UserOwnedSentinel;
 
         var roster = _getRoster?.Invoke();
         if (roster is null) return null;
