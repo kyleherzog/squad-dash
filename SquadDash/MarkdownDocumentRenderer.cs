@@ -597,6 +597,16 @@ internal sealed class MarkdownDocumentRenderer {
                     commitLink.SetResourceReference(TextElement.BackgroundProperty, "CodeSurface");
                     commitLink.Click += (_, _) => _onLinkClicked(commitUrl);
                     inlines.Add(commitLink);
+                } else if (TryReadBareUrl(codeText, 0, out var codeUrlEnd, out var codeUrl) && codeUrlEnd == codeText.Length) {
+                    // Entire code span is a URL — render as a clickable link with code styling
+                    var codeLink = new Hyperlink(new Run(codeText)) {
+                        Tag = codeUrl,
+                        FontFamily = new FontFamily("Consolas")
+                    };
+                    codeLink.SetResourceReference(TextElement.ForegroundProperty, "DocumentLinkText");
+                    codeLink.SetResourceReference(TextElement.BackgroundProperty, "CodeSurface");
+                    codeLink.Click += (_, _) => _onLinkClicked(codeUrl);
+                    inlines.Add(codeLink);
                 } else {
                     var codeRun = new Run(codeText) {
                         FontFamily = new FontFamily("Consolas")
