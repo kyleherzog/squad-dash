@@ -68,7 +68,42 @@ See **[Fullscreen Transcript](fullscreen-transcript.md)** for details.
 
 ---
 
-## Troubleshooting
+## Smooth Dictation
+
+Voice recognition often inserts unwanted sentence breaks — ending a sentence with a period and capitalizing the next word, even when you intended it as a continuous thought.
+
+**Smooth Dictation** removes these spurious periods and lowercases the following word, joining sentences back together.
+
+### Using Smooth Dictation
+
+1. **Select the text** you want to clean up in the prompt box or documentation editor
+2. Press **Shift+Space**, or right-click and choose **✨ Smooth Dictation**
+
+The feature finds every occurrence of `. [Capital Letter]` and converts it to ` [lowercase letter]`.
+
+### Example
+
+**Before:**
+```
+sentence. Is usually marked with a period.
+```
+
+**After:**
+```
+sentence is usually marked with a period.
+```
+
+### Exception: The Pronoun "I"
+
+The pronoun **I** is preserved — patterns like `". I "`, `". I'm"`, and `". I'd"` are left unchanged.
+
+### Where It Works
+
+- **Prompt text box** (main input area at the bottom)
+- **Documentation source editor** (markdown editor window)
+- **Doc source pane** (RichTextBox source view inside the main window)
+
+---
 
 | Issue | Fix |
 |---|---|

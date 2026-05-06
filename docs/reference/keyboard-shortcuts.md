@@ -102,6 +102,7 @@ See **[Fullscreen Transcript Mode](../features/fullscreen-transcript.md)** for f
 |---|---|
 | **Ctrl+V** (clipboard image) | Intercept paste and attach image as **📷 Image** pill |
 | **Ctrl+B** | Wrap selected text in markdown bold (`**…**`) |
+| **Shift+Space** | Smooth Dictation — remove voice-dictated sentence breaks (see **[Voice Input](../features/voice-input.md#smooth-dictation)**) |
 
 ---
 
