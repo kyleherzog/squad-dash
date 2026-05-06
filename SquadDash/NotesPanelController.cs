@@ -134,7 +134,7 @@ internal sealed class NotesPanelController {
         // ── Hover tooltip ─────────────────────────────────────────────────────
         if (_loadPreview is not null)
         {
-            var tooltip = new ToolTip { MaxWidth = 280, Placement = System.Windows.Controls.Primitives.PlacementMode.Right };
+            var tooltip = new ToolTip { MaxWidth = 190, Placement = System.Windows.Controls.Primitives.PlacementMode.Right };
             tooltip.SetResourceReference(ToolTip.BackgroundProperty, "PopupSurface");
 
             tooltip.Opened += (_, _) =>
@@ -159,7 +159,7 @@ internal sealed class NotesPanelController {
 
     private object BuildTooltipContent(NoteItem note)
     {
-        var panel = new StackPanel { Margin = new Thickness(4, 4, 4, 6), MaxWidth = 268 };
+        var panel = new StackPanel { Margin = new Thickness(4, 4, 4, 6), MaxWidth = 178 };
 
         // Header: title — relative time
         var ts = DateTimeOffset.FromUnixTimeSeconds(note.CreatedAt);
@@ -172,7 +172,7 @@ internal sealed class NotesPanelController {
             FontWeight = FontWeights.SemiBold,
             FontSize   = 12,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxWidth   = 160,
+            MaxWidth   = 110,
         };
         titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "ImportantText");
         var separatorBlock = new TextBlock { Text = " — ", FontSize = 12 };
@@ -192,7 +192,7 @@ internal sealed class NotesPanelController {
             Text         = preview,
             FontSize     = 11,
             TextWrapping = TextWrapping.Wrap,
-            MaxWidth     = 268,
+            MaxWidth     = 178,
         };
         bodyBlock.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
         panel.Children.Add(bodyBlock);
