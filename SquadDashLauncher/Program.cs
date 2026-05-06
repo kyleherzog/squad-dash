@@ -87,8 +87,7 @@ internal static class Program {
             return 0;
 
         try {
-            WaitForRegisteredInstancesToExit(plan.Instances, GracefulRestartWait);
-            RelaunchInstances(plan.Instances);
+            WaitAndRelaunchInstances(plan.Instances, GracefulRestartWait);
         }
         finally {
             restartStateStore.ClearRequest(appRoot);
@@ -161,44 +160,62 @@ internal static class Program {
         }
     }
 
-    private static void WaitForRegisteredInstancesToExit(
+    /// <summary>
+    /// Relaunches each instance as soon as it exits, rather than waiting for all
+    /// instances to exit before relaunching any. This lets idle instances (e.g. other
+    /// workspaces that were not busy) come back immediately while a busy instance
+    /// finishes its current turn.
+    /// </summary>
+    private static void WaitAndRelaunchInstances(
         IReadOnlyList<RunningInstanceRecord> instances,
         TimeSpan timeout) {
         var deadline = DateTime.UtcNow + timeout;
+        var pending = new List<RunningInstanceRecord>(instances);
 
-        foreach (var instance in instances) {
-            while (DateTime.UtcNow < deadline && IsProcessAlive(instance))
+        while (pending.Count > 0 && DateTime.UtcNow < deadline) {
+            for (var i = pending.Count - 1; i >= 0; i--) {
+                if (!IsProcessAlive(pending[i])) {
+                    RelaunchInstance(pending[i]);
+                    pending.RemoveAt(i);
+                }
+            }
+
+            if (pending.Count > 0)
                 Thread.Sleep(250);
         }
 
-        foreach (var instance in instances.Where(IsProcessAlive)) {
-            try {
-                using var process = Process.GetProcessById(instance.ProcessId);
-                if (!process.HasExited)
-                    process.Kill(entireProcessTree: true);
-            }
-            catch {
-            }
+        // Timeout: forcibly close any stragglers and relaunch them.
+        foreach (var instance in pending) {
+            TryKillInstance(instance);
+            RelaunchInstance(instance);
         }
     }
 
-    private static void RelaunchInstances(IReadOnlyList<RunningInstanceRecord> instances) {
+    private static void TryKillInstance(RunningInstanceRecord instance) {
+        try {
+            using var process = Process.GetProcessById(instance.ProcessId);
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch {
+        }
+    }
+
+    private static void RelaunchInstance(RunningInstanceRecord instance) {
         var launcherPath = Environment.ProcessPath;
         if (string.IsNullOrWhiteSpace(launcherPath) || !File.Exists(launcherPath))
             throw new FileNotFoundException("Could not resolve the SquadDash launcher path.", launcherPath);
 
-        foreach (var instance in instances) {
-            var workspaceFolder = Directory.Exists(instance.WorkspaceFolder)
-                ? instance.WorkspaceFolder
-                : Environment.CurrentDirectory;
+        var workspaceFolder = Directory.Exists(instance.WorkspaceFolder)
+            ? instance.WorkspaceFolder
+            : Environment.CurrentDirectory;
 
-            Process.Start(new ProcessStartInfo {
-                FileName = launcherPath,
-                Arguments = QuoteArgument(workspaceFolder),
-                WorkingDirectory = workspaceFolder,
-                UseShellExecute = true
-            });
-        }
+        Process.Start(new ProcessStartInfo {
+            FileName = launcherPath,
+            Arguments = QuoteArgument(workspaceFolder),
+            WorkingDirectory = workspaceFolder,
+            UseShellExecute = true
+        });
     }
 
     private static void StartDetachedRestartCoordinator(string requestId) {
