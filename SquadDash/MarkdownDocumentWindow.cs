@@ -413,6 +413,8 @@ internal sealed class MarkdownDocumentWindow : Window {
                 mi.IsEnabled = tb.SelectionLength > 0;
             if (mi.Command == ApplicationCommands.Paste)
                 mi.IsEnabled = Clipboard.ContainsText();
+            if (mi.Tag is "SmoothDictation")
+                mi.IsEnabled = tb.SelectionLength > 0;
         }
 
         // Add "Add to Notes" if callback is set and there's a selection
@@ -565,15 +567,38 @@ internal sealed class MarkdownDocumentWindow : Window {
         };
         pasteItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
 
+        var sep = new Separator { Tag = "SmoothDictationSep" };
+        sep.SetResourceReference(Separator.StyleProperty, "ThemedMenuSeparatorStyle");
+
+        var smoothItem = new MenuItem {
+            Header           = "✨ Smooth Dictation",
+            InputGestureText = "Shift+Space",
+            Tag              = "SmoothDictation",
+        };
+        smoothItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+        smoothItem.Click += (_, _) => SmoothDictationHelper.ApplyToTextBox(tb);
+
         menu.Items.Add(cutItem);
         menu.Items.Add(copyItem);
         menu.Items.Add(pasteItem);
+        menu.Items.Add(sep);
+        menu.Items.Add(smoothItem);
 
         return menu;
     }
 
     private void EditorTextBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e) {
         if (sender is not TextBox tb) return;
+
+        // ── Smooth Dictation: Shift+Space on selection ────────────────────────
+        if (e.Key == System.Windows.Input.Key.Space
+            && (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Shift) != 0
+            && (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) == 0
+            && tb.SelectionLength > 0) {
+            e.Handled = SmoothDictationHelper.ApplyToTextBox(tb);
+            return;
+        }
+
         if ((System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) == 0) return;
         if (e.Key == System.Windows.Input.Key.B) {
             MarkdownEditorCommands.ApplyBold(tb);
