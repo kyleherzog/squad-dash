@@ -315,8 +315,15 @@ internal sealed class TasksPanelController {
 
             bool isFading = false;
             bool isMouseOverPopup = false;
+            DispatcherTimer? fadeDelayTimer = null;
+
+            void CancelPendingFade() {
+                fadeDelayTimer?.Stop();
+                fadeDelayTimer = null;
+            }
 
             void CancelFade() {
+                CancelPendingFade();
                 if (!isFading) return;
                 popupBorder.BeginAnimation(UIElement.OpacityProperty, null);
                 popupBorder.Opacity = 1.0;
@@ -338,6 +345,21 @@ internal sealed class TasksPanelController {
                 popupBorder.BeginAnimation(UIElement.OpacityProperty, anim);
             }
 
+            // Deferred fade: waits 'delayMs' before actually fading, so the mouse has time to
+            // travel from the row into the popup. If popupBorder.MouseEnter fires during the
+            // wait, CancelFade() kills the timer and the popup stays visible.
+            void ScheduleFadeOut(int delayMs = 500) {
+                CancelPendingFade();
+                if (!popup.IsOpen || isMouseOverPopup) return;
+                fadeDelayTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(delayMs) };
+                fadeDelayTimer.Tick += (_, _) => {
+                    fadeDelayTimer!.Stop();
+                    fadeDelayTimer = null;
+                    BeginFadeOut();
+                };
+                fadeDelayTimer.Start();
+            }
+
             // When the mouse moves into the popup keep it visible; fade only when it leaves.
             popupBorder.MouseEnter += (_, _) => {
                 isMouseOverPopup = true;
@@ -353,13 +375,14 @@ internal sealed class TasksPanelController {
 
             row.MouseEnter += (_, e) => {
                 hoverOrigin = row.PointToScreen(e.GetPosition(row));
+                CancelPendingFade();  // mouse returned to row — cancel any deferred fade
                 StartOpenTimer();
             };
 
             row.MouseLeave += (_, _) => {
                 openTimer?.Stop();
                 openTimer = null;
-                BeginFadeOut();
+                ScheduleFadeOut(500);  // give the mouse 500ms to reach the popup before fading
             };
 
             void StartOpenTimer() {
@@ -384,7 +407,7 @@ internal sealed class TasksPanelController {
                 var dy = current.Y - hoverOrigin.Y;
                 if (Math.Sqrt(dx * dx + dy * dy) > 10.0) {
                     hoverOrigin = current;
-                    BeginFadeOut();
+                    ScheduleFadeOut(500);
                     // Re-arm the open timer so the popup shows again once the cursor settles.
                     StartOpenTimer();
                 }
