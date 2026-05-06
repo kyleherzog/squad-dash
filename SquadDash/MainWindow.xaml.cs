@@ -5661,6 +5661,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                     var text = TranscriptCopyService.BuildSelectionMarkdown(OutputTextBox);
                     if (!string.IsNullOrWhiteSpace(text))
                         AddNoteFromText(text);
+                    OutputTextBox.Selection.Select(OutputTextBox.CaretPosition, OutputTextBox.CaretPosition);
                 };
                 menu.Items.Add(addToNotesItem);
             }
@@ -12003,6 +12004,12 @@ public partial class MainWindow : Window, ILiveElementLocator
         var newBlocks = BuildResponseBlocks(entry, sanitizedText, entry.AllowQuickReplies).ToList();
         if (newBlocks.Count == 0)
             newBlocks.Add(CreateTranscriptParagraph(bottomMargin: 18));
+
+        // If the user has a selection, clear it before swapping blocks. When old blocks are
+        // removed from the document, their TextPointers become stale — WPF renders the selection
+        // highlight at the last known pixel coordinates (a "ghost" that doesn't scroll or resize).
+        if (!OutputTextBox.Selection.IsEmpty)
+            OutputTextBox.Selection.Select(OutputTextBox.CaretPosition, OutputTextBox.CaretPosition);
 
         // Swap blocks in-place so the section never empties — Blocks.Clear() collapses the
         // document height synchronously, clamping VerticalOffset before the rebuild adds
