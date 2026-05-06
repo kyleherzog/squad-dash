@@ -345,6 +345,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _pttHadPreexistingText;
     private bool _pttShiftTappedDuringRecording;
     private bool _voiceStartedWithSendEnabled;
+    private bool _pttLostFocusDuringRecording;   // set when another window stole focus mid-PTT
+    private DispatcherTimer? _pttCtrlPollTimer;   // polls GetAsyncKeyState while window is inactive
     private DateTime _ctrlFirstDownTime;
     private DateTime _ctrlFirstReleaseTime;
     private SpeechRecognitionService? _speechService;
@@ -6327,9 +6329,12 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     /// <summary>
     /// Called when another application takes focus away from SquadDash.
-    /// WPF does not deliver KeyUp events while the window is inactive, so a Ctrl key
-    /// released while focus belongs to another app would leave PTT running indefinitely.
-    /// Stopping here ensures the voice UI always collapses on window deactivation.
+    /// WPF does not deliver KeyUp events while the window is inactive, so if Ctrl is
+    /// released in the other app we would never see it. Instead of stopping PTT
+    /// immediately (which would discard in-progress dictation), we:
+    ///   1. Flag that focus was lost — this suppresses auto-send when PTT eventually stops.
+    ///   2. Start a 100 ms polling timer that uses GetAsyncKeyState to watch for Ctrl release.
+    ///      When both Ctrl keys are up, PTT stops (no send).
     /// </summary>
     private void Window_Deactivated(object sender, EventArgs e)
     {
@@ -6338,13 +6343,15 @@ public partial class MainWindow : Window, ILiveElementLocator
             switch (_pttState)
             {
                 case PttState.Active:
-                    // Stop without sending — the user lost focus mid-dictation.
-                    _ = StopPushToTalkAsync(send: false);
+                    // Mark so that whenever PTT stops (via poll or KeyUp after refocus), send is suppressed.
+                    _pttLostFocusDuringRecording = true;
+                    _pttWindow?.MarkShiftSuppressed(); // update the visual hint
+                    StartPttCtrlPollTimer();
                     break;
 
                 case PttState.TapDown:
                 case PttState.TapReleased:
-                    // Reset the tap sequence — any pending Ctrl tap is now stale.
+                    // Reset stale tap sequence — cannot complete the double-tap while inactive.
                     _pttState = PttState.Idle;
                     _ctrlFirstDownTime = default;
                     _ctrlFirstReleaseTime = default;
@@ -6355,6 +6362,68 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             HandleUiCallbackException(nameof(Window_Deactivated), ex);
         }
+    }
+
+    /// <summary>
+    /// Called when SquadDash regains focus. If the user kept Ctrl held while switching back,
+    /// cancel the poll timer and return to normal key-event handling. The
+    /// <c>_pttLostFocusDuringRecording</c> flag remains set so that when they finally release
+    /// Ctrl the send is still suppressed — they may not have seen what was dictated.
+    /// If Ctrl is already up when we regain focus, the poll timer will fire within 100 ms
+    /// and stop PTT cleanly.
+    /// </summary>
+    private void Window_Activated(object sender, EventArgs e)
+    {
+        try
+        {
+            if (_pttState == PttState.Active && _pttCtrlPollTimer is not null)
+            {
+                // Still Active — check immediately whether Ctrl is already released.
+                if (!NativeMethods.IsCtrlPhysicallyDown())
+                {
+                    StopPttCtrlPollTimer();
+                    _ = StopPushToTalkAsync(send: false); // _pttLostFocusDuringRecording already set
+                }
+                else
+                {
+                    // Ctrl still held — normal PreviewKeyUp will handle release; cancel poll.
+                    StopPttCtrlPollTimer();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            HandleUiCallbackException(nameof(Window_Activated), ex);
+        }
+    }
+
+    private void StartPttCtrlPollTimer()
+    {
+        if (_pttCtrlPollTimer is not null)
+            return; // already running
+
+        _pttCtrlPollTimer = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(100)
+        };
+        _pttCtrlPollTimer.Tick += (_, _) =>
+        {
+            if (_pttState != PttState.Active || NativeMethods.IsCtrlPhysicallyDown())
+                return; // Ctrl still down or PTT already stopped — keep waiting
+
+            // Ctrl has been released while inactive — stop PTT without sending.
+            StopPttCtrlPollTimer();
+            _ = StopPushToTalkAsync(send: false);
+        };
+        _pttCtrlPollTimer.Start();
+    }
+
+    private void StopPttCtrlPollTimer()
+    {
+        if (_pttCtrlPollTimer is null)
+            return;
+        _pttCtrlPollTimer.Stop();
+        _pttCtrlPollTimer = null;
     }
 
     private void Window_PreviewKeyUp(object sender, KeyEventArgs e)
@@ -6394,7 +6463,9 @@ public partial class MainWindow : Window, ILiveElementLocator
                         var shiftHeld = (e.KeyboardDevice.Modifiers & ModifierKeys.Shift) != 0
                                         || e.KeyboardDevice.IsKeyDown(Key.LeftShift)
                                         || e.KeyboardDevice.IsKeyDown(Key.RightShift);
-                        var suppress = shiftHeld || _pttShiftTappedDuringRecording || _pttHadPreexistingText;
+                        var suppress = shiftHeld || _pttShiftTappedDuringRecording || _pttHadPreexistingText
+                                                 || _pttLostFocusDuringRecording;
+                        StopPttCtrlPollTimer();
                         // Send only if PTT started with Send enabled AND no suppression flags
                         _ = StopPushToTalkAsync(send: _voiceStartedWithSendEnabled && !suppress);
                     }
@@ -6418,6 +6489,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         _pttHadPreexistingText = !string.IsNullOrEmpty(target.Text);
         _pttShiftTappedDuringRecording = false;
+        _pttLostFocusDuringRecording = false;
         var key = Environment.GetEnvironmentVariable("SQUAD_SPEECH_KEY", EnvironmentVariableTarget.User);
         var region = _settingsSnapshot.SpeechRegion;
 
@@ -6542,6 +6614,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private async Task StopPushToTalkAsync(bool send)
     {
         _pttState = PttState.Idle;
+        StopPttCtrlPollTimer();
+        _pttLostFocusDuringRecording = false;
         var wasTargetingPrompt = _pttTargetTextBox is null || _pttTargetTextBox == PromptTextBox;
         // Do NOT null _pttTargetTextBox here — pending AppendSpeechToPrompt BeginInvoke
         // callbacks in the dispatcher queue still need it to route text to the correct target.

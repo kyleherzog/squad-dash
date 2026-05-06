@@ -233,6 +233,22 @@ internal static class NativeMethods {
         return nint.Zero;
     }
 
+    // ── Keyboard state polling ────────────────────────────────────────────────
+
+    // Virtual-key codes for left/right Ctrl
+    private const int VK_LCONTROL = 0xA2;
+    private const int VK_RCONTROL = 0xA3;
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
+
+    /// <summary>
+    /// Returns <c>true</c> if either Ctrl key is physically held down right now,
+    /// regardless of which window has focus.
+    /// </summary>
+    public static bool IsCtrlPhysicallyDown()
+        => ((GetAsyncKeyState(VK_LCONTROL) | GetAsyncKeyState(VK_RCONTROL)) & 0x8000) != 0;
+
     // ── GDI screen-capture ────────────────────────────────────────────────────
 
     [DllImport("user32.dll")]
