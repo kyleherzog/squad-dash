@@ -79,6 +79,10 @@ internal sealed class ClipboardImageEditorWindow : Window
     private double _zoom = 1.0;
     private readonly ScaleTransform _scaleTransform = new(1.0, 1.0);
 
+    // Scale factor: canvas logical units per image pixel (< 1 when image DPI > 96).
+    private double _canvasScaleX = 1.0;
+    private double _canvasScaleY = 1.0;
+
     // ── Theme ─────────────────────────────────────────────────────────────────
 
     private readonly string _themeName;
@@ -196,18 +200,26 @@ internal sealed class ClipboardImageEditorWindow : Window
         LoadArrowDefaults();
 
         // ── Compute display size ─────────────────────────────────────────────
-        // Canvas shows image at full resolution but window is capped to 85% of work area.
-        // The user can Ctrl+scroll to zoom in/out (the canvas stays at fixed logical size;
-        // zoom is applied via ScaleTransform on the wrapper so DoInsertImage is unaffected).
+        // Canvas shows image at its intended logical size, correcting for source DPI.
+        // Screenshots taken on a 150%-scaled monitor arrive with DpiX/Y=144; without
+        // correction the canvas would be 1.5× too large.  We normalise to 96 dpi so
+        // the image appears at the intended physical size on any monitor.
+        // Ctrl+scroll zoom is applied via ScaleTransform on the wrapper so
+        // DoInsertImage always renders at the original pixel dimensions.
         var workArea = SystemParameters.WorkArea;
         double imgW = clipboardImage.PixelWidth;
         double imgH = clipboardImage.PixelHeight;
         double maxWinW = workArea.Width * 0.85;
         double maxWinH = workArea.Height * 0.85;
 
-        // Canvas is always the full image resolution (no pre-scaling).
-        double dispW = imgW;
-        double dispH = imgH;
+        double imageDpiX = clipboardImage.DpiX > 0 ? clipboardImage.DpiX : 96.0;
+        double imageDpiY = clipboardImage.DpiY > 0 ? clipboardImage.DpiY : 96.0;
+        // Logical (WPF) canvas size normalised to 96 dpi.
+        double dispW = imgW * 96.0 / imageDpiX;
+        double dispH = imgH * 96.0 / imageDpiY;
+        // Pixels per canvas logical unit — used for pixel sampling and export crop.
+        _canvasScaleX = imgW / dispW;  // = imageDpiX / 96
+        _canvasScaleY = imgH / dispH;
 
         // Set initial window size: image + chrome, capped to 85% work area.
         Width = Math.Min(maxWinW, dispW + 20);
@@ -445,10 +457,18 @@ internal sealed class ClipboardImageEditorWindow : Window
             Text = "",
             VerticalAlignment = VerticalAlignment.Center,
             FontFamily = new FontFamily("Consolas"),
-            FontSize = 11,
+            FontSize = 13,
             Margin = new Thickness(0, 0, 8, 0)
         };
         _eyedropperHexLabel.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
+        _eyedropperHexLabel.ContextMenu = new ContextMenu();
+        var copyHexItem = new MenuItem { Header = "Copy" };
+        copyHexItem.Click += (_, _) =>
+        {
+            if (!string.IsNullOrEmpty(_eyedropperHexLabel.Text))
+                Clipboard.SetText(_eyedropperHexLabel.Text);
+        };
+        _eyedropperHexLabel.ContextMenu.Items.Add(copyHexItem);
 
         // In prompt mode the Round Corners option is not relevant — hide it.
         if (_isPromptMode)
@@ -2121,8 +2141,9 @@ internal sealed class ClipboardImageEditorWindow : Window
     private Color SamplePixelAtCanvasPoint(Point pt)
     {
         if (_cachedPixels == null) CachePixels();
-        int px = (int)Math.Max(0, Math.Min(pt.X, _clipboardImage.PixelWidth - 1));
-        int py = (int)Math.Max(0, Math.Min(pt.Y, _clipboardImage.PixelHeight - 1));
+        // Canvas coordinates are in logical (96-dpi) units; convert to image pixels.
+        int px = (int)Math.Max(0, Math.Min(pt.X * _canvasScaleX, _clipboardImage.PixelWidth - 1));
+        int py = (int)Math.Max(0, Math.Min(pt.Y * _canvasScaleY, _clipboardImage.PixelHeight - 1));
         int offset = py * _cachedStride + px * 4;
         byte bv = _cachedPixels![offset];
         byte gv = _cachedPixels[offset + 1];
@@ -2152,7 +2173,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         {
             _eyedropperTooltipText = new TextBlock
             {
-                FontSize = 11,
+                FontSize = 13,
                 FontFamily = new FontFamily("Consolas"),
                 Foreground = Brushes.White,
                 IsHitTestVisible = false
@@ -2223,23 +2244,31 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         try
         {
-            var dpi = VisualTreeHelper.GetDpi(this);
-            var pxW = (int)Math.Round(_canvas.ActualWidth * dpi.DpiScaleX);
-            var pxH = (int)Math.Round(_canvas.ActualHeight * dpi.DpiScaleY);
+            // Always render at original pixel dimensions regardless of monitor DPI or
+            // the display scaling applied in the constructor.
+            var pxW = _clipboardImage.PixelWidth;
+            var pxH = _clipboardImage.PixelHeight;
             if (pxW < 1 || pxH < 1) return;
 
-            var rtb = new RenderTargetBitmap(
-                pxW, pxH,
-                dpi.PixelsPerInchX, dpi.PixelsPerInchY,
-                PixelFormats.Pbgra32);
-            rtb.Render(_canvas);
+            // Use a DrawingVisual so we can scale from canvas logical size to pixel size.
+            var rtb = new RenderTargetBitmap(pxW, pxH, 96, 96, PixelFormats.Pbgra32);
+            var dv = new DrawingVisual();
+            using (var ctx = dv.RenderOpen())
+            {
+                // VisualBrush with Stretch=Fill maps the full canvas to the target rect,
+                // preserving every original pixel even when canvas was DPI-downscaled.
+                var vb = new VisualBrush(_canvas) { Stretch = Stretch.Fill };
+                ctx.DrawRectangle(vb, null, new Rect(0, 0, pxW, pxH));
+            }
+            rtb.Render(dv);
             rtb.Freeze();
 
+            // Crop: convert canvas logical selection coords back to pixel coords.
             var cropSel = _sel.IsEmpty ? new Rect(0, 0, _canvas.ActualWidth, _canvas.ActualHeight) : _sel;
-            var cropX = (int)Math.Round(cropSel.Left * dpi.DpiScaleX);
-            var cropY = (int)Math.Round(cropSel.Top * dpi.DpiScaleY);
-            var cropW = (int)Math.Round(cropSel.Width * dpi.DpiScaleX);
-            var cropH = (int)Math.Round(cropSel.Height * dpi.DpiScaleY);
+            var cropX = (int)Math.Round(cropSel.Left * _canvasScaleX);
+            var cropY = (int)Math.Round(cropSel.Top * _canvasScaleY);
+            var cropW = (int)Math.Round(cropSel.Width * _canvasScaleX);
+            var cropH = (int)Math.Round(cropSel.Height * _canvasScaleY);
 
             cropX = Math.Max(0, cropX);
             cropY = Math.Max(0, cropY);
