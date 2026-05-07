@@ -16,6 +16,7 @@ internal sealed class RevisionHighlightAdorner : Adorner
     private readonly RichTextBox _rtb;
     private TextPointer? _start;
     private TextPointer? _end;
+    private EventHandler? _layoutUpdatedHandler;
 
     private RevisionHighlightAdorner(RichTextBox rtb) : base(rtb)
     {
@@ -23,6 +24,11 @@ internal sealed class RevisionHighlightAdorner : Adorner
         IsHitTestVisible = false;
 
         rtb.SizeChanged += (_, _) => InvalidateVisual();
+        // LayoutUpdated fires after any document-content change causes a layout pass
+        // (e.g. coordinator appending text while a revision is pending). Neither
+        // SizeChanged nor ScrollChanged fires in that case, leaving the adorner stale.
+        _layoutUpdatedHandler = (_, _) => InvalidateVisual();
+        rtb.LayoutUpdated += _layoutUpdatedHandler;
         rtb.Loaded += (_, _) => SubscribeToScrollViewer();
         if (rtb.IsLoaded)
             SubscribeToScrollViewer();
@@ -73,6 +79,11 @@ internal sealed class RevisionHighlightAdorner : Adorner
         {
             _start = null;
             _end   = null;
+            if (_layoutUpdatedHandler is not null)
+            {
+                _rtb.LayoutUpdated -= _layoutUpdatedHandler;
+                _layoutUpdatedHandler = null;
+            }
             AdornerLayer.GetAdornerLayer(_rtb)?.Remove(this);
         }
         catch { }

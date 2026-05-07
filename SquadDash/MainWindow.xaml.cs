@@ -10051,9 +10051,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         var originalText = textBox.GetSubstring(selStart, selLen);
         var fullText     = textBox.GetPlainText();
 
-        // Capture live TextPointer anchors (not frozen) — they track document edits automatically
-        var startPointer = textBox.Document.ContentStart.GetPositionAtOffset(selStart, LogicalDirection.Forward);
-        var endPointer   = textBox.Document.ContentStart.GetPositionAtOffset(selStart + selLen, LogicalDirection.Backward);
+        // Capture live TextPointer anchors — use GetTextPointerAt so offsets are counted
+        // as plain-text characters (not FlowDocument structural symbols).
+        // WPF TextPointers automatically track insertions/deletions that happen before them.
+        var startPointer = textBox.GetTextPointerAt(selStart);
+        var endPointer   = textBox.GetTextPointerAt(selStart + selLen);
 
         RevisionPendingIndicator?  indicator = null;
         RevisionHighlightAdorner?  highlight = null;
