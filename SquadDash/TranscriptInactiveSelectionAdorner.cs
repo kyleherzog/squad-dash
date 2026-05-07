@@ -137,6 +137,8 @@ internal sealed class TranscriptInactiveSelectionAdorner : Adorner
 
     private bool ShouldDrawSelection() =>
         _rtb.IsVisible
+        && _rtb.Opacity > 0.01
+        && _rtb.IsHitTestVisible
         && RenderSize.Width > 0
         && RenderSize.Height > 0
         && !_rtb.Selection.IsEmpty

@@ -52,6 +52,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private const double DocSourceFontSizeMin = 8;
     private const double DocSourceFontSizeMax = 28;
     private const double DocSourceFontSizeStep = 1;
+    private const DispatcherPriority PostVisualUpdatePriority = DispatcherPriority.Loaded;
     private static readonly TimeSpan MultiLineHintCooldown = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan AgentActiveDisplayLinger = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan DynamicAgentHistoryRetention = TimeSpan.FromDays(2);
@@ -5689,7 +5690,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void QueueDeferredTranscriptPanelOperation(string reason, Action action)
     {
         var queuedAt = Stopwatch.GetTimestamp();
-        _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        _ = Dispatcher.BeginInvoke(PostVisualUpdatePriority, () =>
         {
             var queueMs = (long)((Stopwatch.GetTimestamp() - queuedAt) * 1000.0 / Stopwatch.Frequency);
             var sw = Stopwatch.StartNew();
@@ -5760,7 +5761,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         var requestVersion = ++_deferredPrimaryTranscriptSelectionVersion;
         var queuedAt = Stopwatch.GetTimestamp();
-        _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        _ = Dispatcher.BeginInvoke(PostVisualUpdatePriority, () =>
         {
             if (requestVersion != _deferredPrimaryTranscriptSelectionVersion)
             {
@@ -12025,7 +12026,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void QueueDeferredLiveTranscriptSwitch(TranscriptThreadState thread, bool scrollToStart)
     {
         var queuedAt = Stopwatch.GetTimestamp();
-        _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        _ = Dispatcher.BeginInvoke(PostVisualUpdatePriority, () =>
         {
             if (!ReferenceEquals(_selectedTranscriptThread, thread))
                 return;
@@ -12038,7 +12039,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (_conversationManager.HasPendingRender(thread))
                 _ = _conversationManager.EnsureAgentThreadRenderedAsync(thread);
             ScrollTranscriptThread(thread, scrollToStart);
-            SyncPromptNavButtons();
+            SyncPromptNavButtons(allowGeometry: false);
+            SchedulePromptNavGeometryRefresh();
             UpdateInteractiveControlState();
             sw.Stop();
             SquadDashTrace.Write(TraceCategory.Performance,
@@ -12170,7 +12172,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         bool scrollToStart)
     {
         var queuedAt = Stopwatch.GetTimestamp();
-        _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        _ = Dispatcher.BeginInvoke(PostVisualUpdatePriority, () =>
         {
             if (!ReferenceEquals(_selectedTranscriptThread, thread))
                 return;
@@ -12286,7 +12288,10 @@ public partial class MainWindow : Window, ILiveElementLocator
         var t4 = swSelect.ElapsedMilliseconds;
 
         if (!useSnapshotFastPath)
-            SyncPromptNavButtons();
+        {
+            SyncPromptNavButtons(allowGeometry: false);
+            SchedulePromptNavGeometryRefresh();
+        }
         var t5 = swSelect.ElapsedMilliseconds;
 
         // If this agent thread's turns were deferred at startup (lazy rendering),
@@ -15304,7 +15309,16 @@ public partial class MainWindow : Window, ILiveElementLocator
         canGoDown = nearestBelowIdx >= 0;
     }
 
-    private void SyncPromptNavButtons()
+    private void SchedulePromptNavGeometryRefresh()
+    {
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, () =>
+        {
+            try { SyncPromptNavButtons(allowGeometry: true); }
+            catch (Exception ex) { HandleUiCallbackException(nameof(SchedulePromptNavGeometryRefresh), ex); }
+        });
+    }
+
+    private void SyncPromptNavButtons(bool allowGeometry = true)
     {
         var thread = _selectedTranscriptThread ?? CoordinatorThread;
         var count = thread.PromptParagraphs.Count;
@@ -15315,13 +15329,15 @@ public partial class MainWindow : Window, ILiveElementLocator
             ? Visibility.Visible
             : Visibility.Collapsed;
 
-        // Base enabled state on scroll position so that manual scrolling keeps
-        // both buttons in sync — not just on which button was last clicked.
-        GetScrollBasedNavState(out bool canGoUp, out bool canGoDown, out _, out _);
-
-        // Fall back to the index-based check when the scroll viewer isn't ready yet
-        // (e.g. during initial layout before the template is applied).
-        if (_transcriptScrollViewer is null)
+        bool canGoUp;
+        bool canGoDown;
+        if (allowGeometry && _transcriptScrollViewer is not null)
+        {
+            // Base enabled state on scroll position so that manual scrolling keeps
+            // both buttons in sync — not just on which button was last clicked.
+            GetScrollBasedNavState(out canGoUp, out canGoDown, out _, out _);
+        }
+        else
         {
             canGoUp   = count > 0 && (idx == -1 || idx > 0);
             canGoDown = count > 0 && idx != -1 && idx < count - 1;

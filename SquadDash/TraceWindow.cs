@@ -25,6 +25,7 @@ namespace SquadDash;
 /// </summary>
 internal sealed class TraceWindow : Window, ILiveTraceTarget
 {
+    private const int MaxFlushEntries = 200;
     private readonly TextBox _logTextBox = null!;
     private readonly WrapPanel _checkboxPanel = null!;
     private readonly ApplicationSettingsStore _settingsStore;
@@ -283,7 +284,7 @@ internal sealed class TraceWindow : Window, ILiveTraceTarget
         var timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
         if (!Dispatcher.CheckAccess())
         {
-            Dispatcher.BeginInvoke(DispatcherPriority.Background, () => EnqueueEntry(category, timestamp, detail));
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => EnqueueEntry(category, timestamp, detail));
             return;
         }
 
@@ -299,7 +300,7 @@ internal sealed class TraceWindow : Window, ILiveTraceTarget
             return;
 
         _flushPending = true;
-        Dispatcher.BeginInvoke(DispatcherPriority.Background, FlushPendingEntries);
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, FlushPendingEntries);
     }
 
     private void FlushPendingEntries()
@@ -312,15 +313,23 @@ internal sealed class TraceWindow : Window, ILiveTraceTarget
         if (_logTextBox.Text.Length > 0)
             builder.AppendLine();
 
-        while (_pendingEntries.Count > 0)
+        var entryCount = 0;
+        while (_pendingEntries.Count > 0 && entryCount < MaxFlushEntries)
         {
             var (category, timestamp, detail) = _pendingEntries.Dequeue();
             builder.Append($"{timestamp}  {category,-24}  {detail}");
-            if (_pendingEntries.Count > 0)
+            entryCount++;
+            if (_pendingEntries.Count > 0 && entryCount < MaxFlushEntries)
                 builder.AppendLine();
         }
 
         _logTextBox.AppendText(builder.ToString());
         _logTextBox.ScrollToEnd();
+
+        if (_pendingEntries.Count > 0)
+        {
+            _flushPending = true;
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, FlushPendingEntries);
+        }
     }
 }
