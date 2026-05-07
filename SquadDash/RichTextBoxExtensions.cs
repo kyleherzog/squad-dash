@@ -52,7 +52,7 @@ internal static class RichTextBoxExtensions
         rtb.Document.Blocks.Clear();
         var lines = (text ?? string.Empty).Replace("\r\n", "\n").Split('\n');
         foreach (var line in lines)
-            rtb.Document.Blocks.Add(new Paragraph(new Run(line)));
+            rtb.Document.Blocks.Add(new Paragraph(new Run(line)) { Margin = new Thickness(0) });
     }
 
     // ── TextPointer ↔ char-offset conversions ─────────────────────────────────

@@ -1578,6 +1578,10 @@ internal sealed class MarkdownDocumentTabState {
             Visibility = Visibility.Collapsed
         };
         EditorTextBox.SetPlainText(stripped);
+        EditorTextBox.Document.Resources[typeof(Paragraph)] = new Style(typeof(Paragraph))
+        {
+            Setters = { new Setter(Block.MarginProperty, new Thickness(0)) }
+        };
         EditorTextBox.SetResourceReference(RichTextBox.BackgroundProperty, "InputSurface");
         EditorTextBox.SetResourceReference(RichTextBox.ForegroundProperty, "LabelText");
         

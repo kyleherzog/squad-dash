@@ -1801,7 +1801,13 @@
                              SelectionChanged="DocSourceTextBox_SelectionChanged"
                              TextChanged="DocSourceTextBox_TextChanged">
                         <RichTextBox.Document>
-                            <FlowDocument PageWidth="100000" />
+                            <FlowDocument PageWidth="100000">
+                                <FlowDocument.Resources>
+                                    <Style TargetType="Paragraph">
+                                        <Setter Property="Margin" Value="0"/>
+                                    </Style>
+                                </FlowDocument.Resources>
+                            </FlowDocument>
                         </RichTextBox.Document>
                     </RichTextBox>
                 </DockPanel>
