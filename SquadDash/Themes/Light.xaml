@@ -154,10 +154,10 @@
     <!-- Revision Highlight Token (used by RevisionHighlightAdorner while AI is revising) -->
     <SolidColorBrush x:Key="RevisionHighlight"          Color="#2860B878"/>
     <!-- Editor selection colours -->
-    <SolidColorBrush x:Key="DocEditorSelectionBrush"    Color="#B8D8FF"/>
+    <SolidColorBrush x:Key="DocEditorSelectionBrush"    Color="#EAF5FF"/>
     <SolidColorBrush x:Key="DocEditorSelectionTextBrush" Color="#0D0D0D"/>
     <!-- Active selection system-colour overrides — make text readable on the pale blue background -->
-    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}"     Color="#B8D8FF"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}"     Color="#EAF5FF"/>
     <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#0D0D0D"/>
     <!-- Screenshot Overlay Tokens -->
     <SolidColorBrush x:Key="OverlayDimFill"             Color="#60000000"/>
@@ -165,6 +165,6 @@
     <SolidColorBrush x:Key="ScreenshotAnchorUnnamed"     Color="#F57F17"/>
     <SolidColorBrush x:Key="ScreenshotAnchorMissing"     Color="#C62828"/>
     <!-- TreeView unfocused-selection override (keeps selection visible in light theme) -->
-    <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#C8DAEF"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#DDE9F5"/>
     <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#1E3A5F"/>
 </ResourceDictionary>
