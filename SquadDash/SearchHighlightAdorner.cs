@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace SquadDash;
@@ -18,6 +19,7 @@ internal sealed class SearchHighlightAdorner : Adorner
     private readonly RichTextBox _rtb;
     private List<(TextPointer Start, TextPointer End, string Text)> _matches = [];
     private int _currentIndex = -1;
+    private MouseWheelEventHandler? _mouseWheelHandler;
 
     public SearchHighlightAdorner(RichTextBox richTextBox) : base(richTextBox)
     {
@@ -37,6 +39,13 @@ internal sealed class SearchHighlightAdorner : Adorner
         var sv = FindScrollViewer(_rtb);
         if (sv is not null)
             sv.ScrollChanged += (_, _) => InvalidateVisual();
+
+        // Belt-and-suspenders: subscribe to MouseWheel on the RTB itself so highlights
+        // reposition on every scroll, even when PART_ContentHost.ScrollChanged doesn't
+        // fire through the expected path (e.g. after focus shifts to a sibling panel).
+        // handlesEventsToo: true — PART_ContentHost marks the event handled in OnMouseWheel.
+        _mouseWheelHandler = (_, _) => InvalidateVisual();
+        _rtb.AddHandler(UIElement.MouseWheelEvent, _mouseWheelHandler, true);
     }
 
     private static ScrollViewer? FindScrollViewer(DependencyObject parent)

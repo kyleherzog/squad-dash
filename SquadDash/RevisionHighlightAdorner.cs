@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace SquadDash;
@@ -17,6 +18,9 @@ internal sealed class RevisionHighlightAdorner : Adorner
     private TextPointer? _start;
     private TextPointer? _end;
     private EventHandler? _layoutUpdatedHandler;
+    private ScrollChangedEventHandler? _scrollChangedHandler;
+    private ScrollViewer? _subscribedSv;
+    private MouseWheelEventHandler? _mouseWheelHandler;
 
     private RevisionHighlightAdorner(RichTextBox rtb) : base(rtb)
     {
@@ -38,7 +42,20 @@ internal sealed class RevisionHighlightAdorner : Adorner
     {
         var sv = FindScrollViewer(_rtb);
         if (sv is not null)
-            sv.ScrollChanged += (_, _) => InvalidateVisual();
+        {
+            _scrollChangedHandler = (_, _) => InvalidateVisual();
+            sv.ScrollChanged += _scrollChangedHandler;
+            _subscribedSv = sv;
+        }
+
+        // Belt-and-suspenders: subscribe to MouseWheel on the RTB itself so the adorner
+        // repaints after every scroll, even when PART_ContentHost.ScrollChanged doesn't
+        // fire through the expected path (e.g. after focus shifts to a sibling panel such
+        // as the Notes panel whose ScrollViewer retains keyboard focus).
+        // handlesEventsToo: true — PART_ContentHost marks the event handled in OnMouseWheel,
+        // so we must opt in to receive it.
+        _mouseWheelHandler = (_, _) => InvalidateVisual();
+        _rtb.AddHandler(UIElement.MouseWheelEvent, _mouseWheelHandler, true);
     }
 
     private static ScrollViewer? FindScrollViewer(DependencyObject parent)
@@ -83,6 +100,17 @@ internal sealed class RevisionHighlightAdorner : Adorner
             {
                 _rtb.LayoutUpdated -= _layoutUpdatedHandler;
                 _layoutUpdatedHandler = null;
+            }
+            if (_scrollChangedHandler is not null && _subscribedSv is not null)
+            {
+                _subscribedSv.ScrollChanged -= _scrollChangedHandler;
+                _scrollChangedHandler = null;
+                _subscribedSv = null;
+            }
+            if (_mouseWheelHandler is not null)
+            {
+                _rtb.RemoveHandler(UIElement.MouseWheelEvent, _mouseWheelHandler);
+                _mouseWheelHandler = null;
             }
             AdornerLayer.GetAdornerLayer(_rtb)?.Remove(this);
         }
