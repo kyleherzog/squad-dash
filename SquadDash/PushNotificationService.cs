@@ -310,18 +310,41 @@ internal sealed class PushNotificationService {
         }
     }
 
-    // Scans tool output text from a completed turn for a git commit SHA.
-    // Git outputs "[branch abc1234] message" on a successful commit. Returns the short
-    // SHA (7+ hex chars) if found, or null if no commit occurred this turn.
-    internal static string? ExtractGitCommitSha(IEnumerable<string?> toolOutputs) {
-        // Pattern: "[anything sha7+] rest of line" — the sha is hex chars only
-        var pattern = new Regex(@"\[\S+\s+([0-9a-f]{7,})\]", RegexOptions.IgnoreCase);
+    // Scans tool output text and agent response text from a completed turn for a git commit SHA.
+    // Git outputs "[branch abc1234] message" on a successful commit.
+    // Squad agents report commits in prose like "Committed as `abc1234`" or "Commit: `abc1234`".
+    // Returns the short SHA (7+ hex chars) if found, or null if no commit occurred this turn.
+    internal static string? ExtractGitCommitSha(IEnumerable<string?> toolOutputs, string? agentResponse = null) {
+        // Pattern 1: Git native format "[anything sha7+] rest of line"
+        var gitNativePattern = new Regex(@"\[\S+\s+([0-9a-f]{7,})\]", RegexOptions.IgnoreCase);
+        
+        // Pattern 2: Agent-reported formats like "Committed as `abc1234`" or "**Commit `abc1234`**"
+        // Matches: commit/committed followed by optional "as", optional ":", backtick-wrapped SHA
+        var agentPattern = new Regex(@"(?:commit(?:ted)?)\s*(?:as|:)?\s*[*]*\s*`([0-9a-f]{7,40})`", RegexOptions.IgnoreCase);
+        
+        // First try the git native pattern in tool outputs
         foreach (var output in toolOutputs) {
             if (string.IsNullOrWhiteSpace(output)) continue;
-            var match = pattern.Match(output);
+            var match = gitNativePattern.Match(output);
             if (match.Success)
                 return match.Groups[1].Value;
         }
+        
+        // Then try agent-reported pattern in the response text
+        if (!string.IsNullOrWhiteSpace(agentResponse)) {
+            var match = agentPattern.Match(agentResponse);
+            if (match.Success)
+                return match.Groups[1].Value;
+        }
+        
+        // Also try agent pattern in tool outputs as a fallback
+        foreach (var output in toolOutputs) {
+            if (string.IsNullOrWhiteSpace(output)) continue;
+            var match = agentPattern.Match(output);
+            if (match.Success)
+                return match.Groups[1].Value;
+        }
+        
         return null;
     }
 

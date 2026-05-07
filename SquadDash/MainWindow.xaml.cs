@@ -3223,7 +3223,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                         : notifSummary;
                     // Append git commit SHA if a commit happened during this turn.
                     var commitSha = PushNotificationService.ExtractGitCommitSha(
-                        doneCurrentTurn?.ToolEntries.Select(e => e.OutputText) ?? []);
+                        doneCurrentTurn?.ToolEntries.Select(e => e.OutputText) ?? [],
+                        rawResponse);
                     if (commitSha is not null)
                     {
                         notifMessage += $" [{commitSha}]";
