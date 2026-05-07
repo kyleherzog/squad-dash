@@ -3221,26 +3221,43 @@ public partial class MainWindow : Window, ILiveElementLocator
                     var notifMessage = string.IsNullOrWhiteSpace(notifSummary)
                         ? $"{agentName} turn complete"
                         : notifSummary;
-                    // Append git commit SHA if a commit happened during this turn.
-                    var commitSha = PushNotificationService.ExtractGitCommitSha(
-                        doneCurrentTurn?.ToolEntries.Select(e => e.OutputText) ?? [],
-                        rawResponse);
-                    if (commitSha is not null)
+                    
+                    // Collect tool outputs from main session and all spawned agent threads
+                    var allToolOutputs = new List<string?>();
+                    if (doneCurrentTurn?.ToolEntries is not null)
+                        allToolOutputs.AddRange(doneCurrentTurn.ToolEntries.Select(e => e.OutputText));
+                    foreach (var agentThread in _agentThreadRegistry.ThreadOrder)
                     {
-                        notifMessage += $" [{commitSha}]";
+                        foreach (var turn in agentThread.SavedTurns)
+                        {
+                            if (turn.Tools is not null)
+                                allToolOutputs.AddRange(turn.Tools.Select(t => t.OutputText));
+                        }
+                        if (agentThread.CurrentTurn?.ToolEntries is not null)
+                            allToolOutputs.AddRange(agentThread.CurrentTurn.ToolEntries.Select(e => e.OutputText));
+                    }
+                    
+                    // Extract git commit info (SHA + message when available from git native output)
+                    var commitInfo = PushNotificationService.ExtractGitCommitInfo(allToolOutputs, rawResponse);
+                    if (commitInfo is not null)
+                    {
+                        notifMessage += $" [{commitInfo.CommitSha}]";
                         var commitUrl = _workspaceGitHubUrl is not null
-                            ? $"{_workspaceGitHubUrl}/commit/{commitSha}"
+                            ? $"{_workspaceGitHubUrl}/commit/{commitInfo.CommitSha}"
                             : null;
-                        _ = _bridge.BroadcastRcCommitAsync(commitSha, commitUrl);
+                        _ = _bridge.BroadcastRcCommitAsync(commitInfo.CommitSha, commitUrl);
 
                         // ── Approval tracking ─────────────────────────────────────────────
                         // Use doneCurrentTurn.StartedAt — same value that BeginTranscriptTurn stored
                         // in PromptParagraphs. _pec.CurrentPromptStartedAt is already null here because
                         // the PEC finally-block runs before this Dispatcher.BeginInvoke callback fires.
                         var turnStartedAt = doneCurrentTurn?.StartedAt ?? DateTimeOffset.Now;
-                        var description = BuildApprovalDescription(notifSummary, doneCurrentTurn?.Prompt);
+                        // Prefer git's commit message when available; fallback to notifSummary or prompt hint
+                        var description = !string.IsNullOrWhiteSpace(commitInfo.CommitMessage)
+                            ? commitInfo.CommitMessage
+                            : BuildApprovalDescription(notifSummary, doneCurrentTurn?.Prompt);
                         var hint = TruncatePromptHint(doneCurrentTurn?.Prompt, maxChars: 60);
-                        var item = CommitApprovalItem.Create(commitSha, commitUrl, description,
+                        var item = CommitApprovalItem.Create(commitInfo.CommitSha, commitUrl, description,
                                                                       turnStartedAt, hint,
                                                                       originalPrompt: doneCurrentTurn?.Prompt?.Trim());
                         _approvalItems.Add(item);

@@ -2667,5 +2667,51 @@ The feature doc includes:
 **By:** Orion Vale (recommended), Mark003 (requesting assessment)
 
 **What:** For the RevisionHighlightAdorner + RevisionPendingIndicator feature, the team should pursue Path A (convert MarkdownDocumentWindow editor TextBox to RichTextBox). 28 call sites require mechanical changes. RichTextBoxExtensions.cs already covers 100% of the gap. Paste command override required. Estimated 6-7 hours total including adorner implementation. Path B (TextBox adorner) rejected: 10.5h, O(n²) geometry, multi-revision artifacts, dead-end architecture.
+
+**Why:** Lower effort, lower risk, better architecture, future-proof for Phase 4+ features.
 
-**Why:** Lower effort, lower risk, better architecture, future-proof for Phase 4+ features.
+---
+
+## 2026-05-07 — SHA Extraction Pattern for Agent-Reported Commits
+
+**Date:** 2026-05-07  
+**Author:** Arjun Sen  
+**Status:** Implemented (commit `deb8d76`)
+
+### Context
+
+Squad agents report git commits in their response prose (e.g., "Committed as \`abc1234\`"), not in tool output text. The original `ExtractGitCommitSha()` method only parsed git's native CLI format from tool outputs, causing agent-created commits to never appear in the Approvals panel.
+
+### Decision
+
+Extended `PushNotificationService.ExtractGitCommitInfo()` to accept both tool outputs and agent response text, with prioritized pattern matching:
+
+1. **Git native format** (tool outputs): `\[\S+\s+([0-9a-f]{7,})\]`
+2. **Agent-reported format** (response text): `(?:commit(?:ted)?)\s*(?:as|:)?\s*[*]*\s*\x60([0-9a-f]{7,40})\x60`
+3. **Agent format fallback** (tool outputs): same pattern as #2
+
+### Rationale
+
+- Agents naturally report commit outcomes in conversational prose, not tool output blocks
+- Backtick-wrapped SHAs are a common markdown convention in agent responses
+- Pattern handles variations: `Committed as \`abc\``, `Commit: \`abc\``, `**Commit \`abc\`**`, `commit hash: abc`
+- Case-insensitive matching accommodates agent phrasing variations
+
+### Implications
+
+- All future extraction methods should accept both structured (tool output) and unstructured (response text) sources
+- Response text is the primary source for semantic extraction tasks when agents report outcomes conversationally
+- Pattern: optional parameters for dual-source extraction maintain backward compatibility
+
+### Rollout
+
+- New `GitCommitInfo` record: `public record GitCommitInfo(string SHA, string Message)`
+- Method added: `ExtractGitCommitInfo(string responseText, string toolOutput)`
+- Call site updated in MainWindow.xaml.cs to pass `rawResponse` as second parameter
+- Build: 0 errors
+- No test changes required (existing tests cover git native format; agent format is additive)
+
+### Related
+
+- `CommitApprovalItem.cs` — stores extracted SHA for approvals panel
+- `PushNotificationService.cs` — new extraction method

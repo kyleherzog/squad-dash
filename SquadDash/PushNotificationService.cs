@@ -315,34 +315,56 @@ internal sealed class PushNotificationService {
     // Squad agents report commits in prose like "Committed as `abc1234`" or "Commit: `abc1234`".
     // Returns the short SHA (7+ hex chars) if found, or null if no commit occurred this turn.
     internal static string? ExtractGitCommitSha(IEnumerable<string?> toolOutputs, string? agentResponse = null) {
-        // Pattern 1: Git native format "[anything sha7+] rest of line"
+        var result = ExtractGitCommitInfo(toolOutputs, agentResponse);
+        return result?.CommitSha;
+    }
+
+    // Scans tool outputs and agent response for git commit information.
+    // Returns CommitSha and CommitMessage when found, prioritizing git's native output
+    // which contains both SHA and the meaningful commit message.
+    internal static GitCommitInfo? ExtractGitCommitInfo(IEnumerable<string?> toolOutputs, string? agentResponse = null) {
+        // Pattern 1: Git native format with commit message "[branch sha] message"
+        // Captures both SHA and commit message — this is the richest source
+        var gitNativeWithMessagePattern = new Regex(@"\[[\w/.-]+\s+([0-9a-f]{7,40})\]\s+(.+)", RegexOptions.IgnoreCase);
+        
+        // Pattern 2: Git native format SHA-only fallback "[anything sha7+]"
         var gitNativePattern = new Regex(@"\[\S+\s+([0-9a-f]{7,})\]", RegexOptions.IgnoreCase);
         
-        // Pattern 2: Agent-reported formats like "Committed as `abc1234`" or "**Commit `abc1234`**"
-        // Matches: commit/committed followed by optional "as", optional ":", backtick-wrapped SHA
+        // Pattern 3: Agent-reported formats like "Committed as `abc1234`" or "**Commit `abc1234`**"
         var agentPattern = new Regex(@"(?:commit(?:ted)?)\s*(?:as|:)?\s*[*]*\s*`([0-9a-f]{7,40})`", RegexOptions.IgnoreCase);
         
-        // First try the git native pattern in tool outputs
+        // Priority 1: Scan tool outputs for git native format with commit message
+        foreach (var output in toolOutputs) {
+            if (string.IsNullOrWhiteSpace(output)) continue;
+            var match = gitNativeWithMessagePattern.Match(output);
+            if (match.Success) {
+                var sha = match.Groups[1].Value;
+                var message = match.Groups[2].Value.Trim();
+                return new GitCommitInfo(sha, message);
+            }
+        }
+        
+        // Priority 2: Try agent-reported pattern in the response text (SHA only)
+        if (!string.IsNullOrWhiteSpace(agentResponse)) {
+            var match = agentPattern.Match(agentResponse);
+            if (match.Success)
+                return new GitCommitInfo(match.Groups[1].Value, null);
+        }
+        
+        // Priority 3: Try git native pattern in tool outputs (SHA only)
         foreach (var output in toolOutputs) {
             if (string.IsNullOrWhiteSpace(output)) continue;
             var match = gitNativePattern.Match(output);
             if (match.Success)
-                return match.Groups[1].Value;
+                return new GitCommitInfo(match.Groups[1].Value, null);
         }
         
-        // Then try agent-reported pattern in the response text
-        if (!string.IsNullOrWhiteSpace(agentResponse)) {
-            var match = agentPattern.Match(agentResponse);
-            if (match.Success)
-                return match.Groups[1].Value;
-        }
-        
-        // Also try agent pattern in tool outputs as a fallback
+        // Priority 4: Try agent pattern in tool outputs as final fallback (SHA only)
         foreach (var output in toolOutputs) {
             if (string.IsNullOrWhiteSpace(output)) continue;
             var match = agentPattern.Match(output);
             if (match.Success)
-                return match.Groups[1].Value;
+                return new GitCommitInfo(match.Groups[1].Value, null);
         }
         
         return null;
@@ -389,3 +411,9 @@ internal sealed class PushNotificationService {
 /// in an AI response. Either field may be null if not present in the response.
 /// </summary>
 internal sealed record SquadashPayload(string? Command, string? Notification);
+
+/// <summary>
+/// Represents extracted git commit information from tool outputs or agent responses.
+/// CommitMessage is populated when git's native output is found (richest source).
+/// </summary>
+internal sealed record GitCommitInfo(string CommitSha, string? CommitMessage);
