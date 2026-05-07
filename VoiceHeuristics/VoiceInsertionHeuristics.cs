@@ -319,7 +319,18 @@ public static class VoiceInsertionHeuristics
     ///   <item>
     ///     Ends with the word <c>"this"</c> (optionally followed by a period) →
     ///     replace / append a colon.
-    ///     Example: <c>"it looks like this."</c> → <c>"it looks like this:"</c>
+    ///     Example: <c>"it looks like this."</c> → <c>"it looks like this: "</c>
+    ///   </item>
+    ///   <item>
+    ///     Starts with <c>"Here's "</c> (any case) and ends with a period →
+    ///     replace the trailing period with a colon.
+    ///     Example: <c>"Here's what I see in the log."</c>
+    ///              → <c>"Here's what I see in the log: "</c>
+    ///   </item>
+    ///   <item>
+    ///     Ends with the word <c>"example"</c> (optionally followed by a period) →
+    ///     replace / append a colon (preserving original capitalisation).
+    ///     Example: <c>"Example."</c> → <c>"Example: "</c>
     ///   </item>
     /// </list>
     /// </summary>
@@ -329,6 +340,26 @@ public static class VoiceInsertionHeuristics
 
         if (TryMatchTrailingWord(text, "this", out var stemLen))
             return text[..stemLen] + "this: ";
+
+        // "Here's what I see." → "Here's what I see: "
+        // Condition: text starts with "here's " AND ends with a period.
+        // Must have content after the "Here's " prefix (length > 7).
+        var trimHeres = text.TrimEnd();
+        if (trimHeres.Length > 7
+            && trimHeres.StartsWith("here's ", StringComparison.OrdinalIgnoreCase)
+            && trimHeres.EndsWith('.'))
+        {
+            return trimHeres[..^1] + ": ";
+        }
+
+        // "Example." (standalone or at end of phrase) → "Example: "
+        // Case is preserved from the original text; the period (if present) is consumed.
+        if (TryMatchTrailingWord(text, "example", out _))
+        {
+            var core = text.TrimEnd();
+            if (core.EndsWith('.')) core = core[..^1];
+            return core + ": ";
+        }
 
         return text;
     }

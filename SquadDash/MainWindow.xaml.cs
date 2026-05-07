@@ -7105,8 +7105,14 @@ public partial class MainWindow : Window, ILiveElementLocator
         var leftContext = current[..caretIndex];
         var rightContext = current[selEndIndex..];
         var precedingChar = caretIndex > 0 ? current[caretIndex - 1] : '\0';
+        // Suppress the auto-inserted leading space when the caret sits immediately after
+        // an opening double-quote that is itself preceded by a space — e.g. `like "`.
+        // Inserting a space before the dictation would produce `like " word` (stray space
+        // inside the quote). Straight and Unicode left-double-quote are both matched.
+        var isQuoteAfterSpace = (precedingChar == '"' || precedingChar == '\u201C')
+                                && caretIndex >= 2 && current[caretIndex - 2] == ' ';
         var prefix = precedingChar != '\0' && precedingChar != ' ' && precedingChar != '(' &&
-                     precedingChar != '\n' && precedingChar != '\r' ? " " : string.Empty;
+                     precedingChar != '\n' && precedingChar != '\r' && !isQuoteAfterSpace ? " " : string.Empty;
         var processed = VoiceInsertionHeuristics.Apply(leftContext, text, rightContext);
         var insert = prefix + processed;
         target.Text = leftContext + insert + rightContext;

@@ -233,7 +233,73 @@ internal sealed class VoiceInsertionHeuristicsTests {
             Is.EqualTo("synthesis."));
     }
 
-    // ── Apply (integration) ───────────────────────────────────────────────────
+    [Test]
+    public void ApplyTrailingPunctuationFixes_HeresWithPeriod_ReplacesWithColon() {
+        Assert.That(
+            VoiceInsertionHeuristics.ApplyTrailingPunctuationFixes("Here's what I see in the log."),
+            Is.EqualTo("Here's what I see in the log: "));
+    }
+
+    [Test]
+    public void ApplyTrailingPunctuationFixes_HeresWithoutPeriod_ReturnsUnchanged() {
+        // Rule only fires when the speech recognizer adds a terminal period.
+        Assert.That(
+            VoiceInsertionHeuristics.ApplyTrailingPunctuationFixes("Here's what I see in the log"),
+            Is.EqualTo("Here's what I see in the log"));
+    }
+
+    [Test]
+    public void ApplyTrailingPunctuationFixes_HeresAlonePeriod_ReturnsUnchanged() {
+        // "Here's." alone has no content after the prefix — rule requires length > 7.
+        Assert.That(
+            VoiceInsertionHeuristics.ApplyTrailingPunctuationFixes("Here's."),
+            Is.EqualTo("Here's."));
+    }
+
+    [Test]
+    public void ApplyTrailingPunctuationFixes_HeresLowercase_ReplacesWithColon() {
+        Assert.That(
+            VoiceInsertionHeuristics.ApplyTrailingPunctuationFixes("here's an example."),
+            Is.Not.EqualTo("here's an example."));
+    }
+
+    [Test]
+    public void ApplyTrailingPunctuationFixes_ExamplePeriod_ReplacesWithColon() {
+        Assert.That(
+            VoiceInsertionHeuristics.ApplyTrailingPunctuationFixes("Example."),
+            Is.EqualTo("Example: "));
+    }
+
+    [Test]
+    public void ApplyTrailingPunctuationFixes_ExampleNoPeriod_AppendsColon() {
+        Assert.That(
+            VoiceInsertionHeuristics.ApplyTrailingPunctuationFixes("Example"),
+            Is.EqualTo("Example: "));
+    }
+
+    [Test]
+    public void ApplyTrailingPunctuationFixes_ExampleLowercase_PreservesCase() {
+        Assert.That(
+            VoiceInsertionHeuristics.ApplyTrailingPunctuationFixes("example."),
+            Is.EqualTo("example: "));
+    }
+
+    [Test]
+    public void ApplyTrailingPunctuationFixes_PhraseEndingWithExample_AppendsColon() {
+        Assert.That(
+            VoiceInsertionHeuristics.ApplyTrailingPunctuationFixes("Here's an example."),
+            Is.EqualTo("Here's an example: "));
+    }
+
+    [Test]
+    public void ApplyTrailingPunctuationFixes_ExamplesNotWordBoundary_ReturnsUnchanged() {
+        // "examples" ends with substring "example" but is not a word boundary
+        Assert.That(
+            VoiceInsertionHeuristics.ApplyTrailingPunctuationFixes("examples."),
+            Is.EqualTo("examples."));
+    }
+
+
 
     [Test]
     public void Apply_MidSentenceContextWithNormalFirstWord_LowercasesFirstWord() {
