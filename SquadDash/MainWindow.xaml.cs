@@ -21315,6 +21315,21 @@ public partial class MainWindow : Window, ILiveElementLocator
                 _searchNavigating = false;
             }
             activeThread = targetThread;
+
+            // Flash the border of the newly-loaded transcript so the user knows which
+            // panel has become active — mirrors the flash used when opening a secondary panel.
+            if (ReferenceEquals(targetThread, CoordinatorThread))
+            {
+                FlashGlowHighlight(MainTranscriptBorder, Colors.CornflowerBlue);
+            }
+            else
+            {
+                var entry = _secondaryTranscripts.FirstOrDefault(e => ReferenceEquals(e.Thread, targetThread));
+                if (entry is not null)
+                    FlashGlowHighlight(entry.PanelBorder, ColorFromHex(entry.Agent.AccentColorHex));
+                else
+                    FlashGlowHighlight(MainTranscriptBorder, Colors.CornflowerBlue);
+            }
         }
 
         // Fast path: pointer cache is valid and the turn is already in the FlowDocument.
