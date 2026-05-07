@@ -155,6 +155,9 @@
     <!-- Editor selection colours -->
     <SolidColorBrush x:Key="DocEditorSelectionBrush"    Color="#2060A0CC"/>
     <SolidColorBrush x:Key="DocEditorSelectionTextBrush" Color="#E8D8C0"/>
+    <!-- Active selection system-colour overrides — make text readable on the selection background -->
+    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}"     Color="#3A6EA0"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#E8D8C0"/>
     <!-- Screenshot Overlay Tokens -->
     <SolidColorBrush x:Key="OverlayDimFill"             Color="#80000000"/>
     <SolidColorBrush x:Key="ScreenshotAnchorNamed"       Color="#4CAF50"/>

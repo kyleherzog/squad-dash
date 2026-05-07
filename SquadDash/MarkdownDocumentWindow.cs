@@ -279,6 +279,7 @@ internal sealed class MarkdownDocumentWindow : Window {
         foreach (var document in _documents) {
             document.EditorTextBox.SelectionChanged += EditorTextBox_SelectionChanged;
             document.EditorTextBox.PreviewKeyDown   += EditorTextBox_PreviewKeyDown;
+            document.EditorTextBox.PreviewTextInput += EditorTextBox_PreviewTextInput;
             document.EditorTextBox.ContextMenuOpening += EditorTextBox_ContextMenuOpening;
         }
 
@@ -481,9 +482,10 @@ internal sealed class MarkdownDocumentWindow : Window {
 
         var priorFocus = Keyboard.FocusedElement as IInputElement;
 
-        // Capture adorner and indicator references for lifecycle management
+        // Capture adorner, indicator, and revision lock for lifecycle management
         RevisionHighlightAdorner? adorner = null;
         RevisionPendingIndicator? indicator = null;
+        EditorRevisionLock? revLock = null;
 
         var popup = new DocRevisePopup(
             selectedText,
@@ -493,7 +495,8 @@ internal sealed class MarkdownDocumentWindow : Window {
             onRevised: revised => Dispatcher.Invoke(() => {
                 adorner?.Remove();
                 indicator?.Detach();
-                tb.IsReadOnly = false;
+                if (revLock is not null) doc?.RemoveRevisionLock(revLock);
+                revLock = null;
 
                 // Use live TextPointers to get current text after any edits; normalize to \n
                 var currentSelectedText = new TextRange(startPointer, endPointer).Text.Replace("\r\n", "\n");
@@ -511,7 +514,8 @@ internal sealed class MarkdownDocumentWindow : Window {
                 priorFocus?.Focus();
                 Keyboard.Focus(priorFocus);
                 RevisionWorkingOverlay.ShowAt(popupCenter, this);
-                tb.IsReadOnly = true;
+                // Lock the revision range so editing keys are swallowed in that area
+                revLock = doc?.AddRevisionLock(startPointer, endPointer);
                 adorner = RevisionHighlightAdorner.Attach(tb, startPointer, endPointer);
                 indicator = RevisionPendingIndicator.Attach(tb, endPointer);
             },
@@ -519,7 +523,8 @@ internal sealed class MarkdownDocumentWindow : Window {
                 // Fallback unlock — fires on failure/cancel as well as success
                 adorner?.Remove();
                 indicator?.Detach();
-                tb.IsReadOnly = false;
+                if (revLock is not null) doc?.RemoveRevisionLock(revLock);
+                revLock = null;
             }),
             startPtt: _captureContext?.StartPttCallback,
             stopPtt:  _captureContext?.StopPttCallback);
@@ -618,6 +623,15 @@ internal sealed class MarkdownDocumentWindow : Window {
     private void EditorTextBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e) {
         if (sender is not RichTextBox tb) return;
 
+        // Block mutating keys while the caret/selection overlaps an active AI revision range.
+        if (IsKeyMutating(e.Key)
+            && tb.Tag is MarkdownDocumentTabState lockedDoc
+            && lockedDoc.HasLockedRanges
+            && IsCaretInLockedRange(tb, lockedDoc)) {
+            e.Handled = true;
+            return;
+        }
+
         // ── Smooth Dictation: Shift+Space on selection ────────────────────────
         if (e.Key == System.Windows.Input.Key.Space
             && (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Shift) != 0
@@ -652,6 +666,34 @@ internal sealed class MarkdownDocumentWindow : Window {
             TriggerReviseWithAi(tb, revCb);
             e.Handled = true;
         }
+    }
+
+    private void EditorTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e) {
+        if (sender is not RichTextBox tb) return;
+        if (tb.Tag is MarkdownDocumentTabState doc
+            && doc.HasLockedRanges
+            && IsCaretInLockedRange(tb, doc))
+            e.Handled = true;
+    }
+
+    /// <summary>Returns true for keys that directly mutate document content.</summary>
+    private static bool IsKeyMutating(Key key) =>
+        key == Key.Back || key == Key.Delete || key == Key.Return;
+
+    /// <summary>
+    /// Returns true when the current caret position or selection overlaps any active revision lock.
+    /// The check uses an inclusive boundary so Delete/Backspace at the very edge of a locked range
+    /// are also blocked.
+    /// </summary>
+    private static bool IsCaretInLockedRange(RichTextBox tb, MarkdownDocumentTabState state) {
+        var selStart = tb.Selection.Start;
+        var selEnd   = tb.Selection.End;
+        foreach (var range in state.LockedRanges) {
+            // Inclusive boundary: block if selection touches or overlaps [range.Start, range.End]
+            if (selStart.CompareTo(range.End) <= 0 && selEnd.CompareTo(range.Start) >= 0)
+                return true;
+        }
+        return false;
     }
 
     // ── Editor PTT (double-tap Ctrl voice) ────────────────────────────────
@@ -1588,9 +1630,6 @@ internal sealed class MarkdownDocumentTabState {
         };
         EditorTextBox.SetResourceReference(RichTextBox.BackgroundProperty, "InputSurface");
         EditorTextBox.SetResourceReference(RichTextBox.ForegroundProperty, "LabelText");
-        EditorTextBox.SetResourceReference(RichTextBox.SelectionBrushProperty, "DocEditorSelectionBrush");
-        EditorTextBox.SelectionOpacity = 1.0;
-        EditorTextBox.SetResourceReference(RichTextBox.SelectionTextBrushProperty, "DocEditorSelectionTextBrush");
         
         // Force plain-text paste — RichTextBox defaults to rich paste which would preserve formatting
         DataObject.AddPastingHandler(EditorTextBox, (s, e) => {
@@ -1623,6 +1662,17 @@ internal sealed class MarkdownDocumentTabState {
     internal bool IsReloadPending { get; set; }
     internal FileSystemWatcher? FileWatcher { get; set; }
 
+    // ── Revision locks ─────────────────────────────────────────────────────────
+    private readonly List<EditorRevisionLock> _lockedRanges = [];
+    public bool HasLockedRanges => _lockedRanges.Count > 0;
+    public IReadOnlyList<EditorRevisionLock> LockedRanges => _lockedRanges;
+    public EditorRevisionLock AddRevisionLock(TextPointer start, TextPointer end) {
+        var revLock = new EditorRevisionLock(start, end);
+        _lockedRanges.Add(revLock);
+        return revLock;
+    }
+    public void RemoveRevisionLock(EditorRevisionLock revLock) => _lockedRanges.Remove(revLock);
+
     public static MarkdownDocumentTabState Load(string tabTitle, string filePath) {
         var text = File.Exists(filePath) ? File.ReadAllText(filePath) : string.Empty;
         return new MarkdownDocumentTabState(tabTitle, filePath, text);
@@ -1644,6 +1694,13 @@ internal sealed class MarkdownDocumentTabState {
         frontMatter = m.Value;
         return rawText[m.Length..];
     }
+}
+
+/// <summary>Tracks one locked text range during an active AI revision.</summary>
+internal sealed class EditorRevisionLock {
+    public TextPointer Start { get; }
+    public TextPointer End   { get; }
+    public EditorRevisionLock(TextPointer start, TextPointer end) { Start = start; End = end; }
 }
 
 internal static class MarkdownFlowDocumentBuilder {
