@@ -219,7 +219,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private BackgroundTaskPresenter _backgroundTaskPresenter = null!;
     private TranscriptConversationManager _conversationManager = null!;
     private MarkdownDocumentRenderer _markdownRenderer = null!;
-    private TranscriptScrollController _scrollController = null!;
+    private TranscriptScrollController _coordinatorScrollController = null!;
+    private TranscriptScrollController _agentScrollController = null!;
     private bool _modelObservedThisSession;
     private readonly Queue<(string Text, Brush? Brush)> _deferredSystemLines = new();
     private string? _currentSessionState;
@@ -231,6 +232,25 @@ public partial class MainWindow : Window, ILiveElementLocator
     private TranscriptThreadState? _coordinatorThread;
     private TranscriptThreadState? _selectedTranscriptThread;
     private UiExceptionPanelState? _activeUiException;
+
+    // ── Active transcript helpers ────────────────────────────────────────────────
+
+    /// <summary>
+    /// The scroll controller for whichever transcript is currently displayed.
+    /// Coordinator uses <c>OutputTextBox</c>; agents use <c>AgentTranscriptBox</c>.
+    /// </summary>
+    private TranscriptScrollController ActiveScrollController =>
+        (_selectedTranscriptThread?.Kind ?? TranscriptThreadKind.Coordinator) == TranscriptThreadKind.Coordinator
+            ? _coordinatorScrollController
+            : _agentScrollController;
+
+    /// <summary>
+    /// The RichTextBox that is currently visible in the main transcript panel.
+    /// </summary>
+    private RichTextBox ActiveTranscriptBox =>
+        (_selectedTranscriptThread?.Kind ?? TranscriptThreadKind.Coordinator) == TranscriptThreadKind.Coordinator
+            ? OutputTextBox
+            : AgentTranscriptBox;
 
     // ── Transcript search state ─────────────────────────────────────────────────
     private IReadOnlyList<TurnSearchMatch> _searchMatches = [];
@@ -392,8 +412,10 @@ public partial class MainWindow : Window, ILiveElementLocator
         _pushNotificationService = new PushNotificationService(_settingsStore);
         InitializeComponent();
         SquadDashTrace.Write(TraceCategory.Startup, $"Constructor: InitializeComponent {ctorSw.ElapsedMilliseconds}ms.");
-        _scrollController = new TranscriptScrollController(OutputTextBox, Dispatcher);
-        _scrollController.SetScrollToBottomButton(ScrollToBottomButton);
+        _coordinatorScrollController = new TranscriptScrollController(OutputTextBox, Dispatcher);
+        _coordinatorScrollController.SetScrollToBottomButton(ScrollToBottomButton);
+        _agentScrollController = new TranscriptScrollController(AgentTranscriptBox, Dispatcher);
+        _agentScrollController.SetScrollToBottomButton(ScrollToBottomButton);
         _agentThreadRegistry = new AgentThreadRegistry(
             beginTranscriptTurn: (thread, prompt) => BeginTranscriptTurn(thread, prompt),
             finalizeCurrentTurnResponse: thread => FinalizeCurrentTurnResponse(thread),
@@ -477,13 +499,13 @@ public partial class MainWindow : Window, ILiveElementLocator
                 // so the suppression flag is cleared and exactly one post-load scroll fires.
                 // Outside of load (normal streaming) IsLoadingTranscript is false — use the
                 // standard debounced RequestScrollToEnd path.
-                if (_scrollController.IsLoadingTranscript)
+                if (_coordinatorScrollController.IsLoadingTranscript)
                 {
-                    _scrollController.EndLoad();
+                    _coordinatorScrollController.EndLoad();
                     LoadingTranscriptOverlay.Visibility = Visibility.Collapsed;
                 }
                 else
-                    _scrollController.RequestScrollToEnd();
+                    _coordinatorScrollController.RequestScrollToEnd();
             },
             agentThreadRegistry: _agentThreadRegistry,
             getToolEntries: () => _agentThreadRegistry.ToolEntries,
@@ -496,14 +518,14 @@ public partial class MainWindow : Window, ILiveElementLocator
             beginBulkDocumentLoad: () => OutputTextBox.BeginChange(),
             endBulkDocumentLoad: () => OutputTextBox.EndChange(),
             prependTurnsBatch: (thread, turns) => PrependPersistedTurnsBatch(thread, turns),
-            getScrollableHeight: () => _scrollController.GetScrollableHeight(),
-            getVerticalOffset: () => _scrollController.GetVerticalOffset(),
-            scrollToAbsoluteOffset: target => _scrollController.ScrollToAbsoluteOffset(target),
+            getScrollableHeight: () => _coordinatorScrollController.GetScrollableHeight(),
+            getVerticalOffset: () => _coordinatorScrollController.GetVerticalOffset(),
+            scrollToAbsoluteOffset: target => _coordinatorScrollController.ScrollToAbsoluteOffset(target),
             updateScrollLayout: () => OutputTextBox.UpdateLayout());
         // Wire the near-top prepend trigger: when the user scrolls within 400 px of the
         // top of the coordinator transcript, TranscriptScrollController calls this to
         // load the next batch of older turns from the virtual window.
-        _scrollController.RequestPrependOlderTurns =
+        _coordinatorScrollController.RequestPrependOlderTurns =
             () => _ = _conversationManager.PrependOlderTurnsAsync();
         _instanceActivationChannel = new InstanceActivationChannel(
             _workspacePaths.ApplicationRoot,
@@ -553,6 +575,10 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         OutputTextBox.Document = CoordinatorThread.Document;
         OutputTextBox.CommandBindings.Add(new CommandBinding(
+            System.Windows.Input.ApplicationCommands.Copy,
+            OutputTextBox_CopyExecuted,
+            OutputTextBox_CopyCanExecute));
+        AgentTranscriptBox.CommandBindings.Add(new CommandBinding(
             System.Windows.Input.ApplicationCommands.Copy,
             OutputTextBox_CopyExecuted,
             OutputTextBox_CopyCanExecute));
@@ -1016,7 +1042,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         _fixtureLoaderRegistry.Register("transcript", new TranscriptFixtureLoader(
             getCoordinatorThread: () => CoordinatorThread,
-            scrollController: _scrollController,
+            scrollController: _coordinatorScrollController,
             dispatcher: Dispatcher,
             repoRoot: _workspacePaths.ApplicationRoot));
 
@@ -1038,8 +1064,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         // scrollPosition must come after agentCard — agent-card layout must be settled
         // before scroll positions are meaningful.
         _fixtureLoaderRegistry.Register("scrollPosition", new ScrollPositionFixtureLoader(
-            getTranscriptOffset: () => _scrollController.GetVerticalOffset(),
-            setTranscriptOffset: v => _scrollController.ScrollToAbsoluteOffset(v),
+            getTranscriptOffset: () => _coordinatorScrollController.GetVerticalOffset(),
+            setTranscriptOffset: v => _coordinatorScrollController.ScrollToAbsoluteOffset(v),
             getActiveRosterOffset: () => ActiveAgentsScrollViewer.HorizontalOffset,
             setActiveRosterOffset: v => ActiveAgentsScrollViewer.ScrollToHorizontalOffset(v),
             getInactiveRosterOffset: () => InactiveAgentsScrollViewer.HorizontalOffset,
@@ -1138,7 +1164,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             // which can leave the transcript viewport at the top without firing the
             // events that normally show/hide the scroll-to-bottom button — is corrected
             // the moment the user sees the window.
-            _scrollController.SyncScrollState();
+            ActiveScrollController.SyncScrollState();
 
             if (!_pendingPowerShellInstallRecheck)
                 return;
@@ -5748,9 +5774,10 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
                 return;
 
+            var rtb = (sender as RichTextBox) ?? OutputTextBox;
             // Capture text anchor under the mouse before zoom
-            var mousePos = e.GetPosition(OutputTextBox);
-            var anchor = OutputTextBox.GetPositionFromPoint(mousePos, snapToText: true);
+            var mousePos = e.GetPosition(rtb);
+            var anchor = rtb.GetPositionFromPoint(mousePos, snapToText: true);
 
             _transcriptFontSize = Math.Clamp(
                 _transcriptFontSize + (e.Delta > 0 ? TranscriptFontSizeStep : -TranscriptFontSizeStep),
@@ -5764,7 +5791,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 _ = Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
                 {
-                    var sv = OutputTextBox.Template?.FindName("PART_ContentHost", OutputTextBox) as ScrollViewer;
+                    var sv = rtb.Template?.FindName("PART_ContentHost", rtb) as ScrollViewer;
                     if (sv is null)
                         return;
                     var newRect = anchor.GetCharacterRect(LogicalDirection.Forward);
@@ -5791,7 +5818,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try
         {
-            _scrollController.DismissScrollButton();
+            ActiveScrollController.DismissScrollButton();
         }
         catch (Exception ex)
         {
@@ -5807,7 +5834,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try
         {
-            _scrollController.ScrollToBottom();
+            ActiveScrollController.ScrollToBottom();
         }
         catch (Exception ex)
         {
@@ -5820,6 +5847,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void ApplyTranscriptFontSize()
     {
         OutputTextBox.FontSize = _transcriptFontSize;
+        AgentTranscriptBox.FontSize = _transcriptFontSize;
         var iconSize = ToolIconSizeForFontSize(_transcriptFontSize);
         foreach (var img in _toolIconImages)
         {
@@ -5989,7 +6017,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try
         {
-            var text = TranscriptCopyService.BuildSelectionText(OutputTextBox);
+            var text = TranscriptCopyService.BuildSelectionText((sender as RichTextBox) ?? OutputTextBox);
             if (!string.IsNullOrEmpty(text))
                 SetClipboardTextWithRetry(text);
             e.Handled = true;
@@ -6007,13 +6035,14 @@ public partial class MainWindow : Window, ILiveElementLocator
             var menu = new ContextMenu();
             menu.SetResourceReference(ContextMenu.StyleProperty, "ThemedContextMenuStyle");
 
-            var hasSelection = !OutputTextBox.Selection.IsEmpty;
+            var activeRtb = (sender as RichTextBox) ?? OutputTextBox;
+            var hasSelection = !activeRtb.Selection.IsEmpty;
 
             var copyItem = new MenuItem { Header = "_Copy" };
             copyItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
             copyItem.IsEnabled = hasSelection;
             copyItem.Click += (_, _) => {
-                var text = TranscriptCopyService.BuildSelectionText(OutputTextBox);
+                var text = TranscriptCopyService.BuildSelectionText(activeRtb);
                 if (!string.IsNullOrEmpty(text))
                     SetClipboardTextWithRetry(text);
             };
@@ -6027,21 +6056,21 @@ public partial class MainWindow : Window, ILiveElementLocator
 
                 var followUpItem = new MenuItem { Header = "Attach to Prompt" };
                 followUpItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
-                followUpItem.Click += (_, _) => AttachTranscriptFollowUp(OutputTextBox);
+                followUpItem.Click += (_, _) => AttachTranscriptFollowUp(activeRtb);
                 menu.Items.Add(followUpItem);
 
                 var addToNotesItem = new MenuItem { Header = "Add to Notes" };
                 addToNotesItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
                 addToNotesItem.Click += (_, _) => {
-                    var text = TranscriptCopyService.BuildSelectionMarkdown(OutputTextBox);
+                    var text = TranscriptCopyService.BuildSelectionMarkdown(activeRtb);
                     if (!string.IsNullOrWhiteSpace(text))
                         AddNoteFromText(text);
-                    OutputTextBox.Selection.Select(OutputTextBox.CaretPosition, OutputTextBox.CaretPosition);
+                    activeRtb.Selection.Select(activeRtb.CaretPosition, activeRtb.CaretPosition);
                 };
                 menu.Items.Add(addToNotesItem);
             }
 
-            menu.PlacementTarget = OutputTextBox;
+            menu.PlacementTarget = activeRtb;
             menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
             menu.IsOpen = true;
             e.Handled = true;
@@ -6056,7 +6085,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try
         {
-            e.CanExecute = !OutputTextBox.Selection.IsEmpty;
+            e.CanExecute = !((sender as RichTextBox)?.Selection.IsEmpty ?? true);
             e.Handled = true;
         }
         catch (Exception ex)
@@ -6568,13 +6597,13 @@ public partial class MainWindow : Window, ILiveElementLocator
             // ── Page Up / Page Down: scroll main transcript ───────────────────
             if (e.Key == Key.PageUp && PromptTextBox?.IsFocused != true)
             {
-                _scrollController.ScrollPageUp();
+                ActiveScrollController.ScrollPageUp();
                 e.Handled = true;
                 return;
             }
             if (e.Key == Key.PageDown && PromptTextBox?.IsFocused != true)
             {
-                _scrollController.ScrollPageDown();
+                ActiveScrollController.ScrollPageDown();
                 e.Handled = true;
                 return;
             }
@@ -6584,7 +6613,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 (Keyboard.Modifiers & ModifierKeys.Control) != 0 &&
                 PromptTextBox?.IsFocused != true)
             {
-                _scrollController.ScrollToBottom();
+                ActiveScrollController.ScrollToBottom();
                 e.Handled = true;
                 return;
             }
@@ -8424,7 +8453,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
 
         // Capture before ApplyViewMode changes the layout (and possibly the scroll extent).
-        bool wasAtBottom = !_scrollController.IsUserScrolledAway;
+        bool wasAtBottom = !ActiveScrollController.IsUserScrolledAway;
 
         ApplyViewMode();
 
@@ -8432,7 +8461,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         // the newly-visible status panel / prompt area doesn't leave a gap at the bottom.
         if (!enabled && wasAtBottom)
             Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,
-                (Action)(() => _scrollController.ScrollToBottom()));
+                (Action)(() => ActiveScrollController.ScrollToBottom()));
 
         // Persist fullscreen state per workspace.
         var state = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
@@ -11065,7 +11094,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         RefreshAgentCards();
         // Suppress per-turn scroll operations during history load; EndLoad() will issue
         // exactly one scroll-to-bottom once all stored turns have been appended.
-        _scrollController.BeginLoad();
+        _coordinatorScrollController.BeginLoad();
 
         SquadDashTrace.Write(TraceCategory.Performance, $"LOAD_CONVERSATION_START: folder={_currentWorkspace.FolderPath}");
         var loadConvSw = Stopwatch.StartNew();
@@ -11438,9 +11467,11 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         UpdateTransientTranscriptFooters(thread);
         UpdateCompletedTimeFooters();
-        // close that panel before assigning to OutputTextBox — FlowDocument can only
-        // belong to one RichTextBox at a time.
-        if (thread.Document.Parent is RichTextBox secondaryOwner && secondaryOwner != OutputTextBox)
+        // close that panel before assigning to AgentTranscriptBox — FlowDocument can only
+        // belong to one RichTextBox at a time. Coordinator doc stays permanently in OutputTextBox.
+        if (thread.Document.Parent is RichTextBox secondaryOwner
+            && secondaryOwner != OutputTextBox
+            && secondaryOwner != AgentTranscriptBox)
         {
             var secondaryEntry = _secondaryTranscripts.FirstOrDefault(e => e.TranscriptBox == secondaryOwner);
             if (secondaryEntry != null)
@@ -11449,7 +11480,20 @@ public partial class MainWindow : Window, ILiveElementLocator
                 secondaryOwner.Document = new FlowDocument(); // detach without a tracked panel
         }
 
-        OutputTextBox.Document = thread.Document;
+        // Toggle visibility instead of reassigning documents.
+        // Coordinator: OutputTextBox stays permanently attached — no StructuralCache invalidation.
+        // Agent: AgentTranscriptBox gets the doc; OutputTextBox stays Collapsed (cache preserved).
+        if (thread.Kind == TranscriptThreadKind.Coordinator)
+        {
+            OutputTextBox.Visibility = Visibility.Visible;
+            AgentTranscriptBox.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            AgentTranscriptBox.Document = thread.Document;
+            AgentTranscriptBox.Visibility = Visibility.Visible;
+            OutputTextBox.Visibility = Visibility.Collapsed;
+        }
         ApplyTranscriptFontSizeToDocument(thread.Document);
         UpdateTranscriptThreadBadge();
         SyncAgentCardsWithThreads();
@@ -11555,7 +11599,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void ScrollTranscriptThread(TranscriptThreadState thread, bool scrollToStart)
     {
         EnsureThreadFooterAtEnd(thread);
-        _scrollController.OnThreadSelected(scrollToStart);
+        ActiveScrollController.OnThreadSelected(scrollToStart);
     }
 
     // ── Completed-time footer ────────────────────────────────────────────────
@@ -12582,7 +12626,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (!string.IsNullOrEmpty(prompt) && ReferenceEquals(_selectedTranscriptThread ?? CoordinatorThread, thread))
         {
             EnsureThreadFooterAtEnd(thread);
-            _scrollController.ForceScrollToBottom();
+            ActiveScrollController.ForceScrollToBottom();
         }
         else
         {
@@ -13158,15 +13202,15 @@ public partial class MainWindow : Window, ILiveElementLocator
         // selection highlight at frozen pixel coordinates (a "ghost" that doesn't scroll or
         // zoom). We only clear when the selection overlaps this entry — selections in any other
         // completed turn are in unrelated blocks and must be left untouched.
-        if (!OutputTextBox.Selection.IsEmpty)
+        if (!ActiveTranscriptBox.Selection.IsEmpty)
         {
             try
             {
-                var selStart = OutputTextBox.Selection.Start;
+                var selStart = ActiveTranscriptBox.Selection.Start;
                 bool inThisSection = entry.Section.ContentStart.CompareTo(selStart) <= 0 &&
                                      entry.Section.ContentEnd.CompareTo(selStart)   >= 0;
                 if (inThisSection)
-                    OutputTextBox.Selection.Select(OutputTextBox.CaretPosition, OutputTextBox.CaretPosition);
+                    ActiveTranscriptBox.Selection.Select(ActiveTranscriptBox.CaretPosition, ActiveTranscriptBox.CaretPosition);
             }
             catch (ArgumentException)
             {
@@ -14257,14 +14301,15 @@ public partial class MainWindow : Window, ILiveElementLocator
             return;
 
         EnsureThreadFooterAtEnd(thread);
-        _scrollController.RequestScrollToEnd();
+        ActiveScrollController.RequestScrollToEnd();
     }
 
     private void ScrollToPromptParagraph(Paragraph paragraph)
     {
         _ = Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
         {
-            var sv = OutputTextBox.Template?.FindName("PART_ContentHost", OutputTextBox) as ScrollViewer;
+            var activeBox = ActiveTranscriptBox;
+            var sv = activeBox.Template?.FindName("PART_ContentHost", activeBox) as ScrollViewer;
             if (sv is null) return;
 
             var tp = paragraph.ContentStart;
@@ -14273,7 +14318,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             // rect is in coordinates relative to the scroll viewer's visible area.
             // Always scroll to place this prompt at the viewport top.
             double targetOffset = sv.VerticalOffset + rect.Top;
-            _scrollController.ScrollToOffset(targetOffset);
+            _coordinatorScrollController.ScrollToOffset(targetOffset);
 
             SyncPromptNavButtons();
         });
@@ -16025,6 +16070,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         ActiveAgentItemsControl.IsEnabled = state.AgentItemsEnabled;
         InactiveAgentItemsControl.IsEnabled = state.AgentItemsEnabled;
         OutputTextBox.IsEnabled = state.OutputEnabled;
+        AgentTranscriptBox.IsEnabled = state.OutputEnabled;
         PromptTextBox.IsEnabled = state.PromptEnabled;
         RunButton.IsEnabled = state.RunEnabled
             || ((_isPromptRunning || IsLoopRunning) && _currentWorkspace is not null);
@@ -20838,14 +20884,16 @@ public partial class MainWindow : Window, ILiveElementLocator
 
             _traceWindow.Closed += (_, _) =>
             {
-                _scrollController.TraceTarget = null;
+                _coordinatorScrollController.TraceTarget = null;
+                _agentScrollController.TraceTarget = null;
                 SquadDashTrace.TraceTarget = null;
                 _traceWindow = null;
                 _traceWindowOffset = null;
             };
             _traceWindow.LocationChanged += (_, _) => OnTraceWindowMoved();
 
-            _scrollController.TraceTarget = _traceWindow;
+            _coordinatorScrollController.TraceTarget = _traceWindow;
+            _agentScrollController.TraceTarget = _traceWindow;
             SquadDashTrace.TraceTarget = _traceWindow;
             _traceWindow.Show();
         }
@@ -21755,7 +21803,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void ScrollToMatchPointerIfNeeded(TextPointer? pointer)
     {
         if (pointer is null) return;
-        var sv = OutputTextBox.Template?.FindName("PART_ContentHost", OutputTextBox) as ScrollViewer;
+        var activeBox = ActiveTranscriptBox;
+        var sv = activeBox.Template?.FindName("PART_ContentHost", activeBox) as ScrollViewer;
         if (sv is null) return;
 
         var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
@@ -21772,7 +21821,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         SquadDashTrace.Write(TraceCategory.UI,
             $"SEARCH_SCROLL cursor={_searchMatchCursor} rectTop={rect.Top:F0} rectBottom={rect.Bottom:F0} vp={sv.ViewportHeight:F0} offset={sv.VerticalOffset:F0} fullyVisible={isFullyVisible}");
         if (!isFullyVisible)
-            _scrollController.ScrollToOffset(sv.VerticalOffset + rect.Top);
+            ActiveScrollController.ScrollToOffset(sv.VerticalOffset + rect.Top);
     }
 
     /// <summary>

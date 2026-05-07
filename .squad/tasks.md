@@ -32,6 +32,8 @@
 
 - [ ] **RC browser UI — review and improvement pass** *(Owner: Lyra Morn)*
 
+- [x] **Transcript — ghost selection highlight when content streams in** *(Owner: Arjun Sen)*
+
 - [ ] **[Orion audit] `_isPromptRunning` — move ownership to PromptExecutionController** *(Owner: Arjun Sen)*
   `_isPromptRunning` is declared in MainWindow, mutated by PEC via setter delegate, read by
   `BackgroundTaskPresenter` via getter delegate, and read directly by MainWindow at 8 call sites.

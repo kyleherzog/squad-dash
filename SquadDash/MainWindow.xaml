@@ -1420,6 +1420,22 @@
                                  PreviewMouseWheel="OutputTextBox_PreviewMouseWheel"
                                  PreviewMouseDown="OutputTextBox_PreviewMouseDown"
                                  PreviewMouseRightButtonDown="OutputTextBox_PreviewMouseRightButtonDown" />
+                    <RichTextBox x:Name="AgentTranscriptBox"
+                                 Visibility="Collapsed"
+                                 VerticalScrollBarVisibility="Auto"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 IsDocumentEnabled="True"
+                                 IsReadOnly="True"
+                                 IsUndoEnabled="False"
+                                 IsInactiveSelectionHighlightEnabled="True"
+                                 ContextMenu="{x:Null}"
+                                 Foreground="{DynamicResource LabelText}"
+                                 SelectionBrush="{DynamicResource DocEditorSelectionBrush}"
+                                 SelectionOpacity="{DynamicResource DocEditorSelectionOpacity}"
+                                 PreviewMouseWheel="OutputTextBox_PreviewMouseWheel"
+                                 PreviewMouseDown="OutputTextBox_PreviewMouseDown"
+                                 PreviewMouseRightButtonDown="OutputTextBox_PreviewMouseRightButtonDown" />
 
                     <!-- Search highlight overlay — rectangles drawn here; never touches FlowDocument -->
 
