@@ -222,8 +222,11 @@ internal sealed class ClipboardImageEditorWindow : Window
         _canvasScaleY = imgH / dispH;
 
         // Set initial window size: image + chrome, capped to 85% work area.
-        Width = Math.Min(maxWinW, dispW + 20);
+        // MinWidth ensures the toolbar buttons are never clipped even for tiny images.
+        const double MinWindowWidth = 580;
+        Width = Math.Max(MinWindowWidth, Math.Min(maxWinW, dispW + 20));
         Height = Math.Min(maxWinH, dispH + 110); // toolbar ~40 + chrome ~70
+        MinWidth = MinWindowWidth;
 
         // ── Canvas ───────────────────────────────────────────────────────────
 
