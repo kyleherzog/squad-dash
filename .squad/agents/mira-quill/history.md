@@ -73,3 +73,6 @@ Documented the **Smooth Dictation** feature (Shift+Space keyboard shortcut for c
 
 Placement rationale: Feature is a complement to voice input (though accessible from text editor everywhere), so primary doc lives in `voice-input.md` with keyboard shortcut reference in the shortcuts table. Commit: `65bbbb3`.
 
+
+
+📌 Team update (2026-05-07T12:15:43Z): Smooth Dictation feature documentation merged to decisions.md — decided by Mira Quill

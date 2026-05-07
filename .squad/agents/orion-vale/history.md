@@ -196,3 +196,5 @@ Implement **Unified CommandRegistry** pattern:
 
 
 📌 Team update (2026-05-01T20:14:59.8700850Z): Architectural review consolidated (Grade B+, 1,133 tests passing). Key findings: Repository structure sound; MainWindow still large (5.6K lines); bleeding-edge stack (.NET 10 preview, TS 6.0.2); command system needs unified registry. All decisions merged to .squad/decisions.md. — decided by Orion Vale
+
+📌 Team update (2026-05-07T12:15:43Z): RichTextBox conversion path (Path A) approved and implemented by Lyra Morn — architectural recommendation accepted (commit e35c9b5)

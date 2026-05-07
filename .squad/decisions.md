@@ -2443,3 +2443,229 @@ We considered using `ResizeBehavior="BasedOnAlignment"` with carefully tuned `Ho
 - `SquadDash/MainWindow.xaml` — Grid column restructure, inner LoopSectionGrid
 - `SquadDash/MainWindow.xaml.cs` — SyncLoopOutputPane freeze logic, context menu handlers
 
+
+
+---
+
+# Decision: Diff Hover Popup Implementation
+
+**Date:** 2027-01-02  
+**Author:** Lyra Morn (WPF & UI Specialist)  
+**Status:** Implemented  
+**Commit:** 52a9735c771cfdbf728b2a3d05a5d41004995d4d
+
+## Context
+
+Users needed a quick way to preview file changes when hovering over edit tool entries in the transcript, without needing to expand the entry or open a separate window.
+
+## Decision
+
+Implemented a hover-triggered diff popup that appears when the mouse enters the header panel of an edit tool transcript entry. The popup displays a syntax-highlighted unified diff with:
+
+- **Added lines:** Blue foreground (`DiffAddedText`) with ~15% opacity blue background
+- **Removed lines:** Red foreground (`DiffRemovedText`) with ~15% opacity red background
+- **Context lines:** Normal foreground, no background tint
+- **Header lines:** Dimmed/muted appearance
+- **Monospace font:** Consolas 12px for code readability
+- **Truncation:** Max 40 lines displayed with scroll support up to 300px height
+- **Theme-aware:** Uses existing theme resources for colors
+
+## Implementation Details
+
+### New File: `DiffHoverPopup.cs`
+- `DiffLineKind` enum for line type classification
+- `DiffLine` class to represent parsed diff lines
+- `DiffHoverPopup` class extending WPF `Popup`
+- `ParseDiff()` static method using prefix-based parsing (same approach as existing `TryBuildEditDiffSummary()`)
+- `ShowDiff()` method to build and display the popup UI
+
+### Modified: `MainWindow.xaml.cs`
+- Added hover event handlers in `CreateToolEntry()` method
+- Only wires events for edit tool entries (`descriptor.ToolName == "edit"`)
+- Checks entry is completed before showing popup
+- Uses `headerPanel.MouseEnter` and `headerPanel.MouseLeave` for trigger/dismiss
+
+## Alternatives Considered
+
+1. **Using WPF ToolTip:** Rejected because ToolTip has limited styling control and doesn't work well with scrollable content
+2. **Creating a separate window:** Rejected as too heavyweight for a quick preview
+3. **Expanding entry by default:** Rejected as it breaks the compact transcript view
+
+## Theme Resources Used
+
+- `DiffAddedText` — Blue color for added lines
+- `DiffRemovedText` — Red color for removed lines
+- `CardSurface` — Popup background
+- `LineColor` — Border color
+- `SubtleText` — Header line text
+- `LabelText` — Context line text
+
+All resources already exist in both Dark.xaml and Light.xaml, ensuring theme consistency.
+
+## Build Status
+
+Clean build — DLL compiled successfully. (Launcher copy failed due to app running, which is expected.)
+
+## Future Enhancements
+
+- Could add syntax highlighting for specific file types (currently treats all as plain text)
+- Could add side-by-side diff view option
+- Could make max lines/height configurable via preferences
+
+
+---
+
+# RevisionPendingIndicator/RevisionHighlightAdorner TextBox Compatibility
+
+**Date:** 2027-01-02  
+**Decided by:** Lyra Morn  
+**Status:** Blocked — requires design decision
+
+## Context
+
+Task specification requested wiring `RevisionPendingIndicator` and `RevisionHighlightAdorner` into `MarkdownDocumentWindow.cs` → `TriggerReviseWithAi()` method to show inline progress indicator and highlight during AI revision.
+
+## Problem
+
+- `RevisionPendingIndicator.Insert()` signature: `static RevisionPendingIndicator? Insert(RichTextBox rtb, int afterCharOffset)`
+- `RevisionHighlightAdorner.Attach()` signature: `static RevisionHighlightAdorner? Attach(RichTextBox rtb, int startOffset, int length)`
+- `MarkdownDocumentWindow` uses `TextBox` for editing (line 1585: `public TextBox EditorTextBox { get; }`)
+- `TriggerReviseWithAi()` operates on `TextBox tb` parameter (line 467)
+
+**Incompatibility:** Both components are designed for `RichTextBox` (rely on `TextPointer`, `FlowDocument`, `InlineUIContainer`) but the markdown editor uses `TextBox` (plain text, no FlowDocument).
+
+## Options
+
+1. **Create TextBox-compatible versions** — Build `TextBoxRevisionIndicator` and `TextBoxRevisionAdorner` using `TextBox.GetRectFromCharacterIndex()` for positioning and WPF adorners for visual overlay
+2. **Convert MarkdownDocumentWindow to RichTextBox** — Large refactor, breaks existing plain-text editing patterns
+3. **Skip revision indicators in markdown editor** — Document as out-of-scope for plain-text editing scenarios
+
+## Recommendation
+
+**Option 3** — Skip for now. The revision popup (`DocRevisePopup`) already provides visual feedback that AI is working. Inline indicators are cosmetic enhancements most valuable in rich-text transcript scenarios where many concurrent revisions might occur. Markdown editing is single-user, single-revision-at-a-time.
+
+If future work requires inline indicators in markdown editor, implement Option 1 as a separate feature task with proper TextBox API design.
+
+## Implementation
+
+- Added `RevisionHighlight` theme colors to `Dark.xaml` (#1A3A5C) and `Light.xaml` (#D0E4F7) as prep work
+- Did NOT wire components into `TriggerReviseWithAi()` due to type incompatibility
+- Documented in `.squad/agents/lyra-morn/history.md`
+
+## Next Steps
+
+- Mark003 or team lead to decide: implement Option 1, accept Option 3, or revisit when markdown editor refactor occurs
+
+
+---
+
+# Decision: Convert MarkdownDocumentWindow to RichTextBox
+
+**Date:** 2026-04-28  
+**Decider:** Lyra Morn (WPF & UI Specialist)  
+**Status:** Implemented  
+**Commit:** e35c9b5
+
+## Context
+
+MarkdownDocumentWindow's source editor was implemented as a `TextBox`, which has limited support for visual overlays like adorners. To implement the "Revise with AI" feature's visual feedback (highlight adorner + inline spinner), we needed to switch to `RichTextBox` which supports the WPF adorner layer and inline UI containers.
+
+## Decision
+
+Convert MarkdownDocumentWindow's editor from `TextBox` to `RichTextBox`, using it **purely as a plain-text editor** with adorner support.
+
+### Implementation approach:
+1. Use `RichTextBoxExtensions` methods for all text access (`.GetPlainText()`, `.SetPlainText()`, etc.)
+2. Force plain-text paste via `DataObject.AddPastingHandler` to prevent rich formatting
+3. Leverage existing `RevisionHighlightAdorner` and `RevisionPendingIndicator` classes
+4. Wire adorner/indicator lifecycle in `TriggerReviseWithAi()` method
+
+### Key constraint:
+**No markdown rendering/parsing changes** — the editor remains a plain-text markdown source editor. RichTextBox is used solely for its adorner layer and FlowDocument support, not for rich text editing.
+
+## Alternatives considered
+
+1. **Keep TextBox, overlay Canvas for highlights:** Would require manual positioning and scroll tracking. Adorner layer handles this automatically.
+2. **Separate RichTextBox for revision preview:** Would duplicate content and add complexity. Current approach is simpler and more direct.
+
+## Consequences
+
+### Positive:
+- Clean visual feedback during AI revision (highlight + spinner)
+- Follows established adorner pattern (`SearchHighlightAdorner`)
+- No behavior changes — still plain-text markdown editing
+- All existing toolbar commands, voice input, and markdown helpers work unchanged
+
+### Negative:
+- RichTextBox has slightly different keyboard/selection behavior (mitigated by extension methods)
+- Requires paste handler to prevent rich text (one-time setup cost)
+
+## Related files
+
+- `SquadDash/MarkdownDocumentWindow.cs` — main conversion (28 call sites)
+- `SquadDash/RichTextBoxExtensions.cs` — plain-text API compatibility layer
+- `SquadDash/RevisionHighlightAdorner.cs` — semi-transparent highlight adorner
+- `SquadDash/RevisionPendingIndicator.cs` — inline animated spinner
+
+## Team notes
+
+This decision unblocks the full "Revise with AI" UX. The adorner pattern is reusable for future editor enhancements (e.g., inline diagnostics, diff previews).
+
+
+---
+
+# Documentation: Smooth Dictation Feature
+
+**Date:** 2026-04-18  
+**Agent:** Mira Quill  
+**Status:** ✅ Complete  
+
+## Summary
+
+Documented the **Smooth Dictation** feature (Shift+Space) — a text cleanup utility that removes unwanted sentence breaks inserted by voice recognition.
+
+## Decision: Where to Place the Docs
+
+**Primary location:** `docs/features/voice-input.md` — Added new "## Smooth Dictation" section.  
+**Secondary reference:** `docs/reference/keyboard-shortcuts.md` — Added Shift+Space entry to "Prompt Editor Shortcuts" table with link to feature doc.
+
+## Rationale
+
+1. **Feature classification:** Smooth Dictation is a text-editing utility designed to complement voice dictation workflows. While it works in any text area (prompt box, doc editor, doc source pane), it's conceptually tied to voice input — users dictate messy text, then use Smooth Dictation to clean it up.
+
+2. **Cross-referencing:** Keyboard shortcuts table is the main discovery point for users who've learned about the shortcut elsewhere (UI button, tooltip, etc.). The table entry links to the full feature doc for context.
+
+3. **Consistency:** Matches existing doc structure where voice-input.md documents related features (PTT, fullscreen mode, voice annotation), and keyboard-shortcuts.md serves as a reference index.
+
+## Content
+
+The feature doc includes:
+- Problem statement (unwanted sentence breaks in voice recognition)
+- Usage instructions (select + Shift+Space, or right-click menu)
+- Before/after example
+- Exception for pronoun "I"
+- List of supported text areas
+
+## Files Changed
+
+- `docs/features/voice-input.md` — Added 35 lines (new section after Fullscreen Mode, before Troubleshooting)
+- `docs/reference/keyboard-shortcuts.md` — Added 1 line (Shift+Space row in Prompt Editor Shortcuts table)
+
+**Commit:** `65bbbb3`
+
+## Impact
+
+- ✅ New feature is discoverable in two ways: (1) keyboard shortcuts reference, (2) voice input feature doc
+- ✅ Documentation style consistent with existing docs (structured, concise, examples)
+- ✅ No breaking changes; pure additions
+
+
+---
+
+### 2026-05-07T08-03-16: Architecture decision — RichTextBox conversion path selected
+
+**By:** Orion Vale (recommended), Mark003 (requesting assessment)
+
+**What:** For the RevisionHighlightAdorner + RevisionPendingIndicator feature, the team should pursue Path A (convert MarkdownDocumentWindow editor TextBox to RichTextBox). 28 call sites require mechanical changes. RichTextBoxExtensions.cs already covers 100% of the gap. Paste command override required. Estimated 6-7 hours total including adorner implementation. Path B (TextBox adorner) rejected: 10.5h, O(n²) geometry, multi-revision artifacts, dead-end architecture.
+
+**Why:** Lower effort, lower risk, better architecture, future-proof for Phase 4+ features.

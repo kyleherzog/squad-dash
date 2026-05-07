@@ -129,3 +129,27 @@ file\, and backslash (no-newline markers). Clean diff preview without metadata n
 
 **Files:** DiffHoverPopup.cs (lines 35-38, 53, 118-149), MainWindow.xaml.cs (lines 14949-14972). Also added RevisionHighlight theme colors to Dark.xaml (#1A3A5C) and Light.xaml (#D0E4F7) for future revision adorner work (not wired yet — requires TextBox-compatible implementation as MarkdownDocumentWindow uses TextBox not RichTextBox). Commit: bab3da3. Build: 0 errors, 0 warnings.
 
+
+📌 MarkdownDocumentWindow TextBox → RichTextBox conversion (2026-04-28): Converted the markdown source editor from TextBox to RichTextBox to enable revision highlighting adorner and inline pending indicator during "Revise with AI" operations.
+
+**Key changes:**
+- Changed MarkdownDocumentTabState.EditorTextBox from TextBox to RichTextBox (line 1585)
+- Replaced all TextBox-specific API calls with RichTextBoxExtensions methods:
+  - .Text → .GetPlainText() / .SetPlainText()
+  - .SelectionStart / .SelectionLength → .GetSelectionStart() / .GetSelectionLength()
+  - .CaretIndex → .GetCaretOffset() / .SetCaretOffset()
+  - .SelectedText → .GetSelectedText()
+  - .GetRectFromCharacterIndex() → .GetRectFromOffset()
+- Added plain-text paste handler using DataObject.AddPastingHandler to force Unicode text paste (prevents rich formatting)
+- Wired RevisionHighlightAdorner.Attach() and RevisionPendingIndicator.Insert() in TriggerReviseWithAi() method
+- Adorner displays semi-transparent highlight over selected text during AI revision
+- Indicator shows animated spinner inline at selection end
+- Both are removed when revision completes or fails
+
+**Pattern:** The conversion preserved all existing behavior — RichTextBox is used purely as a plain-text editor with adorner support. RevisionHighlightAdorner follows the SearchHighlightAdorner pattern (scroll tracking, multi-line rect rendering). RevisionPendingIndicator is an InlineUIContainer that's intentionally excluded from GetPlainText() output.
+
+**Files:** MarkdownDocumentWindow.cs (28 call sites converted). RevisionHighlightAdorner.cs and RevisionPendingIndicator.cs already existed from prior work. Build: 0 errors, 0 warnings. Commit: 35c9b5
+
+
+
+📌 RichTextBox conversion task completed (2026-05-07T12:15:43Z): MarkdownDocumentWindow editor converted from TextBox → RichTextBox, 28 call sites updated, RevisionHighlightAdorner and RevisionPendingIndicator integrated. Commit: e35c9b5. Build: clean. Tests: passing.
