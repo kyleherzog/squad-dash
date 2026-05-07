@@ -186,6 +186,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private Border? _dropIndicator;           // Narrow vertical bar shown between tabs during drag
     private const double DragThreshold = 4.0; // px of movement before drag mode activates
     private bool _restartPending;
+    private bool _clipboardEditorOpen; // true while ClipboardImageEditorWindow is open; defers restart
     private bool _programmaticExpanderChange;
     private DeferredShutdownMode _deferredShutdown;
     private bool _transcriptFullScreenEnabled;
@@ -6218,8 +6219,11 @@ public partial class MainWindow : Window, ILiveElementLocator
                     var bitmap = Clipboard.GetImage();
                     if (bitmap is not null && _currentWorkspace is not null)
                     {
+                        _clipboardEditorOpen = true;
                         var editor = new ClipboardImageEditorWindow(this, bitmap, isPromptMode: true);
                         editor.ShowDialog();
+                        _clipboardEditorOpen = false;
+                        OnClipboardEditorClosed();
                         var edited = editor.Result;
                         if (edited is not null)
                         {
@@ -10328,8 +10332,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (string.IsNullOrEmpty(_currentDocPath)) return;
 
         var clipImg = Clipboard.GetImage()!;
+        _clipboardEditorOpen = true;
         var editor = new ClipboardImageEditorWindow(this, clipImg);
         editor.ShowDialog();
+        _clipboardEditorOpen = false;
+        OnClipboardEditorClosed();
         if (editor.Result is not { } image) return;
 
         var docName = Path.GetFileNameWithoutExtension(_currentDocPath);
@@ -17432,6 +17439,13 @@ public partial class MainWindow : Window, ILiveElementLocator
             return;
         }
 
+        if (_clipboardEditorOpen)
+        {
+            SetInstallStatus("Build finished. Restart will happen after the image editor closes.");
+            UpdateSessionState("Restart pending");
+            return;
+        }
+
         ShowRestartingOverlay();
         Close();
     }
@@ -17452,6 +17466,23 @@ public partial class MainWindow : Window, ILiveElementLocator
     /// for all in-flight revisions to complete, and none remain, trigger the restart now.
     /// </summary>
     private void OnDocRevisionCompleted()
+    {
+        if (!_restartPending) return;
+        if (_isPromptRunning) return;
+        if (_pttState == PttState.Active || _pttDraining) return;
+        if (MarkdownDocumentWindow.AnyRevisionInFlight) return;
+        if (_clipboardEditorOpen) return;
+
+        ShowRestartingOverlay();
+        _conversationManager.EmergencySave();
+        Close();
+    }
+
+    /// <summary>
+    /// Called after a ClipboardImageEditorWindow closes. If a restart was deferred
+    /// waiting for the editor to finish, trigger it now.
+    /// </summary>
+    private void OnClipboardEditorClosed()
     {
         if (!_restartPending) return;
         if (_isPromptRunning) return;
@@ -17972,8 +18003,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         Directory.CreateDirectory(Path.GetDirectoryName(fullImagePath)!);
 
         var clipImg = Clipboard.GetImage()!;
+        _clipboardEditorOpen = true;
         var editor = new ClipboardImageEditorWindow(this, clipImg);
         editor.ShowDialog();
+        _clipboardEditorOpen = false;
+        OnClipboardEditorClosed();
         if (editor.Result is not { } image) return;
 
         var encoder = new PngBitmapEncoder();
@@ -18097,8 +18131,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         Directory.CreateDirectory(Path.GetDirectoryName(fullImagePath)!);
 
         var clipImg = Clipboard.GetImage()!;
+        _clipboardEditorOpen = true;
         var editor = new ClipboardImageEditorWindow(this, clipImg);
         editor.ShowDialog();
+        _clipboardEditorOpen = false;
+        OnClipboardEditorClosed();
         if (editor.Result is not { } image) return;
 
         var encoder = new PngBitmapEncoder();
