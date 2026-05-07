@@ -16,7 +16,6 @@ internal sealed class RevisionHighlightAdorner : Adorner
     private readonly RichTextBox _rtb;
     private TextPointer? _start;
     private TextPointer? _end;
-    private Brush? _originalForeground;
 
     private RevisionHighlightAdorner(RichTextBox rtb) : base(rtb)
     {
@@ -61,14 +60,6 @@ internal sealed class RevisionHighlightAdorner : Adorner
             if (layer is null) return null;
 
             var adorner = new RevisionHighlightAdorner(rtb) { _start = start, _end = end };
-            
-            // Apply text color to the highlighted range
-            var highlightRange = new TextRange(start, end);
-            adorner._originalForeground = highlightRange.GetPropertyValue(TextElement.ForegroundProperty) as Brush;
-            
-            var textColor = GetBrush("RevisionHighlightText", Colors.Black);
-            highlightRange.ApplyPropertyValue(TextElement.ForegroundProperty, textColor);
-            
             layer.Add(adorner);
             return adorner;
         }
@@ -80,16 +71,6 @@ internal sealed class RevisionHighlightAdorner : Adorner
     {
         try
         {
-            // Restore original foreground color
-            if (_start is not null && _end is not null)
-            {
-                var highlightRange = new TextRange(_start, _end);
-                if (_originalForeground is not null)
-                    highlightRange.ApplyPropertyValue(TextElement.ForegroundProperty, _originalForeground);
-                else
-                    highlightRange.ApplyPropertyValue(TextElement.ForegroundProperty, DependencyProperty.UnsetValue);
-            }
-            
             _start = null;
             _end   = null;
             AdornerLayer.GetAdornerLayer(_rtb)?.Remove(this);
@@ -163,7 +144,4 @@ internal sealed class RevisionHighlightAdorner : Adorner
         if (Application.Current?.Resources[key] is Brush b) return b;
         return new SolidColorBrush(fallback);
     }
-    
-    private static Brush GetBrush(string key, Colors fallback) => 
-        GetBrush(key, Color.FromRgb(0, 0, 0));
 }

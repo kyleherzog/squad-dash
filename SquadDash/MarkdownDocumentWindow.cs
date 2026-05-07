@@ -475,9 +475,9 @@ internal sealed class MarkdownDocumentWindow : Window {
         var selLen       = tb.GetSelectionLength();
         var docPath      = doc?.FilePath ?? "";
 
-        // Capture live TextPointer anchors (not frozen) — they track document edits automatically
-        var startPointer = tb.Document.ContentStart.GetPositionAtOffset(selStart, LogicalDirection.Forward);
-        var endPointer   = tb.Document.ContentStart.GetPositionAtOffset(selStart + selLen, LogicalDirection.Backward);
+        // Capture live TextPointer anchors via plain-text offsets — they track document edits automatically
+        var startPointer = tb.GetTextPointerAt(selStart);
+        var endPointer   = tb.GetTextPointerAt(selStart + selLen);
 
         var priorFocus = Keyboard.FocusedElement as IInputElement;
 
@@ -495,8 +495,8 @@ internal sealed class MarkdownDocumentWindow : Window {
                 adorner?.Remove();
                 indicator?.Detach();
 
-                // Use live TextPointers to get current text after any edits
-                var currentSelectedText = new TextRange(startPointer, endPointer).Text;
+                // Use live TextPointers to get current text after any edits; normalize to \n
+                var currentSelectedText = new TextRange(startPointer, endPointer).Text.Replace("\r\n", "\n");
                 
                 // Check if the original selection is still intact
                 if (currentSelectedText == selectedText) {
