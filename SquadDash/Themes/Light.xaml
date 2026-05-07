@@ -155,9 +155,9 @@
     <!-- Revision Highlight Token (used by RevisionHighlightAdorner while AI is revising) -->
     <SolidColorBrush x:Key="RevisionHighlight"          Color="#2860B878"/>
     <!-- Editor selection colours -->
-    <SolidColorBrush x:Key="DocEditorSelectionBrush"    Color="#EAF5FF"/>
+    <SolidColorBrush x:Key="DocEditorSelectionBrush"    Color="#1565C0"/>
     <SolidColorBrush x:Key="DocEditorSelectionTextBrush" Color="#0D0D0D"/>
-    <sys:Double x:Key="DocEditorSelectionOpacity">0.5</sys:Double>
+    <sys:Double x:Key="DocEditorSelectionOpacity">0.25</sys:Double>
     <!-- Active selection system-colour overrides — make text readable on the pale blue background -->
     <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}"     Color="#EAF5FF"/>
     <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#0D0D0D"/>

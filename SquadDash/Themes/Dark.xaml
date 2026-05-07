@@ -156,7 +156,7 @@
     <!-- Editor selection colours -->
     <SolidColorBrush x:Key="DocEditorSelectionBrush"    Color="#1565C0"/>
     <SolidColorBrush x:Key="DocEditorSelectionTextBrush" Color="#E8D8C0"/>
-    <sys:Double x:Key="DocEditorSelectionOpacity">0.3</sys:Double>
+    <sys:Double x:Key="DocEditorSelectionOpacity">0.25</sys:Double>
     <!-- Active selection system-colour overrides — make text readable on the selection background -->
     <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}"     Color="#3A6EA0"/>
     <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#E8D8C0"/>
