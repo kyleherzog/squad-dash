@@ -389,6 +389,14 @@ public partial class MainWindow : Window, ILiveElementLocator
         int PixelHeight,
         string ThemeName);
 
+    private sealed record TranscriptViewportAnchor(
+        TranscriptThreadState Thread,
+        TextPointer Pointer,
+        double ViewportY,
+        double PreviousVerticalOffset,
+        double PreviousViewportHeight,
+        double PreviousWidth);
+
     private readonly List<SecondaryTranscriptEntry> _secondaryTranscripts = new();
     private DispatcherTimer? _transcriptTitleRefreshTimer;
     private DispatcherTimer? _completedTimeFooterTimer;
@@ -396,6 +404,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private HashSet<AgentStatusCard> _prevActiveAgentCards = new();
     private bool _mainTranscriptVisible = true;
     private bool _gridRebuildPending;
+    private TranscriptViewportAnchor? _pendingGridRebuildViewportAnchor;
 
     // Push-to-talk state
     private enum PttState { Idle, TapDown, TapReleased, Active }
@@ -11900,6 +11909,137 @@ public partial class MainWindow : Window, ILiveElementLocator
         return $"hosts={total} visible={visible} attached={attached} mru={_primaryAgentHostMru.Count}";
     }
 
+    private RichTextBox? TryGetMainTranscriptBox(TranscriptThreadState? thread)
+    {
+        if (thread is null || !_mainTranscriptVisible)
+            return null;
+
+        if (ReferenceEquals(thread, CoordinatorThread))
+            return OutputTextBox;
+
+        return _primaryAgentTranscriptHosts.TryGetValue(thread, out var entry)
+            ? entry.TranscriptBox
+            : null;
+    }
+
+    private TranscriptScrollController? TryGetMainTranscriptScrollController(TranscriptThreadState? thread)
+    {
+        if (thread is null || !_mainTranscriptVisible)
+            return null;
+
+        if (ReferenceEquals(thread, CoordinatorThread))
+            return _coordinatorScrollController;
+
+        return _primaryAgentTranscriptHosts.TryGetValue(thread, out var entry)
+            ? entry.ScrollController
+            : null;
+    }
+
+    private TranscriptViewportAnchor? TryCaptureMainTranscriptViewportAnchor(string reason)
+    {
+        var thread = _selectedTranscriptThread ?? CoordinatorThread;
+        var box = TryGetMainTranscriptBox(thread);
+        if (box is null
+            || box.Visibility != Visibility.Visible
+            || box.Opacity <= 0.01
+            || box.ActualWidth < 2
+            || box.ActualHeight < 2)
+        {
+            return null;
+        }
+
+        var sv = FindScrollViewer(box);
+        if (sv is null || sv.ViewportWidth <= 0 || sv.ViewportHeight <= 0)
+            return null;
+
+        var viewportX = Math.Max(1, sv.ViewportWidth * 0.5);
+        var viewportY = Math.Max(1, sv.ViewportHeight * 0.5);
+        var capturePoint = new Point(box.ActualWidth * 0.5, box.ActualHeight * 0.5);
+        try
+        {
+            capturePoint = sv.TransformToAncestor(box).Transform(new Point(viewportX, viewportY));
+        }
+        catch
+        {
+            viewportY = Math.Max(1, box.ActualHeight * 0.5);
+        }
+
+        capturePoint.X = Math.Clamp(capturePoint.X, 1, Math.Max(1, box.ActualWidth - 1));
+        capturePoint.Y = Math.Clamp(capturePoint.Y, 1, Math.Max(1, box.ActualHeight - 1));
+
+        var pointer = box.GetPositionFromPoint(capturePoint, true);
+        if (pointer is null)
+            return null;
+
+        SquadDashTrace.Write(TraceCategory.Performance,
+            $"TRANSCRIPT_VIEWPORT_ANCHOR_CAPTURE reason={reason} thread={thread.ThreadId} " +
+            $"offset={sv.VerticalOffset:0.#} viewportY={viewportY:0.#} viewportH={sv.ViewportHeight:0.#} width={box.ActualWidth:0.#}");
+        return new TranscriptViewportAnchor(
+            thread,
+            pointer,
+            viewportY,
+            sv.VerticalOffset,
+            sv.ViewportHeight,
+            box.ActualWidth);
+    }
+
+    private void QueueRestoreMainTranscriptViewportAnchor(TranscriptViewportAnchor anchor)
+    {
+        var queuedAt = Stopwatch.GetTimestamp();
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
+        {
+            var queueMs = (long)((Stopwatch.GetTimestamp() - queuedAt) * 1000.0 / Stopwatch.Frequency);
+            RestoreMainTranscriptViewportAnchor(anchor, queueMs);
+        });
+    }
+
+    private void RestoreMainTranscriptViewportAnchor(TranscriptViewportAnchor anchor, long queueMs)
+    {
+        if (!_mainTranscriptVisible || !ReferenceEquals(_selectedTranscriptThread ?? CoordinatorThread, anchor.Thread))
+            return;
+
+        var box = TryGetMainTranscriptBox(anchor.Thread);
+        var controller = TryGetMainTranscriptScrollController(anchor.Thread);
+        if (box is null || controller is null || box.Visibility != Visibility.Visible)
+            return;
+
+        var sv = FindScrollViewer(box);
+        if (sv is null)
+            return;
+
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            var rect = anchor.Pointer.GetCharacterRect(LogicalDirection.Forward);
+            if (rect.IsEmpty || double.IsNaN(rect.Top) || double.IsInfinity(rect.Top))
+                return;
+
+            var beforeOffset = sv.VerticalOffset;
+            var targetOffset = sv.VerticalOffset + rect.Top - anchor.ViewportY;
+            var clampedOffset = Math.Clamp(targetOffset, 0, sv.ScrollableHeight);
+            controller.RestoreViewportAnchorOffset(clampedOffset);
+            SyncPromptNavButtons(allowGeometry: false);
+            SchedulePromptNavGeometryRefresh();
+
+            sw.Stop();
+            var delta = Math.Abs(clampedOffset - beforeOffset);
+            if (delta >= 1 || sw.ElapsedMilliseconds >= 10 || queueMs >= 20)
+            {
+                SquadDashTrace.Write(TraceCategory.Performance,
+                    $"TRANSCRIPT_VIEWPORT_ANCHOR_RESTORE thread={anchor.Thread.ThreadId} " +
+                    $"queue={queueMs}ms work={sw.ElapsedMilliseconds}ms " +
+                    $"capturedOffset={anchor.PreviousVerticalOffset:0.#} offset={beforeOffset:0.#}->{clampedOffset:0.#} delta={delta:0.#} " +
+                    $"width={anchor.PreviousWidth:0.#}->{box.ActualWidth:0.#} " +
+                    $"viewportH={anchor.PreviousViewportHeight:0.#}->{sv.ViewportHeight:0.#}");
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            SquadDashTrace.Write(TraceCategory.Performance,
+                $"TRANSCRIPT_VIEWPORT_ANCHOR_RESTORE_SKIP thread={anchor.Thread.ThreadId} error={ex.GetType().Name}");
+        }
+    }
+
     private bool TryCaptureTranscriptSnapshot(TranscriptThreadState? thread)
     {
         if (thread is null || !_mainTranscriptVisible)
@@ -12824,14 +12964,19 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void ScheduleGridRebuild()
     {
+        _pendingGridRebuildViewportAnchor ??= TryCaptureMainTranscriptViewportAnchor("grid-rebuild");
         if (_gridRebuildPending) return;
         _gridRebuildPending = true;
         _ = Dispatcher.BeginInvoke(DispatcherPriority.Normal, () =>
         {
             _gridRebuildPending = false;
+            var anchor = _pendingGridRebuildViewportAnchor;
+            _pendingGridRebuildViewportAnchor = null;
             var sw = Stopwatch.StartNew();
             RebuildTranscriptPanelsGrid();
             SquadDashTrace.Write(TraceCategory.Performance, $"REBUILD_GRID (coalesced): {sw.ElapsedMilliseconds}ms panels={_secondaryTranscripts.Count}");
+            if (anchor is not null)
+                QueueRestoreMainTranscriptViewportAnchor(anchor);
         });
     }
 

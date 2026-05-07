@@ -432,6 +432,47 @@ internal sealed class TranscriptScrollController
         }
     }
 
+    /// <summary>
+    /// Restores a viewport anchor after a layout-only reflow, such as splitting the
+    /// transcript area into multiple columns. Unlike prompt navigation, this preserves
+    /// the user's reading lock state based on the restored distance from the bottom.
+    /// </summary>
+    public void RestoreViewportAnchorOffset(double targetOffset)
+    {
+        var sv = EnsureScrollViewer();
+        if (sv is null)
+            return;
+
+        _pendingScrollRequest = false;
+        _pendingLockedViewportReanchor = false;
+
+        _isProgrammaticScroll = true;
+        try
+        {
+            var clampedOffset = Math.Clamp(targetOffset, 0, sv.ScrollableHeight);
+            sv.ScrollToVerticalOffset(clampedOffset);
+
+            var distanceFromBottom = sv.ScrollableHeight - clampedOffset;
+            IsUserScrolledAway = distanceFromBottom > NearBottomThreshold;
+            if (IsUserScrolledAway)
+            {
+                _savedDistanceFromBottom = distanceFromBottom;
+                _savedOffsetBeforeShrink = clampedOffset;
+                ShowScrollButton();
+            }
+            else
+            {
+                _savedDistanceFromBottom = -1;
+                _savedOffsetBeforeShrink = -1;
+                HideScrollButton(immediate: true);
+            }
+        }
+        finally
+        {
+            _isProgrammaticScroll = false;
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Public API — scroll-to-bottom button
     // -------------------------------------------------------------------------
