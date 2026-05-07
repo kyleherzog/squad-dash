@@ -14949,7 +14949,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         // Wire up diff hover popup for edit tool entries
         if (string.Equals(descriptor.ToolName, "edit", StringComparison.OrdinalIgnoreCase)) {
             DiffHoverPopup? diffPopup = null;
-            headerPanel.MouseEnter += (_, _) => {
+            headerPanel.MouseEnter += (sender, _) => {
                 if (!entry.IsCompleted || string.IsNullOrWhiteSpace(entry.OutputText))
                     return;
 
@@ -14957,8 +14957,12 @@ public partial class MainWindow : Window, ILiveElementLocator
                 if (diffLines.Count == 0)
                     return;
 
+                // Capture the screen position once and lock it
+                var screenPos = headerPanel.PointToScreen(new Point(0, 0));
                 diffPopup = new DiffHoverPopup {
-                    PlacementTarget = headerPanel
+                    PlacementTarget = headerPanel,
+                    HorizontalOffset = screenPos.X + 12,
+                    VerticalOffset = screenPos.Y + 12
                 };
                 diffPopup.ShowDiff(diffLines);
             };

@@ -151,7 +151,7 @@
     <SolidColorBrush x:Key="SearchHighlightText"        Color="#120D00"/>
     <SolidColorBrush x:Key="SearchHighlightTextCurrent" Color="#000000"/>
     <!-- Revision Highlight Token (used by RevisionHighlightAdorner while AI is revising) -->
-    <SolidColorBrush x:Key="RevisionHighlight"          Color="#4D5B8C"/>
+    <SolidColorBrush x:Key="RevisionHighlight"          Color="#1A3A5C"/>
     <!-- Screenshot Overlay Tokens -->
     <SolidColorBrush x:Key="OverlayDimFill"             Color="#80000000"/>
     <SolidColorBrush x:Key="ScreenshotAnchorNamed"       Color="#4CAF50"/>

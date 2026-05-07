@@ -32,9 +32,8 @@ internal sealed class DiffHoverPopup : Popup {
     public DiffHoverPopup() {
         AllowsTransparency = true;
         StaysOpen = false;
-        Placement = PlacementMode.Mouse;
-        HorizontalOffset = 12;
-        VerticalOffset = 12;
+        Placement = PlacementMode.Absolute;
+        IsHitTestVisible = false;
     }
 
     public void ShowDiff(IEnumerable<DiffLine> diffLines) {
@@ -50,7 +49,7 @@ internal sealed class DiffHoverPopup : Popup {
             var textBlock = new TextBlock {
                 Text = line.Text,
                 FontFamily = new FontFamily("Consolas"),
-                FontSize = 12,
+                FontSize = 13,
                 Padding = new Thickness(4, 1, 4, 1),
                 TextWrapping = TextWrapping.NoWrap
             };
@@ -124,17 +123,20 @@ internal sealed class DiffHoverPopup : Popup {
         var textLines = normalized.Split('\n');
 
         foreach (var line in textLines) {
-            if (string.IsNullOrWhiteSpace(line))
-                continue;
-
-            if (line.StartsWith("+++", StringComparison.Ordinal) ||
+            // Skip entirely: headers, metadata, and no-newline markers
+            if (string.IsNullOrWhiteSpace(line) ||
+                line.StartsWith("+++", StringComparison.Ordinal) ||
                 line.StartsWith("---", StringComparison.Ordinal) ||
                 line.StartsWith("@@", StringComparison.Ordinal) ||
                 line.StartsWith("diff ", StringComparison.Ordinal) ||
-                line.StartsWith("index ", StringComparison.Ordinal)) {
-                lines.Add(new DiffLine(line, DiffLineKind.Header));
+                line.StartsWith("index ", StringComparison.Ordinal) ||
+                line.StartsWith("new file", StringComparison.Ordinal) ||
+                line.StartsWith("deleted file", StringComparison.Ordinal) ||
+                line.StartsWith("\\", StringComparison.Ordinal)) {
+                continue;
             }
-            else if (line.StartsWith('+')) {
+
+            if (line.StartsWith('+')) {
                 lines.Add(new DiffLine(line, DiffLineKind.Added));
             }
             else if (line.StartsWith('-')) {
