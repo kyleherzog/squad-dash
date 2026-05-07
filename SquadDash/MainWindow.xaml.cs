@@ -9886,7 +9886,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         var capturedStart = selStart;
         var capturedLen   = selLen;
 
-        RevisionPendingIndicator? indicator = null;
+        RevisionPendingIndicator?  indicator = null;
+        RevisionHighlightAdorner?  highlight = null;
 
         var popup = new DocRevisePopup(
             originalText,
@@ -9897,12 +9898,15 @@ public partial class MainWindow : Window, ILiveElementLocator
             onRevised: revised => Dispatcher.Invoke(() => {
                 indicator?.Remove();
                 indicator = null;
+                highlight?.Remove();
+                highlight = null;
                 ApplyDocRevision(textBox, capturedStart, capturedLen, originalText, revised);
             }),
             onSubmitting: popupCenter => {
                 priorFocus?.Focus();
                 Keyboard.Focus(priorFocus);
-                indicator = RevisionPendingIndicator.Insert(textBox, capturedStart + capturedLen);
+                highlight  = RevisionHighlightAdorner.Attach(textBox, capturedStart, capturedLen);
+                indicator  = RevisionPendingIndicator.Insert(textBox, capturedStart + capturedLen);
                 ShowRevisionWorkingOverlay(popupCenter);
             },
             startPtt: (tb) => {

@@ -69,35 +69,61 @@ internal sealed class RevisionPendingIndicator
 
     private static UIElement BuildElement(RichTextBox rtb)
     {
-        // Three dots that pulse with staggered phase — a classic "typing" indicator.
-        var panel = new StackPanel
+        // Spinning arc circle — a single partial-arc Ellipse rotating over a dim full ring.
+        // A circumference of ~31.4 px at diameter 10, StrokeThickness 1.5 → ~20.9 stroke-units.
+        // Dash {14, 100}: a ~67% arc segment, gap large enough to hide the repeat.
+        const double Diameter       = 10;
+        const double StrokeW        = 1.5;
+        const double ArcDash        = 14.0;  // ≈ 67% of circle visible
+        const double ArcGap         = 100.0; // larger than circumference → single arc
+        const double SpinDurationMs = 900;
+
+        var container = new Grid
         {
-            Orientation         = Orientation.Horizontal,
+            Width               = Diameter + StrokeW * 2,
+            Height              = Diameter + StrokeW * 2,
             VerticalAlignment   = VerticalAlignment.Center,
             Margin              = new Thickness(4, 0, 2, 0),
+            ToolTip             = "AI is revising this selection",
         };
 
-        for (int i = 0; i < 3; i++)
+        // Dim background ring
+        var trackRing = new Ellipse
         {
-            var dot = new Ellipse
-            {
-                Width  = 5,
-                Height = 5,
-                Margin = new Thickness(i == 0 ? 0 : 3, 0, 0, 0),
-            };
-            dot.SetResourceReference(Shape.FillProperty, "ActionLinkText");
+            Width               = Diameter,
+            Height              = Diameter,
+            StrokeThickness     = StrokeW,
+            Opacity             = 0.2,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment   = VerticalAlignment.Center,
+        };
+        trackRing.SetResourceReference(Shape.StrokeProperty, "ActionLinkText");
+        container.Children.Add(trackRing);
 
-            var anim = new DoubleAnimation(1.0, 0.15, TimeSpan.FromMilliseconds(550))
-            {
-                AutoReverse      = true,
-                RepeatBehavior   = RepeatBehavior.Forever,
-                BeginTime        = TimeSpan.FromMilliseconds(i * 180),
-                EasingFunction   = new SineEase { EasingMode = EasingMode.EaseInOut },
-            };
-            dot.BeginAnimation(UIElement.OpacityProperty, anim);
-            panel.Children.Add(dot);
-        }
+        // Spinning arc
+        var spinRing = new Ellipse
+        {
+            Width               = Diameter,
+            Height              = Diameter,
+            StrokeThickness     = StrokeW,
+            StrokeDashArray     = new DoubleCollection(new[] { ArcDash, ArcGap }),
+            RenderTransformOrigin = new Point(0.5, 0.5),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment   = VerticalAlignment.Center,
+        };
+        spinRing.SetResourceReference(Shape.StrokeProperty, "ActionLinkText");
 
-        return panel;
+        var rt = new RotateTransform(0);
+        spinRing.RenderTransform = rt;
+
+        var spin = new DoubleAnimation(0, 360, new Duration(TimeSpan.FromMilliseconds(SpinDurationMs)))
+        {
+            RepeatBehavior = RepeatBehavior.Forever,
+        };
+        rt.BeginAnimation(RotateTransform.AngleProperty, spin);
+
+        container.Children.Add(spinRing);
+
+        return container;
     }
 }
