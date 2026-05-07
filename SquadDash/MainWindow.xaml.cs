@@ -346,6 +346,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private TranscriptSelectionController _selectionController = null!; // initialized in constructor
     private HashSet<AgentStatusCard> _prevActiveAgentCards = new();
     private bool _mainTranscriptVisible = true;
+    private bool _gridRebuildPending;
 
     // Push-to-talk state
     private enum PttState { Idle, TapDown, TapReleased, Active }
@@ -11744,8 +11745,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         SyncTranscriptTargetIndicators();
         SquadDashTrace.Write(TraceCategory.Performance, $"PANEL_OPEN SyncState={sw.ElapsedMilliseconds}ms");
         sw.Restart();
-        RebuildTranscriptPanelsGrid();
-        SquadDashTrace.Write(TraceCategory.Performance, $"PANEL_OPEN RebuildGrid={sw.ElapsedMilliseconds}ms");
+        ScheduleGridRebuild();
+        SquadDashTrace.Write(TraceCategory.Performance, $"PANEL_OPEN RebuildGrid=scheduled");
         FlashGlowHighlight(entry.PanelBorder, ColorFromHex(agent.AccentColorHex));
         _ = Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
         {
@@ -11775,8 +11776,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         SyncTranscriptTargetIndicators();
         SquadDashTrace.Write(TraceCategory.Performance, $"PANEL_CLOSE SyncState={sw.ElapsedMilliseconds}ms");
         sw.Restart();
-        RebuildTranscriptPanelsGrid();
-        SquadDashTrace.Write(TraceCategory.Performance, $"PANEL_CLOSE RebuildGrid={sw.ElapsedMilliseconds}ms");
+        ScheduleGridRebuild();
+        SquadDashTrace.Write(TraceCategory.Performance, $"PANEL_CLOSE RebuildGrid=scheduled");
     }
 
     private void ShowMainTranscript()
@@ -11786,7 +11787,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         MainTranscriptBorder.Visibility = Visibility.Visible;
         SyncSelectionControllerWithUiState("ShowMainTranscript");
         SyncTranscriptTargetIndicators();
-        RebuildTranscriptPanelsGrid();
+        ScheduleGridRebuild();
     }
 
     private void HideMainTranscript()
@@ -11796,7 +11797,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         MainTranscriptBorder.Visibility = Visibility.Collapsed;
         SyncSelectionControllerWithUiState("HideMainTranscript");
         SyncTranscriptTargetIndicators();
-        RebuildTranscriptPanelsGrid();
+        ScheduleGridRebuild();
     }
 
     private void HandleActiveAgentCountdownCheck()
@@ -11831,6 +11832,19 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (entry.CountdownTimer is null)
                 StartAutoCloseCountdown(entry);
         }
+    }
+
+    private void ScheduleGridRebuild()
+    {
+        if (_gridRebuildPending) return;
+        _gridRebuildPending = true;
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.Normal, () =>
+        {
+            _gridRebuildPending = false;
+            var sw = Stopwatch.StartNew();
+            RebuildTranscriptPanelsGrid();
+            SquadDashTrace.Write(TraceCategory.Performance, $"REBUILD_GRID (coalesced): {sw.ElapsedMilliseconds}ms panels={_secondaryTranscripts.Count}");
+        });
     }
 
     private void RebuildTranscriptPanelsGrid()
