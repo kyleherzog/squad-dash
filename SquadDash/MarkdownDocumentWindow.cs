@@ -30,6 +30,19 @@ internal sealed class MarkdownDocumentWindow : Window {
             window.RefreshTheme();
     }
 
+    /// <summary>
+    /// True while any open doc window has at least one active AI revision lock.
+    /// Used by MainWindow to defer hot-reload restarts until all revisions complete.
+    /// </summary>
+    public static bool AnyRevisionInFlight =>
+        _openWindows.Any(w => w._documents.Any(d => d.HasLockedRanges));
+
+    /// <summary>
+    /// Fired on the UI thread whenever an AI revision completes (lock released).
+    /// MainWindow subscribes to trigger a deferred restart if one is pending.
+    /// </summary>
+    public static event Action? RevisionCompleted;
+
     private void RefreshTheme() {
         foreach (var document in _documents)
             RenderPreview(document, preserveScroll: true);
@@ -525,6 +538,7 @@ internal sealed class MarkdownDocumentWindow : Window {
                 indicator?.Detach();
                 if (revLock is not null) doc?.RemoveRevisionLock(revLock);
                 revLock = null;
+                RevisionCompleted?.Invoke();
             }),
             startPtt: _captureContext?.StartPttCallback,
             stopPtt:  _captureContext?.StopPttCallback);

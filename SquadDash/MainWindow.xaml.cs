@@ -837,10 +837,10 @@ public partial class MainWindow : Window, ILiveElementLocator
                         // Rebuild-triggered restart: close immediately after the current turn so
                         // the launcher can reload the new binary. Queue items will resume in the
                         // reloaded instance (they are persisted).
-                        // Do not close if PTT is still active or draining — the deferral in
-                        // StopPushToTalkAsync's Background-priority callback will call Close()
-                        // once the final phrase has been received from Azure.
-                        if (_pttState != PttState.Active && !_pttDraining)
+                        // Do not close if PTT is still active, draining, or an AI doc revision is
+                        // in flight — the deferral callbacks will call Close() once those complete.
+                        if (_pttState != PttState.Active && !_pttDraining
+                            && !MarkdownDocumentWindow.AnyRevisionInFlight)
                         {
                             ShowRestartingOverlay();
                             Close();
@@ -1209,6 +1209,9 @@ public partial class MainWindow : Window, ILiveElementLocator
 
             ConfigureRestartRequestWatcher();
             SquadDashTrace.Write(TraceCategory.Startup, $"MainWindow_Loaded: ConfigureRestartRequestWatcher {phaseSw.ElapsedMilliseconds}ms.");
+
+            // When an AI doc-revision completes, check if a deferred restart can now proceed.
+            MarkdownDocumentWindow.RevisionCompleted += OnDocRevisionCompleted;
 
             phaseSw.Restart();
             await InitializeWorkspace(_startupFolderArgument);
@@ -6938,7 +6941,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             _pttTargetTextBox = null;  // Clear after all Normal-priority phrase callbacks have run.
             _pttDraining = false;
-            if (_restartPending && !_isPromptRunning)
+            if (_restartPending && !_isPromptRunning && !MarkdownDocumentWindow.AnyRevisionInFlight)
             {
                 ShowRestartingOverlay();
                 _conversationManager.EmergencySave();
@@ -17386,6 +17389,13 @@ public partial class MainWindow : Window, ILiveElementLocator
             return;
         }
 
+        if (MarkdownDocumentWindow.AnyRevisionInFlight)
+        {
+            SetInstallStatus("Build finished. Restart will happen after in-flight AI revisions complete.");
+            UpdateSessionState("Restart pending");
+            return;
+        }
+
         if (_pttState == PttState.Active || _pttDraining)
         {
             SetInstallStatus("Build finished. Restart will happen after voice recording completes.");
@@ -17406,6 +17416,22 @@ public partial class MainWindow : Window, ILiveElementLocator
         // Force the dispatcher to flush a render frame so the overlay paints before
         // the synchronous shutdown work blocks the UI thread.
         Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Render);
+    }
+
+    /// <summary>
+    /// Called when an AI doc-revision lock is released. If a restart was deferred waiting
+    /// for all in-flight revisions to complete, and none remain, trigger the restart now.
+    /// </summary>
+    private void OnDocRevisionCompleted()
+    {
+        if (!_restartPending) return;
+        if (_isPromptRunning) return;
+        if (_pttState == PttState.Active || _pttDraining) return;
+        if (MarkdownDocumentWindow.AnyRevisionInFlight) return;
+
+        ShowRestartingOverlay();
+        _conversationManager.EmergencySave();
+        Close();
     }
 
     private void TryPostToUi(Action action, string source)
