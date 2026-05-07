@@ -12948,11 +12948,13 @@ public partial class MainWindow : Window, ILiveElementLocator
             IsDocumentEnabled = true,
             IsReadOnly = true,
             IsUndoEnabled = false,
-            IsInactiveSelectionHighlightEnabled = true,
+            IsInactiveSelectionHighlightEnabled = false,
             FontSize = _transcriptFontSize,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto
         };
         rtb.SetResourceReference(RichTextBox.ForegroundProperty, "LabelText");
+        rtb.SetResourceReference(RichTextBox.SelectionBrushProperty, "DocEditorSelectionBrush");
+        rtb.SetResourceReference(RichTextBox.SelectionOpacityProperty, "DocEditorSelectionOpacity");
         SquadDashTrace.Write(TraceCategory.Performance, $"CREATE_PANEL RtbCreated={sw.ElapsedMilliseconds}ms turns={thread.SavedTurns.Count} docBlocks={thread.Document.Blocks.Count}");
         sw.Restart();
         rtb.PreviewMouseRightButtonDown += (_, e) =>
@@ -15215,13 +15217,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (e.VerticalChange != 0 || e.ExtentHeightChange != 0 || e.ViewportHeightChange != 0)
             SyncPromptNavButtons();
 
-        // When the transcript scrolls while its RichTextBox does not hold keyboard focus
-        // (e.g. mouse-wheel from another window), the WPF selection adorner layer can get
-        // out of sync, leaving a ghost highlight frozen at the old scroll position.
-        // Forcing the adorner layer to repaint fixes the stale render.
-        var activeBox = ActiveTranscriptBox;
-        if (e.VerticalChange != 0 && !activeBox.IsKeyboardFocusWithin)
-            AdornerLayer.GetAdornerLayer(activeBox)?.InvalidateVisual();
+        // Inactive transcript selection is rendered by TranscriptInactiveSelectionAdorner
+        // so it can recompute geometry after scroll instead of using WPF's stale cache.
     }
 
     /// <summary>

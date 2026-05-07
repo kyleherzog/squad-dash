@@ -71,6 +71,7 @@ internal sealed class TranscriptScrollController
 
     private readonly RichTextBox _outputTextBox;
     private readonly Dispatcher _dispatcher;
+    private readonly TranscriptInactiveSelectionAdorner _inactiveSelectionAdorner;
 
     /// <summary>
     /// The inner <see cref="ScrollViewer"/> obtained from the
@@ -183,6 +184,7 @@ internal sealed class TranscriptScrollController
     {
         _outputTextBox = outputTextBox ?? throw new ArgumentNullException(nameof(outputTextBox));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _inactiveSelectionAdorner = TranscriptInactiveSelectionAdorner.Attach(_outputTextBox);
 
         _autoHideTimer = new DispatcherTimer(DispatcherPriority.Normal, _dispatcher)
         {
@@ -702,6 +704,7 @@ internal sealed class TranscriptScrollController
 
         _sv = newSv;
         _sv.ScrollChanged += OnScrollChanged;
+        _inactiveSelectionAdorner.RefreshScrollViewerSubscription();
 
         // After re-wiring, correct IsUserScrolledAway to match the actual scroll
         // position. An RDP reconnect can leave the viewport at the top while our flag
@@ -793,6 +796,8 @@ internal sealed class TranscriptScrollController
     /// </summary>
     private void OnScrollChanged(object sender, ScrollChangedEventArgs e)
     {
+        _inactiveSelectionAdorner.InvalidateHighlight();
+
         // Gate 1: programmatic scroll — we caused this, ignore.
         if (_isProgrammaticScroll)
         {
