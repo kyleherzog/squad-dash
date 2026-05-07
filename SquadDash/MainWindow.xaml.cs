@@ -14998,11 +14998,16 @@ public partial class MainWindow : Window, ILiveElementLocator
                     HorizontalOffset = screenPos.X + 12,
                     VerticalOffset = screenPos.Y + 12
                 };
+                diffPopup.MouseLeave += (_, _) => {
+                    diffPopup.IsOpen = false;
+                    diffPopup = null;
+                };
                 diffPopup.ShowDiff(diffLines);
             };
 
-            headerPanel.MouseLeave += (_, _) => {
-                if (diffPopup != null) {
+            headerPanel.MouseLeave += (_, e) => {
+                // Don't close if the mouse is moving into the popup itself
+                if (diffPopup != null && !diffPopup.IsMouseOver) {
                     diffPopup.IsOpen = false;
                     diffPopup = null;
                 }

@@ -31,9 +31,9 @@ internal sealed class DiffHoverPopup : Popup {
 
     public DiffHoverPopup() {
         AllowsTransparency = true;
-        StaysOpen = false;
+        StaysOpen = true;
         Placement = PlacementMode.Absolute;
-        IsHitTestVisible = false;
+        IsHitTestVisible = true;
     }
 
     public void ShowDiff(IEnumerable<DiffLine> diffLines) {
