@@ -642,6 +642,20 @@ internal sealed class MarkdownDocumentRenderer {
                     codeRun.SetResourceReference(TextElement.ForegroundProperty, "CodeText");
                     inlines.Add(codeRun);
                 }
+                // Append a color swatch if the entire code span is a CSS hex color
+                if (TryReadColorHex(codeText, 0, out var codeSwatchEnd, out var codeSwatchColor) && codeSwatchEnd == codeText.Length) {
+                    var swatchSize = Math.Round(_getFontSize() * 0.75);
+                    var swatch = new System.Windows.Shapes.Rectangle {
+                        Width               = swatchSize,
+                        Height              = swatchSize,
+                        Fill                = new SolidColorBrush(codeSwatchColor),
+                        Stroke              = new SolidColorBrush(Color.FromArgb(100, 128, 128, 128)),
+                        StrokeThickness     = 0.5,
+                        Margin              = new Thickness(3, 0, 0, -2),
+                        SnapsToDevicePixels = true,
+                    };
+                    inlines.Add(new InlineUIContainer(swatch) { BaselineAlignment = BaselineAlignment.Center });
+                }
                 i = end + 1;
                 continue;
             }
