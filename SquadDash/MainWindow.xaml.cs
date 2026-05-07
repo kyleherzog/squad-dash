@@ -11512,14 +11512,21 @@ public partial class MainWindow : Window, ILiveElementLocator
         //        its layout stays valid and the next coordinator switch costs zero re-measure.
         if (thread.Kind == TranscriptThreadKind.Coordinator)
         {
-            OutputTextBox.Visibility = Visibility.Visible;
+            // Reveal coordinator via Opacity (compositor-only — no repaint needed).
+            // OutputTextBox is always Visible so WPF keeps its layout and rendering texture
+            // alive while an agent transcript is showing. Setting Opacity=1 is instant.
+            OutputTextBox.Opacity = 1;
+            OutputTextBox.IsHitTestVisible = true;
             AgentTranscriptBox.Visibility = Visibility.Collapsed;
         }
         else
         {
             AgentTranscriptBox.Document = thread.Document;
             AgentTranscriptBox.Visibility = Visibility.Visible;
-            OutputTextBox.Visibility = Visibility.Hidden;
+            // Hide coordinator with Opacity=0 rather than Visibility.Hidden/Collapsed.
+            // Opacity=0 keeps the compositor texture live so switching back is instant.
+            OutputTextBox.Opacity = 0;
+            OutputTextBox.IsHitTestVisible = false;
         }
         var t2 = swSelect.ElapsedMilliseconds;
 
