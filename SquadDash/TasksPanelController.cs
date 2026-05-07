@@ -480,11 +480,10 @@ internal sealed class TasksPanelController {
 
                 // Owner filter (from @handle or @me).
                 if (ownerCandidates is not null) {
-                    if (ownerCandidates.Count == 1 && ownerCandidates[0] == UserOwnedSentinel)
-                        visible = item.IsUserOwned;
-                    else
-                        visible = ownerCandidates.Any(
-                            c => string.Equals(item.Owner?.Trim(), c, StringComparison.OrdinalIgnoreCase));
+                    visible = ownerCandidates.Any(c =>
+                        c == UserOwnedSentinel
+                            ? item.IsUserOwned
+                            : string.Equals(item.Owner?.Trim(), c, StringComparison.OrdinalIgnoreCase));
                 }
 
                 // Text filter applied on top — both conditions must hold.
@@ -547,13 +546,22 @@ internal sealed class TasksPanelController {
         if (string.IsNullOrEmpty(handle))
             return (null, remaining);
 
-        // "@me" sentinel.
+        // "@me" — exact match resolves immediately.
         if (string.Equals(handle, "me", StringComparison.OrdinalIgnoreCase))
             return (new[] { UserOwnedSentinel }, remaining);
 
         var roster = _getRoster?.Invoke();
+
+        // Collect all candidates: exact handle match, roster prefix matches,
+        // and the "me" sentinel when the typed prefix is a prefix of "me" (e.g. "@m").
+        var candidates = new List<string>();
+
+        // Include @me sentinel when typed prefix matches the start of "me".
+        if ("me".StartsWith(handle, StringComparison.OrdinalIgnoreCase))
+            candidates.Add(UserOwnedSentinel);
+
         if (roster is not null) {
-            // Try exact match first.
+            // Try exact handle match first — if found, use only that one agent.
             foreach (var member in roster) {
                 var memberHandle = member.FolderPath is not null
                     ? System.IO.Path.GetFileName(member.FolderPath)
@@ -563,17 +571,17 @@ internal sealed class TasksPanelController {
             }
 
             // Prefix match — collect all agents whose handle starts with the typed prefix.
-            var prefixMatches = new List<string>();
             foreach (var member in roster) {
                 var memberHandle = member.FolderPath is not null
                     ? System.IO.Path.GetFileName(member.FolderPath)
                     : member.Name.ToLowerInvariant().Replace(" ", "-");
                 if (memberHandle.StartsWith(handle, StringComparison.OrdinalIgnoreCase))
-                    prefixMatches.Add(member.Name);
+                    candidates.Add(member.Name);
             }
-            if (prefixMatches.Count > 0)
-                return (prefixMatches, remaining);
         }
+
+        if (candidates.Count > 0)
+            return (candidates, remaining);
 
         // Unresolved handle — treat the whole filter as plain text.
         return (null, filter);
