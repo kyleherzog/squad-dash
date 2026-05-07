@@ -759,6 +759,7 @@
 
                     <Border x:Name="LoopPanelBorder"
                             Grid.Column="3"
+                            Visibility="Collapsed"
                             Margin="14,0,0,0"
                             MinWidth="136"
                                 VerticalAlignment="Top"
