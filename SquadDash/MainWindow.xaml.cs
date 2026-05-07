@@ -14435,6 +14435,14 @@ public partial class MainWindow : Window, ILiveElementLocator
             var thread = _selectedTranscriptThread ?? CoordinatorThread;
             if (thread.PromptParagraphs.Count == 0) return;
 
+            // Shift+click jumps to the very first prompt.
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+            {
+                thread.PromptNavIndex = 0;
+                ScrollToPromptParagraph(thread.PromptParagraphs[0].Paragraph);
+                return;
+            }
+
             GetScrollBasedNavState(out _, out _, out int nearestAboveIdx, out _);
 
             int target;
@@ -14468,6 +14476,15 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             var thread = _selectedTranscriptThread ?? CoordinatorThread;
             if (thread.PromptParagraphs.Count == 0) return;
+
+            // Shift+click jumps to the very last prompt.
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+            {
+                var last = thread.PromptParagraphs.Count - 1;
+                thread.PromptNavIndex = last;
+                ScrollToPromptParagraph(thread.PromptParagraphs[last].Paragraph);
+                return;
+            }
 
             GetScrollBasedNavState(out _, out _, out _, out int nearestBelowIdx);
             if (nearestBelowIdx < 0) return;
