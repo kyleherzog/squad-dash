@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -84,6 +85,7 @@ internal sealed class TranscriptScrollController
     /// when the queued lambda executes. Prevents multiple concurrent dispatcher items.
     /// </summary>
     private bool _pendingScrollRequest;
+    private long _pendingScrollQueuedAt;
 
     /// <summary>
     /// True when this class itself initiated a programmatic scroll, so that the
@@ -304,6 +306,7 @@ internal sealed class TranscriptScrollController
         if (_pendingScrollRequest)
             return;
 
+        _pendingScrollQueuedAt = Stopwatch.GetTimestamp();
         ScrollTrace("SCROLL → END", "auto-scroll to bottom");
         _pendingScrollRequest = true;
         _dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, ExecutePendingScrollToEnd);
@@ -330,9 +333,9 @@ internal sealed class TranscriptScrollController
     /// a thread for the first time to show the beginning of the transcript).
     /// When <c>false</c>, scroll to the end (resume live tail).
     /// </param>
-    public void OnThreadSelected(bool scrollToStart)
+    public void OnThreadSelected(bool scrollToStart, bool scrollToEnd = true)
     {
-        ScrollTrace("THREAD SWITCH", $"scrollToStart={scrollToStart} → IsUserScrolledAway reset to false");
+        ScrollTrace("THREAD SWITCH", $"scrollToStart={scrollToStart} scrollToEnd={scrollToEnd} → IsUserScrolledAway reset to false");
 
         // Thread switch always re-enables auto-scroll regardless of previous state.
         IsUserScrolledAway = false;
@@ -346,6 +349,10 @@ internal sealed class TranscriptScrollController
         if (scrollToStart)
         {
             _dispatcher.BeginInvoke(DispatcherPriority.Loaded, ExecuteScrollToStart);
+        }
+        else if (!scrollToEnd)
+        {
+            ScrollTrace("THREAD SWITCH", "preserving viewport; no queued ScrollToEnd/UpdateLayout");
         }
         else
         {
@@ -579,6 +586,10 @@ internal sealed class TranscriptScrollController
     /// </summary>
     private void ExecutePendingScrollToEnd()
     {
+        var executeSw = Stopwatch.StartNew();
+        var queueMs = _pendingScrollQueuedAt == 0
+            ? 0
+            : (long)((Stopwatch.GetTimestamp() - _pendingScrollQueuedAt) * 1000.0 / Stopwatch.Frequency);
         _pendingScrollRequest = false;
 
         if (IsUserScrolledAway)
@@ -588,12 +599,15 @@ internal sealed class TranscriptScrollController
         if (sv is null)
             return;
 
+        var updateSw = Stopwatch.StartNew();
         // Force the deferred WPF layout pass to complete now, so ScrollableHeight is
         // already computed before we move the viewport. This turns the implicit
         // synchronous layout that ScrollToEnd() triggers into an explicit one that we
         // control — and avoids it being counted as scroll overhead in perf traces.
         sv.UpdateLayout();
+        updateSw.Stop();
 
+        var scrollSw = Stopwatch.StartNew();
         _isProgrammaticScroll = true;
         try
         {
@@ -602,6 +616,18 @@ internal sealed class TranscriptScrollController
         finally
         {
             _isProgrammaticScroll = false;
+        }
+        scrollSw.Stop();
+        executeSw.Stop();
+
+        if (executeSw.ElapsedMilliseconds >= 20 || updateSw.ElapsedMilliseconds >= 20)
+        {
+            var message =
+                $"SCROLL_TO_END_EXEC queue={queueMs}ms updateLayout={updateSw.ElapsedMilliseconds}ms " +
+                $"scroll={scrollSw.ElapsedMilliseconds}ms total={executeSw.ElapsedMilliseconds}ms " +
+                $"extent={sv.ExtentHeight:0.#} viewport={sv.ViewportHeight:0.#} scrollable={sv.ScrollableHeight:0.#}";
+            SquadDashTrace.Write(TraceCategory.Performance, message);
+            ScrollTrace("SCROLL → END EXEC", message);
         }
     }
 

@@ -102,7 +102,7 @@ internal sealed class TranscriptConversationManager {
     private readonly Action<string>                                                   _maybePublishRoutingIssue;
     private readonly Action                                                           _syncAgentCardsWithThreads;
     private readonly Dispatcher                                                       _dispatcher;
-    private readonly Action                                                           _scrollOutputToEnd;
+    private readonly Action<TranscriptThreadState>                                    _scrollOutputToEnd;
     private readonly AgentThreadRegistry                                              _agentThreadRegistry;
     private readonly Func<IReadOnlyDictionary<string, ToolTranscriptEntry>>          _getToolEntries;
     private readonly Func<TranscriptTurnView?>                                        _getCurrentTurn;
@@ -110,8 +110,8 @@ internal sealed class TranscriptConversationManager {
     // Bracket the bulk history-load insertion in a BeginChange/EndChange pair on the
     // RichTextBox so WPF does not attempt to layout the FlowDocument after every
     // Blocks.Add call — instead it fires exactly one layout pass when EndChange() is called.
-    private readonly Action                                                           _beginBulkDocumentLoad;
-    private readonly Action                                                           _endBulkDocumentLoad;
+    private readonly Action<TranscriptThreadState>                                     _beginBulkDocumentLoad;
+    private readonly Action<TranscriptThreadState>                                     _endBulkDocumentLoad;
     // Virtual-window prepend support (coordinator transcript only).
     // _prependTurnsBatch inserts a batch of turns at the FRONT of the FlowDocument.
     // _getScrollableHeight / _getVerticalOffset / _scrollToAbsoluteOffset / _updateScrollLayout
@@ -134,13 +134,13 @@ internal sealed class TranscriptConversationManager {
         Action<string> maybePublishRoutingIssue,
         Action syncAgentCardsWithThreads,
         Dispatcher dispatcher,
-        Action scrollOutputToEnd,
+        Action<TranscriptThreadState> scrollOutputToEnd,
         AgentThreadRegistry agentThreadRegistry,
         Func<IReadOnlyDictionary<string, ToolTranscriptEntry>> getToolEntries,
         Func<TranscriptTurnView?> getCurrentTurn,
         Action setCurrentTurnNull,
-        Action beginBulkDocumentLoad,
-        Action endBulkDocumentLoad,
+        Action<TranscriptThreadState> beginBulkDocumentLoad,
+        Action<TranscriptThreadState> endBulkDocumentLoad,
         Action<TranscriptThreadState, IReadOnlyList<TranscriptTurnRecord>> prependTurnsBatch,
         Func<double> getScrollableHeight,
         Func<double> getVerticalOffset,
@@ -277,7 +277,7 @@ internal sealed class TranscriptConversationManager {
             // Dispatch _scrollOutputToEnd even when there are no turns to render so that
             // TranscriptScrollController.EndLoad() is always called — clearing the
             // IsLoadingTranscript flag and issuing the one post-load scroll.
-            _ = _dispatcher.InvokeAsync(_scrollOutputToEnd,
+            _ = _dispatcher.InvokeAsync(() => _scrollOutputToEnd(_coordinatorThread()),
                 System.Windows.Threading.DispatcherPriority.Loaded);
         }
     }
@@ -290,9 +290,9 @@ internal sealed class TranscriptConversationManager {
 
     /// <summary>
     /// Renders a deferred agent thread's conversation history on demand.
-    /// Called the first time the user selects an agent thread whose turns were not
-    /// rendered at startup.  The thread's <see cref="FlowDocument"/> must already be
-    /// assigned to <c>OutputTextBox</c> before calling this so that
+    /// Called the first time the user selects or prewarms an agent thread whose turns
+    /// were not rendered at startup.  The thread's <see cref="FlowDocument"/> must
+    /// already be assigned to a transcript viewer before calling this so that
     /// <c>BeginChange</c>/<c>EndChange</c> suppress intermediate layout passes.
     /// </summary>
     internal async Task EnsureAgentThreadRenderedAsync(TranscriptThreadState thread) {
@@ -350,12 +350,12 @@ internal sealed class TranscriptConversationManager {
                 double scrollableHeightBefore = _getScrollableHeight();
                 double verticalOffsetBefore   = _getVerticalOffset();
 
-                _beginBulkDocumentLoad();
+                _beginBulkDocumentLoad(_coordinatorThread());
                 try {
                     _prependTurnsBatch(_coordinatorThread(), batch);
                 }
                 finally {
-                    _endBulkDocumentLoad();
+                    _endBulkDocumentLoad(_coordinatorThread());
                 }
 
                 // Force the deferred layout pass to complete so ScrollableHeight
@@ -501,7 +501,7 @@ internal sealed class TranscriptConversationManager {
             dispatchWaitMs = queuedAt.ElapsedMilliseconds;
             SquadDashTrace.Write(TraceCategory.Performance, $"DISPATCH_WAIT: {dispatchWaitMs}ms turns={turns.Count}");
             var phaseSw = Stopwatch.StartNew();
-            _beginBulkDocumentLoad();
+            _beginBulkDocumentLoad(thread);
             beginBulkMs = phaseSw.ElapsedMilliseconds;
             phaseSw.Restart();
             try {
@@ -512,7 +512,7 @@ internal sealed class TranscriptConversationManager {
             } finally {
                 turnLoopMs = phaseSw.ElapsedMilliseconds;
                 phaseSw.Restart();
-                _endBulkDocumentLoad();
+                _endBulkDocumentLoad(thread);
                 endBulkMs = phaseSw.ElapsedMilliseconds;
             }
         }, System.Windows.Threading.DispatcherPriority.Normal);
@@ -540,7 +540,7 @@ internal sealed class TranscriptConversationManager {
             {
                 var scrollMs = (long)((Stopwatch.GetTimestamp() - scrollStart) * 1000.0 / Stopwatch.Frequency);
                 SquadDashTrace.Write(TraceCategory.Performance, $"SCROLL_SETTLE: {scrollMs}ms (queue wait before scroll)");
-                _scrollOutputToEnd();
+                _scrollOutputToEnd(thread);
             }, System.Windows.Threading.DispatcherPriority.ContextIdle);
         }
 
@@ -549,15 +549,16 @@ internal sealed class TranscriptConversationManager {
     }
 
     internal void RenderConversationHistory(IReadOnlyList<TranscriptTurnRecord> turns) {
-        _beginBulkDocumentLoad();
+        var coordinatorThread = _coordinatorThread();
+        _beginBulkDocumentLoad(coordinatorThread);
         try {
             for (var i = 0; i < turns.Count; i++)
-                _renderPersistedTurn(_coordinatorThread(), turns[i], i == turns.Count - 1);
+                _renderPersistedTurn(coordinatorThread, turns[i], i == turns.Count - 1);
         } finally {
-            _endBulkDocumentLoad();
+            _endBulkDocumentLoad(coordinatorThread);
         }
         _setCurrentTurnNull();
-        _scrollOutputToEnd();
+        _scrollOutputToEnd(coordinatorThread);
     }
 
     // ── Save operations ─────────────────────────────────────────────────────────

@@ -1413,7 +1413,7 @@
                                  IsDocumentEnabled="True"
                                  IsReadOnly="True"
                                  IsUndoEnabled="False"
-                                 IsInactiveSelectionHighlightEnabled="True"
+                                 IsInactiveSelectionHighlightEnabled="False"
                                  ContextMenu="{x:Null}"
                                  Foreground="{DynamicResource LabelText}"
                                  SelectionBrush="{DynamicResource DocEditorSelectionBrush}"
@@ -1421,23 +1421,20 @@
                                  PreviewMouseWheel="OutputTextBox_PreviewMouseWheel"
                                  PreviewMouseDown="OutputTextBox_PreviewMouseDown"
                                  PreviewMouseRightButtonDown="OutputTextBox_PreviewMouseRightButtonDown" />
-                    <RichTextBox x:Name="AgentTranscriptBox"
-                                 Opacity="0"
-                                 IsHitTestVisible="False"
-                                 VerticalScrollBarVisibility="Auto"
-                                 Background="Transparent"
-                                 BorderThickness="0"
-                                 IsDocumentEnabled="True"
-                                 IsReadOnly="True"
-                                 IsUndoEnabled="False"
-                                 IsInactiveSelectionHighlightEnabled="True"
-                                 ContextMenu="{x:Null}"
-                                 Foreground="{DynamicResource LabelText}"
-                                 SelectionBrush="{DynamicResource DocEditorSelectionBrush}"
-                                 SelectionOpacity="{DynamicResource DocEditorSelectionOpacity}"
-                                 PreviewMouseWheel="OutputTextBox_PreviewMouseWheel"
-                                 PreviewMouseDown="OutputTextBox_PreviewMouseDown"
-                                 PreviewMouseRightButtonDown="OutputTextBox_PreviewMouseRightButtonDown" />
+                    <Grid x:Name="AgentTranscriptHost"
+                          Opacity="0"
+                          IsHitTestVisible="False" />
+                    <Border x:Name="TranscriptSnapshotBackdrop"
+                            Visibility="Collapsed"
+                            Background="{DynamicResource TranscriptSurface}"
+                            IsHitTestVisible="False"
+                            Panel.ZIndex="3" />
+                    <Image x:Name="TranscriptSnapshotImage"
+                           Visibility="Collapsed"
+                           Stretch="Fill"
+                           IsHitTestVisible="False"
+                           SnapsToDevicePixels="True"
+                           Panel.ZIndex="4" />
 
                     <!-- Search highlight overlay — rectangles drawn here; never touches FlowDocument -->
 

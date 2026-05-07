@@ -220,7 +220,6 @@ public partial class MainWindow : Window, ILiveElementLocator
     private TranscriptConversationManager _conversationManager = null!;
     private MarkdownDocumentRenderer _markdownRenderer = null!;
     private TranscriptScrollController _coordinatorScrollController = null!;
-    private TranscriptScrollController _agentScrollController = null!;
     private bool _modelObservedThisSession;
     private readonly Queue<(string Text, Brush? Brush)> _deferredSystemLines = new();
     private string? _currentSessionState;
@@ -232,17 +231,29 @@ public partial class MainWindow : Window, ILiveElementLocator
     private TranscriptThreadState? _coordinatorThread;
     private TranscriptThreadState? _selectedTranscriptThread;
     private UiExceptionPanelState? _activeUiException;
+    private const int PrimaryAgentLiveHostLimit = 4;
+    private readonly Dictionary<TranscriptThreadState, PrimaryTranscriptHostEntry> _primaryAgentTranscriptHosts =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly List<TranscriptThreadState> _primaryAgentHostMru = [];
+    private readonly Dictionary<TranscriptThreadState, RichTextBox> _bulkChangeTranscriptBoxes =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<TranscriptThreadState, TranscriptSnapshot> _transcriptSnapshots =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<TranscriptThreadState> _pendingTranscriptSnapshotCaptures =
+        new(ReferenceEqualityComparer.Instance);
+    private TranscriptThreadState? _snapshotThread;
+    private bool _primaryAgentWarmupPending;
 
     // ── Active transcript helpers ────────────────────────────────────────────────
 
     /// <summary>
     /// The scroll controller for whichever transcript is currently displayed.
-    /// Coordinator uses <c>OutputTextBox</c>; agents use <c>AgentTranscriptBox</c>.
+    /// Coordinator uses <c>OutputTextBox</c>; agents use their cached main host.
     /// </summary>
     private TranscriptScrollController ActiveScrollController =>
         (_selectedTranscriptThread?.Kind ?? TranscriptThreadKind.Coordinator) == TranscriptThreadKind.Coordinator
             ? _coordinatorScrollController
-            : _agentScrollController;
+            : GetOrCreatePrimaryAgentTranscriptHost(_selectedTranscriptThread!).ScrollController;
 
     /// <summary>
     /// The RichTextBox that is currently visible in the main transcript panel.
@@ -250,7 +261,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private RichTextBox ActiveTranscriptBox =>
         (_selectedTranscriptThread?.Kind ?? TranscriptThreadKind.Coordinator) == TranscriptThreadKind.Coordinator
             ? OutputTextBox
-            : AgentTranscriptBox;
+            : GetOrCreatePrimaryAgentTranscriptHost(_selectedTranscriptThread!).TranscriptBox;
 
     // ── Transcript search state ─────────────────────────────────────────────────
     private IReadOnlyList<TurnSearchMatch> _searchMatches = [];
@@ -360,6 +371,21 @@ public partial class MainWindow : Window, ILiveElementLocator
         public DispatcherTimer? PostponeTimer { get; set; }
     }
 
+    private sealed class PrimaryTranscriptHostEntry
+    {
+        public TranscriptThreadState Thread { get; init; } = null!;
+        public RichTextBox TranscriptBox { get; init; } = null!;
+        public TranscriptScrollController ScrollController { get; init; } = null!;
+    }
+
+    private sealed record TranscriptSnapshot(
+        ImageSource Source,
+        double LogicalWidth,
+        double LogicalHeight,
+        int PixelWidth,
+        int PixelHeight,
+        string ThemeName);
+
     private readonly List<SecondaryTranscriptEntry> _secondaryTranscripts = new();
     private DispatcherTimer? _transcriptTitleRefreshTimer;
     private DispatcherTimer? _completedTimeFooterTimer;
@@ -412,10 +438,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         _pushNotificationService = new PushNotificationService(_settingsStore);
         InitializeComponent();
         SquadDashTrace.Write(TraceCategory.Startup, $"Constructor: InitializeComponent {ctorSw.ElapsedMilliseconds}ms.");
+        OutputTextBox.CacheMode = CreateTranscriptBitmapCache();
         _coordinatorScrollController = new TranscriptScrollController(OutputTextBox, Dispatcher);
         _coordinatorScrollController.SetScrollToBottomButton(ScrollToBottomButton);
-        _agentScrollController = new TranscriptScrollController(AgentTranscriptBox, Dispatcher);
-        _agentScrollController.SetScrollToBottomButton(ScrollToBottomButton);
         _agentThreadRegistry = new AgentThreadRegistry(
             beginTranscriptTurn: (thread, prompt) => BeginTranscriptTurn(thread, prompt),
             finalizeCurrentTurnResponse: thread => FinalizeCurrentTurnResponse(thread),
@@ -493,20 +518,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             maybePublishRoutingIssue: reason => MaybePublishRoutingIssueSystemEntry(reason),
             syncAgentCardsWithThreads: () => SyncAgentCardsWithThreads(),
             dispatcher: Dispatcher,
-            scrollOutputToEnd: () =>
-            {
-                // During initial history load IsLoadingTranscript is true — route to EndLoad()
-                // so the suppression flag is cleared and exactly one post-load scroll fires.
-                // Outside of load (normal streaming) IsLoadingTranscript is false — use the
-                // standard debounced RequestScrollToEnd path.
-                if (_coordinatorScrollController.IsLoadingTranscript)
-                {
-                    _coordinatorScrollController.EndLoad();
-                    LoadingTranscriptOverlay.Visibility = Visibility.Collapsed;
-                }
-                else
-                    _coordinatorScrollController.RequestScrollToEnd();
-            },
+            scrollOutputToEnd: thread => ScrollTranscriptToEndAfterRender(thread),
             agentThreadRegistry: _agentThreadRegistry,
             getToolEntries: () => _agentThreadRegistry.ToolEntries,
             getCurrentTurn: () => _currentTurn,
@@ -515,8 +527,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             // This prevents the WPF TextEditor from issuing a layout pass after every
             // Blocks.Add call; instead exactly one layout pass fires when EndChange() is
             // called, collapsing N layout invalidations into one.
-            beginBulkDocumentLoad: () => OutputTextBox.BeginChange(),
-            endBulkDocumentLoad: () => OutputTextBox.EndChange(),
+            beginBulkDocumentLoad: thread => BeginBulkTranscriptDocumentLoad(thread),
+            endBulkDocumentLoad: thread => EndBulkTranscriptDocumentLoad(thread),
             prependTurnsBatch: (thread, turns) => PrependPersistedTurnsBatch(thread, turns),
             getScrollableHeight: () => _coordinatorScrollController.GetScrollableHeight(),
             getVerticalOffset: () => _coordinatorScrollController.GetVerticalOffset(),
@@ -575,10 +587,6 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         OutputTextBox.Document = CoordinatorThread.Document;
         OutputTextBox.CommandBindings.Add(new CommandBinding(
-            System.Windows.Input.ApplicationCommands.Copy,
-            OutputTextBox_CopyExecuted,
-            OutputTextBox_CopyCanExecute));
-        AgentTranscriptBox.CommandBindings.Add(new CommandBinding(
             System.Windows.Input.ApplicationCommands.Copy,
             OutputTextBox_CopyExecuted,
             OutputTextBox_CopyCanExecute));
@@ -1203,12 +1211,12 @@ public partial class MainWindow : Window, ILiveElementLocator
             // Wire the scrollbar marker adorner onto the vertical ScrollBar inside OutputTextBox.
             if (_scrollbarAdorner is null)
             {
-                _transcriptScrollViewer = FindScrollViewer(OutputTextBox);
-                if (_transcriptScrollViewer is not null)
+                var outputScrollViewer = FindScrollViewer(OutputTextBox);
+                if (outputScrollViewer is not null)
                 {
                     _transcriptScrollBar =
-                        _transcriptScrollViewer.Template?.FindName("PART_VerticalScrollBar", _transcriptScrollViewer) as ScrollBar
-                        ?? FindVerticalScrollBar(_transcriptScrollViewer);
+                        outputScrollViewer.Template?.FindName("PART_VerticalScrollBar", outputScrollViewer) as ScrollBar
+                        ?? FindVerticalScrollBar(outputScrollViewer);
 
                     if (_transcriptScrollBar is not null)
                     {
@@ -1219,10 +1227,9 @@ public partial class MainWindow : Window, ILiveElementLocator
                             sbLayer.Add(_scrollbarAdorner);
                         }
                     }
-
-                    _transcriptScrollViewer.ScrollChanged += TranscriptScrollViewer_ScrollChanged;
                 }
             }
+            RefreshActiveTranscriptScrollViewer();
 
             if (_startupInitialized)
                 return;
@@ -5280,6 +5287,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             entry.Thread.IsSecondaryPanelOpen = true;
         UpdateTranscriptThreadBadge();
         ScheduleAgentPanelLayoutRefresh();
+        SchedulePrimaryAgentHostWarmup();
     }
 
     private void EnsureDynamicAgentCards()
@@ -5863,7 +5871,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void ApplyTranscriptFontSize()
     {
         OutputTextBox.FontSize = _transcriptFontSize;
-        AgentTranscriptBox.FontSize = _transcriptFontSize;
+        foreach (var entry in _primaryAgentTranscriptHosts.Values)
+            entry.TranscriptBox.FontSize = _transcriptFontSize;
         var iconSize = ToolIconSizeForFontSize(_transcriptFontSize);
         foreach (var img in _toolIconImages)
         {
@@ -10963,6 +10972,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         foreach (var thread in removableThreads)
             _backgroundTaskPresenter.RemovePromotionEntry(thread.ThreadId);
 
+        RemovePrimaryAgentTranscriptHosts(removableThreads);
         _agentThreadRegistry.RemoveThreads(removableThreads);
 
         if (removedSelectedThread)
@@ -11470,11 +11480,575 @@ public partial class MainWindow : Window, ILiveElementLocator
             yield return thread;
     }
 
+    private static BitmapCache CreateTranscriptBitmapCache() =>
+        new()
+        {
+            EnableClearType = true,
+            SnapsToDevicePixels = true
+        };
+
+    private static FlowDocument CreateEmptyTranscriptDocument() =>
+        new()
+        {
+            PagePadding = new Thickness(0)
+        };
+
+    private RichTextBox? GetTranscriptBoxForBulkChange(TranscriptThreadState thread)
+    {
+        if (ReferenceEquals(thread, CoordinatorThread))
+            return OutputTextBox;
+
+        if (thread.Document.Parent is RichTextBox currentOwner)
+            return currentOwner;
+
+        if (thread.Kind == TranscriptThreadKind.Agent)
+        {
+            var entry = GetOrCreatePrimaryAgentTranscriptHost(thread);
+            AttachDocumentToPrimaryAgentHost(entry, closeSecondaryOwner: false);
+            return entry.TranscriptBox;
+        }
+
+        return null;
+    }
+
+    private void BeginBulkTranscriptDocumentLoad(TranscriptThreadState thread)
+    {
+        var box = GetTranscriptBoxForBulkChange(thread);
+        if (box is null)
+            return;
+
+        _bulkChangeTranscriptBoxes[thread] = box;
+        box.BeginChange();
+    }
+
+    private void EndBulkTranscriptDocumentLoad(TranscriptThreadState thread)
+    {
+        if (!_bulkChangeTranscriptBoxes.Remove(thread, out var box))
+            return;
+
+        box.EndChange();
+    }
+
+    private RichTextBox CreatePrimaryAgentTranscriptBox()
+    {
+        var rtb = new RichTextBox
+        {
+            Visibility = Visibility.Collapsed,
+            Opacity = 0,
+            IsHitTestVisible = false,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            IsDocumentEnabled = true,
+            IsReadOnly = true,
+            IsUndoEnabled = false,
+            IsInactiveSelectionHighlightEnabled = false,
+            ContextMenu = null,
+            FontSize = _transcriptFontSize,
+            CacheMode = CreateTranscriptBitmapCache()
+        };
+        rtb.SetResourceReference(RichTextBox.ForegroundProperty, "LabelText");
+        rtb.SetResourceReference(RichTextBox.SelectionBrushProperty, "DocEditorSelectionBrush");
+        rtb.SetResourceReference(RichTextBox.SelectionOpacityProperty, "DocEditorSelectionOpacity");
+        rtb.PreviewMouseWheel += OutputTextBox_PreviewMouseWheel;
+        rtb.PreviewMouseDown += OutputTextBox_PreviewMouseDown;
+        rtb.PreviewMouseRightButtonDown += OutputTextBox_PreviewMouseRightButtonDown;
+        rtb.Loaded += (_, _) =>
+        {
+            try
+            {
+                if (_selectedTranscriptThread?.Kind == TranscriptThreadKind.Agent
+                    && _primaryAgentTranscriptHosts.TryGetValue(_selectedTranscriptThread, out var activeEntry)
+                    && ReferenceEquals(activeEntry.TranscriptBox, rtb))
+                    RefreshActiveTranscriptScrollViewer();
+            }
+            catch (Exception ex)
+            {
+                HandleUiCallbackException("PrimaryAgentTranscript.Loaded", ex);
+            }
+        };
+        rtb.CommandBindings.Add(new CommandBinding(
+            System.Windows.Input.ApplicationCommands.Copy,
+            OutputTextBox_CopyExecuted,
+            OutputTextBox_CopyCanExecute));
+        return rtb;
+    }
+
+    private PrimaryTranscriptHostEntry GetOrCreatePrimaryAgentTranscriptHost(TranscriptThreadState thread)
+    {
+        if (thread.Kind != TranscriptThreadKind.Agent)
+            throw new InvalidOperationException("Only agent threads use cached primary transcript hosts.");
+
+        if (_primaryAgentTranscriptHosts.TryGetValue(thread, out var existing))
+            return existing;
+
+        var rtb = CreatePrimaryAgentTranscriptBox();
+        var scrollController = new TranscriptScrollController(rtb, Dispatcher);
+        scrollController.SetScrollToBottomButton(ScrollToBottomButton);
+        scrollController.TraceTarget = _traceWindow;
+
+        var entry = new PrimaryTranscriptHostEntry
+        {
+            Thread = thread,
+            TranscriptBox = rtb,
+            ScrollController = scrollController
+        };
+
+        _primaryAgentTranscriptHosts.Add(thread, entry);
+        AgentTranscriptHost.Children.Add(rtb);
+        Panel.SetZIndex(rtb, 0);
+        ApplyTranscriptFontSizeToDocument(thread.Document);
+        return entry;
+    }
+
+    private bool AttachDocumentToPrimaryAgentHost(PrimaryTranscriptHostEntry entry, bool closeSecondaryOwner)
+    {
+        var thread = entry.Thread;
+        if (ReferenceEquals(entry.TranscriptBox.Document, thread.Document))
+            return true;
+
+        if (thread.Document.Parent is RichTextBox currentOwner && currentOwner != entry.TranscriptBox)
+        {
+            var secondaryEntry = _secondaryTranscripts.FirstOrDefault(e => e.TranscriptBox == currentOwner);
+            if (secondaryEntry is not null)
+            {
+                if (!closeSecondaryOwner)
+                    return false;
+
+                CloseSecondaryPanel(secondaryEntry);
+            }
+            else
+            {
+                currentOwner.Document = CreateEmptyTranscriptDocument();
+            }
+        }
+
+        entry.TranscriptBox.Document = thread.Document;
+        return true;
+    }
+
+    private bool IsPrimaryAgentTranscriptBox(RichTextBox box) =>
+        _primaryAgentTranscriptHosts.Values.Any(entry => ReferenceEquals(entry.TranscriptBox, box));
+
+    private void MarkPrimaryAgentHostRecentlyUsed(TranscriptThreadState thread)
+    {
+        _primaryAgentHostMru.RemoveAll(candidate => ReferenceEquals(candidate, thread));
+        _primaryAgentHostMru.Insert(0, thread);
+    }
+
+    private bool IsPrimaryAgentHostLive(TranscriptThreadState thread)
+    {
+        var liveCount = Math.Min(PrimaryAgentLiveHostLimit, _primaryAgentHostMru.Count);
+        for (var i = 0; i < liveCount; i++)
+        {
+            if (ReferenceEquals(_primaryAgentHostMru[i], thread))
+                return true;
+        }
+
+        return false;
+    }
+
+    private string GetPrimaryAgentHostSummary()
+    {
+        var total = _primaryAgentTranscriptHosts.Count;
+        var visible = _primaryAgentTranscriptHosts.Values.Count(entry => entry.TranscriptBox.Visibility == Visibility.Visible);
+        var attached = _primaryAgentTranscriptHosts.Values.Count(entry => ReferenceEquals(entry.TranscriptBox.Document, entry.Thread.Document));
+        return $"hosts={total} visible={visible} attached={attached} mru={_primaryAgentHostMru.Count}";
+    }
+
+    private bool TryCaptureTranscriptSnapshot(TranscriptThreadState? thread)
+    {
+        if (thread is null || !_mainTranscriptVisible)
+            return false;
+
+        RichTextBox box;
+        if (ReferenceEquals(thread, CoordinatorThread))
+        {
+            box = OutputTextBox;
+        }
+        else if (_primaryAgentTranscriptHosts.TryGetValue(thread, out var entry))
+        {
+            box = entry.TranscriptBox;
+        }
+        else
+        {
+            return false;
+        }
+
+        if (box.Visibility != Visibility.Visible || box.ActualWidth < 2 || box.ActualHeight < 2)
+            return false;
+
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            var dpi = VisualTreeHelper.GetDpi(box);
+            var pixelWidth = Math.Max(1, (int)Math.Ceiling(box.ActualWidth * dpi.DpiScaleX));
+            var pixelHeight = Math.Max(1, (int)Math.Ceiling(box.ActualHeight * dpi.DpiScaleY));
+            var bitmap = new RenderTargetBitmap(
+                pixelWidth,
+                pixelHeight,
+                96.0 * dpi.DpiScaleX,
+                96.0 * dpi.DpiScaleY,
+                PixelFormats.Pbgra32);
+            bitmap.Render(box);
+            bitmap.Freeze();
+            _transcriptSnapshots[thread] = new TranscriptSnapshot(
+                bitmap,
+                box.ActualWidth,
+                box.ActualHeight,
+                pixelWidth,
+                pixelHeight,
+                _activeThemeName);
+            sw.Stop();
+            if (sw.ElapsedMilliseconds >= 10)
+                SquadDashTrace.Write(TraceCategory.Performance,
+                    $"TRANSCRIPT_SNAPSHOT_CAPTURE thread={thread.ThreadId} {sw.ElapsedMilliseconds}ms size={pixelWidth}x{pixelHeight}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            SquadDashTrace.Write(TraceCategory.Performance,
+                $"TRANSCRIPT_SNAPSHOT_CAPTURE_FAILED thread={thread.ThreadId} error={ex.Message}");
+            return false;
+        }
+    }
+
+    private void ScheduleTranscriptSnapshotRefresh(TranscriptThreadState? thread)
+    {
+        if (thread is null || !_mainTranscriptVisible)
+            return;
+
+        if (!_pendingTranscriptSnapshotCaptures.Add(thread))
+            return;
+
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, () =>
+        {
+            _pendingTranscriptSnapshotCaptures.Remove(thread);
+            if (!ReferenceEquals(_selectedTranscriptThread, thread) || _snapshotThread is not null)
+                return;
+
+            TryCaptureTranscriptSnapshot(thread);
+        });
+    }
+
+    private bool TryShowTranscriptSnapshot(TranscriptThreadState thread)
+    {
+        if (!_transcriptSnapshots.TryGetValue(thread, out var snapshot))
+            return false;
+
+        if (!string.Equals(snapshot.ThemeName, _activeThemeName, StringComparison.OrdinalIgnoreCase))
+        {
+            _transcriptSnapshots.Remove(thread);
+            SquadDashTrace.Write(TraceCategory.Performance,
+                $"TRANSCRIPT_SNAPSHOT_SKIP thread={thread.ThreadId} reason=theme-mismatch " +
+                $"snapshot={snapshot.ThemeName} current={_activeThemeName}");
+            return false;
+        }
+
+        var currentWidth = OutputTextBox.ActualWidth;
+        var currentHeight = OutputTextBox.ActualHeight;
+        if (Math.Abs(snapshot.LogicalWidth - currentWidth) > 1.0
+            || Math.Abs(snapshot.LogicalHeight - currentHeight) > 1.0)
+        {
+            _transcriptSnapshots.Remove(thread);
+            SquadDashTrace.Write(TraceCategory.Performance,
+                $"TRANSCRIPT_SNAPSHOT_SKIP thread={thread.ThreadId} reason=size-mismatch " +
+                $"snapshot={snapshot.LogicalWidth:0.#}x{snapshot.LogicalHeight:0.#} current={currentWidth:0.#}x{currentHeight:0.#}");
+            return false;
+        }
+
+        TranscriptSnapshotImage.BeginAnimation(OpacityProperty, null);
+        TranscriptSnapshotImage.Opacity = 1;
+        TranscriptSnapshotBackdrop.Visibility = Visibility.Visible;
+        TranscriptSnapshotImage.Source = snapshot.Source;
+        TranscriptSnapshotImage.Visibility = Visibility.Visible;
+        _snapshotThread = thread;
+        SquadDashTrace.Write(TraceCategory.Performance,
+            $"TRANSCRIPT_SNAPSHOT_SHOW thread={thread.ThreadId} source={snapshot.PixelWidth}x{snapshot.PixelHeight}");
+        return true;
+    }
+
+    private void HideTranscriptSnapshot(TranscriptThreadState thread)
+    {
+        if (!ReferenceEquals(_snapshotThread, thread))
+            return;
+
+        TranscriptSnapshotImage.BeginAnimation(OpacityProperty, null);
+        TranscriptSnapshotImage.Opacity = 1;
+        TranscriptSnapshotImage.Visibility = Visibility.Collapsed;
+        TranscriptSnapshotImage.Source = null;
+        TranscriptSnapshotBackdrop.Visibility = Visibility.Collapsed;
+        _snapshotThread = null;
+        if (ReferenceEquals(_selectedTranscriptThread, thread))
+        {
+            if (thread.Kind == TranscriptThreadKind.Coordinator)
+            {
+                OutputTextBox.IsHitTestVisible = true;
+            }
+            else
+            {
+                AgentTranscriptHost.IsHitTestVisible = true;
+                ApplyPrimaryAgentHostVisibility(thread);
+            }
+        }
+        ScheduleTranscriptSnapshotRefresh(thread);
+        SquadDashTrace.Write(TraceCategory.Performance, $"TRANSCRIPT_SNAPSHOT_HIDE thread={thread.ThreadId}");
+    }
+
+    private void InvalidateTranscriptSnapshots(string reason)
+    {
+        if (_transcriptSnapshots.Count == 0 && _snapshotThread is null)
+            return;
+
+        _transcriptSnapshots.Clear();
+        if (_snapshotThread is not null)
+        {
+            TranscriptSnapshotImage.BeginAnimation(OpacityProperty, null);
+            TranscriptSnapshotImage.Opacity = 1;
+            TranscriptSnapshotImage.Visibility = Visibility.Collapsed;
+            TranscriptSnapshotImage.Source = null;
+            TranscriptSnapshotBackdrop.Visibility = Visibility.Collapsed;
+            _snapshotThread = null;
+        }
+
+        if ((_selectedTranscriptThread?.Kind ?? TranscriptThreadKind.Coordinator) == TranscriptThreadKind.Coordinator)
+            OutputTextBox.IsHitTestVisible = true;
+        else
+            AgentTranscriptHost.IsHitTestVisible = true;
+
+        SquadDashTrace.Write(TraceCategory.Performance, $"TRANSCRIPT_SNAPSHOT_INVALIDATE reason={reason}");
+    }
+
+    private void ApplyLiveTranscriptVisibility(TranscriptThreadState thread)
+    {
+        if (thread.Kind == TranscriptThreadKind.Coordinator)
+        {
+            OutputTextBox.Opacity = 1;
+            OutputTextBox.IsHitTestVisible = true;
+            HidePrimaryAgentTranscriptHost();
+        }
+        else
+        {
+            ShowPrimaryAgentTranscriptHost(thread);
+            OutputTextBox.Opacity = 0;
+            OutputTextBox.IsHitTestVisible = false;
+            AgentTranscriptHost.IsHitTestVisible = true;
+            ApplyPrimaryAgentHostVisibility(thread);
+        }
+    }
+
+    private void QueueDeferredLiveTranscriptSwitch(TranscriptThreadState thread, bool scrollToStart)
+    {
+        var queuedAt = Stopwatch.GetTimestamp();
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        {
+            if (!ReferenceEquals(_selectedTranscriptThread, thread))
+                return;
+
+            var sw = Stopwatch.StartNew();
+            var queueMs = (long)((Stopwatch.GetTimestamp() - queuedAt) * 1000.0 / Stopwatch.Frequency);
+            ApplyLiveTranscriptVisibility(thread);
+            RefreshActiveTranscriptScrollViewer();
+            ApplyTranscriptFontSizeToDocument(thread.Document);
+            if (_conversationManager.HasPendingRender(thread))
+                _ = _conversationManager.EnsureAgentThreadRenderedAsync(thread);
+            ScrollTranscriptThread(thread, scrollToStart);
+            SyncPromptNavButtons();
+            UpdateInteractiveControlState();
+            sw.Stop();
+            SquadDashTrace.Write(TraceCategory.Performance,
+                $"DEFERRED_LIVE_TRANSCRIPT_SWITCH thread={thread.ThreadId} queue={queueMs}ms work={sw.ElapsedMilliseconds}ms");
+
+            if (ReferenceEquals(_selectedTranscriptThread, thread))
+                HideTranscriptSnapshot(thread);
+        });
+    }
+
+    private void ApplyPrimaryAgentHostVisibility(TranscriptThreadState? activeAgentThread)
+    {
+        foreach (var entry in _primaryAgentTranscriptHosts.Values)
+        {
+            var isActive = ReferenceEquals(entry.Thread, activeAgentThread);
+            entry.TranscriptBox.Visibility = isActive ? Visibility.Visible : Visibility.Collapsed;
+            entry.TranscriptBox.Opacity = isActive ? 1 : 0;
+            entry.TranscriptBox.IsHitTestVisible = isActive && AgentTranscriptHost.IsHitTestVisible;
+            Panel.SetZIndex(entry.TranscriptBox, isActive ? 1 : 0);
+        }
+    }
+
+    private void ShowPrimaryAgentTranscriptHost(TranscriptThreadState thread)
+    {
+        var sw = Stopwatch.StartNew();
+        var existed = _primaryAgentTranscriptHosts.ContainsKey(thread);
+        var entry = GetOrCreatePrimaryAgentTranscriptHost(thread);
+        var hostMs = sw.ElapsedMilliseconds;
+        sw.Restart();
+        AttachDocumentToPrimaryAgentHost(entry, closeSecondaryOwner: true);
+        var attachMs = sw.ElapsedMilliseconds;
+        sw.Restart();
+        MarkPrimaryAgentHostRecentlyUsed(thread);
+        AgentTranscriptHost.Opacity = 1;
+        AgentTranscriptHost.IsHitTestVisible = true;
+        ApplyPrimaryAgentHostVisibility(thread);
+        var visibilityMs = sw.ElapsedMilliseconds;
+        SquadDashTrace.Write(TraceCategory.Performance,
+            $"PRIMARY_HOST_SHOW thread={thread.ThreadId} existed={existed} host={hostMs}ms attach={attachMs}ms visibility={visibilityMs}ms {GetPrimaryAgentHostSummary()}");
+    }
+
+    private void HidePrimaryAgentTranscriptHost()
+    {
+        AgentTranscriptHost.Opacity = 0;
+        AgentTranscriptHost.IsHitTestVisible = false;
+        ApplyPrimaryAgentHostVisibility(activeAgentThread: null);
+    }
+
+    private void RemovePrimaryAgentTranscriptHosts(IEnumerable<TranscriptThreadState> threads)
+    {
+        foreach (var thread in threads.ToArray())
+        {
+            if (!_primaryAgentTranscriptHosts.Remove(thread, out var entry))
+                continue;
+
+            _primaryAgentHostMru.RemoveAll(candidate => ReferenceEquals(candidate, thread));
+            _bulkChangeTranscriptBoxes.Remove(thread);
+            _transcriptSnapshots.Remove(thread);
+            _pendingTranscriptSnapshotCaptures.Remove(thread);
+            if (ReferenceEquals(_snapshotThread, thread))
+                HideTranscriptSnapshot(thread);
+            if (ReferenceEquals(entry.TranscriptBox.Document, thread.Document))
+                entry.TranscriptBox.Document = CreateEmptyTranscriptDocument();
+            AgentTranscriptHost.Children.Remove(entry.TranscriptBox);
+        }
+    }
+
+    private IReadOnlyList<TranscriptThreadState> GetPrimaryAgentWarmupCandidates()
+    {
+        var selected = _selectedTranscriptThread;
+        return _agentThreadRegistry.ThreadOrder
+            .Where(thread => thread.Kind == TranscriptThreadKind.Agent)
+            .OrderByDescending(thread => ReferenceEquals(thread, selected))
+            .ThenByDescending(thread => _backgroundTaskPresenter.IsThreadActiveForDisplay(thread))
+            .ThenByDescending(AgentThreadRegistry.GetThreadLastActivityAt)
+            .Take(PrimaryAgentLiveHostLimit)
+            .ToArray();
+    }
+
+    private void SchedulePrimaryAgentHostWarmup()
+    {
+        if (_primaryAgentWarmupPending)
+            return;
+
+        _primaryAgentWarmupPending = true;
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, WarmPrimaryAgentTranscriptHosts);
+    }
+
+    private async void WarmPrimaryAgentTranscriptHosts()
+    {
+        _primaryAgentWarmupPending = false;
+        try
+        {
+            foreach (var thread in GetPrimaryAgentWarmupCandidates())
+            {
+                if (_isClosing)
+                    return;
+
+                var entry = GetOrCreatePrimaryAgentTranscriptHost(thread);
+                if (!AttachDocumentToPrimaryAgentHost(entry, closeSecondaryOwner: false))
+                    continue;
+
+                MarkPrimaryAgentHostRecentlyUsed(thread);
+                ApplyPrimaryAgentHostVisibility(
+                    (_selectedTranscriptThread?.Kind ?? TranscriptThreadKind.Coordinator) == TranscriptThreadKind.Agent
+                        ? _selectedTranscriptThread
+                        : null);
+
+                if (_conversationManager.HasPendingRender(thread))
+                    await _conversationManager.EnsureAgentThreadRenderedAsync(thread);
+
+                entry.TranscriptBox.UpdateLayout();
+            }
+        }
+        catch (Exception ex)
+        {
+            HandleUiCallbackException(nameof(WarmPrimaryAgentTranscriptHosts), ex);
+        }
+    }
+
     private void SelectTranscriptThread(TranscriptThreadState thread, bool scrollToStart = false)
     {
+        SelectTranscriptThreadCore(thread, scrollToStart, allowSnapshotFastPath: true, previousThreadOverride: null);
+    }
+
+    private void QueueDeferredSnapshotSelectionCompletion(
+        TranscriptThreadState thread,
+        TranscriptThreadState? previousThread,
+        bool scrollToStart)
+    {
+        var queuedAt = Stopwatch.GetTimestamp();
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        {
+            if (!ReferenceEquals(_selectedTranscriptThread, thread))
+                return;
+
+            var queueMs = (long)((Stopwatch.GetTimestamp() - queuedAt) * 1000.0 / Stopwatch.Frequency);
+            SquadDashTrace.Write(TraceCategory.Performance,
+                $"SNAPSHOT_SELECTION_COMPLETE_START thread={thread.ThreadId} queue={queueMs}ms");
+            SelectTranscriptThreadCore(thread, scrollToStart, allowSnapshotFastPath: false, previousThreadOverride: previousThread);
+            if (ReferenceEquals(_selectedTranscriptThread, thread))
+                HideTranscriptSnapshot(thread);
+        });
+    }
+
+    private void TraceSnapshotFirstRender(TranscriptThreadState thread, Stopwatch stopwatch)
+    {
+        EventHandler? renderingHandler = null;
+        renderingHandler = (_, _) =>
+        {
+            CompositionTarget.Rendering -= renderingHandler;
+            SquadDashTrace.Write(TraceCategory.Performance,
+                $"TRANSCRIPT_SNAPSHOT_FIRST_RENDER thread={thread.ThreadId} {stopwatch.ElapsedMilliseconds}ms");
+        };
+        CompositionTarget.Rendering += renderingHandler;
+    }
+
+    private void SelectTranscriptThreadCore(
+        TranscriptThreadState thread,
+        bool scrollToStart,
+        bool allowSnapshotFastPath,
+        TranscriptThreadState? previousThreadOverride)
+    {
         var swSelect = System.Diagnostics.Stopwatch.StartNew();
-        var previousThread = _selectedTranscriptThread;
+        var previousThread = previousThreadOverride ?? _selectedTranscriptThread;
+        var useSnapshotFastPath = allowSnapshotFastPath
+            && !scrollToStart
+            && !_searchNavigating
+            && !ReferenceEquals(previousThread, thread)
+            && TryShowTranscriptSnapshot(thread);
+
         _selectedTranscriptThread = thread;
+
+        if (useSnapshotFastPath)
+        {
+            swSelect.Stop();
+            SquadDashTrace.Write(TraceCategory.Performance,
+                $"SELECT_THREAD_SNAPSHOT_FAST_PATH target={thread.Kind} id={thread.ThreadId} total={swSelect.ElapsedMilliseconds}ms");
+            TraceSnapshotFirstRender(thread, Stopwatch.StartNew());
+            QueueDeferredSnapshotSelectionCompletion(thread, previousThread, scrollToStart);
+            return;
+        }
+
+        var parentKind = thread.Document.Parent switch
+        {
+            RichTextBox rtb when ReferenceEquals(rtb, OutputTextBox) => "OutputTextBox",
+            RichTextBox rtb when IsPrimaryAgentTranscriptBox(rtb) => "PrimaryAgentHost",
+            RichTextBox => "SecondaryRichTextBox",
+            null => "null",
+            var parent => parent.GetType().Name
+        };
+        SquadDashTrace.Write(TraceCategory.Performance,
+            $"SELECT_THREAD_DETAIL target={thread.Kind} id={thread.ThreadId} scrollToStart={scrollToStart} " +
+            $"pendingRender={_conversationManager.HasPendingRender(thread)} docBlocks={thread.Document.Blocks.Count} " +
+            $"parent={parentKind} {GetPrimaryAgentHostSummary()}");
 
         // Preserve search state when navigating to a match in a different thread.
         // When _searchNavigating is set, the caller owns restoring state after the switch.
@@ -11499,44 +12073,23 @@ public partial class MainWindow : Window, ILiveElementLocator
         UpdateCompletedTimeFooters();
         var t1 = swSelect.ElapsedMilliseconds;
 
-        // close that panel before assigning to AgentTranscriptBox — FlowDocument can only
+        // close that panel before assigning to the main cached host — FlowDocument can only
         // belong to one RichTextBox at a time. Coordinator doc stays permanently in OutputTextBox.
         if (thread.Document.Parent is RichTextBox secondaryOwner
             && secondaryOwner != OutputTextBox
-            && secondaryOwner != AgentTranscriptBox)
+            && !IsPrimaryAgentTranscriptBox(secondaryOwner))
         {
             var secondaryEntry = _secondaryTranscripts.FirstOrDefault(e => e.TranscriptBox == secondaryOwner);
             if (secondaryEntry != null)
                 CloseSecondaryPanel(secondaryEntry);
             else
-                secondaryOwner.Document = new FlowDocument(); // detach without a tracked panel
+                secondaryOwner.Document = CreateEmptyTranscriptDocument(); // detach without a tracked panel
         }
 
-        // Toggle visibility instead of reassigning documents.
-        // Both RTBs stay Visible at all times; hide/show via Opacity so WPF keeps
-        // the compositor texture alive and avoids a full layout+repaint on every switch.
-        // Coordinator: OutputTextBox stays permanently attached — no StructuralCache invalidation.
-        // Agent: AgentTranscriptBox gets the doc; both boxes use Opacity=0/1 (not Collapsed/Visible)
-        //        so their layout and render textures survive the switch.
-        if (thread.Kind == TranscriptThreadKind.Coordinator)
+        if (!useSnapshotFastPath)
         {
-            // Reveal coordinator via Opacity (compositor-only — no repaint needed).
-            // OutputTextBox is always Visible so WPF keeps its layout and rendering texture
-            // alive while an agent transcript is showing. Setting Opacity=1 is instant.
-            OutputTextBox.Opacity = 1;
-            OutputTextBox.IsHitTestVisible = true;
-            AgentTranscriptBox.Opacity = 0;
-            AgentTranscriptBox.IsHitTestVisible = false;
-        }
-        else
-        {
-            AgentTranscriptBox.Document = thread.Document;
-            AgentTranscriptBox.Opacity = 1;
-            AgentTranscriptBox.IsHitTestVisible = true;
-            // Hide coordinator with Opacity=0 rather than Visibility.Hidden/Collapsed.
-            // Opacity=0 keeps the compositor texture live so switching back is instant.
-            OutputTextBox.Opacity = 0;
-            OutputTextBox.IsHitTestVisible = false;
+            ApplyLiveTranscriptVisibility(thread);
+            RefreshActiveTranscriptScrollViewer();
         }
         var t2 = swSelect.ElapsedMilliseconds;
 
@@ -11547,16 +12100,17 @@ public partial class MainWindow : Window, ILiveElementLocator
         SyncAgentCardsForSelectionChange(previousThread, thread);
         var t4 = swSelect.ElapsedMilliseconds;
 
-        SyncPromptNavButtons();
+        if (!useSnapshotFastPath)
+            SyncPromptNavButtons();
         var t5 = swSelect.ElapsedMilliseconds;
 
         // If this agent thread's turns were deferred at startup (lazy rendering),
-        // render them now.  The document is already assigned to OutputTextBox above so
+        // render them now.  The document is already assigned to the active transcript box so
         // BeginChange/EndChange in RenderConversationHistoryAsync suppress intermediate
         // layout passes correctly.  The Normal-priority dispatch ensures the render
         // completes before any subsequent Input-priority click events can fire, so there
         // is no race between the render and the user switching threads again.
-        if (_conversationManager.HasPendingRender(thread))
+        if (!useSnapshotFastPath && _conversationManager.HasPendingRender(thread))
             _ = _conversationManager.EnsureAgentThreadRenderedAsync(thread);
 
         // When switching to a thread with no focused prompt, briefly flash the
@@ -11568,8 +12122,16 @@ public partial class MainWindow : Window, ILiveElementLocator
             ShowPromptNavHintWithFadeOut();
         }
 
-        ScrollTranscriptThread(thread, scrollToStart);
-        UpdateInteractiveControlState();
+        if (useSnapshotFastPath)
+        {
+            QueueDeferredLiveTranscriptSwitch(thread, scrollToStart);
+        }
+        else
+        {
+            ScrollTranscriptThread(thread, scrollToStart);
+            UpdateInteractiveControlState();
+            ScheduleTranscriptSnapshotRefresh(thread);
+        }
         swSelect.Stop();
 
         if (swSelect.ElapsedMilliseconds >= 20)
@@ -11579,17 +12141,41 @@ public partial class MainWindow : Window, ILiveElementLocator
                 $"fontsize={t3 - t2}ms syncCards={t4 - t3}ms promptNav={t5 - t4}ms " +
                 $"rest={swSelect.ElapsedMilliseconds - t5}ms");
 
-        // Post-render trace: measure how long WPF's layout+render pass takes after the C#
-        // work is done. ContextIdle fires after Render, so elapsed time here is the real
-        // wall-clock cost of the thread switch as perceived by the user.
+        SchedulePrimaryAgentHostWarmup();
+
+        // Dispatcher checkpoint trace. ContextIdle used to include a queued ScrollToEnd
+        // layout flush; keep the old line for continuity, and add surrounding priority
+        // checkpoints so slow switches can be attributed more precisely.
         var swRender = System.Diagnostics.Stopwatch.StartNew();
         var traceKind = thread.Kind;
-        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, () => {
-            swRender.Stop();
+        void QueueCheckpoint(DispatcherPriority priority, string label)
+        {
+            Dispatcher.BeginInvoke(priority, () =>
+            {
+                if (swRender.ElapsedMilliseconds >= 20)
+                    SquadDashTrace.Write(TraceCategory.Performance,
+                        $"SELECT_THREAD checkpoint ({traceKind}) {label}: {swRender.ElapsedMilliseconds}ms {GetPrimaryAgentHostSummary()}");
+            });
+        }
+
+        EventHandler? renderingHandler = null;
+        renderingHandler = (_, _) =>
+        {
+            CompositionTarget.Rendering -= renderingHandler;
             if (swRender.ElapsedMilliseconds >= 20)
                 SquadDashTrace.Write(TraceCategory.Performance,
-                    $"SELECT_THREAD render ({traceKind}): {swRender.ElapsedMilliseconds}ms (WPF layout+paint)");
+                    $"SELECT_THREAD CompositionTarget.Rendering ({traceKind}): {swRender.ElapsedMilliseconds}ms");
+        };
+        CompositionTarget.Rendering += renderingHandler;
+
+        QueueCheckpoint(DispatcherPriority.Render, "RenderPriority");
+        QueueCheckpoint(DispatcherPriority.Loaded, "LoadedPriority");
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, () => {
+            if (swRender.ElapsedMilliseconds >= 20)
+                SquadDashTrace.Write(TraceCategory.Performance,
+                    $"SELECT_THREAD render ({traceKind}): {swRender.ElapsedMilliseconds}ms (ContextIdle after switch)");
         });
+        QueueCheckpoint(DispatcherPriority.ApplicationIdle, "ApplicationIdle");
     }
 
     private void UpdateTranscriptThreadBadge()
@@ -11670,7 +12256,32 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void ScrollTranscriptThread(TranscriptThreadState thread, bool scrollToStart)
     {
         EnsureThreadFooterAtEnd(thread);
-        ActiveScrollController.OnThreadSelected(scrollToStart);
+        ActiveScrollController.OnThreadSelected(scrollToStart, scrollToEnd: false);
+    }
+
+    private void ScrollTranscriptToEndAfterRender(TranscriptThreadState thread)
+    {
+        if (ReferenceEquals(thread, CoordinatorThread))
+        {
+            // During initial history load IsLoadingTranscript is true — route to EndLoad()
+            // so the suppression flag is cleared and exactly one post-load scroll fires.
+            // Outside of load (normal streaming) IsLoadingTranscript is false — use the
+            // standard debounced RequestScrollToEnd path.
+            if (_coordinatorScrollController.IsLoadingTranscript)
+            {
+                _coordinatorScrollController.EndLoad();
+                LoadingTranscriptOverlay.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                _coordinatorScrollController.RequestScrollToEnd();
+            }
+
+            return;
+        }
+
+        if (_primaryAgentTranscriptHosts.TryGetValue(thread, out var entry))
+            entry.ScrollController.RequestScrollToEnd();
     }
 
     // ── Completed-time footer ────────────────────────────────────────────────
@@ -11831,10 +12442,13 @@ public partial class MainWindow : Window, ILiveElementLocator
             return;
         }
 
-        // If this thread's document is already displayed in the main OutputTextBox,
+        // If this thread's document is already displayed in the main transcript,
         // opening a secondary panel would throw (FlowDocument can only belong to
         // one RichTextBox at a time).  Flash the main transcript border instead.
-        if (thread.Document.Parent == OutputTextBox)
+        if (_mainTranscriptVisible
+            && ReferenceEquals(_selectedTranscriptThread ?? CoordinatorThread, thread)
+            && thread.Document.Parent is RichTextBox mainOwner
+            && (mainOwner == OutputTextBox || IsPrimaryAgentTranscriptBox(mainOwner)))
         {
             SquadDashTrace.Write(TraceCategory.TranscriptPanels,
                 $"OpenSecondaryPanel skipped main-owned thread={thread.ThreadId} agent={agent.Name} selectedMain={thread.IsSelected}");
@@ -11875,7 +12489,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         CancelAutoCloseCountdown(entry);
         var sw = Stopwatch.StartNew();
         if (ReferenceEquals(entry.TranscriptBox.Document, entry.Thread.Document))
-            entry.TranscriptBox.Document = new FlowDocument();
+            entry.TranscriptBox.Document = CreateEmptyTranscriptDocument();
         SquadDashTrace.Write(TraceCategory.Performance, $"PANEL_CLOSE DetachDoc={sw.ElapsedMilliseconds}ms thread={entry.Thread.ThreadId}");
         SquadDashTrace.Write(TraceCategory.TranscriptPanels,
             $"CloseSecondaryPanel closing thread={entry.Thread.ThreadId} agent={entry.Agent.Name} seq={entry.Thread.SequenceNumber} title=\"{entry.TitleBlock.Text}\"");
@@ -12328,7 +12942,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         };
 
         if (thread.Document.Parent is RichTextBox currentOwner && currentOwner != rtb)
-            currentOwner.Document = new FlowDocument();
+            currentOwner.Document = CreateEmptyTranscriptDocument();
         rtb.Document = thread.Document;
         if (_conversationManager.HasPendingRender(thread))
             _ = _conversationManager.EnsureAgentThreadRenderedAsync(thread);
@@ -12378,7 +12992,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         // from the current owner by giving that owner a temporary empty document.
         if (doc.Parent is RichTextBox currentOwner && currentOwner != rtb)
         {
-            currentOwner.Document = new FlowDocument();
+            currentOwner.Document = CreateEmptyTranscriptDocument();
         }
 
         rtb.Document = doc;
@@ -14399,10 +15013,26 @@ public partial class MainWindow : Window, ILiveElementLocator
             // rect is in coordinates relative to the scroll viewer's visible area.
             // Always scroll to place this prompt at the viewport top.
             double targetOffset = sv.VerticalOffset + rect.Top;
-            _coordinatorScrollController.ScrollToOffset(targetOffset);
+            ActiveScrollController.ScrollToOffset(targetOffset);
 
             SyncPromptNavButtons();
         });
+    }
+
+    private void RefreshActiveTranscriptScrollViewer()
+    {
+        var activeBox = ActiveTranscriptBox;
+        var newScrollViewer = FindScrollViewer(activeBox);
+        if (ReferenceEquals(newScrollViewer, _transcriptScrollViewer))
+            return;
+
+        if (_transcriptScrollViewer is not null)
+            _transcriptScrollViewer.ScrollChanged -= TranscriptScrollViewer_ScrollChanged;
+
+        _transcriptScrollViewer = newScrollViewer;
+
+        if (_transcriptScrollViewer is not null)
+            _transcriptScrollViewer.ScrollChanged += TranscriptScrollViewer_ScrollChanged;
     }
 
     private void TranscriptScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
@@ -14413,12 +15043,13 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (e.VerticalChange != 0 || e.ExtentHeightChange != 0 || e.ViewportHeightChange != 0)
             SyncPromptNavButtons();
 
-        // When the transcript scrolls while OutputTextBox does not hold keyboard focus
+        // When the transcript scrolls while its RichTextBox does not hold keyboard focus
         // (e.g. mouse-wheel from another window), the WPF selection adorner layer can get
         // out of sync, leaving a ghost highlight frozen at the old scroll position.
         // Forcing the adorner layer to repaint fixes the stale render.
-        if (e.VerticalChange != 0 && !OutputTextBox.IsKeyboardFocusWithin)
-            AdornerLayer.GetAdornerLayer(OutputTextBox)?.InvalidateVisual();
+        var activeBox = ActiveTranscriptBox;
+        if (e.VerticalChange != 0 && !activeBox.IsKeyboardFocusWithin)
+            AdornerLayer.GetAdornerLayer(activeBox)?.InvalidateVisual();
     }
 
     /// <summary>
@@ -15736,6 +16367,13 @@ public partial class MainWindow : Window, ILiveElementLocator
             AgentReportStore.ClearAll(reportsDir);
         }
         CoordinatorThread.Document.Blocks.Clear();
+        RemovePrimaryAgentTranscriptHosts(_primaryAgentTranscriptHosts.Keys.ToArray());
+        _transcriptSnapshots.Clear();
+        _pendingTranscriptSnapshotCaptures.Clear();
+        TranscriptSnapshotBackdrop.Visibility = Visibility.Collapsed;
+        TranscriptSnapshotImage.Visibility = Visibility.Collapsed;
+        TranscriptSnapshotImage.Source = null;
+        _snapshotThread = null;
         _agentThreadRegistry.ClearAll();
         _backgroundTaskPresenter.ClearState();
         _routingIssueQuickReplyEntry = null;
@@ -16151,7 +16789,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         ActiveAgentItemsControl.IsEnabled = state.AgentItemsEnabled;
         InactiveAgentItemsControl.IsEnabled = state.AgentItemsEnabled;
         OutputTextBox.IsEnabled = state.OutputEnabled;
-        AgentTranscriptBox.IsEnabled = state.OutputEnabled;
+        foreach (var entry in _primaryAgentTranscriptHosts.Values)
+            entry.TranscriptBox.IsEnabled = state.OutputEnabled;
         PromptTextBox.IsEnabled = state.PromptEnabled;
         RunButton.IsEnabled = state.RunEnabled
             || ((_isPromptRunning || IsLoopRunning) && _currentWorkspace is not null);
@@ -18152,7 +18791,10 @@ public partial class MainWindow : Window, ILiveElementLocator
             mergedDicts.Remove(existing);
 
         mergedDicts.Add(new ResourceDictionary { Source = themeUri });
+        var previousThemeName = _activeThemeName;
         _activeThemeName = themeName;
+        if (!string.Equals(previousThemeName, themeName, StringComparison.OrdinalIgnoreCase))
+            InvalidateTranscriptSnapshots("theme-changed");
 
         // Re-render adorners so they pick up the new theme's brush tokens.
         _searchAdorner?.InvalidateHighlights();
@@ -20966,7 +21608,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             _traceWindow.Closed += (_, _) =>
             {
                 _coordinatorScrollController.TraceTarget = null;
-                _agentScrollController.TraceTarget = null;
+                foreach (var entry in _primaryAgentTranscriptHosts.Values)
+                    entry.ScrollController.TraceTarget = null;
                 SquadDashTrace.TraceTarget = null;
                 _traceWindow = null;
                 _traceWindowOffset = null;
@@ -20974,7 +21617,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             _traceWindow.LocationChanged += (_, _) => OnTraceWindowMoved();
 
             _coordinatorScrollController.TraceTarget = _traceWindow;
-            _agentScrollController.TraceTarget = _traceWindow;
+            foreach (var entry in _primaryAgentTranscriptHosts.Values)
+                entry.ScrollController.TraceTarget = _traceWindow;
             SquadDashTrace.TraceTarget = _traceWindow;
             _traceWindow.Show();
         }

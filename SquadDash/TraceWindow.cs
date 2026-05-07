@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shell;
+using System.Windows.Threading;
 
 namespace SquadDash;
 
@@ -26,7 +28,9 @@ internal sealed class TraceWindow : Window, ILiveTraceTarget
     private readonly TextBox _logTextBox = null!;
     private readonly WrapPanel _checkboxPanel = null!;
     private readonly ApplicationSettingsStore _settingsStore;
+    private readonly Queue<(TraceCategory Category, string Timestamp, string Detail)> _pendingEntries = new();
     private HashSet<TraceCategory> _disabledCategories;
+    private bool _flushPending;
 
     public TraceWindow(ApplicationSettingsStore settingsStore)
     {
@@ -276,21 +280,47 @@ internal sealed class TraceWindow : Window, ILiveTraceTarget
     /// </summary>
     public void AddEntry(TraceCategory category, string detail)
     {
+        var timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
         if (!Dispatcher.CheckAccess())
         {
-            Dispatcher.BeginInvoke(() => AddEntry(category, detail));
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, () => EnqueueEntry(category, timestamp, detail));
             return;
         }
 
+        EnqueueEntry(category, timestamp, detail);
+    }
+
+    private void EnqueueEntry(TraceCategory category, string timestamp, string detail)
+    {
         if (_disabledCategories.Contains(category)) return;
 
-        var timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
-        var line = $"{timestamp}  {category,-24}  {detail}";
+        _pendingEntries.Enqueue((category, timestamp, detail));
+        if (_flushPending)
+            return;
 
+        _flushPending = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, FlushPendingEntries);
+    }
+
+    private void FlushPendingEntries()
+    {
+        _flushPending = false;
+        if (_pendingEntries.Count == 0)
+            return;
+
+        var builder = new StringBuilder();
         if (_logTextBox.Text.Length > 0)
-            _logTextBox.AppendText(Environment.NewLine);
+            builder.AppendLine();
 
-        _logTextBox.AppendText(line);
+        while (_pendingEntries.Count > 0)
+        {
+            var (category, timestamp, detail) = _pendingEntries.Dequeue();
+            builder.Append($"{timestamp}  {category,-24}  {detail}");
+            if (_pendingEntries.Count > 0)
+                builder.AppendLine();
+        }
+
+        _logTextBox.AppendText(builder.ToString());
         _logTextBox.ScrollToEnd();
     }
 }
