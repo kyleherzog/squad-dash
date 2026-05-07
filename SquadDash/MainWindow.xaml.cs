@@ -11508,7 +11508,8 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         // Toggle visibility instead of reassigning documents.
         // Coordinator: OutputTextBox stays permanently attached — no StructuralCache invalidation.
-        // Agent: AgentTranscriptBox gets the doc; OutputTextBox stays Collapsed (cache preserved).
+        // Agent: AgentTranscriptBox gets the doc; OutputTextBox uses Hidden (not Collapsed) so
+        //        its layout stays valid and the next coordinator switch costs zero re-measure.
         if (thread.Kind == TranscriptThreadKind.Coordinator)
         {
             OutputTextBox.Visibility = Visibility.Visible;
@@ -11518,7 +11519,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             AgentTranscriptBox.Document = thread.Document;
             AgentTranscriptBox.Visibility = Visibility.Visible;
-            OutputTextBox.Visibility = Visibility.Collapsed;
+            OutputTextBox.Visibility = Visibility.Hidden;
         }
         var t2 = swSelect.ElapsedMilliseconds;
 
@@ -11560,6 +11561,18 @@ public partial class MainWindow : Window, ILiveElementLocator
                 $"search/sel={t0}ms footers={t1 - t0}ms vis={t2 - t1}ms " +
                 $"fontsize={t3 - t2}ms syncCards={t4 - t3}ms promptNav={t5 - t4}ms " +
                 $"rest={swSelect.ElapsedMilliseconds - t5}ms");
+
+        // Post-render trace: measure how long WPF's layout+render pass takes after the C#
+        // work is done. ContextIdle fires after Render, so elapsed time here is the real
+        // wall-clock cost of the thread switch as perceived by the user.
+        var swRender = System.Diagnostics.Stopwatch.StartNew();
+        var traceKind = thread.Kind;
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, () => {
+            swRender.Stop();
+            if (swRender.ElapsedMilliseconds >= 20)
+                SquadDashTrace.Write(TraceCategory.Performance,
+                    $"SELECT_THREAD render ({traceKind}): {swRender.ElapsedMilliseconds}ms (WPF layout+paint)");
+        });
     }
 
     private void UpdateTranscriptThreadBadge()
