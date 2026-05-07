@@ -27,4 +27,7 @@ internal sealed class AnnotationRect
     /// Hidden unless the rect is selected.
     /// </summary>
     public Ellipse[] Handles { get; set; } = null!;
+
+    /// <summary>Transparent rectangle inflated 3 px on each side — widens the clickable area.</summary>
+    public Rectangle HitZoneRect { get; set; } = null!;
 }

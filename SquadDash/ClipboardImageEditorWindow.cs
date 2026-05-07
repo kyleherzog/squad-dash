@@ -139,6 +139,17 @@ internal sealed class ClipboardImageEditorWindow : Window
     private bool _inCursorPlacementMode;
     private bool _draggingCursor;
 
+    // ── Eyedropper ────────────────────────────────────────────────────────────
+
+    private bool _inEyedropperMode;
+    private Button? _eyedropperBtn;
+    private Border? _eyedropperSwatch;
+    private TextBlock? _eyedropperHexLabel;
+    private Border? _eyedropperTooltipBorder;
+    private TextBlock? _eyedropperTooltipText;
+    private byte[]? _cachedPixels;
+    private int _cachedStride;
+
     // ── Mode hint ─────────────────────────────────────────────────────────────
 
     private Border? _modeHintBorder;
@@ -388,6 +399,13 @@ internal sealed class ClipboardImageEditorWindow : Window
             Margin   = new Thickness(0, 0, 4, 0),
             ToolTip  = "Add a mouse-cursor indicator — click on the image to place it"
         };
+        _eyedropperBtn = new Button
+        {
+            Content  = "⊕ Color",
+            Width    = 76, Height = 28,
+            Margin   = new Thickness(0, 0, 4, 0),
+            ToolTip  = "Pick a color from the image — hover to preview RGB and HSL, click to capture"
+        };
         var roundCornersBtn = new Button
         {
             Content  = "⌐ Round Corners",
@@ -410,13 +428,35 @@ internal sealed class ClipboardImageEditorWindow : Window
         };
         var cancelBtn = new Button { Content = "Cancel", Width = 70, Height = 28 };
 
+        _eyedropperSwatch = new Border
+        {
+            Width = 20, Height = 20,
+            CornerRadius = new CornerRadius(3),
+            Background = Brushes.Transparent,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(160, 160, 160)),
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 0, 4, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "Sampled color",
+            Visibility = Visibility.Collapsed
+        };
+        _eyedropperHexLabel = new TextBlock
+        {
+            Text = "",
+            VerticalAlignment = VerticalAlignment.Center,
+            FontFamily = new FontFamily("Consolas"),
+            FontSize = 11,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        _eyedropperHexLabel.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
+
         // In prompt mode the Round Corners option is not relevant — hide it.
         if (_isPromptMode)
             roundCornersBtn.Visibility = Visibility.Collapsed;
 
         var styleButtons = _isPromptMode
-            ? new[] { _addArrowBtn, _addRectBtn, cursorBtn, insertBtn, cancelBtn }
-            : new[] { _addArrowBtn, _addRectBtn, cursorBtn, roundCornersBtn, insertBtn, cancelBtn };
+            ? new[] { _addArrowBtn, _addRectBtn, cursorBtn, _eyedropperBtn, insertBtn, cancelBtn }
+            : new[] { _addArrowBtn, _addRectBtn, cursorBtn, _eyedropperBtn, roundCornersBtn, insertBtn, cancelBtn };
         foreach (var btn in styleButtons)
             btn.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
 
@@ -450,6 +490,13 @@ internal sealed class ClipboardImageEditorWindow : Window
                 ToggleCursorOverlay(false);
                 HideModeHint();
             }
+        };
+
+        _eyedropperBtn.Click += (_, _) =>
+        {
+            if (_inEyedropperMode) { ExitEyedropperMode(); return; }
+            EnterEyedropperMode();
+            _eyedropperBtn.Content = "✓ ⊕ Color";
         };
 
         roundCornersBtn.Click += (_, _) =>
@@ -495,8 +542,15 @@ internal sealed class ClipboardImageEditorWindow : Window
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(8, 6, 8, 6)
         };
-        foreach (var btn in new[] { _addArrowBtn, _addRectBtn, cursorBtn, roundCornersBtn, insertBtn, cancelBtn })
-            row.Children.Add(btn);
+        row.Children.Add(_addArrowBtn);
+        row.Children.Add(_addRectBtn);
+        row.Children.Add(cursorBtn);
+        row.Children.Add(_eyedropperBtn);
+        row.Children.Add(_eyedropperSwatch);
+        row.Children.Add(_eyedropperHexLabel);
+        row.Children.Add(roundCornersBtn);
+        row.Children.Add(insertBtn);
+        row.Children.Add(cancelBtn);
         row.Children.Add(_zoomLabel);
         row.Children.Add(resetZoomBtn);
 
@@ -700,6 +754,17 @@ internal sealed class ClipboardImageEditorWindow : Window
     private void Canvas_MouseDown(object sender, MouseButtonEventArgs e)
     {
         if (e.LeftButton != MouseButtonState.Pressed) return;
+
+        // Eyedropper mode: sample pixel on click.
+        if (_inEyedropperMode)
+        {
+            var ept = e.GetPosition(_canvas);
+            var ec = SamplePixelAtCanvasPoint(ept);
+            UpdateEyedropperResult(ec);
+            e.Handled = true;
+            return;
+        }
+
         SelectArrow(null);
         SelectAnnotationRect(null);
 
@@ -838,6 +903,16 @@ internal sealed class ClipboardImageEditorWindow : Window
             };
             RefreshLayout();
             e.Handled = true;
+            return;
+        }
+
+        // Eyedropper mode: show live color tooltip.
+        if (_inEyedropperMode)
+        {
+            _canvas.Cursor = Cursors.Cross;
+            var ept = e.GetPosition(_canvas);
+            var ec = SamplePixelAtCanvasPoint(ept);
+            ShowEyedropperTooltip(ept, ec);
             return;
         }
 
@@ -1025,6 +1100,13 @@ internal sealed class ClipboardImageEditorWindow : Window
             IsHitTestVisible = true,
             Cursor = Cursors.Arrow
         };
+        var hitLine = new Line
+        {
+            StrokeThickness = 9,
+            Stroke = Brushes.Transparent,
+            IsHitTestVisible = true,
+            Cursor = Cursors.Arrow
+        };
         var head = new Polygon
         {
             Fill = colorBrush,
@@ -1064,6 +1146,8 @@ internal sealed class ClipboardImageEditorWindow : Window
         Panel.SetZIndex(head, 5);
         Panel.SetZIndex(shadowLine, 2);
         Panel.SetZIndex(shadowHead, 2);
+        _canvas.Children.Add(hitLine);
+        Panel.SetZIndex(hitLine, 6);  // just above line (5) so it intercepts first
 
         var arrow = new AnnotationArrow
         {
@@ -1080,7 +1164,8 @@ internal sealed class ClipboardImageEditorWindow : Window
             TailHandle = tailHandle,
             TargetCenterOnCanvas = center,
             ShadowLine = shadowLine,
-            ShadowHead = shadowHead
+            ShadowHead = shadowHead,
+            HitLine = hitLine
         };
 
         // ── Tip-handle drag: changes angle (pivot stays at target centre) ─────
@@ -1170,6 +1255,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         // ── Body drag (click line or head to select + move) ───────────────────
         AttachBodyDrag(line, arrow);
         AttachBodyDrag(head, arrow);
+        AttachBodyDrag(hitLine, arrow);
 
         tipHandle.MouseRightButtonDown += (_, e) =>
         {
@@ -1254,6 +1340,11 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         arrow.Line.X1 = tailX; arrow.Line.Y1 = tailY;
         arrow.Line.X2 = ahX; arrow.Line.Y2 = ahY;
+
+        arrow.HitLine.X1 = arrow.Line.X1;
+        arrow.HitLine.Y1 = arrow.Line.Y1;
+        arrow.HitLine.X2 = arrow.Line.X2;
+        arrow.HitLine.Y2 = arrow.Line.Y2;
 
         const double HeadLen = 16.0;
         const double HeadHalf = 6.0;
@@ -1439,6 +1530,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         _canvas.Children.Remove(arrow.Head);
         _canvas.Children.Remove(arrow.TipHandle);
         _canvas.Children.Remove(arrow.TailHandle);
+        _canvas.Children.Remove(arrow.HitLine);
         _arrows.Remove(arrow);
     }
 
@@ -1506,6 +1598,14 @@ internal sealed class ClipboardImageEditorWindow : Window
             IsHitTestVisible = true
         };
 
+        var hitZone = new Rectangle
+        {
+            Fill = Brushes.Transparent,
+            StrokeThickness = 0,
+            IsHitTestVisible = true,
+            Cursor = Cursors.SizeAll
+        };
+
         var handles = new Ellipse[4];
         for (int i = 0; i < 4; i++)
         {
@@ -1527,6 +1627,8 @@ internal sealed class ClipboardImageEditorWindow : Window
         _canvas.Children.Add(border);
         Panel.SetZIndex(shadow, 2);
         Panel.SetZIndex(border, 5);
+        _canvas.Children.Add(hitZone);
+        Panel.SetZIndex(hitZone, 4);  // just below border (5) — still catches clicks outside border
 
         var annotRect = new AnnotationRect
         {
@@ -1534,7 +1636,8 @@ internal sealed class ClipboardImageEditorWindow : Window
             RectColor = rectColor,
             Border = border,
             Shadow = shadow,
-            Handles = handles
+            Handles = handles,
+            HitZoneRect = hitZone
         };
 
         border.MouseLeftButtonDown += (_, e) =>
@@ -1578,6 +1681,54 @@ internal sealed class ClipboardImageEditorWindow : Window
             e.Handled = true;
         };
         border.MouseRightButtonDown += (_, e) =>
+        {
+            PushUndo();
+            RemoveAnnotationRect(annotRect);
+            if (_selectedAnnotRect == annotRect) { _selectedAnnotRect = null; HideColorPicker(); }
+            e.Handled = true;
+        };
+
+        hitZone.MouseLeftButtonDown += (_, e) =>
+        {
+            if (_draggingAnnotRect != null || _inArrowMode || _inRectMode) return;
+            SelectAnnotationRect(annotRect);
+            _preDragSnapshot = CaptureSnapshot();
+            _draggingAnnotRect = annotRect;
+            _annotRectBodyDragging = true;
+            _draggingAnnotRectHandleIdx = -1;
+            _annotRectDragStart = e.GetPosition(_canvas);
+            _annotRectDragOriginal = annotRect.Bounds;
+            hitZone.CaptureMouse();
+            e.Handled = true;
+        };
+        hitZone.MouseMove += (_, e) =>
+        {
+            if (_draggingAnnotRect != annotRect || !_annotRectBodyDragging) return;
+            var pt = e.GetPosition(_canvas);
+            var dx = pt.X - _annotRectDragStart.X;
+            var dy = pt.Y - _annotRectDragStart.Y;
+            var cw = _canvas.Width;
+            var ch = _canvas.Height;
+            var nb = new Rect(
+                Math.Max(0, Math.Min(_annotRectDragOriginal.X + dx, cw - _annotRectDragOriginal.Width)),
+                Math.Max(0, Math.Min(_annotRectDragOriginal.Y + dy, ch - _annotRectDragOriginal.Height)),
+                _annotRectDragOriginal.Width,
+                _annotRectDragOriginal.Height);
+            annotRect.Bounds = nb;
+            UpdateRectGeometry(annotRect);
+            if (_colorPickerRect == annotRect) ShowColorPickerForRect(annotRect);
+            e.Handled = true;
+        };
+        hitZone.MouseLeftButtonUp += (_, e) =>
+        {
+            if (_draggingAnnotRect != annotRect || !_annotRectBodyDragging) return;
+            CommitDragUndo();
+            _draggingAnnotRect = null;
+            _annotRectBodyDragging = false;
+            hitZone.ReleaseMouseCapture();
+            e.Handled = true;
+        };
+        hitZone.MouseRightButtonDown += (_, e) =>
         {
             PushUndo();
             RemoveAnnotationRect(annotRect);
@@ -1670,6 +1821,15 @@ internal sealed class ClipboardImageEditorWindow : Window
         PlaceRectHandle(rect.Handles[1], b.Right, b.Top);
         PlaceRectHandle(rect.Handles[2], b.Left, b.Bottom);
         PlaceRectHandle(rect.Handles[3], b.Right, b.Bottom);
+
+        if (rect.HitZoneRect != null)
+        {
+            const double hp = 3.0;
+            Canvas.SetLeft(rect.HitZoneRect, b.Left - hp);
+            Canvas.SetTop(rect.HitZoneRect, b.Top - hp);
+            rect.HitZoneRect.Width = b.Width + hp * 2;
+            rect.HitZoneRect.Height = b.Height + hp * 2;
+        }
     }
 
     private static void PlaceRectHandle(Ellipse h, double cx, double cy)
@@ -1684,6 +1844,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         if (rect == _colorPickerRect) HideColorPicker();
         _canvas.Children.Remove(rect.Shadow);
         _canvas.Children.Remove(rect.Border);
+        _canvas.Children.Remove(rect.HitZoneRect);
         foreach (var h in rect.Handles) _canvas.Children.Remove(h);
         _annotRects.Remove(rect);
     }
@@ -1931,6 +2092,115 @@ internal sealed class ClipboardImageEditorWindow : Window
         Canvas.SetTop(_modeHintBorder, _sel.Top + 8);
     }
 
+    // ── Eyedropper ────────────────────────────────────────────────────────────
+
+    private void EnterEyedropperMode()
+    {
+        _inEyedropperMode = true;
+        _canvas.Cursor = Cursors.Cross;
+        ShowModeHint("Hover to preview color — click to capture");
+    }
+
+    private void ExitEyedropperMode()
+    {
+        _inEyedropperMode = false;
+        _canvas.Cursor = Cursors.Arrow;
+        HideModeHint();
+        HideEyedropperTooltip();
+        if (_eyedropperBtn != null) _eyedropperBtn.Content = "⊕ Color";
+    }
+
+    private void CachePixels()
+    {
+        var conv = new FormatConvertedBitmap(_clipboardImage, PixelFormats.Bgra32, null, 0);
+        _cachedStride = conv.PixelWidth * 4;
+        _cachedPixels = new byte[_cachedStride * conv.PixelHeight];
+        conv.CopyPixels(_cachedPixels, _cachedStride, 0);
+    }
+
+    private Color SamplePixelAtCanvasPoint(Point pt)
+    {
+        if (_cachedPixels == null) CachePixels();
+        int px = (int)Math.Max(0, Math.Min(pt.X, _clipboardImage.PixelWidth - 1));
+        int py = (int)Math.Max(0, Math.Min(pt.Y, _clipboardImage.PixelHeight - 1));
+        int offset = py * _cachedStride + px * 4;
+        byte bv = _cachedPixels![offset];
+        byte gv = _cachedPixels[offset + 1];
+        byte rv = _cachedPixels[offset + 2];
+        return Color.FromRgb(rv, gv, bv);
+    }
+
+    private static (double H, double S, double L) RgbToHsl(Color c)
+    {
+        double r = c.R / 255.0, g = c.G / 255.0, b = c.B / 255.0;
+        double max = Math.Max(r, Math.Max(g, b));
+        double min = Math.Min(r, Math.Min(g, b));
+        double l = (max + min) / 2.0;
+        if (max == min) return (0, 0, l * 100);
+        double d = max - min;
+        double s = l > 0.5 ? d / (2.0 - max - min) : d / (max + min);
+        double h;
+        if (max == r) h = (g - b) / d + (g < b ? 6 : 0);
+        else if (max == g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        return (h / 6.0 * 360.0, s * 100.0, l * 100.0);
+    }
+
+    private void ShowEyedropperTooltip(Point pt, Color color)
+    {
+        if (_eyedropperTooltipBorder == null)
+        {
+            _eyedropperTooltipText = new TextBlock
+            {
+                FontSize = 11,
+                FontFamily = new FontFamily("Consolas"),
+                Foreground = Brushes.White,
+                IsHitTestVisible = false
+            };
+            _eyedropperTooltipBorder = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(0xCC, 0x10, 0x10, 0x10)),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(6, 4, 6, 4),
+                Child = _eyedropperTooltipText,
+                IsHitTestVisible = false,
+                Visibility = Visibility.Collapsed
+            };
+            Panel.SetZIndex(_eyedropperTooltipBorder, 200);
+            _canvas.Children.Add(_eyedropperTooltipBorder);
+        }
+        var (h, s, l) = RgbToHsl(color);
+        _eyedropperTooltipText!.Text =
+            $"R:{color.R}  G:{color.G}  B:{color.B}\nH:{h:F0}°  S:{s:F0}%  L:{l:F0}%";
+        _eyedropperTooltipBorder.Visibility = Visibility.Visible;
+        _eyedropperTooltipBorder.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var tw = _eyedropperTooltipBorder.DesiredSize.Width;
+        var th = _eyedropperTooltipBorder.DesiredSize.Height;
+        double tx = pt.X + 14;
+        double ty = pt.Y - th - 6;
+        if (tx + tw > _canvas.Width)  tx = pt.X - tw - 6;
+        if (ty < 0)                   ty = pt.Y + 14;
+        Canvas.SetLeft(_eyedropperTooltipBorder, tx);
+        Canvas.SetTop(_eyedropperTooltipBorder, ty);
+    }
+
+    private void HideEyedropperTooltip()
+    {
+        if (_eyedropperTooltipBorder != null)
+            _eyedropperTooltipBorder.Visibility = Visibility.Collapsed;
+    }
+
+    private void UpdateEyedropperResult(Color color)
+    {
+        if (_eyedropperSwatch != null)
+        {
+            _eyedropperSwatch.Background = new SolidColorBrush(color);
+            _eyedropperSwatch.Visibility = Visibility.Visible;
+        }
+        if (_eyedropperHexLabel != null)
+            _eyedropperHexLabel.Text = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+    }
+
     // ── Insert Image ──────────────────────────────────────────────────────────
 
     private void DoInsertImage()
@@ -1940,6 +2210,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         _selBorderRect.Visibility = Visibility.Collapsed;
         HideColorPicker();
         HideModeHint();
+        HideEyedropperTooltip();
 
         if (_selectedArrow != null)
         {
