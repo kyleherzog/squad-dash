@@ -5740,6 +5740,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             card.IsTranscriptTargetSelected = ReferenceEquals(card, agent);
 
         UpdateTranscriptThreadBadge(thread);
+        var clearedSelections = CollapseTranscriptSelectionsForFastSwitch("primary-visual");
 
         _selectionController.ReconcilePanels(
             Array.Empty<(AgentStatusCard Agent, TranscriptThreadState Thread)>(),
@@ -5747,7 +5748,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         sw.Stop();
         SquadDashTrace.Write(TraceCategory.Performance,
-            $"AGENT_CARD_VISUAL_IMMEDIATE reason=primary-select card={agent.Name} thread={thread.ThreadId} title=\"{TranscriptTitleTextBlock.Text}\" work={sw.ElapsedMilliseconds}ms");
+            $"AGENT_CARD_VISUAL_IMMEDIATE reason=primary-select card={agent.Name} thread={thread.ThreadId} title=\"{TranscriptTitleTextBlock.Text}\" selectionsCleared={clearedSelections} work={sw.ElapsedMilliseconds}ms");
         TraceAgentCardVisualFirstRender(agent, "primary-select", Stopwatch.StartNew());
         TraceTranscriptTitleFirstRender(thread, "primary-select", Stopwatch.StartNew());
         return previousActualThread;
@@ -11679,6 +11680,63 @@ public partial class MainWindow : Window, ILiveElementLocator
             PagePadding = new Thickness(0)
         };
 
+    private static bool HasTranscriptSelection(RichTextBox box)
+    {
+        try { return !box.Selection.IsEmpty; }
+        catch { return false; }
+    }
+
+    private static bool CollapseTranscriptSelection(RichTextBox box)
+    {
+        try
+        {
+            if (box.Selection.IsEmpty)
+                return false;
+
+            var caret = box.Selection.Start;
+            box.Selection.Select(caret, caret);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private int CollapseTranscriptSelectionsForFastSwitch(string reason)
+    {
+        var sw = Stopwatch.StartNew();
+        var cleared = 0;
+
+        if (CollapseTranscriptSelection(OutputTextBox))
+        {
+            _transcriptSnapshots.Remove(CoordinatorThread);
+            cleared++;
+        }
+
+        foreach (var entry in _primaryAgentTranscriptHosts.Values)
+        {
+            if (!CollapseTranscriptSelection(entry.TranscriptBox))
+                continue;
+
+            _transcriptSnapshots.Remove(entry.Thread);
+            cleared++;
+        }
+
+        foreach (var entry in _secondaryTranscripts)
+        {
+            if (CollapseTranscriptSelection(entry.TranscriptBox))
+                cleared++;
+        }
+
+        sw.Stop();
+        if (cleared > 0 || sw.ElapsedMilliseconds >= 10)
+            SquadDashTrace.Write(TraceCategory.Performance,
+                $"TRANSCRIPT_SELECTION_COLLAPSE reason={reason} cleared={cleared} work={sw.ElapsedMilliseconds}ms");
+
+        return cleared;
+    }
+
     private RichTextBox? GetTranscriptBoxForBulkChange(TranscriptThreadState thread)
     {
         if (ReferenceEquals(thread, CoordinatorThread))
@@ -11863,6 +11921,14 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         if (box.Visibility != Visibility.Visible || box.ActualWidth < 2 || box.ActualHeight < 2)
             return false;
+
+        if (HasTranscriptSelection(box))
+        {
+            _transcriptSnapshots.Remove(thread);
+            SquadDashTrace.Write(TraceCategory.Performance,
+                $"TRANSCRIPT_SNAPSHOT_SKIP thread={thread.ThreadId} reason=selection-active");
+            return false;
+        }
 
         var sw = Stopwatch.StartNew();
         try
@@ -12206,6 +12272,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         var swSelect = System.Diagnostics.Stopwatch.StartNew();
         var previousThread = previousThreadOverride ?? _selectedTranscriptThread;
+        if (!ReferenceEquals(previousThread, thread))
+            CollapseTranscriptSelectionsForFastSwitch("select-thread");
         var useSnapshotFastPath = allowSnapshotFastPath
             && !scrollToStart
             && !_searchNavigating
