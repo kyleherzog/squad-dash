@@ -16,6 +16,7 @@ internal sealed class RevisionHighlightAdorner : Adorner
     private readonly RichTextBox _rtb;
     private TextPointer? _start;
     private TextPointer? _end;
+    private Brush? _originalForeground;
 
     private RevisionHighlightAdorner(RichTextBox rtb) : base(rtb)
     {
@@ -48,23 +49,26 @@ internal sealed class RevisionHighlightAdorner : Adorner
     }
 
     /// <summary>
-    /// Attaches a highlight adorner to <paramref name="rtb"/> covering chars
-    /// <paramref name="startOffset"/>..<paramref name="startOffset"/>+<paramref name="length"/>.
+    /// Attaches a highlight adorner to <paramref name="rtb"/> covering the range from
+    /// <paramref name="start"/> to <paramref name="end"/> TextPointers.
     /// Returns <c>null</c> on any error — the highlight is cosmetic only.
     /// </summary>
-    internal static RevisionHighlightAdorner? Attach(RichTextBox rtb, int startOffset, int length)
+    internal static RevisionHighlightAdorner? Attach(RichTextBox rtb, TextPointer start, TextPointer end)
     {
         try
         {
             var layer = AdornerLayer.GetAdornerLayer(rtb);
             if (layer is null) return null;
 
-            var startPtr = rtb.GetTextPointerAt(startOffset)
-                              .GetInsertionPosition(LogicalDirection.Forward);
-            var endPtr   = rtb.GetTextPointerAt(startOffset + length)
-                              .GetInsertionPosition(LogicalDirection.Backward);
-
-            var adorner = new RevisionHighlightAdorner(rtb) { _start = startPtr, _end = endPtr };
+            var adorner = new RevisionHighlightAdorner(rtb) { _start = start, _end = end };
+            
+            // Apply text color to the highlighted range
+            var highlightRange = new TextRange(start, end);
+            adorner._originalForeground = highlightRange.GetPropertyValue(TextElement.ForegroundProperty) as Brush;
+            
+            var textColor = GetBrush("RevisionHighlightText", Colors.Black);
+            highlightRange.ApplyPropertyValue(TextElement.ForegroundProperty, textColor);
+            
             layer.Add(adorner);
             return adorner;
         }
@@ -76,6 +80,16 @@ internal sealed class RevisionHighlightAdorner : Adorner
     {
         try
         {
+            // Restore original foreground color
+            if (_start is not null && _end is not null)
+            {
+                var highlightRange = new TextRange(_start, _end);
+                if (_originalForeground is not null)
+                    highlightRange.ApplyPropertyValue(TextElement.ForegroundProperty, _originalForeground);
+                else
+                    highlightRange.ApplyPropertyValue(TextElement.ForegroundProperty, DependencyProperty.UnsetValue);
+            }
+            
             _start = null;
             _end   = null;
             AdornerLayer.GetAdornerLayer(_rtb)?.Remove(this);
@@ -149,4 +163,7 @@ internal sealed class RevisionHighlightAdorner : Adorner
         if (Application.Current?.Resources[key] is Brush b) return b;
         return new SolidColorBrush(fallback);
     }
+    
+    private static Brush GetBrush(string key, Colors fallback) => 
+        GetBrush(key, Color.FromRgb(0, 0, 0));
 }

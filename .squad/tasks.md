@@ -43,7 +43,7 @@
   has silent failure suppression that may hide real errors. Review and replace with at minimum a
   `SquadDashTrace.Write` call so failures surface in the trace log.
 
-- [ ] **Revise with AI — dynamic offset tracking for async revision** *(Owner: Arjun Sen)*
+- [x] **Revise with AI — dynamic offset tracking for async revision** *(Owner: Arjun Sen)*
   When Revise with AI (Ctrl+Shift+A) is invoked, `selStart` is saved as an integer. If the user
   edits text *before* that offset while the AI is working, the saved integer is stale. Implement
   a text-change listener on `DocSourceTextBox` that adjusts the saved start offset based on

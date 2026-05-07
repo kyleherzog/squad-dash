@@ -475,6 +475,10 @@ internal sealed class MarkdownDocumentWindow : Window {
         var selLen       = tb.GetSelectionLength();
         var docPath      = doc?.FilePath ?? "";
 
+        // Capture live TextPointer anchors (not frozen) — they track document edits automatically
+        var startPointer = tb.Document.ContentStart.GetPositionAtOffset(selStart, LogicalDirection.Forward);
+        var endPointer   = tb.Document.ContentStart.GetPositionAtOffset(selStart + selLen, LogicalDirection.Backward);
+
         var priorFocus = Keyboard.FocusedElement as IInputElement;
 
         // Capture adorner and indicator references for lifecycle management
@@ -489,15 +493,16 @@ internal sealed class MarkdownDocumentWindow : Window {
             onRevised: revised => Dispatcher.Invoke(() => {
                 // Clean up adorner and indicator when revision completes
                 adorner?.Remove();
-                indicator?.Remove();
+                indicator?.Detach();
 
-                var currentText = tb.GetPlainText();
-                var intact = selStart >= 0 &&
-                             selStart + selLen <= currentText.Length &&
-                             currentText.Substring(selStart, selLen) == selectedText;
-                if (intact) {
-                    tb.SelectRange(selStart, selLen);
-                    tb.ReplaceSelection(revised);
+                // Use live TextPointers to get current text after any edits
+                var currentSelectedText = new TextRange(startPointer, endPointer).Text;
+                
+                // Check if the original selection is still intact
+                if (currentSelectedText == selectedText) {
+                    // Replace using live TextPointers
+                    var replaceRange = new TextRange(startPointer, endPointer);
+                    replaceRange.Text = revised;
                 } else {
                     var win = new RevisionResultWindow(revised) { Owner = this };
                     win.Show();
@@ -509,8 +514,8 @@ internal sealed class MarkdownDocumentWindow : Window {
                 RevisionWorkingOverlay.ShowAt(popupCenter, this);
 
                 // Attach adorner and indicator after the popup starts the revision
-                adorner = RevisionHighlightAdorner.Attach(tb, selStart, selLen);
-                indicator = RevisionPendingIndicator.Insert(tb, selStart + selLen);
+                adorner = RevisionHighlightAdorner.Attach(tb, startPointer, endPointer);
+                indicator = RevisionPendingIndicator.Attach(tb, endPointer);
             },
             startPtt: _captureContext?.StartPttCallback,
             stopPtt:  _captureContext?.StopPttCallback);

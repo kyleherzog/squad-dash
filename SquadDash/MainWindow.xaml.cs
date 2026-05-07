@@ -9901,8 +9901,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         var originalText = textBox.GetSubstring(selStart, selLen);
         var fullText     = textBox.GetPlainText();
 
-        var capturedStart = selStart;
-        var capturedLen   = selLen;
+        // Capture live TextPointer anchors (not frozen) — they track document edits automatically
+        var startPointer = textBox.Document.ContentStart.GetPositionAtOffset(selStart, LogicalDirection.Forward);
+        var endPointer   = textBox.Document.ContentStart.GetPositionAtOffset(selStart + selLen, LogicalDirection.Backward);
 
         RevisionPendingIndicator?  indicator = null;
         RevisionHighlightAdorner?  highlight = null;
@@ -9914,17 +9915,32 @@ public partial class MainWindow : Window, ILiveElementLocator
             (instructions, sel, doc, workingDir, ct) =>
                 _bridge.RunDocRevisionAsync(instructions, sel, doc, workingDir, ct),
             onRevised: revised => Dispatcher.Invoke(() => {
-                indicator?.Remove();
+                indicator?.Detach();
                 indicator = null;
                 highlight?.Remove();
                 highlight = null;
-                ApplyDocRevision(textBox, capturedStart, capturedLen, originalText, revised);
+                
+                // Use live TextPointers to get current text after any edits
+                var currentSelectedText = new TextRange(startPointer, endPointer).Text;
+                
+                // Apply revision using TextPointers if text is still intact
+                if (currentSelectedText == originalText)
+                {
+                    var replaceRange = new TextRange(startPointer, endPointer);
+                    replaceRange.Text = revised;
+                }
+                else
+                {
+                    // Fallback: show in separate window if document was edited
+                    var win = new RevisionResultWindow(revised) { Owner = this };
+                    win.Show();
+                }
             }),
             onSubmitting: popupCenter => {
                 priorFocus?.Focus();
                 Keyboard.Focus(priorFocus);
-                highlight  = RevisionHighlightAdorner.Attach(textBox, capturedStart, capturedLen);
-                indicator  = RevisionPendingIndicator.Insert(textBox, capturedStart + capturedLen);
+                highlight  = RevisionHighlightAdorner.Attach(textBox, startPointer, endPointer);
+                indicator  = RevisionPendingIndicator.Attach(textBox, endPointer);
                 ShowRevisionWorkingOverlay(popupCenter);
             },
             startPtt: (tb) => {
