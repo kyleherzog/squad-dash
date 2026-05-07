@@ -11826,6 +11826,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void ShowMainTranscript()
     {
+        if (_mainTranscriptVisible) return; // already visible — no structural change needed
         _mainTranscriptVisible = true;
         _selectionController.SetMainVisible(true);
         MainTranscriptBorder.Visibility = Visibility.Visible;
@@ -11836,6 +11837,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void HideMainTranscript()
     {
+        if (!_mainTranscriptVisible) return; // already hidden — no structural change needed
         _mainTranscriptVisible = false;
         _selectionController.SetMainVisible(false);
         MainTranscriptBorder.Visibility = Visibility.Collapsed;
@@ -11893,6 +11895,14 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void RebuildTranscriptPanelsGrid()
     {
+        // Skip teardown entirely when the grid is already in the correct single-column state.
+        // Children.Clear() removes MainTranscriptBorder from the visual tree, which discards
+        // WPF's StructuralCache for OutputTextBox — defeating the coordinator-caching strategy.
+        if (_secondaryTranscripts.Count == 0
+            && TranscriptPanelsGrid.Children.Count == 1
+            && ReferenceEquals(TranscriptPanelsGrid.Children[0], MainTranscriptBorder))
+            return;
+
         // Remove all children (DocsSplitter and DocsPanel are at the root grid level, not in TranscriptPanelsGrid)
         TranscriptPanelsGrid.Children.Clear();
         TranscriptPanelsGrid.ColumnDefinitions.Clear();
