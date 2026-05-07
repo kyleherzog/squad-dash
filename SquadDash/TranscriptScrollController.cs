@@ -135,6 +135,17 @@ internal sealed class TranscriptScrollController
     private bool _pendingLockedViewportReanchor;
 
     /// <summary>
+    /// The <c>VerticalOffset</c> captured at the moment the extent shrank while
+    /// <see cref="IsUserScrolledAway"/> was <c>true</c>. WPF clamps
+    /// <c>VerticalOffset</c> to the temporarily-reduced <c>ScrollableHeight</c>
+    /// during the shrink, so we save the pre-shrink absolute offset here and
+    /// restore it on the subsequent grow rather than recomputing from
+    /// <see cref="_savedDistanceFromBottom"/>, which may have been set long before
+    /// the shrink and would not account for streaming content added in between.
+    /// </summary>
+    private double _savedOffsetBeforeShrink = -1;
+
+    /// <summary>
     /// Counts genuine user-scroll events that passed all gates in
     /// <see cref="OnScrollChanged"/>. Used to log the first few scroll events to
     /// the persistent file log for diagnosing scroll-button issues on remote/VM
@@ -391,7 +402,20 @@ internal sealed class TranscriptScrollController
 
             // If we ended up at the very bottom, re-enable auto-scroll.
             if (clampedOffset >= sv.ScrollableHeight)
+            {
                 IsUserScrolledAway = false;
+                _savedDistanceFromBottom = -1;
+                _savedOffsetBeforeShrink = -1;
+            }
+            else
+            {
+                // Update the saved reading position to this new programmatic location.
+                // Without this, a subsequent shrink/re-expand cycle would use a stale
+                // _savedDistanceFromBottom (captured from an earlier manual scroll) and
+                // re-anchor to the wrong offset.
+                _savedDistanceFromBottom = sv.ScrollableHeight - clampedOffset;
+                _savedOffsetBeforeShrink = clampedOffset;
+            }
         }
         finally
         {
@@ -489,7 +513,18 @@ internal sealed class TranscriptScrollController
         var sv = EnsureScrollViewer();
         if (sv is null) return;
         _isProgrammaticScroll = true;
-        try { sv.ScrollToVerticalOffset(target); }
+        try
+        {
+            sv.ScrollToVerticalOffset(target);
+            // Keep _savedDistanceFromBottom and _savedOffsetBeforeShrink in sync so
+            // that any subsequent shrink/re-expand re-anchor restores to this new
+            // position rather than to a stale pre-prepend reading offset.
+            if (IsUserScrolledAway)
+            {
+                _savedDistanceFromBottom = sv.ScrollableHeight - target;
+                _savedOffsetBeforeShrink = target;
+            }
+        }
         finally { _isProgrammaticScroll = false; }
     }
 
@@ -774,15 +809,21 @@ internal sealed class TranscriptScrollController
                 // preserve the current VerticalOffset exactly. Only restore to the saved
                 // distance-from-bottom after a preceding extent shrink told us WPF
                 // clamped the viewport during a collapse / re-expand cycle.
-                if (_pendingLockedViewportReanchor && _savedDistanceFromBottom >= 0)
+                if (_pendingLockedViewportReanchor && _savedOffsetBeforeShrink >= 0)
                 {
                     var sv2 = (ScrollViewer)sender;
-                    double targetOffset = Math.Clamp(sv2.ScrollableHeight - _savedDistanceFromBottom, 0, sv2.ScrollableHeight);
+                    // Restore the exact absolute offset that was in effect the moment
+                    // the extent shrank. Using the pre-shrink absolute offset (rather
+                    // than ScrollableHeight − _savedDistanceFromBottom) avoids a
+                    // spurious upward jump when streaming has added content at the
+                    // bottom between the user's last manual scroll and this re-anchor.
+                    double targetOffset = Math.Clamp(_savedOffsetBeforeShrink, 0, sv2.ScrollableHeight);
                     _isProgrammaticScroll = true;
                     try { sv2.ScrollToVerticalOffset(targetOffset); }
                     finally { _isProgrammaticScroll = false; }
                     _pendingLockedViewportReanchor = false;
-                    ScrollTrace("EXTENT GROW (locked)", $"content grew +{e.ExtentHeightChange:0.#}px \u2014 restored to distFromBottom={_savedDistanceFromBottom:0.#}px (offset={targetOffset:0.#})");
+                    _savedOffsetBeforeShrink = -1;
+                    ScrollTrace("EXTENT GROW (locked)", $"content grew +{e.ExtentHeightChange:0.#}px \u2014 restored to pre-shrink offset={targetOffset:0.#}px");
                 }
                 else
                 {
@@ -792,8 +833,12 @@ internal sealed class TranscriptScrollController
             else
             {
                 if (IsUserScrolledAway)
+                {
+                    var sv3 = (ScrollViewer)sender;
                     _pendingLockedViewportReanchor = true;
-                ScrollTrace("EXTENT SHRINK", $"content shrank {e.ExtentHeightChange:0.#}px \u2014 clamping VerticalOffset, will re-anchor on re-expand");
+                    _savedOffsetBeforeShrink = sv3.VerticalOffset;
+                }
+                ScrollTrace("EXTENT SHRINK", $"content shrank {e.ExtentHeightChange:0.#}px \u2014 saved offset={_savedOffsetBeforeShrink:0.#}px, will re-anchor on re-expand");
             }
             return;
         }
