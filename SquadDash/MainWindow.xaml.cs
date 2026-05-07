@@ -243,6 +243,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         new(ReferenceEqualityComparer.Instance);
     private TranscriptThreadState? _snapshotThread;
     private bool _primaryAgentWarmupPending;
+    private long _deferredPrimaryTranscriptSelectionVersion;
+    private TranscriptThreadState? _pendingPrimaryTranscriptVisualThread;
 
     // ── Active transcript helpers ────────────────────────────────────────────────
 
@@ -557,18 +559,31 @@ public partial class MainWindow : Window, ILiveElementLocator
         };
         _selectionController = new TranscriptSelectionController(_agents);
         _selectionController.OpenPanelRequested += (card, thread, isAuto) =>
-            OpenSecondaryPanel(card, thread, isAutoOpenedInMultiMode: isAuto);
+            QueueDeferredTranscriptPanelOperation(
+                $"open card={card.Name} thread={thread.ThreadId}",
+                () => OpenSecondaryPanel(card, thread, isAutoOpenedInMultiMode: isAuto));
         _selectionController.ClosePanelRequested += (card, thread) =>
         {
-            var entry = _secondaryTranscripts.FirstOrDefault(e => e.Agent == card && e.Thread == thread);
-            if (entry is not null) CloseSecondaryPanel(entry);
+            QueueDeferredTranscriptPanelOperation(
+                $"close card={card.Name} thread={thread.ThreadId}",
+                () =>
+                {
+                    var entry = _secondaryTranscripts.FirstOrDefault(e => e.Agent == card && e.Thread == thread);
+                    if (entry is not null) CloseSecondaryPanel(entry);
+                });
         };
         _selectionController.ShowMainRequested += () =>
         {
-            ShowMainTranscript();
-            SelectTranscriptThread(CoordinatorThread);
+            QueueDeferredTranscriptPanelOperation(
+                "show-main coordinator",
+                () =>
+                {
+                    ShowMainTranscript();
+                    SelectTranscriptThread(CoordinatorThread);
+                });
         };
-        _selectionController.HideMainRequested += HideMainTranscript;
+        _selectionController.HideMainRequested += () =>
+            QueueDeferredTranscriptPanelOperation("hide-main", HideMainTranscript);
         StatusAgentPanelsGrid.SizeChanged += (_, e) =>
         {
             try
@@ -5644,6 +5659,158 @@ public partial class MainWindow : Window, ILiveElementLocator
         SyncSelectionControllerWithUiState("SelectTranscriptThread");
     }
 
+    private void TraceAgentCardVisualFirstRender(AgentStatusCard card, string reason, Stopwatch stopwatch)
+    {
+        var cardName = card.Name;
+        EventHandler? renderingHandler = null;
+        renderingHandler = (_, _) =>
+        {
+            CompositionTarget.Rendering -= renderingHandler;
+            SquadDashTrace.Write(TraceCategory.Performance,
+                $"AGENT_CARD_VISUAL_RENDER reason={reason} card={cardName} {stopwatch.ElapsedMilliseconds}ms");
+        };
+        CompositionTarget.Rendering += renderingHandler;
+    }
+
+    private void TraceTranscriptTitleFirstRender(TranscriptThreadState thread, string reason, Stopwatch stopwatch)
+    {
+        var threadId = thread.ThreadId;
+        var title = TranscriptTitleTextBlock.Text;
+        EventHandler? renderingHandler = null;
+        renderingHandler = (_, _) =>
+        {
+            CompositionTarget.Rendering -= renderingHandler;
+            SquadDashTrace.Write(TraceCategory.Performance,
+                $"TRANSCRIPT_TITLE_RENDER reason={reason} thread={threadId} title=\"{title}\" {stopwatch.ElapsedMilliseconds}ms");
+        };
+        CompositionTarget.Rendering += renderingHandler;
+    }
+
+    private void QueueDeferredTranscriptPanelOperation(string reason, Action action)
+    {
+        var queuedAt = Stopwatch.GetTimestamp();
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        {
+            var queueMs = (long)((Stopwatch.GetTimestamp() - queuedAt) * 1000.0 / Stopwatch.Frequency);
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                HandleUiCallbackException($"DeferredTranscriptPanelOperation.{reason}", ex);
+            }
+            finally
+            {
+                sw.Stop();
+                if (queueMs >= 20 || sw.ElapsedMilliseconds >= 20)
+                    SquadDashTrace.Write(TraceCategory.Performance,
+                        $"TRANSCRIPT_PANEL_DEFERRED_OP reason={reason} queue={queueMs}ms work={sw.ElapsedMilliseconds}ms");
+            }
+        });
+    }
+
+    private TranscriptThreadState ApplyImmediatePrimaryTranscriptSelectionVisuals(AgentStatusCard agent, TranscriptThreadState thread)
+    {
+        var sw = Stopwatch.StartNew();
+        var previousActualThread = _selectedTranscriptThread ?? CoordinatorThread;
+        var previousVisualThread = _pendingPrimaryTranscriptVisualThread ?? previousActualThread;
+
+        _pendingPrimaryTranscriptVisualThread = thread;
+
+        if (!ReferenceEquals(previousVisualThread, thread))
+        {
+            previousVisualThread.IsSelected = false;
+            SyncThreadChip(previousVisualThread);
+        }
+
+        foreach (var entry in _secondaryTranscripts)
+        {
+            entry.Thread.IsSecondaryPanelOpen = false;
+            if (!ReferenceEquals(entry.Thread, thread))
+                SyncThreadChip(entry.Thread);
+        }
+
+        thread.IsSelected = true;
+        SyncThreadChip(thread);
+
+        foreach (var card in _agents)
+            card.IsTranscriptTargetSelected = ReferenceEquals(card, agent);
+
+        UpdateTranscriptThreadBadge(thread);
+
+        _selectionController.ReconcilePanels(
+            Array.Empty<(AgentStatusCard Agent, TranscriptThreadState Thread)>(),
+            mainVisible: true);
+
+        sw.Stop();
+        SquadDashTrace.Write(TraceCategory.Performance,
+            $"AGENT_CARD_VISUAL_IMMEDIATE reason=primary-select card={agent.Name} thread={thread.ThreadId} title=\"{TranscriptTitleTextBlock.Text}\" work={sw.ElapsedMilliseconds}ms");
+        TraceAgentCardVisualFirstRender(agent, "primary-select", Stopwatch.StartNew());
+        TraceTranscriptTitleFirstRender(thread, "primary-select", Stopwatch.StartNew());
+        return previousActualThread;
+    }
+
+    private void QueueDeferredPrimaryTranscriptSelection(
+        AgentStatusCard agent,
+        TranscriptThreadState thread,
+        TranscriptThreadState previousThread,
+        bool scrollToStart = false)
+    {
+        var requestVersion = ++_deferredPrimaryTranscriptSelectionVersion;
+        var queuedAt = Stopwatch.GetTimestamp();
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        {
+            if (requestVersion != _deferredPrimaryTranscriptSelectionVersion)
+            {
+                SquadDashTrace.Write(TraceCategory.Performance,
+                    $"AGENT_CARD_DEFERRED_TRANSCRIPT_SELECT_SKIP card={agent.Name} thread={thread.ThreadId} reason=superseded");
+                return;
+            }
+
+            var queueMs = (long)((Stopwatch.GetTimestamp() - queuedAt) * 1000.0 / Stopwatch.Frequency);
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                _selectedTranscriptThread = thread;
+
+                foreach (var entry in _secondaryTranscripts.ToList())
+                    CloseSecondaryPanel(entry);
+
+                ShowMainTranscript();
+                SelectTranscriptThreadCore(
+                    thread,
+                    scrollToStart,
+                    allowSnapshotFastPath: true,
+                    previousThreadOverride: previousThread);
+
+                if (ReferenceEquals(_pendingPrimaryTranscriptVisualThread, thread))
+                    _pendingPrimaryTranscriptVisualThread = null;
+            }
+            catch (Exception ex)
+            {
+                HandleUiCallbackException("DeferredPrimaryTranscriptSelection", ex);
+            }
+            finally
+            {
+                sw.Stop();
+                SquadDashTrace.Write(TraceCategory.Performance,
+                    $"AGENT_CARD_DEFERRED_TRANSCRIPT_SELECT card={agent.Name} thread={thread.ThreadId} queue={queueMs}ms work={sw.ElapsedMilliseconds}ms");
+            }
+        });
+    }
+
+    private void SyncImmediatePanelToggleVisuals(AgentStatusCard card, string reason, Stopwatch stopwatch)
+    {
+        foreach (var thread in card.Threads)
+            SyncThreadChip(thread);
+
+        SquadDashTrace.Write(TraceCategory.Performance,
+            $"AGENT_CARD_VISUAL_IMMEDIATE reason={reason} card={card.Name} work={stopwatch.ElapsedMilliseconds}ms");
+        TraceAgentCardVisualFirstRender(card, reason, Stopwatch.StartNew());
+    }
+
     private static string BuildThreadChipToolTip(TranscriptThreadState thread)
     {
         var lines = new List<string> {
@@ -7554,8 +7721,10 @@ public partial class MainWindow : Window, ILiveElementLocator
             bool shiftHeld = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
             if (shiftHeld)
             {
+                var visualSw = Stopwatch.StartNew();
                 SyncSelectionControllerWithUiState("AgentCardBorder_MouseLeftButtonUp.Shift");
                 _selectionController.HandleCardClick(agentCard, shiftHeld: true);
+                SyncImmediatePanelToggleVisuals(agentCard, "card-shift-click", visualSw);
             }
             else
             {
@@ -7712,8 +7881,10 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (card is null) return;
 
             bool shiftHeld = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+            var visualSw = Stopwatch.StartNew();
             SyncSelectionControllerWithUiState("AgentThreadChipButton_Click");
             _selectionController.HandleChipClick(card, thread, shiftHeld);
+            SyncImmediatePanelToggleVisuals(card, shiftHeld ? "chip-shift-click" : "chip-click", visualSw);
             e.Handled = true;
         }
         catch (Exception ex)
@@ -7772,8 +7943,10 @@ public partial class MainWindow : Window, ILiveElementLocator
             var card = FindAgentCardForThread(thread);
             if (card is not null)
             {
+                var visualSw = Stopwatch.StartNew();
                 SyncSelectionControllerWithUiState("OverflowMenuThreadItem_Click");
                 _selectionController.HandleChipClick(card, thread, shiftHeld: false);
+                SyncImmediatePanelToggleVisuals(card, "overflow-chip-click", visualSw);
             }
         }
         catch (Exception ex)
@@ -12178,12 +12351,13 @@ public partial class MainWindow : Window, ILiveElementLocator
         QueueCheckpoint(DispatcherPriority.ApplicationIdle, "ApplicationIdle");
     }
 
-    private void UpdateTranscriptThreadBadge()
+    private void UpdateTranscriptThreadBadge(TranscriptThreadState? threadOverride = null)
     {
-        var thread = _selectedTranscriptThread ?? CoordinatorThread;
+        var thread = threadOverride ?? _selectedTranscriptThread ?? CoordinatorThread;
         if (thread.Kind == TranscriptThreadKind.Coordinator)
         {
             TranscriptTitleTextBlock.Text = "Coordinator";
+            TranscriptTitleTextBlock.ToolTip = null;
             return;
         }
 
@@ -12381,11 +12555,9 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void ShowSingleTranscript(AgentStatusCard agent)
     {
-        foreach (var entry in _secondaryTranscripts.ToList())
-            CloseSecondaryPanel(entry);
-
-        ShowMainTranscript();
-        SelectTranscriptThread(GetTranscriptThreadForAgent(agent));
+        var thread = GetTranscriptThreadForAgent(agent);
+        var previousThread = ApplyImmediatePrimaryTranscriptSelectionVisuals(agent, thread);
+        QueueDeferredPrimaryTranscriptSelection(agent, thread, previousThread);
     }
 
     private void ToggleAgentTranscriptVisibility(AgentStatusCard agent)
