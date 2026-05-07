@@ -198,12 +198,48 @@ internal static class LocalPromptSubmissionPolicy {
         "/retire",
         "/status",
         "/tasks",
+        "/trace",
+        "/version"
+    };
+
+    /// <summary>
+    /// Commands that are handled entirely as local UI operations (never touch the AI).
+    /// When one of these is submitted while the coordinator is running or a native loop
+    /// is active, it must be executed immediately rather than added to the prompt queue.
+    /// <para>
+    /// <c>/hire</c> belongs here because the Hire UI opens immediately; if the user
+    /// completes a hire while the coordinator is busy, <c>PromptExecutionController</c>
+    /// calls its <c>enqueuePrompt</c> callback to add the resulting hire prompt to the
+    /// back of the queue automatically.
+    /// </para>
+    /// </summary>
+    private static readonly HashSet<string> ImmediateLocalCommands = new(StringComparer.OrdinalIgnoreCase) {
+        "/agents",
+        "/approval",
+        "/doctor",
+        "/dropTasks",
+        "/help",
+        "/hire",
+        "/model",
+        "/sessions",
+        "/status",
+        "/tasks",
+        "/trace",
         "/version"
     };
 
     public static bool CanSubmitWhilePromptRunning(string? prompt) =>
         !string.IsNullOrWhiteSpace(prompt) &&
         BusySafeCommands.Contains(GetSlashCommand(prompt));
+
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="prompt"/> is a slash command that is
+    /// handled entirely as a local UI operation and must therefore execute immediately,
+    /// regardless of whether the coordinator is busy or items are in the prompt queue.
+    /// </summary>
+    public static bool IsImmediateLocalCommand(string? prompt) =>
+        !string.IsNullOrWhiteSpace(prompt) &&
+        ImmediateLocalCommands.Contains(GetSlashCommand(prompt));
 
     public static bool ShouldRetainPromptAfterLocalSubmit(
         string? prompt,

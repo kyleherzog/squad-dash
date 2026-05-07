@@ -1670,6 +1670,18 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (string.IsNullOrWhiteSpace(prompt))
                 return;
 
+            // Local-only slash commands (e.g. /trace, /hire) must execute immediately
+            // regardless of whether the coordinator is busy or items are queued.
+            // PromptExecutionController.TryHandleLocalCommand never touches the AI, so
+            // there is no risk of a concurrent AI call.  For /hire specifically, if the
+            // user completes a hire while a prompt is running, the PEC's enqueuePrompt
+            // callback adds the resulting hire prompt to the back of the queue.
+            if (LocalPromptSubmissionPolicy.IsImmediateLocalCommand(prompt))
+            {
+                await _pec.ExecutePromptAsync(prompt, addToHistory: true, clearPromptBox: true);
+                return;
+            }
+
             if (_isPromptRunning || IsNativeLoopRunning)
             {
                 if (IsNativeLoopRunning)
