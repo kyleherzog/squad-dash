@@ -2,7 +2,7 @@
 configured: true
 interval: 1
 timeout: 5
-description: "Hello world test loop"
+description: "Hello World"
 ---
 
 # Hello World Test

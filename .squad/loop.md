@@ -2,11 +2,11 @@
 configured: true
 interval: 1
 timeout: 60
-description: "General task backlog runner — picks the top open task, implements it, marks it done, repeats"
+description: "Filtered Task Runner — picks the top open task, implements it, marks it done, repeats"
 commands: [stop_loop]
 ---
 
-# SquadDash Task Backlog Loop
+# Task Backlog Loop
 
 You are running as part of a SquadDash autonomous loop. **Each iteration must complete exactly one task** from `.squad/tasks.md`, then stop. The next iteration will pick up the next task.
 

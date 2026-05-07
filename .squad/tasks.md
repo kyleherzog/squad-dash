@@ -20,6 +20,16 @@
   The user's normal selection should be unaffected — the indicator is a separate inline sibling.
   **Blocked by:** Phase 2.
 
+- [ ] **[Vesper audit] Test coverage — BuiltInPromptInjections, PromptContextDiagnostics** *(Owner: Vesper Knox)*
+  Both classes have zero test coverage. `BuiltInPromptInjections` depends on the triggered injection
+  evaluator — write tests using a fake/stub evaluator. `PromptContextDiagnostics` is pure formatting
+  logic and should be straightforward to cover directly.
+
+- [ ] **[Vesper audit] Test coverage — WorkspaceOpenCoordinator, PromptInteractionLogic multi-path workflows** *(Owner: Vesper Knox)*
+  Both classes have partial coverage but the branching paths (error paths, edge cases, multi-step
+  coordination flows) are not exercised. Audit the existing tests, identify missing paths, and fill
+  them in. Focus on correctness contracts rather than line-count.
+
 - [ ] **RC browser UI — review and improvement pass** *(Owner: Lyra Morn)*
 
 - [ ] **[Orion audit] `_isPromptRunning` — move ownership to PromptExecutionController** *(Owner: Arjun Sen)*
@@ -55,7 +65,7 @@
   Make the exposed collections read-only wrappers (e.g. `IReadOnlyDictionary`) so the correctness
   contract cannot be violated externally.
 
-- [ ] **[Vesper audit] Test coverage — CommitApprovalStore, DocStatusStore, DocTopicsLoader, LoopOutputStore** *(Owner: Vesper Knox)*
+- [x] **[Vesper audit] Test coverage — CommitApprovalStore, DocStatusStore, DocTopicsLoader, LoopOutputStore** *(Owner: Vesper Knox)*
   All four classes have zero test coverage despite critical responsibilities:
   `CommitApprovalStore` (JSON persistence, 200-item cap), `DocStatusStore` (approval tracking,
   case-insensitive key lookup), `DocTopicsLoader` (SUMMARY.md parsing, folder scanning),
@@ -103,6 +113,11 @@
 ## 🔵 Low Priority
 
 - [ ] **SubSquads — investigate and expose in UI** *(Owner: Orion Vale → Lyra Morn)*
+
+- [ ] **[Vesper audit] Test coverage — screenshot infrastructure** *(Owner: Vesper Knox)*
+  `ScreenshotRefreshRunner`, `ScreenshotNamingHelper`, and related fixture loaders have no unit
+  tests. The refresh runner requires a WPF dispatcher — use integration-test seam or thin adapter
+  pattern. Naming helper is pure logic and can be covered directly.
 
 - [ ] **[Vesper audit] ScreenshotRefreshRunner — iterate light+dark variants** *(Owner: Vesper Knox)*
   `ScreenshotRefreshRunner.cs:172` has a TODO: "iterate twice for light+dark variants" but only
