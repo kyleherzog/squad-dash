@@ -113,3 +113,19 @@ Real and useful documentation for SquadUI users and contributors. Serves as both
 **Theme resources:** Uses existing DiffAddedText (#6BAED6 dark / #4682B4 light), DiffRemovedText (#E07070 dark / #CD5C5C light), CardSurface, LineColor, SubtleText, and LabelText from Dark.xaml/Light.xaml. Follows same visual pattern as DocRevisePopup and RevisionWorkingOverlay for consistency.
 
 Commit: 52a9735. Build: clean (DLL compiled successfully; launcher copy failed due to app running — expected).
+
+📌 DiffHoverPopup stability and readability fixes (2027-01-02): Fixed four bugs in diff hover popup for edit tool entries in transcript.
+
+**Bug 1 — Flickering:** Root cause: PlacementMode.Mouse continuously updated popup position every 2-3 seconds as mouse moved, triggering redraw. Fix: Changed to PlacementMode.Absolute with static HorizontalOffset/VerticalOffset captured once via PointToScreen() on MouseEnter (MainWindow.xaml.cs line 14958). Popup position now locked on first display.
+
+**Bug 2 — Mouse following:** Related to Bug 1. Popup followed mouse movement because PlacementMode.Mouse tracked cursor. Fix: Set IsHitTestVisible = false (DiffHoverPopup.cs line 38) to prevent popup from intercepting mouse events and avoid MouseLeave loop (popup covers header → MouseLeave fires → popup closes → header exposed → MouseEnter fires → loop). Popup now stays stationary.
+
+**Bug 3 — Font size:** Increased FontSize from 12px to 13px (DiffHoverPopup.cs line 53) for better readability on standard displays.
+
+**Bug 4 — Header lines shown:** Root cause: ParseDiff() classified header lines (+++, ---, @@, diff, index) as DiffLineKind.Header and displayed them with reduced opacity. Fix: Modified ParseDiff() to skip header lines entirely (lines 120-138). Only display lines starting with + (added), - (removed), or space/empty (context). Also skip \
+new
+file\, \deleted
+file\, and backslash (no-newline markers). Clean diff preview without metadata noise.
+
+**Files:** DiffHoverPopup.cs (lines 35-38, 53, 118-149), MainWindow.xaml.cs (lines 14949-14972). Also added RevisionHighlight theme colors to Dark.xaml (#1A3A5C) and Light.xaml (#D0E4F7) for future revision adorner work (not wired yet — requires TextBox-compatible implementation as MarkdownDocumentWindow uses TextBox not RichTextBox). Commit: bab3da3. Build: 0 errors, 0 warnings.
+
