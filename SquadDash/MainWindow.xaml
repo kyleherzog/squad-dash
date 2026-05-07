@@ -1418,7 +1418,8 @@
                                  SelectionBrush="{DynamicResource DocEditorSelectionBrush}"
                                  SelectionOpacity="{DynamicResource DocEditorSelectionOpacity}"
                                  PreviewMouseWheel="OutputTextBox_PreviewMouseWheel"
-                                 PreviewMouseDown="OutputTextBox_PreviewMouseDown" />
+                                 PreviewMouseDown="OutputTextBox_PreviewMouseDown"
+                                 PreviewMouseRightButtonDown="OutputTextBox_PreviewMouseRightButtonDown" />
 
                     <!-- Search highlight overlay — rectangles drawn here; never touches FlowDocument -->
 
