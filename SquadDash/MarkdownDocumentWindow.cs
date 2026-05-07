@@ -678,7 +678,7 @@ internal sealed class MarkdownDocumentWindow : Window {
 
     /// <summary>Returns true for keys that directly mutate document content.</summary>
     private static bool IsKeyMutating(Key key) =>
-        key == Key.Back || key == Key.Delete || key == Key.Return;
+        key == Key.Back || key == Key.Delete || key == Key.Return || key == Key.Space;
 
     /// <summary>
     /// Returns true when the current caret position or selection overlaps any active revision lock.
