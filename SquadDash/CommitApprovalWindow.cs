@@ -182,7 +182,7 @@ internal sealed class CommitApprovalPanel {
         };
 
         var menu = MakeMenu();
-        var followUpItem = MakeItem("Follow up…");
+        var followUpItem = MakeItem("Attach to Prompt");
         followUpItem.Click += (_, _) => _onFollowUp(item);
         menu.Items.Add(followUpItem);
         menu.Items.Add(MakeSep());

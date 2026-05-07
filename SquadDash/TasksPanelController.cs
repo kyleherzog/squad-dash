@@ -191,7 +191,7 @@ internal sealed class TasksPanelController {
         if (_attachFollowUp is not null)
         {
             menu.Items.Add(MakeSep());
-            var followUpItem = MakeItem("Follow up…");
+            var followUpItem = MakeItem("Attach to Prompt");
             followUpItem.Click += (_, _) => _attachFollowUp(item);
             menu.Items.Add(followUpItem);
         }
@@ -433,7 +433,7 @@ internal sealed class TasksPanelController {
         if (_attachFollowUp is not null)
         {
             menu.Items.Add(MakeSep());
-            var followUpItem = MakeItem("Follow up…");
+            var followUpItem = MakeItem("Attach to Prompt");
             followUpItem.Click += (_, _) => _attachFollowUp(item);
             menu.Items.Add(followUpItem);
         }

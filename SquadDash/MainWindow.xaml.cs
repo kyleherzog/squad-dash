@@ -5999,7 +5999,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 sep.SetResourceReference(Separator.StyleProperty, "ThemedMenuSeparatorStyle");
                 menu.Items.Add(sep);
 
-                var followUpItem = new MenuItem { Header = "Follow up…" };
+                var followUpItem = new MenuItem { Header = "Attach to Prompt" };
                 followUpItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
                 followUpItem.Click += (_, _) => AttachTranscriptFollowUp(OutputTextBox);
                 menu.Items.Add(followUpItem);
@@ -11917,7 +11917,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                     sep.SetResourceReference(Separator.StyleProperty, "ThemedMenuSeparatorStyle");
                     menu.Items.Add(sep);
 
-                    var followUpItem = new MenuItem { Header = "Follow up…" };
+                    var followUpItem = new MenuItem { Header = "Attach to Prompt" };
                     followUpItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
                     followUpItem.Click += (_, _) => AttachTranscriptFollowUp(rtb);
                     menu.Items.Add(followUpItem);
@@ -18649,8 +18649,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             menu.Items.Add(MakeSep());
             menu.Items.Add(copyLinkItem);
 
-            // Follow up…
-            var followUpItem = MakeItem("Follow up…");
+            // Attach to Prompt
+            var followUpItem = MakeItem("Attach to Prompt");
             followUpItem.Click += (_, _) => AttachTopicFollowUp(item, filePath);
             menu.Items.Add(MakeSep());
             menu.Items.Add(followUpItem);
