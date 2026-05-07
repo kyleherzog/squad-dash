@@ -5962,10 +5962,13 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try
         {
-            if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
-                return;
-
             var rtb = (sender as RichTextBox) ?? OutputTextBox;
+            if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            {
+                FocusTranscriptForInactiveSelectionScroll(rtb);
+                return;
+            }
+
             // Capture text anchor under the mouse before zoom
             var mousePos = e.GetPosition(rtb);
             var anchor = rtb.GetPositionFromPoint(mousePos, snapToText: true);
@@ -5996,6 +5999,15 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             HandleUiCallbackException(nameof(OutputTextBox_PreviewMouseWheel), ex);
         }
+    }
+
+    private static void FocusTranscriptForInactiveSelectionScroll(RichTextBox rtb)
+    {
+        if (rtb.IsKeyboardFocusWithin || rtb.Selection.IsEmpty)
+            return;
+
+        _ = rtb.Focus();
+        _ = Keyboard.Focus(rtb);
     }
 
     /// <summary>
