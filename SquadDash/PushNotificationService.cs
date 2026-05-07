@@ -319,6 +319,22 @@ internal sealed class PushNotificationService {
         return result?.CommitSha;
     }
 
+    /// <summary>
+    /// Collects the tool output strings from saved agent turns that started at or after
+    /// <paramref name="mainTurnStartedAt"/>. Turns older than the current main turn are
+    /// excluded so that commits from prior session turns cannot be re-detected.
+    /// </summary>
+    internal static IEnumerable<string?> CollectAgentTurnOutputsSince(
+        IEnumerable<IReadOnlyList<TranscriptTurnRecord>> allThreadSavedTurns,
+        DateTimeOffset mainTurnStartedAt)
+    {
+        foreach (var threadTurns in allThreadSavedTurns)
+            foreach (var turn in threadTurns)
+                if (turn.StartedAt >= mainTurnStartedAt && turn.Tools is not null)
+                    foreach (var tool in turn.Tools)
+                        yield return tool.OutputText;
+    }
+
     // Scans tool outputs and agent response for git commit information.
     // Returns CommitSha and CommitMessage when found, prioritizing git's native output
     // which contains both SHA and the meaningful commit message.

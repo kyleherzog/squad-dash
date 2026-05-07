@@ -213,10 +213,166 @@ internal sealed class PushNotificationServiceTests {
         Assert.That(result, Is.EqualTo("Legacy format still works"));
     }
 
-    // ── BuildAugmentedPrompt ──────────────────────────────────────────────────
+    // ── CollectAgentTurnOutputsSince ─────────────────────────────────────────
 
     [Test]
-    public void BuildAugmentedPrompt_NoCommands_ReturnsOriginalInstructions() {
+    public void CollectAgentTurnOutputsSince_EmptyThreadList_ReturnsEmpty() {
+        var result = PushNotificationService.CollectAgentTurnOutputsSince(
+            [],
+            DateTimeOffset.UtcNow);
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    public void CollectAgentTurnOutputsSince_TurnStartedExactlyAtCutoff_IsIncluded() {
+        var cutoff = new DateTimeOffset(2025, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        var tool = MakeTool("[main abc1234] Fix bug\n 1 file");
+        var turn = MakeTurn(startedAt: cutoff, tools: [tool]);
+
+        var result = PushNotificationService.CollectAgentTurnOutputsSince([[turn]], cutoff).ToList();
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0], Does.Contain("abc1234"));
+    }
+
+    [Test]
+    public void CollectAgentTurnOutputsSince_TurnStartedBeforeCutoff_IsExcluded() {
+        var cutoff = new DateTimeOffset(2025, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        var tool = MakeTool("[main oldsha1] Old commit\n 1 file");
+        var oldTurn = MakeTurn(startedAt: cutoff.AddSeconds(-1), tools: [tool]);
+
+        var result = PushNotificationService.CollectAgentTurnOutputsSince([[oldTurn]], cutoff).ToList();
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    public void CollectAgentTurnOutputsSince_MixedOldAndNewTurns_OnlyReturnsNewOutputs() {
+        var cutoff = new DateTimeOffset(2025, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
+        var oldTool = MakeTool("[main old1111] Prior turn commit");
+        var oldTurn = MakeTurn(startedAt: cutoff.AddMinutes(-5), tools: [oldTool]);
+
+        var newTool = MakeTool("[main new2222] Current turn commit");
+        var newTurn = MakeTurn(startedAt: cutoff.AddSeconds(1), tools: [newTool]);
+
+        var result = PushNotificationService.CollectAgentTurnOutputsSince([[oldTurn, newTurn]], cutoff).ToList();
+
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0], Does.Contain("new2222"));
+        Assert.That(result, Has.None.Contain("old1111"));
+    }
+
+    [Test]
+    public void CollectAgentTurnOutputsSince_MultipleThreads_OnlyCurrentTurnOutputsIncluded() {
+        var cutoff = new DateTimeOffset(2025, 6, 1, 9, 0, 0, TimeSpan.Zero);
+
+        // Thread A: one old turn (before cutoff) and one new turn (after cutoff)
+        var oldToolA = MakeTool("[main stale1] stale commit from thread A");
+        var oldTurnA = MakeTurn(startedAt: cutoff.AddMinutes(-10), tools: [oldToolA]);
+
+        var newToolA = MakeTool("[main fresh1] new commit from thread A");
+        var newTurnA = MakeTurn(startedAt: cutoff, tools: [newToolA]);
+
+        // Thread B: one old turn only
+        var oldToolB = MakeTool("[main stale2] stale commit from thread B");
+        var oldTurnB = MakeTurn(startedAt: cutoff.AddMinutes(-2), tools: [oldToolB]);
+
+        var result = PushNotificationService
+            .CollectAgentTurnOutputsSince([[oldTurnA, newTurnA], [oldTurnB]], cutoff)
+            .ToList();
+
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0], Does.Contain("fresh1"));
+    }
+
+    [Test]
+    public void CollectAgentTurnOutputsSince_TurnWithNullTools_DoesNotThrow() {
+        var cutoff = DateTimeOffset.UtcNow;
+        var turnWithNullTools = MakeTurn(startedAt: cutoff, tools: null);
+
+        Assert.DoesNotThrow(() => {
+            var result = PushNotificationService
+                .CollectAgentTurnOutputsSince([[turnWithNullTools]], cutoff)
+                .ToList();
+            Assert.That(result, Is.Empty);
+        });
+    }
+
+    // Regression test: the bug that caused the same old SHA to appear in every turn's
+    // approval entry after the first agent commit.
+    [Test]
+    public void ExtractGitCommitInfo_WithOldTurnFilteredOut_ReturnsNullForCurrentTurn() {
+        var mainTurnStart = new DateTimeOffset(2025, 3, 15, 10, 0, 0, TimeSpan.Zero);
+
+        // Simulate an old saved turn (from a previous main turn) that has a git commit
+        var staleCommitOutput = "[main abc0001] Commit from earlier session turn";
+        var staleTool = MakeTool(staleCommitOutput);
+        var staleTurn = MakeTurn(startedAt: mainTurnStart.AddMinutes(-30), tools: [staleTool]);
+
+        // Current main turn has no commits of its own
+        var currentTurnOutputs = new List<string?>();
+
+        // Gather agent outputs using the time-gated helper
+        var agentOutputs = PushNotificationService.CollectAgentTurnOutputsSince(
+            [[staleTurn]], mainTurnStart);
+
+        var allOutputs = currentTurnOutputs.Concat(agentOutputs);
+        var result = PushNotificationService.ExtractGitCommitInfo(allOutputs);
+
+        // The stale commit must not bleed into the current turn
+        Assert.That(result, Is.Null,
+            "Stale commit SHA from a prior turn must not appear in the current turn's commit detection.");
+    }
+
+    [Test]
+    public void ExtractGitCommitInfo_NewAgentTurnWithinCurrentTurn_CommitIsDetected() {
+        var mainTurnStart = new DateTimeOffset(2025, 3, 15, 10, 0, 0, TimeSpan.Zero);
+
+        // Agent committed DURING the current main turn
+        var freshCommitOutput = "[main cafe999] Fresh commit during this turn";
+        var freshTool = MakeTool(freshCommitOutput);
+        var freshTurn = MakeTurn(startedAt: mainTurnStart.AddSeconds(5), tools: [freshTool]);
+
+        var agentOutputs = PushNotificationService.CollectAgentTurnOutputsSince(
+            [[freshTurn]], mainTurnStart);
+
+        var result = PushNotificationService.ExtractGitCommitInfo(agentOutputs);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.CommitSha, Is.EqualTo("cafe999"));
+        Assert.That(result.CommitMessage, Is.EqualTo("Fresh commit during this turn"));
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private static TranscriptToolRecord MakeTool(string? outputText) =>
+        new TranscriptToolRecord(
+            ToolCallId:    null,
+            Descriptor:    new ToolTranscriptDescriptor("git"),
+            ArgsJson:      null,
+            StartedAt:     DateTimeOffset.UtcNow,
+            FinishedAt:    null,
+            ProgressText:  null,
+            OutputText:    outputText,
+            DetailContent: null,
+            IsCompleted:   true,
+            Success:       true);
+
+    private static TranscriptTurnRecord MakeTurn(
+        DateTimeOffset startedAt,
+        IReadOnlyList<TranscriptToolRecord>? tools)
+    {
+        return new TranscriptTurnRecord(
+            StartedAt:        startedAt,
+            CompletedAt:      null,
+            Prompt:           string.Empty,
+            ThinkingText:     string.Empty,
+            ResponseText:     string.Empty,
+            ThinkingCollapsed: false,
+            Tools:            tools ?? []);
+    }
+
+    [Test]
+    public void BuildAugmentedPrompt_NoCommands_ReturnsOriginalInstructions(){
         var result = LoopController.BuildAugmentedPrompt("Do work.", null);
         Assert.That(result, Is.EqualTo("Do work."));
     }
