@@ -14946,6 +14946,31 @@ public partial class MainWindow : Window, ILiveElementLocator
         detailPanel.Children.Add(detailTextBox);
         expander.Content = detailPanel;
 
+        // Wire up diff hover popup for edit tool entries
+        if (string.Equals(descriptor.ToolName, "edit", StringComparison.OrdinalIgnoreCase)) {
+            DiffHoverPopup? diffPopup = null;
+            headerPanel.MouseEnter += (_, _) => {
+                if (!entry.IsCompleted || string.IsNullOrWhiteSpace(entry.OutputText))
+                    return;
+
+                var diffLines = DiffHoverPopup.ParseDiff(entry.OutputText);
+                if (diffLines.Count == 0)
+                    return;
+
+                diffPopup = new DiffHoverPopup {
+                    PlacementTarget = headerPanel
+                };
+                diffPopup.ShowDiff(diffLines);
+            };
+
+            headerPanel.MouseLeave += (_, _) => {
+                if (diffPopup != null) {
+                    diffPopup.IsOpen = false;
+                    diffPopup = null;
+                }
+            };
+        }
+
         block.ContentPanel.Children.Add(expander);
         return entry;
     }
