@@ -21175,6 +21175,26 @@ public partial class MainWindow : Window, ILiveElementLocator
 
             if (cts.IsCancellationRequested) return;
 
+            // Sort all matches in document order (oldest/topmost first).
+            // Coordinator matches are already in TurnIndex order, but agent-thread matches
+            // are appended after all coordinator matches even though they render visually
+            // at the thread's launch point — which may be much earlier in the document.
+            // Sorting by each match's turn StartedAt timestamp puts everything in the
+            // correct top-to-bottom order the user expects ("1 of N" = topmost hit).
+            allMatches.Sort((a, b) =>
+            {
+                DateTimeOffset TimestampOf(TurnSearchMatch m)
+                {
+                    if (m.Thread is null)
+                        return _conversationManager.GetCoordinatorTurnStartedAt(m.TurnIndex) ?? DateTimeOffset.MinValue;
+                    var savedTurns = m.Thread.SavedTurns;
+                    return m.TurnIndex >= 0 && m.TurnIndex < savedTurns.Count
+                        ? savedTurns[m.TurnIndex].StartedAt
+                        : m.Thread.StartedAt;
+                }
+                return TimestampOf(a).CompareTo(TimestampOf(b));
+            });
+
             _searchMatches = allMatches;
             _searchMatchCursor = allMatches.Count > 0 ? 0 : -1;
             UpdateSearchUi();
