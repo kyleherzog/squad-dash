@@ -45,7 +45,8 @@ internal static class LoopMdParser {
         double timeoutMinutes  = 5;
         string description     = "";
         var    commands        = new List<string>();
-        var    options         = new Dictionary<string, LoopOptionBuilder>(StringComparer.Ordinal);
+        var    optionKeys      = new List<string>();
+        var    optionsByKey   = new Dictionary<string, LoopOptionBuilder>(StringComparer.Ordinal);
 
         // Read frontmatter up to the closing ---
         bool inOptionsBlock = false;
@@ -68,8 +69,11 @@ internal static class LoopMdParser {
                     var colonIdx = line.IndexOf(':', 2);
                     if (colonIdx > 2) {
                         currentOptionKey = line[2..colonIdx].Trim();
-                        if (!options.ContainsKey(currentOptionKey))
-                            options[currentOptionKey] = new LoopOptionBuilder { Key = currentOptionKey };
+                        if (!optionsByKey.ContainsKey(currentOptionKey))
+                        {
+                            optionsByKey[currentOptionKey] = new LoopOptionBuilder { Key = currentOptionKey };
+                            optionKeys.Add(currentOptionKey);
+                        }
                     }
                     i++;
                     continue;
@@ -81,7 +85,7 @@ internal static class LoopMdParser {
                     if (colonIdx > 4) {
                         var subKey = line[4..colonIdx].Trim();
                         var subVal = colonIdx + 1 < line.Length ? line[(colonIdx + 1)..].Trim() : "";
-                        if (options.TryGetValue(currentOptionKey, out var builder)) {
+                        if (optionsByKey.TryGetValue(currentOptionKey, out var builder)) {
                             switch (subKey) {
                                 case "value":   builder.RawValue = subVal; break;
                                 case "type":    builder.Type     = subVal.Trim('"', '\''); break;
@@ -161,10 +165,10 @@ internal static class LoopMdParser {
 
         // Build the LoopOption list and derive interval/timeout from options block if present
         List<LoopOption>? builtOptions = null;
-        if (options.Count > 0) {
-            builtOptions = new List<LoopOption>(options.Count);
-            foreach (var kvp in options) {
-                var b = kvp.Value;
+        if (optionsByKey.Count > 0) {
+            builtOptions = new List<LoopOption>(optionsByKey.Count);
+            foreach (var key in optionKeys) {
+                var b = optionsByKey[key];
                 builtOptions.Add(new LoopOption(
                     b.Key,
                     b.RawValue ?? "",
@@ -174,14 +178,14 @@ internal static class LoopMdParser {
                     b.Choices));
             }
 
-            if (options.TryGetValue("interval", out var intervalOpt) &&
+            if (optionsByKey.TryGetValue("interval", out var intervalOpt) &&
                 double.TryParse(intervalOpt.RawValue,
                     System.Globalization.NumberStyles.Any,
                     System.Globalization.CultureInfo.InvariantCulture,
                     out var ivOpt))
                 intervalMinutes = ivOpt;
 
-            if (options.TryGetValue("timeout", out var timeoutOpt) &&
+            if (optionsByKey.TryGetValue("timeout", out var timeoutOpt) &&
                 double.TryParse(timeoutOpt.RawValue,
                     System.Globalization.NumberStyles.Any,
                     System.Globalization.CultureInfo.InvariantCulture,
