@@ -5608,43 +5608,27 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void SyncThreadChip(TranscriptThreadState thread)
     {
+        var isFailed = thread.StatusText.Trim() is "Failed" or "Cancelled";
+
         var chipLabel = thread.SequenceNumber > 0 ? $"#{thread.SequenceNumber}" : "#";
         if (!string.IsNullOrWhiteSpace(thread.RequestedAgentHandle))
             chipLabel += "*";
-        thread.ChipLabel = chipLabel;
-        thread.ChipToolTip = BuildThreadChipToolTip(thread);
-        thread.ChipFontWeight = thread.IsSelected ? FontWeights.SemiBold : FontWeights.Normal;
+        if (isFailed)
+            chipLabel += "!";
+        thread.ChipLabel    = chipLabel;
+        thread.ChipToolTip  = BuildThreadChipToolTip(thread);
+        thread.ChipFontWeight = FontWeights.Normal;
 
-        var status = thread.StatusText.Trim();
-        if (thread.IsSelected)
+        thread.ChipBackground = (Brush)Application.Current.Resources["ChipSurface"];
+        if (isFailed)
         {
-            thread.ChipBackground = (Brush)Application.Current.Resources["ChipSelectedSurface"];
-            thread.ChipBorderBrush = (Brush)Application.Current.Resources["ChipSelectedBorder"];
-            thread.ChipForeground = (Brush)Application.Current.Resources["ChipSelectedText"];
+            thread.ChipBorderBrush = (Brush)Application.Current.Resources["ChipFailedBorder"];
+            thread.ChipForeground  = (Brush)Application.Current.Resources["ChipFailedText"];
         }
         else
         {
-            switch (status)
-            {
-                case "Completed":
-                    thread.ChipBackground = (Brush)Application.Current.Resources["ChipCompletedSurface"];
-                    thread.ChipBorderBrush = (Brush)Application.Current.Resources["ChipCompletedBorder"];
-                    thread.ChipForeground = (Brush)Application.Current.Resources["ChipCompletedText"];
-                    break;
-
-                case "Failed":
-                case "Cancelled":
-                    thread.ChipBackground = (Brush)Application.Current.Resources["ChipFailedSurface"];
-                    thread.ChipBorderBrush = (Brush)Application.Current.Resources["ChipFailedBorder"];
-                    thread.ChipForeground = (Brush)Application.Current.Resources["ChipFailedText"];
-                    break;
-
-                default:
-                    thread.ChipBackground = (Brush)Application.Current.Resources["ChipSurface"];
-                    thread.ChipBorderBrush = (Brush)Application.Current.Resources["ChipBorder"];
-                    thread.ChipForeground = (Brush)Application.Current.Resources["ChipText"];
-                    break;
-            }
+            thread.ChipBorderBrush = (Brush)Application.Current.Resources["ChipBorder"];
+            thread.ChipForeground  = (Brush)Application.Current.Resources["ChipText"];
         }
 
         var chipCard = FindAgentCardForThread(thread);

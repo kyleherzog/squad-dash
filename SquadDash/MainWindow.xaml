@@ -90,6 +90,37 @@
             </Setter>
         </Style>
 
+        <Style x:Key="ThemedChipButtonStyle" TargetType="Button">
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ChipBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="2"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ChipBorder" Property="Background"
+                                        Value="{DynamicResource ChipHoverSurface}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ChipBorder" Property="Background"
+                                        Value="{DynamicResource HoverSurface}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <DataTemplate x:Key="AgentCardTemplate">
             <Grid Margin="0,0,12,12"
                   Width="170"
@@ -210,19 +241,18 @@
                                                     <RowDefinition Height="3" />
                                                 </Grid.RowDefinitions>
                                                 <Button Grid.Row="0"
+                                                        Style="{StaticResource ThemedChipButtonStyle}"
                                                         Click="AgentThreadChipButton_Click"
-                                                        Padding="6,3,6,3"
+                                                        Padding="6,2,6,2"
                                                         Margin="0"
                                                         Background="{Binding ChipBackground}"
                                                         BorderBrush="{Binding ChipBorderBrush}"
                                                         BorderThickness="1"
                                                         Foreground="{Binding ChipForeground}"
-                                                        Cursor="Hand"
                                                         ToolTip="{Binding ChipToolTip}">
                                                     <TextBlock Text="{Binding ChipLabel}"
                                                                FontSize="11"
-                                                               FontWeight="{Binding ChipFontWeight}"
-                                                               VerticalAlignment="Center" />
+                                                               FontWeight="Normal" />
                                                 </Button>
                                                 <Border Grid.Row="1"
                                                         CornerRadius="1.5"
