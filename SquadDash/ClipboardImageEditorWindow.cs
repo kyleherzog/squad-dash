@@ -106,6 +106,12 @@ internal sealed class ClipboardImageEditorWindow : Window
     private double _bodyDragStartOffsetX;
     private double _bodyDragStartOffsetY;
 
+    // Arrow drag-to-draw state
+    private bool _creatingArrowByDrag;
+    private Point _arrowDragTailPt;
+    private Line? _arrowDragPreviewLine;
+    private Polygon? _arrowDragPreviewHead;
+
     // Color picker
     private StackPanel? _colorPickerPanel;
     private AnnotationArrow? _colorPickerArrow;
@@ -837,10 +843,31 @@ internal sealed class ClipboardImageEditorWindow : Window
             return;
         }
 
-        // Arrow placement mode: drop arrow at click point.
+        // Arrow placement mode: start drag to define tail→head.
         if (_inArrowMode)
         {
-            PlaceArrowAtPoint(pt);
+            _creatingArrowByDrag = true;
+            _arrowDragTailPt = pt;
+            _preDragSnapshot = CaptureSnapshot();
+            _canvas.CaptureMouse();
+            _arrowDragPreviewLine = new Line
+            {
+                Stroke = new SolidColorBrush(_defaultArrowColor),
+                StrokeThickness = 2.5,
+                Opacity = 0.7,
+                IsHitTestVisible = false,
+                X1 = pt.X, Y1 = pt.Y, X2 = pt.X, Y2 = pt.Y
+            };
+            _arrowDragPreviewHead = new Polygon
+            {
+                Fill = new SolidColorBrush(_defaultArrowColor),
+                Opacity = 0.7,
+                IsHitTestVisible = false
+            };
+            Panel.SetZIndex(_arrowDragPreviewLine, 99);
+            Panel.SetZIndex(_arrowDragPreviewHead, 99);
+            _canvas.Children.Add(_arrowDragPreviewLine);
+            _canvas.Children.Add(_arrowDragPreviewHead);
             e.Handled = true;
             return;
         }
@@ -889,6 +916,38 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     private void Canvas_MouseMove(object sender, MouseEventArgs e)
     {
+        // Live preview for arrow drag-to-draw.
+        if (_creatingArrowByDrag && _arrowDragPreviewLine != null && _arrowDragPreviewHead != null)
+        {
+            var headPt = e.GetPosition(_canvas);
+            var tailPt = _arrowDragTailPt;
+            _arrowDragPreviewLine.X1 = tailPt.X;
+            _arrowDragPreviewLine.Y1 = tailPt.Y;
+            _arrowDragPreviewLine.X2 = headPt.X;
+            _arrowDragPreviewLine.Y2 = headPt.Y;
+
+            var dx = headPt.X - tailPt.X;
+            var dy = headPt.Y - tailPt.Y;
+            var dist2 = Math.Sqrt(dx * dx + dy * dy);
+            if (dist2 > 4)
+            {
+                var ux2 = dx / dist2; var uy2 = dy / dist2;
+                const double HeadLen = 16.0;
+                const double HeadHalf = 6.0;
+                var baseX = headPt.X - ux2 * HeadLen;
+                var baseY = headPt.Y - uy2 * HeadLen;
+                var px = -uy2; var py = ux2;
+                _arrowDragPreviewHead.Points = new PointCollection
+                {
+                    headPt,
+                    new Point(baseX + px * HeadHalf, baseY + py * HeadHalf),
+                    new Point(baseX - px * HeadHalf, baseY - py * HeadHalf)
+                };
+            }
+            e.Handled = true;
+            return;
+        }
+
         // Rubber-band draw of an annotation rectangle.
         if (_creatingAnnotRect)
         {
@@ -975,6 +1034,32 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     private void Canvas_MouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (_creatingArrowByDrag)
+        {
+            _creatingArrowByDrag = false;
+            _canvas.ReleaseMouseCapture();
+            if (_arrowDragPreviewLine != null) { _canvas.Children.Remove(_arrowDragPreviewLine); _arrowDragPreviewLine = null; }
+            if (_arrowDragPreviewHead != null) { _canvas.Children.Remove(_arrowDragPreviewHead); _arrowDragPreviewHead = null; }
+
+            var headPt = e.GetPosition(_canvas);
+            var tailPt = _arrowDragTailPt;
+            var dx = headPt.X - tailPt.X;
+            var dy = headPt.Y - tailPt.Y;
+            var dist = Math.Sqrt(dx * dx + dy * dy);
+
+            if (dist >= 20.0)
+            {
+                _preDragSnapshot = null; // let CreateArrow handle its own undo push
+                PlaceArrowFromDrag(tailPt, headPt, dist);
+            }
+            else
+            {
+                _preDragSnapshot = null;
+            }
+            e.Handled = true;
+            return;
+        }
+
         if (_creatingAnnotRect)
         {
             _creatingAnnotRect = false;
@@ -1025,7 +1110,18 @@ internal sealed class ClipboardImageEditorWindow : Window
     {
         if (e.Key == Key.Escape)
         {
-            if (_inArrowMode) { ExitArrowMode(); e.Handled = true; return; }
+            if (_inArrowMode)
+            {
+                if (_creatingArrowByDrag)
+                {
+                    _creatingArrowByDrag = false;
+                    _canvas.ReleaseMouseCapture();
+                    if (_arrowDragPreviewLine != null) { _canvas.Children.Remove(_arrowDragPreviewLine); _arrowDragPreviewLine = null; }
+                    if (_arrowDragPreviewHead != null) { _canvas.Children.Remove(_arrowDragPreviewHead); _arrowDragPreviewHead = null; }
+                    _preDragSnapshot = null;
+                }
+                ExitArrowMode(); e.Handled = true; return;
+            }
             if (_inRectMode) { ExitRectMode(); e.Handled = true; return; }
             if (_inCursorPlacementMode)
             {
@@ -1082,7 +1178,7 @@ internal sealed class ClipboardImageEditorWindow : Window
     {
         _inArrowMode = true;
         Cursor = Cursors.Cross;
-        ShowModeHint("Click to place an arrow");
+        ShowModeHint("Drag to draw an arrow");
     }
 
     private void ExitArrowMode()
@@ -1107,6 +1203,49 @@ internal sealed class ClipboardImageEditorWindow : Window
         // Use a 2×2 rect centred on the click as the "target bounds".
         var targetBounds = new Rect(clamped.X - 1, clamped.Y - 1, 2, 2);
         CreateArrow(targetBounds);
+        ExitArrowMode();
+    }
+
+    /// <summary>
+    /// Creates an arrow where <paramref name="tailPt"/> is the blunt tail end
+    /// and <paramref name="headPt"/> is the arrowhead tip (pointy end).
+    /// </summary>
+    private void PlaceArrowFromDrag(Point tailPt, Point headPt, double dist)
+    {
+        headPt = new Point(
+            Math.Max(0, Math.Min(headPt.X, _canvas.Width)),
+            Math.Max(0, Math.Min(headPt.Y, _canvas.Height)));
+        tailPt = new Point(
+            Math.Max(0, Math.Min(tailPt.X, _canvas.Width)),
+            Math.Max(0, Math.Min(tailPt.Y, _canvas.Height)));
+
+        // ux,uy = direction from arrowhead tip toward tail (UpdateArrowGeometry convention)
+        var ux = (tailPt.X - headPt.X) / dist;
+        var uy = (tailPt.Y - headPt.Y) / dist;
+
+        double arrowLen = _defaultArrowLength;
+        double tailLen = Math.Max(20.0, dist - arrowLen);
+
+        // ux = sin(rad), uy = -cos(rad) => rad = atan2(ux, -uy)
+        double angleDeg = Math.Atan2(ux, -uy) * 180.0 / Math.PI;
+
+        // Center such that ahX = center.X + ux*arrowLen = headPt.X
+        double centerX = headPt.X - ux * arrowLen;
+        double centerY = headPt.Y - uy * arrowLen;
+
+        var targetBounds = new Rect(centerX - 1, centerY - 1, 2, 2);
+
+        var savedAngle = _defaultArrowAngleDeg;
+        var savedTailLen = _defaultTailLength;
+        _defaultArrowAngleDeg = angleDeg;
+        _defaultTailLength = tailLen;
+
+        var arrow = CreateArrow(targetBounds);
+
+        _defaultArrowAngleDeg = savedAngle;
+        _defaultTailLength = savedTailLen;
+
+        SelectArrow(arrow);
         ExitArrowMode();
     }
 
