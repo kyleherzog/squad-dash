@@ -242,6 +242,9 @@ internal sealed class PromptAttachmentViewerWindow : Window
                 sb.Append(att.OriginalPrompt);
             }
             text = sb.ToString().TrimEnd();
+            // Task/topic/doc attachments store content in ContentBlock with OriginalPrompt=null.
+            if (string.IsNullOrWhiteSpace(text) && !string.IsNullOrWhiteSpace(att.ContentBlock))
+                text = att.ContentBlock!.TrimEnd();
         }
 
         var textBox = new TextBox
