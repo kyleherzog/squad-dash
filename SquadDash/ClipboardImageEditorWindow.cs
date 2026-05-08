@@ -226,6 +226,16 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         LoadArrowDefaults();
 
+        // Resolve owner screen position early so all monitor lookups use the physical
+        // top-left of the owner window — reliable even when the window is maximized.
+        // PointToScreen returns physical pixel coords; TransformFromDevice converts them
+        // to WPF logical units.  We use the physical coords directly for MonitorFromPoint
+        // so we never misidentify the monitor (GetWindowRect on a maximized window returns
+        // an inflated rect that can straddle the boundary between adjacent monitors).
+        var ownerTopLeft = owner.PointToScreen(new Point(0, 0));
+        var pSrc = PresentationSource.FromVisual(owner);
+        var toLogical = pSrc?.CompositionTarget.TransformFromDevice ?? Matrix.Identity;
+
         // ── Compute display size ─────────────────────────────────────────────
         // Canvas shows image at its intended logical size, correcting for source DPI.
         // Screenshots taken on a 150%-scaled monitor arrive with DpiX/Y=144; without
@@ -233,7 +243,9 @@ internal sealed class ClipboardImageEditorWindow : Window
         // the image appears at the intended physical size on any monitor.
         // Ctrl+scroll zoom is applied via ScaleTransform on the wrapper so
         // DoInsertImage always renders at the original pixel dimensions.
-        var monitorArea = GetMonitorWorkAreaRect(owner);
+        var monitorArea = pSrc != null
+            ? GetMonitorWorkAreaRect(ownerTopLeft, toLogical)
+            : GetMonitorWorkAreaRect(owner);
         double imgW = clipboardImage.PixelWidth;
         double imgH = clipboardImage.PixelHeight;
         double maxWinW = monitorArea.Width  * 0.95;
@@ -265,26 +277,26 @@ internal sealed class ClipboardImageEditorWindow : Window
         MinWidth = MinWindowWidth;
 
         // Center dialog on owner's actual screen position.
-        // PointToScreen gives real physical coords (correct even when maximized — unlike
-        // WPF Left/Top which returns restore bounds for maximized windows).
-        // TransformFromDevice converts physical pixels back to WPF logical units.
-        var ownerTopLeft = owner.PointToScreen(new Point(0, 0));
-        var pSrc = PresentationSource.FromVisual(owner);
+        // ownerTopLeft (physical pixels from PointToScreen) and toLogical are resolved above.
+        Point waTopLeft = default, waBottomRight = default;
         if (pSrc != null)
         {
-            var toLogical = pSrc.CompositionTarget.TransformFromDevice;
             var logicalOrigin = toLogical.Transform(ownerTopLeft);
             double ownerLogicalW = owner.ActualWidth;
             double ownerLogicalH = owner.ActualHeight;
             Left = logicalOrigin.X + (ownerLogicalW - Width)  / 2.0;
             Top  = logicalOrigin.Y + (ownerLogicalH - Height) / 2.0;
 
-            // Clamp to monitor work area so dialog doesn't overflow off-screen
-            var work = GetMonitorWorkAreaRect(owner);
-            if (Left < work.Left) Left = work.Left;
-            if (Top  < work.Top)  Top  = work.Top;
-            if (Left + Width  > work.Right)  Left = work.Right  - Width;
-            if (Top  + Height > work.Bottom) Top  = work.Bottom - Height;
+            // Clamp to monitor work area identified via the physical owner top-left.
+            // Using ownerTopLeft (physical pixels from PointToScreen) for MonitorFromPoint
+            // ensures we pick the correct monitor even when the owner is maximized, because
+            // GetWindowRect on a maximized window returns an inflated rect that can straddle
+            // the boundary between adjacent monitors (e.g. secondary above primary at Y<0).
+            var work = GetMonitorWorkAreaRect(ownerTopLeft, toLogical);
+            waTopLeft     = new Point(work.Left,  work.Top);
+            waBottomRight = new Point(work.Right, work.Bottom);
+            Left = Math.Max(waTopLeft.X, Math.Min(Left, waBottomRight.X - Width));
+            Top  = Math.Max(waTopLeft.Y, Math.Min(Top,  waBottomRight.Y - Height));
         }
         else
         {
@@ -299,6 +311,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             $"[ClipboardImageEditor] owner.WindowState={owner.WindowState} " +
             $"owner.ActualWidth={owner.ActualWidth:F0} owner.ActualHeight={owner.ActualHeight:F0} " +
             $"ownerTopLeft={ownerTopLeft.X:F0},{ownerTopLeft.Y:F0} " +
+            $"workArea=({waTopLeft.X:F0},{waTopLeft.Y:F0},{waBottomRight.X:F0},{waBottomRight.Y:F0}) " +
             $"dialog Left={Left:F0} Top={Top:F0} Width={Width:F0} Height={Height:F0}");
 
         // ── Canvas ───────────────────────────────────────────────────────────
@@ -879,6 +892,32 @@ internal sealed class ClipboardImageEditorWindow : Window
         }
         catch { }
         return SystemParameters.WorkArea; // last resort: primary monitor
+    }
+
+    /// <summary>
+    /// Returns the work area of the monitor that contains <paramref name="physPt"/>
+    /// (physical screen pixel coordinates, e.g. from <c>PointToScreen</c>) as a WPF DIP
+    /// <see cref="Rect"/>, using <paramref name="transformFromDevice"/> to convert from
+    /// physical pixels to logical units.
+    /// </summary>
+    private static Rect GetMonitorWorkAreaRect(Point physPt, Matrix transformFromDevice)
+    {
+        try
+        {
+            var hMon = MonitorFromPoint(new POINT { X = (int)physPt.X, Y = (int)physPt.Y }, MONITOR_DEFAULTTONEAREST);
+            if (hMon != IntPtr.Zero)
+            {
+                var mi = new MonitorInfo { cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<MonitorInfo>() };
+                if (GetMonitorInfo(hMon, ref mi))
+                {
+                    var tl = transformFromDevice.Transform(new Point(mi.rcWork.Left,  mi.rcWork.Top));
+                    var br = transformFromDevice.Transform(new Point(mi.rcWork.Right, mi.rcWork.Bottom));
+                    return new Rect(tl, br);
+                }
+            }
+        }
+        catch { }
+        return SystemParameters.WorkArea;
     }
 
     /// <summary>
