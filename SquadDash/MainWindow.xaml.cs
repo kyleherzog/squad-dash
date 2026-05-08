@@ -21311,6 +21311,10 @@ public partial class MainWindow : Window, ILiveElementLocator
                         label.Inlines.Add(icon);
                         label.Inlines.Add(descRun);
                     }
+                    label.Cursor = System.Windows.Input.Cursors.Hand;
+                    var capturedContent = capturedAtt;
+                    label.MouseLeftButtonUp += (_, _) =>
+                        PromptAttachmentViewerWindow.Show(new[] { capturedContent }, CanShowOwnedWindow() ? this : null);
                 }
                 else if (att.TranscriptQuote != null)
                 {
