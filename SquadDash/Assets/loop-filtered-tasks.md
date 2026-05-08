@@ -2,7 +2,7 @@
 configured: true
 options:
   interval:
-    value: 10
+    value: 1
     type: int
     label: "Interval (min)"
     hint: "Minutes to wait between iterations"

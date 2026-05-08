@@ -4607,6 +4607,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         PersistLoopFileSelection();
         UpdateLoopFileSubtitle();
         UpdateLoopPanelButtonStates();
+        RefreshLoopOptionsPanel();
     }
 
     private void PersistLoopFileSelection()
@@ -4614,6 +4615,150 @@ public partial class MainWindow : Window, ILiveElementLocator
         var state = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
         _docsPanelState = state with { SelectedLoopFile = _selectedLoopMdPath };
         _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
+    }
+
+    private void RefreshLoopOptionsPanel()
+    {
+        LoopOptionsPanel.Children.Clear();
+        LoopOptionsPanel.Visibility = Visibility.Collapsed;
+
+        if (_selectedLoopMdPath is null) return;
+
+        LoopMdConfig? config;
+        try { config = LoopMdParser.Parse(_selectedLoopMdPath); }
+        catch { return; }
+
+        if (config?.Options is not { Count: > 0 }) return;
+
+        foreach (var opt in config.Options)
+        {
+            UIElement control = opt.Type switch
+            {
+                "bool" => CreateBoolOptionControl(opt),
+                "int"  => CreateIntOptionControl(opt),
+                "enum" => CreateEnumOptionControl(opt),
+                _      => CreateIntOptionControl(opt),
+            };
+            LoopOptionsPanel.Children.Add(control);
+        }
+
+        LoopOptionsPanel.Visibility = Visibility.Visible;
+    }
+
+    private CheckBox CreateBoolOptionControl(LoopOption opt)
+    {
+        var cb = new CheckBox
+        {
+            Content   = opt.Label ?? opt.Key,
+            IsChecked = opt.RawValue.Equals("true", StringComparison.OrdinalIgnoreCase),
+            ToolTip   = opt.Hint,
+            Margin    = new Thickness(0, 0, 0, 4),
+        };
+        if (TryFindResource("ThemedCheckBoxStyle") is Style cbStyle)
+            cb.Style = cbStyle;
+        else
+            cb.Foreground = (System.Windows.Media.Brush)FindResource("LabelText");
+
+        var capturedPath = _selectedLoopMdPath;
+        var capturedKey  = opt.Key;
+        cb.Checked   += (_, _) => LoopMdParser.UpdateOptionValue(capturedPath!, capturedKey, "true");
+        cb.Unchecked += (_, _) => LoopMdParser.UpdateOptionValue(capturedPath!, capturedKey, "false");
+        return cb;
+    }
+
+    private UIElement CreateIntOptionControl(LoopOption opt)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var label = new TextBlock
+        {
+            Text              = opt.Label ?? opt.Key,
+            ToolTip           = opt.Hint,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(0, 0, 6, 0),
+        };
+        if (TryFindResource("LabelText") is System.Windows.Media.Brush labelBrush)
+            label.Foreground = labelBrush;
+
+        var tb = new TextBox
+        {
+            Text   = opt.RawValue,
+            Width  = 50,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        if (TryFindResource("InputSurface") is System.Windows.Media.Brush bg)
+            tb.Background = bg;
+        if (TryFindResource("InputBorder") is System.Windows.Media.Brush border)
+            tb.BorderBrush = border;
+        if (TryFindResource("LabelText") is System.Windows.Media.Brush fg)
+            tb.Foreground = fg;
+
+        var capturedPath = _selectedLoopMdPath;
+        var capturedKey  = opt.Key;
+        tb.LostFocus += (_, _) =>
+        {
+            var text = tb.Text.Trim();
+            if (int.TryParse(text, out _))
+            {
+                tb.ClearValue(TextBox.BorderBrushProperty);
+                if (TryFindResource("InputBorder") is System.Windows.Media.Brush b)
+                    tb.BorderBrush = b;
+                LoopMdParser.UpdateOptionValue(capturedPath!, capturedKey, text);
+            }
+            else
+            {
+                tb.BorderBrush = System.Windows.Media.Brushes.Red;
+            }
+        };
+
+        Grid.SetColumn(label, 0);
+        Grid.SetColumn(tb, 1);
+        grid.Children.Add(label);
+        grid.Children.Add(tb);
+        return grid;
+    }
+
+    private UIElement CreateEnumOptionControl(LoopOption opt)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var label = new TextBlock
+        {
+            Text              = opt.Label ?? opt.Key,
+            ToolTip           = opt.Hint,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(0, 0, 6, 0),
+        };
+        if (TryFindResource("LabelText") is System.Windows.Media.Brush labelBrush)
+            label.Foreground = labelBrush;
+
+        var combo = new ComboBox();
+        if (TryFindResource("ThemedComboBoxStyle") is Style comboStyle)
+            combo.Style = comboStyle;
+
+        if (opt.Choices is not null)
+            foreach (var choice in opt.Choices)
+                combo.Items.Add(choice);
+
+        combo.SelectedItem = opt.RawValue;
+
+        var capturedPath = _selectedLoopMdPath;
+        var capturedKey  = opt.Key;
+        combo.SelectionChanged += (_, _) =>
+        {
+            if (combo.SelectedItem is string selected)
+                LoopMdParser.UpdateOptionValue(capturedPath!, capturedKey, selected);
+        };
+
+        Grid.SetColumn(label, 0);
+        Grid.SetColumn(combo, 1);
+        grid.Children.Add(label);
+        grid.Children.Add(combo);
+        return grid;
     }
 
     private void LoadTasksPanel()
@@ -4852,6 +4997,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             // Just refresh the picker labels to reflect the new description.
             PopulateLoopFilePicker();
+            RefreshLoopOptionsPanel();
             UpdateLoopFileSubtitle();
             return;
         }
@@ -8874,6 +9020,9 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (_currentWorkspace is null) return;
             var loopMdPath = GetEffectiveLoopMdPath();
             var config = LoopMdParser.Parse(loopMdPath);
+            // If the file uses options: block, the controls are already inline — nothing to open.
+            if (config?.Options is { Count: > 0 })
+                return;
             OpenLoopConfigFlyout(loopMdPath, LoopConfigFlyoutMode.Edit, existingConfig: config);
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(LoopPanelLoopSettingsMenuItem_Click), ex); }
@@ -18290,6 +18439,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _squadFileMenuEntries.Clear();
 
         PopulateLoopFilePicker();
+        RefreshLoopOptionsPanel();
         UpdateLoopPanelButtonStates();
         _pec.TasksFilePath = tasksMdPath;
 
@@ -18432,6 +18582,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                     "]\n" +
                     "```\n");
                 PopulateLoopFilePicker();
+                RefreshLoopOptionsPanel();
                 UpdateLoopPanelButtonStates();
             }
 
@@ -18580,6 +18731,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase))
         {
             PopulateLoopFilePicker();
+            RefreshLoopOptionsPanel();
             UpdateLoopPanelButtonStates();
         }
 
@@ -20089,6 +20241,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         // Restore selected loop file and populate the file picker.
         _selectedLoopMdPath = _docsPanelState.SelectedLoopFile;
         PopulateLoopFilePicker();
+        RefreshLoopOptionsPanel();
 
         // Restore draft follow-up attachments if any were persisted.
         var restoredList = new List<FollowUpAttachment>();

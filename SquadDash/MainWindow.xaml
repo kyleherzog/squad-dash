@@ -1,4 +1,4 @@
-<Window x:Class="SquadDash.MainWindow"
+﻿<Window x:Class="SquadDash.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
@@ -861,6 +861,10 @@
                                           Style="{StaticResource ThemedComboBoxStyle}"
                                           ToolTip="Select which loop file to run"
                                           SelectionChanged="LoopFilePicker_SelectionChanged" />
+                                <StackPanel x:Name="LoopOptionsPanel"
+                                            DockPanel.Dock="Top"
+                                            Margin="0,0,0,6"
+                                            Visibility="Collapsed" />
                                 <StackPanel DockPanel.Dock="Top"
                                             Margin="0,0,0,6">
                                     <RadioButton x:Name="LoopModeCliRadio"
