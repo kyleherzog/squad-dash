@@ -6602,8 +6602,22 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try
         {
+            // ── Ctrl+Shift+Break: abort loop (more-specific, checked first) ──────────
+            if (e.Key == Key.Cancel
+                && (Keyboard.Modifiers & ModifierKeys.Control) != 0
+                && (Keyboard.Modifiers & ModifierKeys.Shift) != 0
+                && AbortLoopButton.IsEnabled)
+            {
+                AbortLoopButton_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                return;
+            }
+
             // ── Ctrl+Break: abort running prompt (from anywhere in the window) ─────
-            if (e.Key == Key.Cancel && AbortButton.IsEnabled)
+            if (e.Key == Key.Cancel
+                && (Keyboard.Modifiers & ModifierKeys.Control) != 0
+                && (Keyboard.Modifiers & ModifierKeys.Shift) == 0
+                && AbortButton.IsEnabled)
             {
                 AbortButton_Click(this, new RoutedEventArgs());
                 e.Handled = true;

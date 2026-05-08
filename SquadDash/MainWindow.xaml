@@ -905,7 +905,7 @@
                                         Visibility="Collapsed"
                                         Foreground="{DynamicResource AbortButtonText}"
                                         Style="{StaticResource ThemedButtonStyle}"
-                                        ToolTip="Abort (Ctrl+Break)"
+                                        ToolTip="Abort Loop (Ctrl+Shift+Break)"
                                         Click="AbortLoopButton_Click" />
                             </DockPanel>
                         </Border>
