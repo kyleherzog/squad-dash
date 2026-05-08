@@ -858,6 +858,7 @@
                                           MaxWidth="144"
                                           HorizontalAlignment="Left"
                                           Visibility="Collapsed"
+                                          Style="{StaticResource ThemedComboBoxStyle}"
                                           ToolTip="Select which loop file to run"
                                           SelectionChanged="LoopFilePicker_SelectionChanged" />
                                 <StackPanel DockPanel.Dock="Top"
