@@ -406,36 +406,41 @@ internal sealed class ClipboardImageEditorWindow : Window
     {
         _addArrowBtn = new Button
         {
-            Content  = "↗ Arrow",
-            Width    = 80, Height = 28,
+            Content  = MakeToolIcon("ImageEditorArrowIcon"),
+            Width    = 32, Height = 28,
+            Padding  = new Thickness(4, 3, 4, 3),
             Margin   = new Thickness(0, 0, 4, 0),
-            ToolTip  = "Add an arrow annotation — click on the image to place it"
+            ToolTip  = "Arrow (drag to draw)"
         };
         _addRectBtn = new Button
         {
-            Content  = "□ Rect",
-            Width    = 70, Height = 28,
+            Content  = MakeToolIcon("ImageEditorRectIcon"),
+            Width    = 32, Height = 28,
+            Padding  = new Thickness(4, 3, 4, 3),
             Margin   = new Thickness(0, 0, 4, 0),
-            ToolTip  = "Draw a rectangle annotation — drag on the image to define the region"
+            ToolTip  = "Rectangle annotation (drag to draw)"
         };
         var cursorBtn = new Button
         {
-            Content  = "⌖ Cursor",
-            Width    = 80, Height = 28,
+            Content  = MakeToolIcon("ImageEditorCursorIcon"),
+            Width    = 32, Height = 28,
+            Padding  = new Thickness(4, 3, 4, 3),
             Margin   = new Thickness(0, 0, 4, 0),
-            ToolTip  = "Add a mouse-cursor indicator — click on the image to place it"
+            ToolTip  = "Add a mouse-cursor indicator"
         };
         _eyedropperBtn = new Button
         {
-            Content  = "⊕ Color",
-            Width    = 76, Height = 28,
+            Content  = MakeToolIcon("ImageEditorEyedropperIcon"),
+            Width    = 32, Height = 28,
+            Padding  = new Thickness(4, 3, 4, 3),
             Margin   = new Thickness(0, 0, 4, 0),
-            ToolTip  = "Pick a color from the image — hover to preview RGB and HSL, click to capture"
+            ToolTip  = "Pick a color from the image"
         };
         var roundCornersBtn = new Button
         {
-            Content  = "⌐ Round Corners",
-            Width    = 112, Height = 28,
+            Content  = MakeToolIcon("ImageEditorRoundCornersIcon"),
+            Width    = 32, Height = 28,
+            Padding  = new Thickness(4, 3, 4, 3),
             Margin   = new Thickness(0, 0, 4, 0),
             ToolTip  = $"Mask the {CornerRadiusPx}px corners transparent in the output PNG"
         };
@@ -498,14 +503,14 @@ internal sealed class ClipboardImageEditorWindow : Window
         {
             if (_inArrowMode) { ExitArrowMode(); return; }
             EnterArrowMode();
-            _addArrowBtn.Content = "✓ ↗ Arrow";
+            _addArrowBtn.Content = MakeToolIcon("ImageEditorArrowIcon", active: true);
         };
 
         _addRectBtn.Click += (_, _) =>
         {
             if (_inRectMode) { ExitRectMode(); return; }
             EnterRectMode();
-            _addRectBtn.Content = "✓ □ Rect";
+            _addRectBtn.Content = MakeToolIcon("ImageEditorRectIcon", active: true);
         };
 
         cursorBtn.Click += (_, _) =>
@@ -514,13 +519,13 @@ internal sealed class ClipboardImageEditorWindow : Window
             if (_cursorEnabled)
             {
                 _inCursorPlacementMode = true;
-                cursorBtn.Content = "✓ ⌖ Cursor";
+                cursorBtn.Content = MakeToolIcon("ImageEditorCursorIcon", active: true);
                 ShowModeHint("Click to place the cursor indicator");
             }
             else
             {
                 _inCursorPlacementMode = false;
-                cursorBtn.Content = "⌖ Cursor";
+                cursorBtn.Content = MakeToolIcon("ImageEditorCursorIcon");
                 ToggleCursorOverlay(false);
                 HideModeHint();
             }
@@ -588,6 +593,33 @@ internal sealed class ClipboardImageEditorWindow : Window
         border.SetResourceReference(Border.BorderBrushProperty, "PopupBorder");
         border.Child = row;
         return border;
+    }
+
+    /// <summary>
+    /// Creates button content displaying the named icon resource (a Viewbox from
+    /// ImageEditorIcons.xaml). When <paramref name="active"/> is true a small accent
+    /// underline is added so the user can see which tool is currently engaged.
+    /// </summary>
+    private UIElement MakeToolIcon(string resourceKey, bool active = false)
+    {
+        var icon = (UIElement?)TryFindResource(resourceKey);
+        if (icon == null)
+            return new TextBlock { Text = resourceKey };
+
+        if (!active) return icon;
+
+        // Active state: stack icon over a 2px accent bar at the bottom.
+        var accent = new Border
+        {
+            Height = 2,
+            VerticalAlignment = VerticalAlignment.Bottom
+        };
+        accent.SetResourceReference(Border.BackgroundProperty, "AccentBrush");
+
+        var grid = new Grid();
+        grid.Children.Add(icon);
+        grid.Children.Add(accent);
+        return grid;
     }
 
     // ── Visual layout ─────────────────────────────────────────────────────────
@@ -1186,7 +1218,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         _inArrowMode = false;
         Cursor = Cursors.Arrow;
         HideModeHint();
-        if (_addArrowBtn != null) _addArrowBtn.Content = "↗ Arrow";
+        if (_addArrowBtn != null) _addArrowBtn.Content = MakeToolIcon("ImageEditorArrowIcon");
     }
 
     /// <summary>
@@ -1731,7 +1763,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         _inRectMode = false;
         Cursor = Cursors.Arrow;
         HideModeHint();
-        if (_addRectBtn != null) _addRectBtn.Content = "□ Rect";
+        if (_addRectBtn != null) _addRectBtn.Content = MakeToolIcon("ImageEditorRectIcon");
     }
 
     private Rectangle EnsureAnnotRectPreview()

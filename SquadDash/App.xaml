@@ -8,6 +8,7 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Themes/Light.xaml" />
                 <ResourceDictionary Source="Themes/ToolIcons.xaml" />
+                <ResourceDictionary Source="Themes/ImageEditorIcons.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
             <!-- Transcript selection dimmed at 50% opacity when context menu is open (focus leaves RTB) -->
