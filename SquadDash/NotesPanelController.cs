@@ -232,7 +232,7 @@ internal sealed class NotesPanelController {
         if (_attachFollowUp is not null)
         {
             menu.Items.Add(MakeSep());
-            var followUpItem = MakeItem("Attach to Prompt");
+            var followUpItem = MakeItem("Add to chat");
             followUpItem.Click += (_, _) => _attachFollowUp(note);
             menu.Items.Add(followUpItem);
         }

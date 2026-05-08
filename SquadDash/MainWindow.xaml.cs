@@ -6261,7 +6261,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 sep.SetResourceReference(Separator.StyleProperty, "ThemedMenuSeparatorStyle");
                 menu.Items.Add(sep);
 
-                var followUpItem = new MenuItem { Header = "Attach to Prompt" };
+                var followUpItem = new MenuItem { Header = "Add to chat" };
                 followUpItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
                 followUpItem.Click += (_, _) => AttachTranscriptFollowUp(activeRtb);
                 menu.Items.Add(followUpItem);
@@ -13243,7 +13243,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                     sep.SetResourceReference(Separator.StyleProperty, "ThemedMenuSeparatorStyle");
                     menu.Items.Add(sep);
 
-                    var followUpItem = new MenuItem { Header = "Attach to Prompt" };
+                    var followUpItem = new MenuItem { Header = "Add to chat" };
                     followUpItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
                     followUpItem.Click += (_, _) => AttachTranscriptFollowUp(rtb);
                     menu.Items.Add(followUpItem);
@@ -20121,8 +20121,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             menu.Items.Add(MakeSep());
             menu.Items.Add(copyLinkItem);
 
-            // Attach to Prompt
-            var followUpItem = MakeItem("Attach to Prompt");
+            // Add to chat
+            var followUpItem = MakeItem("Add to chat");
             followUpItem.Click += (_, _) => AttachTopicFollowUp(item, filePath);
             menu.Items.Add(MakeSep());
             menu.Items.Add(followUpItem);
@@ -21164,8 +21164,9 @@ public partial class MainWindow : Window, ILiveElementLocator
 
                 if (att.ImagePath != null)
                 {
+                    int imgIndex = list.Take(i + 1).Count(a => a.ImagePath != null);
                     var icon    = new Run("📷 ");
-                    var descRun = new Run(att.Description);
+                    var descRun = new Run($"(image {imgIndex})");
                     descRun.SetResourceReference(Run.ForegroundProperty, "LabelText");
                     label.Inlines.Add(icon);
                     label.Inlines.Add(descRun);
@@ -21176,15 +21177,26 @@ public partial class MainWindow : Window, ILiveElementLocator
                 }
                 else if (att.ContentBlock != null)
                 {
-                    var icon = new Run("📎 ");
-                    var descRun = new Run(att.Description);
-                    descRun.SetResourceReference(Run.ForegroundProperty, "LabelText");
-                    label.Inlines.Add(icon);
-                    label.Inlines.Add(descRun);
+                    if (att.Description.StartsWith("Note: ", StringComparison.Ordinal))
+                    {
+                        var icon = new Run("📝 ");
+                        var descRun = new Run(att.Description["Note: ".Length..]);
+                        descRun.SetResourceReference(Run.ForegroundProperty, "LabelText");
+                        label.Inlines.Add(icon);
+                        label.Inlines.Add(descRun);
+                    }
+                    else
+                    {
+                        var icon = new Run("📎 ");
+                        var descRun = new Run(att.Description);
+                        descRun.SetResourceReference(Run.ForegroundProperty, "LabelText");
+                        label.Inlines.Add(icon);
+                        label.Inlines.Add(descRun);
+                    }
                 }
                 else if (att.TranscriptQuote != null)
                 {
-                    var prefix = new Run("↩ Regarding: ");
+                    var prefix = new Run("↩ ");
                     prefix.SetResourceReference(Run.ForegroundProperty, "SubtleText");
                     var quoteRun = new Run($"\"{att.Description}\"");
                     quoteRun.SetResourceReference(Run.ForegroundProperty, "LabelText");
@@ -21212,7 +21224,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         var shaDisplay = att.CommitSha.Length >= 7 ? att.CommitSha[..7] : att.CommitSha;
 
-        var prefix = new Run("↩ Follow-up: ");
+        var prefix = new Run("↩ ");
         prefix.SetResourceReference(Run.ForegroundProperty, "SubtleText");
 
         var shaRun = new Run(shaDisplay)
