@@ -4578,10 +4578,13 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             _suppressLoopPickerChange = false;
         }
+        // Sync _selectedLoopMdPath so RefreshLoopOptionsPanel (called by callers right after)
+        // has a valid path even when SelectionChanged was suppressed during population.
+        _selectedLoopMdPath = GetSelectedLoopFileEntry()?.FilePath;
         UpdateLoopPanelButtonStates();
     }
 
-    private void UpdateLoopFileSubtitle() { }  // subtitle removed; kept to avoid call-site churn
+    private void UpdateLoopFileSubtitle(){ }  // subtitle removed; kept to avoid call-site churn
 
     private LoopFileEntry? GetSelectedLoopFileEntry()
     {
