@@ -5632,9 +5632,14 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
 
         var chipCard = FindAgentCardForThread(thread);
-        thread.ChipSelectionIndicatorBrush = (thread.IsSelected || thread.IsSecondaryPanelOpen) && chipCard is not null
-            ? chipCard.EffectiveAccentBrush
-            : Brushes.Transparent;
+        // Guard on IsTranscriptTargetSelected so that chips never show an underline after their
+        // parent card's selection bar has been cleared.
+        thread.ChipSelectionIndicatorBrush =
+            chipCard is not null &&
+            chipCard.IsTranscriptTargetSelected &&
+            (thread.IsSelected || thread.IsSecondaryPanelOpen)
+                ? chipCard.EffectiveAccentBrush
+                : Brushes.Transparent;
     }
 
     /// <summary>
@@ -7730,8 +7735,22 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 var visualSw = Stopwatch.StartNew();
                 SyncSelectionControllerWithUiState("AgentCardBorder_MouseLeftButtonUp.Shift");
-                _selectionController.HandleCardClick(agentCard, shiftHeld: true);
-                SyncImmediatePanelToggleVisuals(agentCard, "card-shift-click", visualSw);
+                // If one of this agent's threads is the current main transcript selection and there
+                // are no secondary panels, shift-click should dismiss it and revert to the
+                // coordinator rather than opening a redundant secondary panel.
+                bool isCurrentMain = _mainTranscriptVisible &&
+                                     agentCard.Threads.Any(t => ReferenceEquals(t, _selectedTranscriptThread)) &&
+                                     _secondaryTranscripts.Count == 0;
+                if (isCurrentMain)
+                {
+                    SelectTranscriptThread(CoordinatorThread);
+                    SyncTranscriptTargetIndicators();
+                }
+                else
+                {
+                    _selectionController.HandleCardClick(agentCard, shiftHeld: true);
+                    SyncImmediatePanelToggleVisuals(agentCard, "card-shift-click", visualSw);
+                }
             }
             else
             {
@@ -7892,8 +7911,21 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 var visualSw = Stopwatch.StartNew();
                 SyncSelectionControllerWithUiState("AgentThreadChipButton_Click.Shift");
-                _selectionController.HandleChipClick(card, thread, shiftHeld: true);
-                SyncImmediatePanelToggleVisuals(card, "chip-shift-click", visualSw);
+                // If this thread is the current main transcript selection and there are no secondary
+                // panels, shift-click should dismiss it and revert to the coordinator rather than
+                // opening a redundant secondary panel.
+                bool isCurrentMain = _mainTranscriptVisible &&
+                                     ReferenceEquals(_selectedTranscriptThread ?? CoordinatorThread, thread);
+                if (isCurrentMain && _secondaryTranscripts.Count == 0)
+                {
+                    SelectTranscriptThread(CoordinatorThread);
+                    SyncTranscriptTargetIndicators();
+                }
+                else
+                {
+                    _selectionController.HandleChipClick(card, thread, shiftHeld: true);
+                    SyncImmediatePanelToggleVisuals(card, "chip-shift-click", visualSw);
+                }
             }
             else
             {
@@ -12889,6 +12921,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             $"CloseSecondaryPanel closing thread={entry.Thread.ThreadId} agent={entry.Agent.Name} seq={entry.Thread.SequenceNumber} title=\"{entry.TitleBlock.Text}\"");
         _secondaryTranscripts.Remove(entry);
         entry.Thread.IsSecondaryPanelOpen = false;
+        SyncThreadChip(entry.Thread);
         if (_secondaryTranscripts.Count == 0)
             _transcriptTitleRefreshTimer?.Stop();
         sw.Restart();
