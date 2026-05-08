@@ -861,34 +861,6 @@
                                           Style="{StaticResource ThemedComboBoxStyle}"
                                           ToolTip="Select which loop file to run"
                                           SelectionChanged="LoopFilePicker_SelectionChanged" />
-                                <StackPanel x:Name="LoopOptionsPanel"
-                                            DockPanel.Dock="Top"
-                                            Margin="0,0,0,6"
-                                            Visibility="Collapsed" />
-                                <StackPanel DockPanel.Dock="Top"
-                                            Margin="0,0,0,6">
-                                    <RadioButton x:Name="LoopModeCliRadio"
-                                                 Content="Squad CLI"
-                                                 GroupName="LoopMode"
-                                                 ToolTipService.ShowOnDisabled="True"
-                                                 Style="{StaticResource ThemedRadioButtonStyle}"
-                                                 Click="LoopModeCliRadio_Click" />
-                                    <RadioButton x:Name="LoopModeNativeRadio"
-                                                 Content="SquadDash Agents"
-                                                 GroupName="LoopMode"
-                                                 IsChecked="True"
-                                                 Margin="0,2,0,0"
-                                                 Style="{StaticResource ThemedRadioButtonStyle}"
-                                                 Click="LoopModeNativeRadio_Click" />
-                                </StackPanel>
-                                <CheckBox x:Name="LoopContinuousContextCheckBox"
-                                          DockPanel.Dock="Top"
-                                          Content="Continuous context"
-                                          IsChecked="True"
-                                          Margin="0,0,0,8"
-                                          Foreground="{DynamicResource LabelText}"
-                                          ToolTip="When checked, each iteration continues in the same session and can see prior results. Uncheck for a fresh, lower-cost session each iteration."
-                                          Click="LoopContinuousContextCheckBox_Click" />
                                 <Button x:Name="StartLoopButton"
                                         DockPanel.Dock="Top"
                                         Content="▶ Start Loop"
@@ -911,6 +883,38 @@
                                         Style="{StaticResource ThemedButtonStyle}"
                                         ToolTip="Abort Loop (Ctrl+Shift+Break)"
                                         Click="AbortLoopButton_Click" />
+                                <ScrollViewer DockPanel.Dock="Top"
+                                              Margin="0,8,0,0"
+                                              MaxHeight="200"
+                                              VerticalScrollBarVisibility="Auto">
+                                    <StackPanel>
+                                        <StackPanel Margin="0,0,0,6">
+                                            <RadioButton x:Name="LoopModeCliRadio"
+                                                         Content="Squad CLI"
+                                                         GroupName="LoopMode"
+                                                         ToolTipService.ShowOnDisabled="True"
+                                                         Style="{StaticResource ThemedRadioButtonStyle}"
+                                                         Click="LoopModeCliRadio_Click" />
+                                            <RadioButton x:Name="LoopModeNativeRadio"
+                                                         Content="SquadDash Agents"
+                                                         GroupName="LoopMode"
+                                                         IsChecked="True"
+                                                         Margin="0,2,0,0"
+                                                         Style="{StaticResource ThemedRadioButtonStyle}"
+                                                         Click="LoopModeNativeRadio_Click" />
+                                        </StackPanel>
+                                        <CheckBox x:Name="LoopContinuousContextCheckBox"
+                                                  Content="Continuous context"
+                                                  IsChecked="True"
+                                                  Margin="0,0,0,8"
+                                                  Foreground="{DynamicResource LabelText}"
+                                                  ToolTip="When checked, each iteration continues in the same session and can see prior results. Uncheck for a fresh, lower-cost session each iteration."
+                                                  Click="LoopContinuousContextCheckBox_Click" />
+                                        <StackPanel x:Name="LoopOptionsPanel"
+                                                    Margin="0,0,0,6"
+                                                    Visibility="Collapsed" />
+                                    </StackPanel>
+                                </ScrollViewer>
                             </DockPanel>
                         </Border>
 

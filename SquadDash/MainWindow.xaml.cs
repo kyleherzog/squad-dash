@@ -4633,8 +4633,23 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         if (config?.Options is not { Count: > 0 }) return;
 
+        bool inGroup = false;
         foreach (var opt in config.Options)
         {
+            if (opt.Type == "group")
+            {
+                var header = new TextBlock
+                {
+                    Text       = opt.Label ?? opt.Key,
+                    FontWeight = FontWeights.SemiBold,
+                    Margin     = new Thickness(0, 6, 0, 2),
+                };
+                header.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
+                LoopOptionsPanel.Children.Add(header);
+                inGroup = true;
+                continue;
+            }
+
             UIElement control = opt.Type switch
             {
                 "bool" => CreateBoolOptionControl(opt),
@@ -4642,6 +4657,10 @@ public partial class MainWindow : Window, ILiveElementLocator
                 "enum" => CreateEnumOptionControl(opt),
                 _      => CreateIntOptionControl(opt),
             };
+
+            if (inGroup && control is FrameworkElement fe)
+                fe.Margin = new Thickness(fe.Margin.Left + 12, fe.Margin.Top, fe.Margin.Right, fe.Margin.Bottom);
+
             LoopOptionsPanel.Children.Add(control);
         }
 
