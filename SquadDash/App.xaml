@@ -682,6 +682,12 @@
                 <Setter Property="BorderThickness"  Value="1"/>
                 <Setter Property="Cursor"           Value="Hand"/>
                 <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <!-- Non-focusable: prevents the button from stealing focus from the transcript
+                     RichTextBox when clicked. If focus moves away from the RichTextBox, WPF
+                     emits a scroll-to-caret event that sets IsUserScrolledAway=true before
+                     ExecutePendingScrollToEnd fires, causing the deferred scroll to be skipped. -->
+                <Setter Property="Focusable"        Value="False"/>
+                <Setter Property="IsTabStop"        Value="False"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
