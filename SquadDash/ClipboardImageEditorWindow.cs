@@ -1632,6 +1632,12 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         var arrow = CreateArrow(targetBounds);
 
+        // Record where the crosshair should stay anchored for this arrow.
+        // headPt is the arrowhead tip; extend 1/4 of the total drag past the tip.
+        arrow.CrosshairCenter = new Point(
+            headPt.X + ux * dist * 0.25,
+            headPt.Y + uy * dist * 0.25);
+
         _defaultArrowAngleDeg = savedAngle;
         _defaultTailLength = savedTailLen;
 
@@ -1768,7 +1774,7 @@ internal sealed class ClipboardImageEditorWindow : Window
                 ? Math.Max(64, Math.Min(arrow.UserTailLength, maxFromTip))
                 : ComputeInitialTailLength(pivot, newAngle, arrow.ArrowLength);
             UpdateArrowGeometry(arrow);
-            ShowCrosshairForArrow(arrow, pivot);
+            if (arrow.CrosshairCenter is { } ch) ShowCrosshair(ch.X, ch.Y);
             e.Handled = true;
         };
         tipHandle.MouseLeftButtonUp += (_, e) =>
@@ -1811,7 +1817,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             var total = Math.Max(arrow.ArrowLength + MinTail, dist);
             arrow.TailLength = Math.Max(MinTail, total - arrow.ArrowLength);
             UpdateArrowGeometry(arrow);
-            ShowCrosshairForArrow(arrow, pivot);
+            if (arrow.CrosshairCenter is { } ch2) ShowCrosshair(ch2.X, ch2.Y);
             e.Handled = true;
         };
         tailHandle.MouseLeftButtonUp += (_, e) =>
@@ -1876,11 +1882,24 @@ internal sealed class ClipboardImageEditorWindow : Window
             arrow.OffsetY = _bodyDragStartOffsetY + (pt.Y - _bodyDragStartMouse.Y);
             UpdateArrowGeometry(arrow);
             if (_colorPickerArrow == arrow) ShowColorPicker(arrow);
+            // Translate the stored crosshair center with the body drag.
+            if (arrow.CrosshairCenter is { } chBase)
+            {
+                var dragDx = arrow.OffsetX - _bodyDragStartOffsetX;
+                var dragDy = arrow.OffsetY - _bodyDragStartOffsetY;
+                ShowCrosshair(chBase.X + dragDx, chBase.Y + dragDy);
+            }
             e.Handled = true;
         };
         shape.MouseLeftButtonUp += (_, e) =>
         {
             if (_draggingArrow != arrow || !_bodyDragging) return;
+            // Commit the crosshair offset so future tip/tail drags use the new location.
+            if (arrow.CrosshairCenter is { } chBase)
+                arrow.CrosshairCenter = new Point(
+                    chBase.X + (arrow.OffsetX - _bodyDragStartOffsetX),
+                    chBase.Y + (arrow.OffsetY - _bodyDragStartOffsetY));
+            HideCrosshair();
             CommitDragUndo();
             _draggingArrow = null;
             _bodyDragging = false;
@@ -1991,23 +2010,6 @@ internal sealed class ClipboardImageEditorWindow : Window
         if (_crosshairRedH is null) return;
         _crosshairWhiteH!.Visibility = _crosshairWhiteV!.Visibility =
         _crosshairRedH.Visibility    = _crosshairRedV!.Visibility   = Visibility.Collapsed;
-    }
-
-    /// <summary>
-    /// Computes the "target" crosshair position for a placed arrow — 1/4 of
-    /// the total arrow length past the tip in the pointing direction — and
-    /// shows it.  <paramref name="pivot"/> is (TargetCenterOnCanvas + Offset).
-    /// </summary>
-    private void ShowCrosshairForArrow(AnnotationArrow arrow, Point pivot)
-    {
-        var rad = arrow.ArrowheadAngleDeg * Math.PI / 180.0;
-        var ux = Math.Sin(rad);
-        var uy = -Math.Cos(rad);
-        // Tip is at pivot + ux*ArrowLength.  Direction PAST tip = -ux, -uy.
-        var total = arrow.ArrowLength + arrow.TailLength;
-        var ahX = pivot.X + ux * arrow.ArrowLength;
-        var ahY = pivot.Y + uy * arrow.ArrowLength;
-        ShowCrosshair(ahX - ux * total * 0.25, ahY - uy * total * 0.25);
     }
 
     private double ComputeInitialTailLength(Point targetCenter, double angleDeg, double arrowheadOffset)
