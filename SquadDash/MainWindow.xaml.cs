@@ -4760,7 +4760,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (TryFindResource("LabelText") is System.Windows.Media.Brush labelBrush)
             label.Foreground = labelBrush;
 
-        var combo = new ComboBox();
+        var combo = new ComboBox
+        {
+            HorizontalAlignment = HorizontalAlignment.Left,
+            MaxWidth            = 90,
+        };
         if (TryFindResource("ThemedComboBoxStyle") is Style comboStyle)
             combo.Style = comboStyle;
 
