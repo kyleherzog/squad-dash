@@ -279,6 +279,23 @@ internal static class LoopMdParser {
             i++;
         return string.Join("\n", lines, i, lines.Length - i);
     }
+
+    /// <summary>
+    /// Returns the instructions body with all <c>{{optionKey}}</c> placeholders
+    /// replaced by the current <c>RawValue</c> of the matching option.
+    /// Options of type "group" are skipped (they are UI headers, not values).
+    /// </summary>
+    public static string BuildMergedBody(LoopMdConfig config)
+    {
+        var body = config.Instructions;
+        if (config.Options is null) return body;
+        foreach (var opt in config.Options)
+        {
+            if (opt.Type == "group") continue;
+            body = body.Replace($"{{{{{opt.Key}}}}}", opt.RawValue, StringComparison.Ordinal);
+        }
+        return body;
+    }
     /// <summary>
     /// Updates a single option's <c>value:</c> line in the loop file's YAML frontmatter.
     /// Reads the file, finds the <c>options:</c> block, locates <paramref name="optionKey"/>,

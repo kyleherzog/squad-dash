@@ -4667,6 +4667,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
 
         LoopOptionsPanel.Visibility = Visibility.Visible;
+        RefreshLoopMergedView();
     }
 
     private CheckBox CreateBoolOptionControl(LoopOption opt)
@@ -4685,8 +4686,8 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         var capturedPath = _selectedLoopMdPath;
         var capturedKey  = opt.Key;
-        cb.Checked   += (_, _) => LoopMdParser.UpdateOptionValue(capturedPath!, capturedKey, "true");
-        cb.Unchecked += (_, _) => LoopMdParser.UpdateOptionValue(capturedPath!, capturedKey, "false");
+        cb.Checked   += (_, _) => { LoopMdParser.UpdateOptionValue(capturedPath!, capturedKey, "true");  RefreshLoopMergedView(); };
+        cb.Unchecked += (_, _) => { LoopMdParser.UpdateOptionValue(capturedPath!, capturedKey, "false"); RefreshLoopMergedView(); };
         return cb;
     }
 
@@ -4730,6 +4731,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 if (TryFindResource("InputBorder") is System.Windows.Media.Brush b)
                     tb.BorderBrush = b;
                 LoopMdParser.UpdateOptionValue(capturedPath!, capturedKey, text);
+                RefreshLoopMergedView();
             }
             else
             {
@@ -4779,7 +4781,10 @@ public partial class MainWindow : Window, ILiveElementLocator
         combo.SelectionChanged += (_, _) =>
         {
             if (combo.SelectedItem is string selected)
+            {
                 LoopMdParser.UpdateOptionValue(capturedPath!, capturedKey, selected);
+                RefreshLoopMergedView();
+            }
         };
 
         Grid.SetColumn(label, 0);
@@ -9084,6 +9089,46 @@ public partial class MainWindow : Window, ILiveElementLocator
             }
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(LoopPanelShowInFolderMenuItem_Click), ex); }
+    }
+
+    private void LoopPanelShowMergedMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var isVisible = LoopMergedViewBorder.Visibility == Visibility.Visible;
+            if (isVisible)
+            {
+                LoopMergedViewBorder.Visibility = Visibility.Collapsed;
+                LoopPanelShowMergedMenuItem.Header = "Show merged loop file";
+            }
+            else
+            {
+                LoopMergedViewBorder.Visibility = Visibility.Visible;
+                LoopPanelShowMergedMenuItem.Header = "Hide merged loop file";
+                RefreshLoopMergedView();
+            }
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(LoopPanelShowMergedMenuItem_Click), ex); }
+    }
+
+    private void RefreshLoopMergedView()
+    {
+        if (LoopMergedViewBorder.Visibility != Visibility.Visible) return;
+        if (_selectedLoopMdPath is null) { LoopMergedBodyTextBox.Text = ""; return; }
+
+        try
+        {
+            var config = LoopMdParser.Parse(_selectedLoopMdPath);
+            LoopMergedBodyTextBox.Text = config is not null
+                ? LoopMdParser.BuildMergedBody(config)
+                : File.Exists(_selectedLoopMdPath)
+                    ? LoopMdParser.StripFrontmatter(File.ReadAllText(_selectedLoopMdPath))
+                    : "";
+        }
+        catch
+        {
+            LoopMergedBodyTextBox.Text = "";
+        }
     }
 
     private void TasksPanelCloseButton_Click(object sender, RoutedEventArgs e)
