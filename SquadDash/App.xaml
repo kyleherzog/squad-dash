@@ -932,7 +932,7 @@
                                         <ScrollViewer Margin="1"
                                                       SnapsToDevicePixels="True"
                                                       Background="Transparent"
-                                                      VerticalScrollBarVisibility="Hidden"
+                                                      VerticalScrollBarVisibility="Auto"
                                                       HorizontalScrollBarVisibility="Disabled">
                                             <StackPanel IsItemsHost="True"
                                                         KeyboardNavigation.DirectionalNavigation="Contained"/>
