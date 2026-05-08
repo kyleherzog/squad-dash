@@ -448,6 +448,7 @@ internal sealed class ClipboardImageEditorWindow : Window
                 if (Keyboard.FocusedElement is TextBox) return;
                 _isPanMode = true;
                 _canvas.Cursor = OpenHandCursor;
+                _canvas.ForceCursor = true;   // prevent child elements (shapes) from overriding cursor
                 _scrollViewer.Cursor = OpenHandCursor;
                 e.Handled = true;
             }
@@ -458,6 +459,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             if (e.Key == Key.Space && _isPanMode)
             {
                 _isPanMode = false;
+                _canvas.ForceCursor = false;
                 if (_isPanning)
                 {
                     _isPanning = false;
@@ -523,12 +525,12 @@ internal sealed class ClipboardImageEditorWindow : Window
         _scrollViewer.PreviewMouseLeftButtonDown += (_, e) =>
         {
             if (!_isPanMode) return;
-            if (_scrollViewer.ScrollableWidth <= 0 && _scrollViewer.ScrollableHeight <= 0) return;
             _isPanning = true;
             _panStartMouse = e.GetPosition(_scrollViewer);
             _panStartH = _scrollViewer.HorizontalOffset;
             _panStartV = _scrollViewer.VerticalOffset;
             _scrollViewer.CaptureMouse();
+            _canvas.Cursor = ClosedHandCursor;
             _scrollViewer.Cursor = ClosedHandCursor;
             e.Handled = true;
         };
@@ -549,6 +551,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             if (!_isPanning) return;
             _isPanning = false;
             _scrollViewer.ReleaseMouseCapture();
+            _canvas.Cursor = _isPanMode ? OpenHandCursor : Cursors.Arrow;
             _scrollViewer.Cursor = _isPanMode ? OpenHandCursor : null;
             e.Handled = true;
         };
@@ -1270,6 +1273,9 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     private void Canvas_MouseMove(object sender, MouseEventArgs e)
     {
+        // Pan mode owns the cursor and all mouse interaction while Space is held.
+        if (_isPanMode) return;
+
         // Live preview for arrow drag-to-draw.
         if (_creatingArrowByDrag && _arrowDragPreviewLine != null && _arrowDragPreviewHead != null)
         {
