@@ -282,6 +282,7 @@ internal sealed class PreferencesWindow : Window {
 
         var pageList = new List<(string label, UIElement page)> {
             ("General",       BuildGeneralPage()),
+            ("Speech",        BuildSpeechPage()),
             ("Remote Access", BuildRemoteAccessPage()),
             ("Custom Model",  BuildByokPage()),
             ("Notifications", BuildNotificationsPage(currentSettings)),
@@ -319,6 +320,14 @@ internal sealed class PreferencesWindow : Window {
 
         AddLabel(form, "User Name (appears in the Transcript, before user prompts)");
         form.Children.Add(_userNameBox);
+
+        return WrapInScrollViewer(form);
+    }
+
+    private UIElement BuildSpeechPage() {
+        var form = new StackPanel { Margin = new Thickness(20, 16, 20, 20) };
+
+        AddSectionHeader(form, "Speech");
 
         AddLabel(form, "Azure Speech API Key");
         var apiKeyHost = new Grid();
