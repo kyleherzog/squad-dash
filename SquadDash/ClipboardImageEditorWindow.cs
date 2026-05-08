@@ -207,7 +207,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         WindowStyle = WindowStyle.SingleBorderWindow;
         ResizeMode = ResizeMode.CanResizeWithGrip;
         ShowInTaskbar = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        WindowStartupLocation = WindowStartupLocation.Manual;
         this.SetResourceReference(BackgroundProperty, "AppSurface");
 
         LoadArrowDefaults();
@@ -249,6 +249,9 @@ internal sealed class ClipboardImageEditorWindow : Window
         Width  = Math.Max(MinWindowWidth, Math.Min(maxWinW, dispW * _zoom + 24));
         Height = Math.Min(maxWinH, dispH * _zoom + toolbarH);
         MinWidth = MinWindowWidth;
+
+        Left = monitorArea.Left + (monitorArea.Width  - Width)  / 2.0;
+        Top  = monitorArea.Top  + (monitorArea.Height - Height) / 2.0;
 
         // ── Canvas ───────────────────────────────────────────────────────────
 
