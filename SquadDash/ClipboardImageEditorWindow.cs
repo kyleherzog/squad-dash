@@ -264,13 +264,42 @@ internal sealed class ClipboardImageEditorWindow : Window
         Height = Math.Min(maxWinH, dispH * _zoom + toolbarH);
         MinWidth = MinWindowWidth;
 
-        Left = monitorArea.Left + (monitorArea.Width  - Width)  / 2.0;
-        Top  = monitorArea.Top  + (monitorArea.Height - Height) / 2.0;
+        // Center dialog on owner's actual screen position.
+        // PointToScreen gives real physical coords (correct even when maximized — unlike
+        // WPF Left/Top which returns restore bounds for maximized windows).
+        // TransformFromDevice converts physical pixels back to WPF logical units.
+        var ownerTopLeft = owner.PointToScreen(new Point(0, 0));
+        var pSrc = PresentationSource.FromVisual(owner);
+        if (pSrc != null)
+        {
+            var toLogical = pSrc.CompositionTarget.TransformFromDevice;
+            var logicalOrigin = toLogical.Transform(ownerTopLeft);
+            double ownerLogicalW = owner.ActualWidth;
+            double ownerLogicalH = owner.ActualHeight;
+            Left = logicalOrigin.X + (ownerLogicalW - Width)  / 2.0;
+            Top  = logicalOrigin.Y + (ownerLogicalH - Height) / 2.0;
 
-        System.Diagnostics.Trace.WriteLine(
-            $"[ClipboardImageEditor] owner.Left={owner.Left} owner.Top={owner.Top} " +
-            $"owner.State={owner.WindowState} monitorArea={monitorArea} " +
-            $"dialog Left={Left} Top={Top}");
+            // Clamp to monitor work area so dialog doesn't overflow off-screen
+            var work = GetMonitorWorkAreaRect(owner);
+            if (Left < work.Left) Left = work.Left;
+            if (Top  < work.Top)  Top  = work.Top;
+            if (Left + Width  > work.Right)  Left = work.Right  - Width;
+            if (Top  + Height > work.Bottom) Top  = work.Bottom - Height;
+        }
+        else
+        {
+            // Fallback: use monitor work area center (pSrc null means window not yet rendered)
+            var work = GetMonitorWorkAreaRect(owner);
+            Left = work.Left + (work.Width  - Width)  / 2.0;
+            Top  = work.Top  + (work.Height - Height) / 2.0;
+        }
+
+        // Write to SquadDash trace log (visible in the Trace panel) for diagnostics
+        SquadDashTrace.Write("UI",
+            $"[ClipboardImageEditor] owner.WindowState={owner.WindowState} " +
+            $"owner.ActualWidth={owner.ActualWidth:F0} owner.ActualHeight={owner.ActualHeight:F0} " +
+            $"ownerTopLeft={ownerTopLeft.X:F0},{ownerTopLeft.Y:F0} " +
+            $"dialog Left={Left:F0} Top={Top:F0} Width={Width:F0} Height={Height:F0}");
 
         // ── Canvas ───────────────────────────────────────────────────────────
 
