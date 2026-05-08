@@ -24,6 +24,7 @@ Known keyboard shortcuts and hotkeys in SquadDash.
 | **Ctrl+Scroll** (on transcript) | Adjust transcript font size (persisted globally) |
 | **Ctrl+Scroll** (on prompt) | Adjust prompt font size (persisted globally) |
 | **Ctrl+Break** | Abort the running prompt (same as clicking the Abort button) |
+| **Ctrl+Shift+Break** | Abort the running loop (when the loop panel is active) |
 
 ---
 
