@@ -1750,6 +1750,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             _preDragSnapshot = CaptureSnapshot();
             _draggingArrow = arrow;
             _tailDragging = false;
+            HideColorPicker();
             tipHandle.CaptureMouse();
             e.Handled = true;
         };
@@ -1783,6 +1784,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             CommitDragUndo();
             _draggingArrow = null;
             HideCrosshair();
+            ShowColorPicker(arrow);
             tipHandle.ReleaseMouseCapture();
             e.Handled = true;
         };
@@ -1794,6 +1796,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             _draggingArrow = arrow;
             _tailDragging = true;
             _tailDragStartMouse = e.GetPosition(_canvas);
+            HideColorPicker();
             tailHandle.CaptureMouse();
             e.Handled = true;
         };
@@ -1828,6 +1831,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             _draggingArrow = null;
             _tailDragging = false;
             HideCrosshair();
+            ShowColorPicker(arrow);
             tailHandle.ReleaseMouseCapture();
             e.Handled = true;
         };
@@ -1862,6 +1866,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         {
             if (_draggingArrow != null) return;
             SelectArrow(arrow);
+            HideColorPicker();
             _preDragSnapshot = CaptureSnapshot();
             _draggingArrow = arrow;
             _bodyDragging = true;
@@ -1890,6 +1895,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             CommitDragUndo();
             _draggingArrow = null;
             _bodyDragging = false;
+            ShowColorPicker(arrow);
             shape.ReleaseMouseCapture();
             e.Handled = true;
         };
