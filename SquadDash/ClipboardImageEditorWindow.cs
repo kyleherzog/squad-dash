@@ -1927,18 +1927,19 @@ internal sealed class ClipboardImageEditorWindow : Window
         var tailX = center.X + ux * (arrow.ArrowLength + arrow.TailLength);
         var tailY = center.Y + uy * (arrow.ArrowLength + arrow.TailLength);
 
+        const double HeadLen = 16.0;
+        const double HeadHalf = 6.0;
+        var baseX = ahX + ux * HeadLen;
+        var baseY = ahY + uy * HeadLen;
+
+        // Stop shaft at the head base so it doesn't poke through the arrowhead tip.
         arrow.Line.X1 = tailX; arrow.Line.Y1 = tailY;
-        arrow.Line.X2 = ahX; arrow.Line.Y2 = ahY;
+        arrow.Line.X2 = baseX; arrow.Line.Y2 = baseY;
 
         arrow.HitLine.X1 = arrow.Line.X1;
         arrow.HitLine.Y1 = arrow.Line.Y1;
         arrow.HitLine.X2 = arrow.Line.X2;
         arrow.HitLine.Y2 = arrow.Line.Y2;
-
-        const double HeadLen = 16.0;
-        const double HeadHalf = 6.0;
-        var baseX = ahX + ux * HeadLen;
-        var baseY = ahY + uy * HeadLen;
         var px = -uy;
         var py = ux;
 
@@ -1957,7 +1958,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         arrow.ShadowLine.Points = new PointCollection(new[]
         {
             new Point(tailX + 2, tailY + 2),
-            new Point(ahX   + 2, ahY   + 2)
+            new Point(baseX + 2, baseY + 2)
         });
         arrow.ShadowHead.Points = new PointCollection(
             arrow.Head.Points.Select(p => p + new Vector(2, 2)));
