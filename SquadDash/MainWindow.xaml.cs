@@ -21188,7 +21188,12 @@ public partial class MainWindow : Window, ILiveElementLocator
                     else
                     {
                         var icon = new Run("📎 ");
-                        var descRun = new Run(att.Description);
+                        var displayText = att.Description.StartsWith("Task: ", StringComparison.Ordinal)
+                            ? att.Description["Task: ".Length..]
+                            : att.Description.StartsWith("Topic: ", StringComparison.Ordinal)
+                                ? att.Description["Topic: ".Length..]
+                                : att.Description;
+                        var descRun = new Run(displayText);
                         descRun.SetResourceReference(Run.ForegroundProperty, "LabelText");
                         label.Inlines.Add(icon);
                         label.Inlines.Add(descRun);
