@@ -4634,6 +4634,9 @@ public partial class MainWindow : Window, ILiveElementLocator
             attachFollowUp: task => AttachContextFollowUp(
                 $"Task: {task.Text}",
                 BuildTaskContentBlock(task)),
+            addToNotes: task => AddNoteFromTextWithTitle(
+                $"Task - {task.Text}",
+                BuildTaskContentBlock(task)),
             getRoster: () => _currentWorkspace is null
                                  ? []
                                  : _teamRosterLoader.Load(_currentWorkspace.FolderPath));
@@ -6245,22 +6248,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             var activeRtb = (sender as RichTextBox) ?? OutputTextBox;
             var hasSelection = !activeRtb.Selection.IsEmpty;
 
-            var copyItem = new MenuItem { Header = "_Copy" };
-            copyItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
-            copyItem.IsEnabled = hasSelection;
-            copyItem.Click += (_, _) => {
-                var text = TranscriptCopyService.BuildSelectionText(activeRtb);
-                if (!string.IsNullOrEmpty(text))
-                    SetClipboardTextWithRetry(text);
-            };
-            menu.Items.Add(copyItem);
-
             if (hasSelection)
             {
-                var sep = new Separator();
-                sep.SetResourceReference(Separator.StyleProperty, "ThemedMenuSeparatorStyle");
-                menu.Items.Add(sep);
-
                 var followUpItem = new MenuItem { Header = "Add to chat" };
                 followUpItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
                 followUpItem.Click += (_, _) => AttachTranscriptFollowUp(activeRtb);
@@ -6275,8 +6264,21 @@ public partial class MainWindow : Window, ILiveElementLocator
                     activeRtb.Selection.Select(activeRtb.CaretPosition, activeRtb.CaretPosition);
                 };
                 menu.Items.Add(addToNotesItem);
+
+                var sep = new Separator();
+                sep.SetResourceReference(Separator.StyleProperty, "ThemedMenuSeparatorStyle");
+                menu.Items.Add(sep);
             }
 
+            var copyItem = new MenuItem { Header = "_Copy" };
+            copyItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+            copyItem.IsEnabled = hasSelection;
+            copyItem.Click += (_, _) => {
+                var text = TranscriptCopyService.BuildSelectionText(activeRtb);
+                if (!string.IsNullOrEmpty(text))
+                    SetClipboardTextWithRetry(text);
+            };
+            menu.Items.Add(copyItem);
             menu.PlacementTarget = activeRtb;
             menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
             menu.IsOpen = true;
@@ -10130,6 +10132,50 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             var menu = MakeMenu();
 
+            var hasSelection = DocSourceTextBox.GetSelectionLength() > 0;
+            var capturedSelStart = hasSelection ? DocSourceTextBox.GetSelectionStart() : 0;
+            var capturedSelLen   = hasSelection ? DocSourceTextBox.GetSelectionLength() : 0;
+
+            if (hasSelection)
+            {
+                // Capture now — WPF clears the selection when the ContextMenu takes focus.
+                var docTitle = _currentDocPath is not null
+                    ? System.IO.Path.GetFileNameWithoutExtension(_currentDocPath)
+                    : "Documentation";
+
+                var addToChatItem = new MenuItem
+                {
+                    Header = "Add to chat",
+                    Style  = (Style)FindResource("ThemedMenuItemStyle")
+                };
+                addToChatItem.Click += (_, _) => {
+                    var text = DocSourceTextBox.GetSubstring(capturedSelStart, capturedSelLen);
+                    if (!string.IsNullOrWhiteSpace(text)) {
+                        var sb = new System.Text.StringBuilder();
+                        sb.AppendLine($"## Documentation: {docTitle}");
+                        if (_currentDocPath is not null) sb.AppendLine($"File: {_currentDocPath}");
+                        sb.AppendLine();
+                        sb.AppendLine(text.Trim());
+                        AttachContextFollowUp($"Doc: {docTitle}", sb.ToString().TrimEnd());
+                    }
+                };
+                menu.Items.Add(addToChatItem);
+
+                var addToNotesItem = new MenuItem
+                {
+                    Header = "Add to Notes",
+                    Style  = (Style)FindResource("ThemedMenuItemStyle")
+                };
+                addToNotesItem.Click += (_, _) => {
+                    var text = DocSourceTextBox.GetSubstring(capturedSelStart, capturedSelLen);
+                    if (!string.IsNullOrWhiteSpace(text))
+                        AddNoteFromText(text);
+                };
+                menu.Items.Add(addToNotesItem);
+
+                menu.Items.Add(new Separator { Style = (Style)FindResource("ThemedMenuSeparatorStyle") });
+            }
+
             var cutItem = new MenuItem
             {
                 Header = "Cu_t",
@@ -10152,8 +10198,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                 CommandTarget = DocSourceTextBox
             };
 
-            cutItem.IsEnabled = DocSourceTextBox.GetSelectionLength() > 0;
-            copyItem.IsEnabled = DocSourceTextBox.GetSelectionLength() > 0;
+            cutItem.IsEnabled = hasSelection;
+            copyItem.IsEnabled = hasSelection;
             pasteItem.IsEnabled = Clipboard.ContainsText();
 
             menu.Items.Add(cutItem);
@@ -10172,24 +10218,9 @@ public partial class MainWindow : Window, ILiveElementLocator
                 menu.Items.Add(imgItem);
             }
 
-            if (DocSourceTextBox.GetSelectionLength() > 0)
+            if (hasSelection)
             {
-                // Capture now — WPF clears the selection when the ContextMenu takes focus.
-                var capturedSelStart = DocSourceTextBox.GetSelectionStart();
-                var capturedSelLen   = DocSourceTextBox.GetSelectionLength();
-
                 menu.Items.Add(new Separator { Style = (Style)FindResource("ThemedMenuSeparatorStyle") });
-                var addToNotesItem = new MenuItem
-                {
-                    Header = "Add to Notes",
-                    Style  = (Style)FindResource("ThemedMenuItemStyle")
-                };
-                addToNotesItem.Click += (_, _) => {
-                    var text = DocSourceTextBox.GetSubstring(capturedSelStart, capturedSelLen);
-                    if (!string.IsNullOrWhiteSpace(text))
-                        AddNoteFromText(text);
-                };
-                menu.Items.Add(addToNotesItem);
 
                 var reviseItem = new MenuItem
                 {
@@ -13226,6 +13257,28 @@ public partial class MainWindow : Window, ILiveElementLocator
 
                 var hasSelection = !rtb.Selection.IsEmpty;
 
+                if (hasSelection)
+                {
+                    var followUpItem = new MenuItem { Header = "Add to chat" };
+                    followUpItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+                    followUpItem.Click += (_, _) => AttachTranscriptFollowUp(rtb);
+                    menu.Items.Add(followUpItem);
+
+                    var addToNotesItem = new MenuItem { Header = "Add to Notes" };
+                    addToNotesItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+                    addToNotesItem.Click += (_, _) => {
+                        var text = TranscriptCopyService.BuildSelectionMarkdown(rtb);
+                        if (!string.IsNullOrWhiteSpace(text))
+                            AddNoteFromText(text);
+                        rtb.Selection.Select(rtb.CaretPosition, rtb.CaretPosition);
+                    };
+                    menu.Items.Add(addToNotesItem);
+
+                    var sep = new Separator();
+                    sep.SetResourceReference(Separator.StyleProperty, "ThemedMenuSeparatorStyle");
+                    menu.Items.Add(sep);
+                }
+
                 var copyItem = new MenuItem { Header = "_Copy" };
                 copyItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
                 copyItem.IsEnabled = hasSelection;
@@ -13236,18 +13289,6 @@ public partial class MainWindow : Window, ILiveElementLocator
                         SetClipboardTextWithRetry(text);
                 };
                 menu.Items.Add(copyItem);
-
-                if (hasSelection)
-                {
-                    var sep = new Separator();
-                    sep.SetResourceReference(Separator.StyleProperty, "ThemedMenuSeparatorStyle");
-                    menu.Items.Add(sep);
-
-                    var followUpItem = new MenuItem { Header = "Add to chat" };
-                    followUpItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
-                    followUpItem.Click += (_, _) => AttachTranscriptFollowUp(rtb);
-                    menu.Items.Add(followUpItem);
-                }
 
                 menu.PlacementTarget = rtb;
                 menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
@@ -19820,6 +19861,10 @@ public partial class MainWindow : Window, ILiveElementLocator
             ScreenshotsDirectory: _workspacePaths.ScreenshotsDirectory,
             ThemeName: _activeThemeName,
             SpeechRegion: _settingsSnapshot.SpeechRegion ?? string.Empty) {
+            AddToChatCallback = text => Dispatcher.Invoke(() => {
+                if (!string.IsNullOrWhiteSpace(text))
+                    AttachContextFollowUp(NotesStore.DeriveTitle(text), text.TrimEnd());
+            }),
             AddToNotesCallback = text => Dispatcher.Invoke(() => AddNoteFromText(text)),
             ReviseWithAiCallback = (instructions, sel, doc, cwd, ct) =>
                 _bridge.RunDocRevisionAsync(instructions, sel, doc, cwd, ct),
@@ -20110,22 +20155,33 @@ public partial class MainWindow : Window, ILiveElementLocator
 
             item.IsSelected = true;
 
-            var renameItem = MakeItem("Rename…");
+            var renameItem = MakeItem("Rename\u2026");
             renameItem.Click += (_, _) => EnterInPlaceRename(item, filePath);
 
             var copyLinkItem = MakeItem("Copy markdown link to this topic");
             copyLinkItem.Click += (_, _) => DocTopicsTreeView_CopyMarkdownLink(item);
 
             var menu = MakeMenu();
+
+            // Add to chat first
+            var followUpItem = MakeItem("Add to chat");
+            followUpItem.Click += (_, _) => AttachTopicFollowUp(item, filePath);
+            menu.Items.Add(followUpItem);
+
+            // Add to Notes second
+            var addToNotesItem = MakeItem("Add to Notes");
+            addToNotesItem.Click += (_, _) => {
+                var topicTitle = GetTopicItemTitle(item) ?? System.IO.Path.GetFileNameWithoutExtension(filePath);
+                string content = "";
+                try { content = System.IO.File.ReadAllText(filePath); } catch { }
+                AddNoteFromTextWithTitle($"Topic - {topicTitle}", content);
+            };
+            menu.Items.Add(addToNotesItem);
+
+            menu.Items.Add(MakeSep());
             menu.Items.Add(renameItem);
             menu.Items.Add(MakeSep());
             menu.Items.Add(copyLinkItem);
-
-            // Add to chat
-            var followUpItem = MakeItem("Add to chat");
-            followUpItem.Click += (_, _) => AttachTopicFollowUp(item, filePath);
-            menu.Items.Add(MakeSep());
-            menu.Items.Add(followUpItem);
 
             if (_docStatusStore?.GetStatus(filePath) == DocApprovalStatus.Approved)
             {
@@ -20956,6 +21012,9 @@ public partial class MainWindow : Window, ILiveElementLocator
                 onItemChanged: item => OnApprovalItemChanged(item),
                 onItemsRemoved: items => OnApprovalItemsRemoved(items),
                 onFollowUp: item => AttachFollowUpToActiveTab(item),
+                addToNotes: item => AddNoteFromTextWithTitle(
+                    $"Approval - {item.Description}",
+                    BuildApprovalContentBlock(item)),
                 initialShowApproved: _settingsStore.Load().ApprovalShowApproved,
                 onShowApprovedChanged: show => _settingsStore.SaveApprovalShowApproved(show),
                 initialShowRejected: _settingsStore.Load().ApprovalShowRejected,
@@ -21081,6 +21140,22 @@ public partial class MainWindow : Window, ILiveElementLocator
             sb.AppendLine();
             sb.AppendLine("Description:");
             sb.AppendLine(task.Description.Trim());
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    private static string BuildApprovalContentBlock(CommitApprovalItem item)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("## Approval context");
+        sb.AppendLine($"Description: {item.Description}");
+        if (!string.IsNullOrWhiteSpace(item.CommitSha))
+            sb.AppendLine($"Commit: {item.CommitSha}");
+        if (!string.IsNullOrWhiteSpace(item.OriginalPrompt))
+        {
+            sb.AppendLine();
+            sb.AppendLine("Original prompt:");
+            sb.AppendLine(item.OriginalPrompt!.Trim());
         }
         return sb.ToString().TrimEnd();
     }
@@ -21509,6 +21584,29 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (_notesStore is null) return;
         var title = NotesStore.DeriveTitle(text);
         var note  = new NoteItem(Guid.NewGuid(), title, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+        _notesStore.WriteContent(note.Id, text);
+        _noteItems.Insert(0, note);
+        _notesStore.SaveAll(_noteItems);
+
+        // Show the panel if hidden
+        if (!_notesPanelVisible)
+        {
+            _notesPanelVisible = true;
+            SyncNotesPanel();
+            if (ViewNotesMenuItem is not null)
+                ViewNotesMenuItem.IsChecked = true;
+            PersistNotesPanelVisible();
+        }
+        else
+        {
+            _notesPanel?.AddNote(note);
+        }
+    }
+
+    private void AddNoteFromTextWithTitle(string title, string text)
+    {
+        if (_notesStore is null) return;
+        var note = new NoteItem(Guid.NewGuid(), title, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
         _notesStore.WriteContent(note.Id, text);
         _noteItems.Insert(0, note);
         _notesStore.SaveAll(_noteItems);

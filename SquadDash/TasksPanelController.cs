@@ -25,6 +25,7 @@ internal sealed class TasksPanelController {
     private readonly Action          _editTasksAction;
     private readonly Func<string, Brush> _priorityDotColor;
     private readonly Action<TaskItem>?  _attachFollowUp;
+    private readonly Action<TaskItem>?  _addToNotes;
     private readonly Func<IReadOnlyList<SquadTeamMember>>? _getRoster;
 
     private bool      _showCompleted;
@@ -45,6 +46,7 @@ internal sealed class TasksPanelController {
         Func<string, Brush>  priorityDotColor,
         Action               reloadPanel,
         Action<TaskItem>?    attachFollowUp = null,
+        Action<TaskItem>?    addToNotes     = null,
         Func<IReadOnlyList<SquadTeamMember>>? getRoster = null) {
 
         _activePanel      = activePanel;
@@ -55,6 +57,7 @@ internal sealed class TasksPanelController {
         _priorityDotColor = priorityDotColor;
         _reloadPanel      = reloadPanel;
         _attachFollowUp   = attachFollowUp;
+        _addToNotes       = addToNotes;
         _getRoster        = getRoster;
 
         AttachPanelContextMenu(outerBorder);
@@ -185,18 +188,27 @@ internal sealed class TasksPanelController {
         row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
 
         var menu           = MakeMenu();
+        if (_attachFollowUp is not null || _addToNotes is not null)
+        {
+            if (_attachFollowUp is not null)
+            {
+                var followUpItem = MakeItem("Add to chat");
+                followUpItem.Click += (_, _) => _attachFollowUp(item);
+                menu.Items.Add(followUpItem);
+            }
+            if (_addToNotes is not null)
+            {
+                var notesItem = MakeItem("Add to Notes");
+                notesItem.Click += (_, _) => _addToNotes(item);
+                menu.Items.Add(notesItem);
+            }
+            menu.Items.Add(MakeSep());
+        }
         var markCompleteItem = MakeItem("Mark as Complete");
         markCompleteItem.Click += (_, _) => _ = HandleMarkCompleteAsync(item, isDone: true);
         menu.Items.Add(markCompleteItem);
         menu.Items.Add(MakeSep());
         menu.Items.Add(BuildAssignToMenuItem(item));
-        if (_attachFollowUp is not null)
-        {
-            menu.Items.Add(MakeSep());
-            var followUpItem = MakeItem("Add to chat");
-            followUpItem.Click += (_, _) => _attachFollowUp(item);
-            menu.Items.Add(followUpItem);
-        }
         menu.Items.Add(MakeSep());
         menu.Items.Add(BuildToggleCompletedMenuItem());
         menu.Items.Add(MakeSep());
@@ -447,16 +459,25 @@ internal sealed class TasksPanelController {
         row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
 
         var menu             = MakeMenu();
+        if (_attachFollowUp is not null || _addToNotes is not null)
+        {
+            if (_attachFollowUp is not null)
+            {
+                var followUpItem = MakeItem("Add to chat");
+                followUpItem.Click += (_, _) => _attachFollowUp(item);
+                menu.Items.Add(followUpItem);
+            }
+            if (_addToNotes is not null)
+            {
+                var notesItem = MakeItem("Add to Notes");
+                notesItem.Click += (_, _) => _addToNotes(item);
+                menu.Items.Add(notesItem);
+            }
+            menu.Items.Add(MakeSep());
+        }
         var markIncompleteItem = MakeItem("Mark as Incomplete");
         markIncompleteItem.Click += (_, _) => _ = HandleMarkCompleteAsync(item, isDone: false);
         menu.Items.Add(markIncompleteItem);
-        if (_attachFollowUp is not null)
-        {
-            menu.Items.Add(MakeSep());
-            var followUpItem = MakeItem("Add to chat");
-            followUpItem.Click += (_, _) => _attachFollowUp(item);
-            menu.Items.Add(followUpItem);
-        }
         menu.Items.Add(MakeSep());
         menu.Items.Add(BuildToggleCompletedMenuItem());
         menu.Items.Add(MakeSep());

@@ -421,9 +421,9 @@ internal sealed class MarkdownDocumentWindow : Window {
     private void EditorTextBox_ContextMenuOpening(object sender, ContextMenuEventArgs e) {
         if (sender is not RichTextBox tb || tb.ContextMenu is null) return;
 
-        // Remove any previously-injected "Add to Notes" items so they don't stack
+        // Remove any previously-injected items so they don't stack
         for (int i = tb.ContextMenu.Items.Count - 1; i >= 0; i--) {
-            if (tb.ContextMenu.Items[i] is MenuItem { Tag: "AddToNotes" } ||
+            if (tb.ContextMenu.Items[i] is MenuItem { Tag: "AddToChat" or "AddToNotes" } ||
                 tb.ContextMenu.Items[i] is Separator { Tag: "AddToNotesSep" })
                 tb.ContextMenu.Items.RemoveAt(i);
         }
@@ -439,21 +439,37 @@ internal sealed class MarkdownDocumentWindow : Window {
                 mi.IsEnabled = tb.GetSelectionLength() > 0;
         }
 
-        // Add "Add to Notes" if callback is set and there's a selection
-        if (_captureContext?.AddToNotesCallback is { } callback && tb.GetSelectionLength() > 0) {
-            var sep = new Separator { Tag = "AddToNotesSep" };
-            sep.SetResourceReference(Separator.StyleProperty, "ThemedMenuSeparatorStyle");
+        // Inject "Add to chat" and "Add to Notes" at the top when there is a selection
+        if (tb.GetSelectionLength() > 0) {
+            int insertIdx = 0;
 
-            var noteItem = new MenuItem { Header = "Add to Notes", Tag = "AddToNotes" };
-            noteItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
-            noteItem.Click += (_, _) => {
-                var text = tb.GetSelectedText();
-                if (!string.IsNullOrWhiteSpace(text))
-                    callback(text);
-            };
+            if (_captureContext?.AddToChatCallback is { } chatCallback) {
+                var chatItem = new MenuItem { Header = "Add to chat", Tag = "AddToChat" };
+                chatItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+                chatItem.Click += (_, _) => {
+                    var text = tb.GetSelectedText();
+                    if (!string.IsNullOrWhiteSpace(text))
+                        chatCallback(text);
+                };
+                tb.ContextMenu.Items.Insert(insertIdx++, chatItem);
+            }
 
-            tb.ContextMenu.Items.Add(sep);
-            tb.ContextMenu.Items.Add(noteItem);
+            if (_captureContext?.AddToNotesCallback is { } callback) {
+                var noteItem = new MenuItem { Header = "Add to Notes", Tag = "AddToNotes" };
+                noteItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+                noteItem.Click += (_, _) => {
+                    var text = tb.GetSelectedText();
+                    if (!string.IsNullOrWhiteSpace(text))
+                        callback(text);
+                };
+                tb.ContextMenu.Items.Insert(insertIdx++, noteItem);
+            }
+
+            if (insertIdx > 0) {
+                var topSep = new Separator { Tag = "AddToNotesSep" };
+                topSep.SetResourceReference(Separator.StyleProperty, "ThemedMenuSeparatorStyle");
+                tb.ContextMenu.Items.Insert(insertIdx, topSep);
+            }
         }
 
         // Remove any previously-injected "Revise with AI" items
@@ -2208,6 +2224,12 @@ internal sealed record MarkdownDocumentCaptureContext(
     string?                             ScreenshotsDirectory,
     string                              ThemeName,
     string                              SpeechRegion) {
+    /// <summary>
+    /// Optional callback invoked when the user chooses "Add to chat" from the source
+    /// editor context menu. Receives the selected markdown text.
+    /// </summary>
+    public Action<string>? AddToChatCallback { get; init; }
+
 
     /// <summary>
     /// Optional callback invoked when the user chooses "Add to Notes" from the source
