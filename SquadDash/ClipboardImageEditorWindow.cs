@@ -66,6 +66,9 @@ internal sealed class ClipboardImageEditorWindow : Window
     private readonly Border _dimHeightBadge;
     private readonly TextBlock _dimHeightLabel;
 
+    // Zoom percentage label (declared as field so the wheel handler can update it)
+    private TextBlock? _zoomLabel;
+
     // ── Round corners ─────────────────────────────────────────────────────────
 
     private bool _roundCorners;
@@ -209,8 +212,8 @@ internal sealed class ClipboardImageEditorWindow : Window
         var workArea = SystemParameters.WorkArea;
         double imgW = clipboardImage.PixelWidth;
         double imgH = clipboardImage.PixelHeight;
-        double maxWinW = workArea.Width * 0.85;
-        double maxWinH = workArea.Height * 0.85;
+        double maxWinW = workArea.Width * 0.95;
+        double maxWinH = workArea.Height * 0.95;
 
         double imageDpiX = clipboardImage.DpiX > 0 ? clipboardImage.DpiX : 96.0;
         double imageDpiY = clipboardImage.DpiY > 0 ? clipboardImage.DpiY : 96.0;
@@ -358,6 +361,8 @@ internal sealed class ClipboardImageEditorWindow : Window
             _zoom = Math.Max(0.1, Math.Min(8.0, _zoom * factor));
             _scaleTransform.ScaleX = _zoom;
             _scaleTransform.ScaleY = _zoom;
+            if (_zoomLabel != null) _zoomLabel.Text = $"{_zoom * 100:F0}%";
+            UpdateWindowSizeForZoom();
             e.Handled = true;
         };
 
@@ -531,7 +536,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         insertBtn.Click += (_, _) => DoInsertImage();
         cancelBtn.Click += (_, _) => Close();
 
-        var _zoomLabel = new TextBlock
+        _zoomLabel = new TextBlock
         {
             Text = "100%",
             VerticalAlignment = VerticalAlignment.Center,
@@ -542,20 +547,16 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         var resetZoomBtn = new Button { Content = "1:1", Width = 36, Height = 28, Margin = new Thickness(0, 0, 4, 0), ToolTip = "Reset zoom to 100% (Ctrl+0)" };
         resetZoomBtn.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
-        resetZoomBtn.Click += (_, _) => { _zoom = 1.0; _scaleTransform.ScaleX = 1.0; _scaleTransform.ScaleY = 1.0; _zoomLabel.Text = "100%"; };
+        resetZoomBtn.Click += (_, _) => { _zoom = 1.0; _scaleTransform.ScaleX = 1.0; _scaleTransform.ScaleY = 1.0; _zoomLabel.Text = "100%"; UpdateWindowSizeForZoom(); };
 
-        // Update label whenever zoom changes
-        PreviewMouseWheel += (_, e) =>
-        {
-            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
-                _zoomLabel.Text = $"{_zoom * 100:F0}%";
-        };
+        // Update label whenever zoom changes via keyboard shortcut
         KeyDown += (_, e) =>
         {
             if (e.Key == Key.D0 && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
             {
                 _zoom = 1.0; _scaleTransform.ScaleX = 1.0; _scaleTransform.ScaleY = 1.0;
                 _zoomLabel.Text = "100%";
+                UpdateWindowSizeForZoom();
                 e.Handled = true;
             }
         };
@@ -584,6 +585,23 @@ internal sealed class ClipboardImageEditorWindow : Window
     }
 
     // ── Visual layout ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Resizes the window to fit the scaled image within the current monitor's work area.
+    /// </summary>
+    private void UpdateWindowSizeForZoom()
+    {
+        double monW = SystemParameters.WorkArea.Width;
+        double monH = SystemParameters.WorkArea.Height;
+
+        double scaledImgW = _canvas.Width  * _zoom;
+        double scaledImgH = _canvas.Height * _zoom;
+        const double toolbarH = 110.0; // toolbar ~40 + chrome ~70
+        const double minW = 580.0;
+
+        Width  = Math.Min(monW, Math.Max(minW, scaledImgW + 24));
+        Height = Math.Min(monH, scaledImgH + toolbarH);
+    }
 
     /// <summary>
     /// Repositions the selection border, resize handles, and mode-hint overlay to
