@@ -330,6 +330,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, RemoteSpeechSession> _remoteSpeechSessions = new();
     private ApplicationSettingsSnapshot _settingsSnapshot = ApplicationSettingsSnapshot.Empty;
     private string _activeThemeName = "Light";
+    private string _themeMode = "Auto";
     private readonly long _processStartedAtUtcTicks = ProcessIdentity.GetCurrentProcessStartedAtUtcTicks();
     private readonly string? _startupFolderArgument;
     private readonly bool _noWorkspaceOnStart;
@@ -1656,7 +1657,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         ApplyPromptFontSize();
         ApplyTranscriptFontSize();
         ApplyDocSourceFontSize();
-        ApplyTheme(_settingsSnapshot.Theme ?? "Light");
+        _themeMode = _settingsSnapshot.Theme ?? "Auto";
+        ApplyTheme(ResolveThemeForMode(_themeMode));
         RefreshRecentFoldersMenu(_settingsSnapshot.RecentFolders);
         UpdateVoiceHintVisibility();
         SquadDashTrace.Write(TraceCategory.Startup, $"InitializeWorkspace: theme/UI applied {initWsSw.ElapsedMilliseconds}ms.");
@@ -20002,31 +20004,70 @@ public partial class MainWindow : Window, ILiveElementLocator
     }
 
 
+    private static string ResolveThemeForMode(string mode)
+    {
+        if (string.Equals(mode, "Dark", StringComparison.OrdinalIgnoreCase))
+            return "Dark";
+        if (string.Equals(mode, "Light", StringComparison.OrdinalIgnoreCase))
+            return "Light";
+        var appsUseLightTheme = Microsoft.Win32.Registry.GetValue(
+            @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+            "AppsUseLightTheme",
+            1);
+        return appsUseLightTheme is 0 ? "Dark" : "Light";
+    }
+
     private void UpdateThemeMenuState()
     {
-        if (ThemeToggleMenuItem is not null)
-            ThemeToggleMenuItem.Header = string.Equals(_activeThemeName, "Dark", StringComparison.OrdinalIgnoreCase)
-                ? "_Light Theme"
-                : "_Dark Theme";
+        if (ThemeDarkMenuItem is not null)
+            ThemeDarkMenuItem.IsChecked = string.Equals(_themeMode, "Dark", StringComparison.OrdinalIgnoreCase);
+        if (ThemeLightMenuItem is not null)
+            ThemeLightMenuItem.IsChecked = string.Equals(_themeMode, "Light", StringComparison.OrdinalIgnoreCase);
+        if (ThemeAutoMenuItem is not null)
+            ThemeAutoMenuItem.IsChecked = string.Equals(_themeMode, "Auto", StringComparison.OrdinalIgnoreCase);
     }
 
-    private void SetTheme(string themeName)
+    private void SetThemeMode(string mode)
     {
-        if (string.Equals(_activeThemeName, themeName, StringComparison.OrdinalIgnoreCase))
-            return;
-        ApplyTheme(themeName);
-        _settingsSnapshot = _settingsStore.SaveTheme(themeName);
+        _themeMode = mode;
+        ApplyTheme(ResolveThemeForMode(mode));
+        _settingsSnapshot = _settingsStore.SaveTheme(mode);
+        UpdateThemeMenuState();
     }
 
-    private void ThemeToggleMenuItem_Click(object sender, RoutedEventArgs e)
+    private void ThemeDarkMenuItem_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            SetTheme(string.Equals(_activeThemeName, "Dark", StringComparison.OrdinalIgnoreCase) ? "Light" : "Dark");
+            SetThemeMode("Dark");
         }
         catch (Exception ex)
         {
-            HandleUiCallbackException(nameof(ThemeToggleMenuItem_Click), ex);
+            HandleUiCallbackException(nameof(ThemeDarkMenuItem_Click), ex);
+        }
+    }
+
+    private void ThemeLightMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            SetThemeMode("Light");
+        }
+        catch (Exception ex)
+        {
+            HandleUiCallbackException(nameof(ThemeLightMenuItem_Click), ex);
+        }
+    }
+
+    private void ThemeAutoMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            SetThemeMode("Auto");
+        }
+        catch (Exception ex)
+        {
+            HandleUiCallbackException(nameof(ThemeAutoMenuItem_Click), ex);
         }
     }
 
