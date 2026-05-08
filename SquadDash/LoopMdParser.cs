@@ -45,51 +45,148 @@ internal static class LoopMdParser {
         double timeoutMinutes  = 5;
         string description     = "";
         var    commands        = new List<string>();
+        var    options         = new Dictionary<string, LoopOptionBuilder>(StringComparer.Ordinal);
 
-        // Read key: value pairs up to the closing ---
+        // Read frontmatter up to the closing ---
+        bool inOptionsBlock = false;
+        string? currentOptionKey = null;
+
         while (i < lines.Length && lines[i].Trim() != "---") {
-            var m = _kvPattern.Match(lines[i]);
-            if (m.Success) {
-                var key   = m.Groups[1].Value.ToLowerInvariant();
-                var value = m.Groups[2].Value.Trim();
-                switch (key) {
-                    case "configured":
-                        configured = string.Equals(
-                            value.Trim('"', '\''),
-                            "true",
-                            StringComparison.OrdinalIgnoreCase);
-                        break;
-                    case "interval":
-                        if (double.TryParse(
-                                value,
-                                System.Globalization.NumberStyles.Any,
-                                System.Globalization.CultureInfo.InvariantCulture,
-                                out var iv))
-                            intervalMinutes = iv;
-                        break;
-                    case "timeout":
-                        if (double.TryParse(
-                                value,
-                                System.Globalization.NumberStyles.Any,
-                                System.Globalization.CultureInfo.InvariantCulture,
-                                out var tv))
-                            timeoutMinutes = tv;
-                        break;
-                    case "description":
-                        description = value.Trim('"', '\'');
-                        break;
-                    case "commands":
-                        // Accepts: [stop_loop, start_loop] or "stop_loop, start_loop"
-                        var raw = value.Trim('[', ']', '"', '\'');
-                        foreach (var cmd in raw.Split(',')) {
-                            var c = cmd.Trim();
-                            if (!string.IsNullOrEmpty(c))
-                                commands.Add(c);
+            var line = lines[i];
+
+            // Entering/exiting the options: block
+            if (line == "options:") {
+                inOptionsBlock = true;
+                currentOptionKey = null;
+                i++;
+                continue;
+            }
+
+            if (inOptionsBlock) {
+                // A line with exactly 2 spaces indent + key: starts a new option entry
+                if (line.Length > 2 && line[0] == ' ' && line[1] == ' ' && line[2] != ' ') {
+                    var colonIdx = line.IndexOf(':', 2);
+                    if (colonIdx > 2) {
+                        currentOptionKey = line[2..colonIdx].Trim();
+                        if (!options.ContainsKey(currentOptionKey))
+                            options[currentOptionKey] = new LoopOptionBuilder { Key = currentOptionKey };
+                    }
+                    i++;
+                    continue;
+                }
+
+                // A line with exactly 4 spaces indent = option sub-key
+                if (line.Length > 4 && line[0] == ' ' && line[1] == ' ' && line[2] == ' ' && line[3] == ' ' && line[4] != ' ' && currentOptionKey != null) {
+                    var colonIdx = line.IndexOf(':', 4);
+                    if (colonIdx > 4) {
+                        var subKey = line[4..colonIdx].Trim();
+                        var subVal = colonIdx + 1 < line.Length ? line[(colonIdx + 1)..].Trim() : "";
+                        if (options.TryGetValue(currentOptionKey, out var builder)) {
+                            switch (subKey) {
+                                case "value":   builder.RawValue = subVal; break;
+                                case "type":    builder.Type     = subVal.Trim('"', '\''); break;
+                                case "label":   builder.Label    = subVal.Trim('"', '\''); break;
+                                case "hint":    builder.Hint     = subVal.Trim('"', '\''); break;
+                                case "choices":
+                                    var choicesRaw = subVal.Trim('[', ']');
+                                    var choiceList = new List<string>();
+                                    foreach (var ch in choicesRaw.Split(',')) {
+                                        var cv = ch.Trim().Trim('"', '\'');
+                                        if (!string.IsNullOrEmpty(cv))
+                                            choiceList.Add(cv);
+                                    }
+                                    builder.Choices = choiceList;
+                                    break;
+                            }
                         }
-                        break;
+                    }
+                    i++;
+                    continue;
+                }
+
+                // Non-indented line (not ---) exits options mode
+                if (line.Length > 0 && line[0] != ' ') {
+                    inOptionsBlock = false;
+                    currentOptionKey = null;
+                    // fall through to flat key parsing below
                 }
             }
+
+            if (!inOptionsBlock) {
+                var m = _kvPattern.Match(line);
+                if (m.Success) {
+                    var key   = m.Groups[1].Value.ToLowerInvariant();
+                    var value = m.Groups[2].Value.Trim();
+                    switch (key) {
+                        case "configured":
+                            configured = string.Equals(
+                                value.Trim('"', '\''),
+                                "true",
+                                StringComparison.OrdinalIgnoreCase);
+                            break;
+                        case "interval":
+                            if (double.TryParse(
+                                    value,
+                                    System.Globalization.NumberStyles.Any,
+                                    System.Globalization.CultureInfo.InvariantCulture,
+                                    out var iv))
+                                intervalMinutes = iv;
+                            break;
+                        case "timeout":
+                            if (double.TryParse(
+                                    value,
+                                    System.Globalization.NumberStyles.Any,
+                                    System.Globalization.CultureInfo.InvariantCulture,
+                                    out var tv))
+                                timeoutMinutes = tv;
+                            break;
+                        case "description":
+                            description = value.Trim('"', '\'');
+                            break;
+                        case "commands":
+                            // Accepts: [stop_loop, start_loop] or "stop_loop, start_loop"
+                            var raw = value.Trim('[', ']', '"', '\'');
+                            foreach (var cmd in raw.Split(',')) {
+                                var c = cmd.Trim();
+                                if (!string.IsNullOrEmpty(c))
+                                    commands.Add(c);
+                            }
+                            break;
+                    }
+                }
+            }
+
             i++;
+        }
+
+        // Build the LoopOption list and derive interval/timeout from options block if present
+        List<LoopOption>? builtOptions = null;
+        if (options.Count > 0) {
+            builtOptions = new List<LoopOption>(options.Count);
+            foreach (var kvp in options) {
+                var b = kvp.Value;
+                builtOptions.Add(new LoopOption(
+                    b.Key,
+                    b.RawValue ?? "",
+                    b.Type ?? "string",
+                    b.Label,
+                    b.Hint,
+                    b.Choices));
+            }
+
+            if (options.TryGetValue("interval", out var intervalOpt) &&
+                double.TryParse(intervalOpt.RawValue,
+                    System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var ivOpt))
+                intervalMinutes = ivOpt;
+
+            if (options.TryGetValue("timeout", out var timeoutOpt) &&
+                double.TryParse(timeoutOpt.RawValue,
+                    System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var tvOpt))
+                timeoutMinutes = tvOpt;
         }
 
         if (!configured)
@@ -97,7 +194,7 @@ internal static class LoopMdParser {
 
         // Everything after the closing --- is the instructions body.
         if (i >= lines.Length)
-            return new LoopMdConfig(intervalMinutes, timeoutMinutes, description, "", commands);
+            return new LoopMdConfig(intervalMinutes, timeoutMinutes, description, "", commands, builtOptions);
 
         i++; // move past the closing ---
 
@@ -111,7 +208,8 @@ internal static class LoopMdParser {
             timeoutMinutes,
             description,
             sb.ToString().Trim(),
-            commands);
+            commands,
+            builtOptions);
     }
 
     /// <summary>
@@ -176,6 +274,81 @@ internal static class LoopMdParser {
         while (i < lines.Length && string.IsNullOrWhiteSpace(lines[i]))
             i++;
         return string.Join("\n", lines, i, lines.Length - i);
+    }
+    /// <summary>
+    /// Updates a single option's <c>value:</c> line in the loop file's YAML frontmatter.
+    /// Reads the file, finds the <c>options:</c> block, locates <paramref name="optionKey"/>,
+    /// updates the first <c>value:</c> sub-key under it, and writes back.
+    /// Does nothing if the file or key is not found.
+    /// </summary>
+    public static void UpdateOptionValue(string loopMdPath, string optionKey, string newRawValue) {
+        if (!File.Exists(loopMdPath))
+            return;
+
+        string[] lines;
+        try {
+            lines = File.ReadAllLines(loopMdPath);
+        }
+        catch {
+            return;
+        }
+
+        // Find opening ---
+        int i = 0;
+        while (i < lines.Length && lines[i].Trim() != "---")
+            i++;
+        if (i >= lines.Length) return;
+        int frontmatterStart = i;
+        i++;
+
+        // Find closing ---
+        int frontmatterEnd = -1;
+        while (i < lines.Length) {
+            if (lines[i].Trim() == "---") { frontmatterEnd = i; break; }
+            i++;
+        }
+        if (frontmatterEnd < 0) return;
+
+        // Find options: at indent 0
+        int optionsLine = -1;
+        for (int j = frontmatterStart + 1; j < frontmatterEnd; j++) {
+            if (lines[j] == "options:") { optionsLine = j; break; }
+        }
+        if (optionsLine < 0) return;
+
+        // Find "  {optionKey}:" (2-space indent)
+        string optionHeader = $"  {optionKey}:";
+        int optionHeaderLine = -1;
+        for (int j = optionsLine + 1; j < frontmatterEnd; j++) {
+            if (lines[j] == optionHeader || lines[j].StartsWith(optionHeader + " ", StringComparison.Ordinal)) {
+                optionHeaderLine = j;
+                break;
+            }
+        }
+        if (optionHeaderLine < 0) return;
+
+        // Find the first "    value:" line after the option key, before the next 2-space-indent option
+        for (int j = optionHeaderLine + 1; j < frontmatterEnd; j++) {
+            var line = lines[j];
+            // Stop if we hit the next 2-space-indent option key
+            if (line.Length >= 2 && line[0] == ' ' && line[1] == ' ' && (line.Length < 3 || line[2] != ' '))
+                break;
+            if (line.StartsWith("    value:", StringComparison.Ordinal)) {
+                lines[j] = $"    value: {newRawValue}";
+                try { File.WriteAllLines(loopMdPath, lines); } catch { /* best-effort */ }
+                return;
+            }
+        }
+    }
+
+    /// <summary>Mutable builder used during options block parsing.</summary>
+    private sealed class LoopOptionBuilder {
+        public string  Key      { get; init; } = "";
+        public string? RawValue { get; set; }
+        public string? Type     { get; set; }
+        public string? Label    { get; set; }
+        public string? Hint     { get; set; }
+        public List<string>? Choices { get; set; }
     }
 }
 

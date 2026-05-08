@@ -4750,7 +4750,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 OpenLoopConfigFlyout(loopMdPath, LoopConfigFlyoutMode.Configure, existingConfig: null);
                 return;
             }
-            await _loopController.StartAsync(config, _settingsSnapshot.LoopContinuousContext);
+            await _loopController.StartAsync(config, _settingsSnapshot.LoopContinuousContext, _currentWorkspace?.FolderPath);
         }
         else
         {

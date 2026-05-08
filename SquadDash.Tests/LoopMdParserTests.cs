@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using NUnit.Framework;
 
 namespace SquadDash.Tests;
@@ -383,7 +384,173 @@ internal sealed class LoopMdParserTests {
         finally { Directory.Delete(dir, true); }
     }
 
-    // ── StripFrontmatter ──────────────────────────────────────────────────────
+    // ── options: block parsing ────────────────────────────────────────────────
+
+    [Test]
+    public void Parse_OptionsBlock_IntervalAndTimeoutDerivedFromOptions() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            options:
+              interval:
+                value: 3
+                type: int
+                label: "Interval (min)"
+              timeout:
+                value: 30
+                type: int
+                label: "Timeout (min)"
+            description: "Test loop"
+            ---
+            Do work.
+            """);
+        try {
+            var config = LoopMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            Assert.That(config!.IntervalMinutes, Is.EqualTo(3));
+            Assert.That(config.TimeoutMinutes,   Is.EqualTo(30));
+            Assert.That(config.Options, Is.Not.Null);
+            Assert.That(config.Options, Has.Count.EqualTo(2));
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void Parse_OptionsBlock_AllFieldsParsedCorrectly() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            options:
+              commit_after_task:
+                value: ask
+                type: enum
+                choices: [always, never, ask]
+                label: "Commit after task"
+                hint: "When to commit"
+              build_verify:
+                value: true
+                type: bool
+                label: "Verify build"
+                hint: "Run build check"
+            ---
+            Body text.
+            """);
+        try {
+            var config = LoopMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            Assert.That(config!.Options, Has.Count.EqualTo(2));
+
+            var commitOpt = config.Options!.First(o => o.Key == "commit_after_task");
+            Assert.That(commitOpt.RawValue, Is.EqualTo("ask"));
+            Assert.That(commitOpt.Type,     Is.EqualTo("enum"));
+            Assert.That(commitOpt.Label,    Is.EqualTo("Commit after task"));
+            Assert.That(commitOpt.Hint,     Is.EqualTo("When to commit"));
+            Assert.That(commitOpt.Choices,  Is.Not.Null);
+            Assert.That(commitOpt.Choices,  Has.Count.EqualTo(3));
+            Assert.That(commitOpt.Choices,  Does.Contain("always"));
+            Assert.That(commitOpt.Choices,  Does.Contain("never"));
+            Assert.That(commitOpt.Choices,  Does.Contain("ask"));
+
+            var buildOpt = config.Options.First(o => o.Key == "build_verify");
+            Assert.That(buildOpt.RawValue, Is.EqualTo("true"));
+            Assert.That(buildOpt.Type,     Is.EqualTo("bool"));
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void Parse_OptionsBlock_FlatIntervalStillWorksForBackwardsCompat() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            interval: 7
+            timeout: 2
+            ---
+            Body.
+            """);
+        try {
+            var config = LoopMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            Assert.That(config!.IntervalMinutes, Is.EqualTo(7));
+            Assert.That(config.TimeoutMinutes,   Is.EqualTo(2));
+            Assert.That(config.Options, Is.Null);
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    // ── UpdateOptionValue ─────────────────────────────────────────────────────
+
+    [Test]
+    public void UpdateOptionValue_ExistingKey_UpdatesValueInFile() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            options:
+              interval:
+                value: 5
+                type: int
+              timeout:
+                value: 60
+                type: int
+            ---
+            Body.
+            """);
+        try {
+            LoopMdParser.UpdateOptionValue(path, "interval", "15");
+            var config = LoopMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            Assert.That(config!.IntervalMinutes, Is.EqualTo(15));
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void UpdateOptionValue_SecondKey_UpdatesCorrectOption() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            options:
+              interval:
+                value: 5
+                type: int
+              timeout:
+                value: 60
+                type: int
+            ---
+            Body.
+            """);
+        try {
+            LoopMdParser.UpdateOptionValue(path, "timeout", "90");
+            var config = LoopMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            Assert.That(config!.TimeoutMinutes, Is.EqualTo(90));
+            Assert.That(config.IntervalMinutes, Is.EqualTo(5), "other option unchanged");
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void UpdateOptionValue_NonExistentKey_DoesNothing() {
+        var content = "---\nconfigured: true\noptions:\n  interval:\n    value: 5\n    type: int\n---\nBody.";
+        var path = WriteTempFile(content);
+        try {
+            LoopMdParser.UpdateOptionValue(path, "nonexistent", "999");
+            Assert.That(File.ReadAllText(path), Does.Contain("value: 5"), "file should be unchanged");
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void UpdateOptionValue_FileNotFound_DoesNotThrow() {
+        Assert.DoesNotThrow(() =>
+            LoopMdParser.UpdateOptionValue(@"C:\does\not\exist\loop.md", "interval", "5"));
+    }
+
 
     [Test]
     public void StripFrontmatter_NormalContent_RemovesFrontmatter() {
