@@ -243,7 +243,7 @@
                                                 <Button Grid.Row="0"
                                                         Style="{StaticResource ThemedChipButtonStyle}"
                                                         Click="AgentThreadChipButton_Click"
-                                                        Padding="6,2,6,2"
+                                                        Padding="7,3,7,3"
                                                         Margin="0"
                                                         Background="{Binding ChipBackground}"
                                                         BorderBrush="{Binding ChipBorderBrush}"
