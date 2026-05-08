@@ -16336,12 +16336,37 @@ public partial class MainWindow : Window, ILiveElementLocator
                 if (diffLines.Count == 0)
                     return;
 
-                // Capture the screen position once and lock it
-                var screenPos = headerPanel.PointToScreen(new Point(0, 0));
+                // Compute above-vs-below placement using work-area-aware screen geometry.
+                // Above:  bottom of popup flush with top of entry (preferred — shows the entry
+                //         and everything below it unobscured).
+                // Below:  popup top starts 1.5 row-heights below the entry top so the hovered
+                //         entry and the first half-row of the next entry are both visible.
+                var physTopLeft    = headerPanel.PointToScreen(new Point(0, 0));
+                var physBottomLeft = headerPanel.PointToScreen(new Point(0, headerPanel.ActualHeight));
+                var physWa         = NativeMethods.GetWorkAreaForPhysicalPoint((int)physTopLeft.X, (int)physTopLeft.Y);
+
+                var logTopLeft  = DpiHelper.PhysicalToLogical(headerPanel, physTopLeft);
+                var logWaTop    = DpiHelper.PhysicalToLogical(headerPanel, new Point(physWa.Left, physWa.Top));
+                var logWaBottom = DpiHelper.PhysicalToLogical(headerPanel, new Point(physWa.Left, physWa.Bottom));
+
+                double entryTopY    = logTopLeft.Y;
+                double rowHeight    = DpiHelper.PhysicalToLogical(headerPanel, physBottomLeft).Y - entryTopY;
+                double estimatedH   = DiffHoverPopup.EstimateHeight(diffLines.Count);
+                double waTop        = logWaTop.Y;
+                double waBottom     = logWaBottom.Y;
+
+                // Prefer above: bottom of popup = top of entry (2px gap).
+                double aboveTop = entryTopY - estimatedH - 2;
+                double popupTop = aboveTop >= waTop
+                    ? aboveTop
+                    : Math.Min(entryTopY + 1.5 * rowHeight, waBottom - estimatedH);
+
+                double popupLeft = logTopLeft.X + 12;
+
                 diffPopup = new DiffHoverPopup {
-                    PlacementTarget = headerPanel,
-                    HorizontalOffset = screenPos.X + 12,
-                    VerticalOffset = screenPos.Y + 12
+                    PlacementTarget  = headerPanel,
+                    HorizontalOffset = popupLeft,
+                    VerticalOffset   = popupTop
                 };
                 diffPopup.MouseLeave += (_, _) => {
                     diffPopup.IsOpen = false;
