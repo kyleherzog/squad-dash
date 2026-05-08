@@ -15997,13 +15997,13 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (diff.added > 0)
             {
                 var addedRun = new Run($" +{diff.added}") { FontWeight = FontWeights.SemiBold };
-                addedRun.SetResourceReference(TextElement.ForegroundProperty, "DiffAddedText");
+                addedRun.SetResourceReference(TextElement.ForegroundProperty, "DiffAddedSummary");
                 header.Inlines.Add(addedRun);
             }
             if (diff.removed > 0)
             {
                 var removedRun = new Run($" -{diff.removed}") { FontWeight = FontWeights.SemiBold };
-                removedRun.SetResourceReference(TextElement.ForegroundProperty, "DiffRemovedText");
+                removedRun.SetResourceReference(TextElement.ForegroundProperty, "DiffRemovedSummary");
                 header.Inlines.Add(removedRun);
             }
         }
@@ -16522,14 +16522,14 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 FontWeight = FontWeights.SemiBold
             };
-            addedRun.SetResourceReference(TextElement.ForegroundProperty, "DiffAddedText");
+            addedRun.SetResourceReference(TextElement.ForegroundProperty, "DiffAddedSummary");
             entry.MessageTextBlock.Inlines.Add(addedRun);
             entry.MessageTextBlock.Inlines.Add(new Run(" "));
             var removedRun = new Run($"-{diffSummary.RemovedLineCount}")
             {
                 FontWeight = FontWeights.SemiBold
             };
-            removedRun.SetResourceReference(TextElement.ForegroundProperty, "DiffRemovedText");
+            removedRun.SetResourceReference(TextElement.ForegroundProperty, "DiffRemovedSummary");
             entry.MessageTextBlock.Inlines.Add(removedRun);
 
             if (diffSummary.IsNewFile)
