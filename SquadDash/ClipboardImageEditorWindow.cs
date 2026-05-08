@@ -216,11 +216,11 @@ internal sealed class ClipboardImageEditorWindow : Window
         // the image appears at the intended physical size on any monitor.
         // Ctrl+scroll zoom is applied via ScaleTransform on the wrapper so
         // DoInsertImage always renders at the original pixel dimensions.
-        var workArea = SystemParameters.WorkArea;
+        var monitorArea = GetOwnerMonitorWorkArea(owner);
         double imgW = clipboardImage.PixelWidth;
         double imgH = clipboardImage.PixelHeight;
-        double maxWinW = workArea.Width * 0.95;
-        double maxWinH = workArea.Height * 0.95;
+        double maxWinW = monitorArea.Width  * 0.95;
+        double maxWinH = monitorArea.Height * 0.95;
 
         double imageDpiX = clipboardImage.DpiX > 0 ? clipboardImage.DpiX : 96.0;
         double imageDpiY = clipboardImage.DpiY > 0 ? clipboardImage.DpiY : 96.0;
@@ -231,11 +231,20 @@ internal sealed class ClipboardImageEditorWindow : Window
         _canvasScaleX = imgW / dispW;  // = imageDpiX / 96
         _canvasScaleY = imgH / dispH;
 
-        // Set initial window size: image + chrome, capped to 85% work area.
-        // MinWidth ensures the toolbar buttons are never clipped even for tiny images.
         const double MinWindowWidth = 580;
-        Width = Math.Max(MinWindowWidth, Math.Min(maxWinW, dispW + 20));
-        Height = Math.Min(maxWinH, dispH + 110); // toolbar ~40 + chrome ~70
+        const double toolbarH = 110.0;
+
+        // Compute initial zoom so the image fits inside the capped window on first open.
+        // Never zoom in (max 1.0), only zoom out if the image is too large.
+        double fitZoomW = (maxWinW - 24) / dispW;
+        double fitZoomH = (maxWinH - toolbarH) / dispH;
+        _zoom = Math.Min(1.0, Math.Min(fitZoomW, fitZoomH));
+        _scaleTransform.ScaleX = _zoom;
+        _scaleTransform.ScaleY = _zoom;
+
+        // Window size = scaled image + chrome, capped to work area.
+        Width  = Math.Max(MinWindowWidth, Math.Min(maxWinW, dispW * _zoom + 24));
+        Height = Math.Min(maxWinH, dispH * _zoom + toolbarH);
         MinWidth = MinWindowWidth;
 
         // ── Canvas ───────────────────────────────────────────────────────────
@@ -550,7 +559,7 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         _zoomLabel = new TextBlock
         {
-            Text = "100%",
+            Text = $"{_zoom * 100:F0}%",
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 4, 0),
             FontSize = 11
@@ -625,17 +634,65 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     // ── Visual layout ─────────────────────────────────────────────────────────
 
+    // P/Invoke for per-monitor work area (used when System.Windows.Forms is unavailable)
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MonitorInfo lpmi);
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct Rect32 { public int Left, Top, Right, Bottom; }
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+    private struct MonitorInfo
+    {
+        public uint cbSize;
+        public Rect32 rcMonitor;
+        public Rect32 rcWork;
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string szDevice;
+    }
+
+    private const uint MONITOR_DEFAULTTONEAREST = 2;
+
+    /// <summary>
+    /// Returns the work area of the monitor that <paramref name="ownerWindow"/> is on,
+    /// in WPF device-independent pixels (DIPs = physical pixels / DPI scale).
+    /// Falls back to <see cref="SystemParameters.WorkArea"/> if the call fails.
+    /// </summary>
+    private static Size GetOwnerMonitorWorkArea(Window ownerWindow)
+    {
+        try
+        {
+            var helper = new System.Windows.Interop.WindowInteropHelper(ownerWindow);
+            var hMonitor = MonitorFromWindow(helper.Handle, MONITOR_DEFAULTTONEAREST);
+            var mi = new MonitorInfo { cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<MonitorInfo>() };
+            if (GetMonitorInfo(hMonitor, ref mi))
+            {
+                // rcWork is in physical pixels. Convert to WPF DIPs using the owner's DPI.
+                var source = System.Windows.Interop.HwndSource.FromHwnd(helper.Handle);
+                double dpiScaleX = source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
+                double dpiScaleY = source?.CompositionTarget?.TransformToDevice.M22 ?? 1.0;
+                double workW = (mi.rcWork.Right  - mi.rcWork.Left) / dpiScaleX;
+                double workH = (mi.rcWork.Bottom - mi.rcWork.Top)  / dpiScaleY;
+                return new Size(workW, workH);
+            }
+        }
+        catch { }
+        return new Size(SystemParameters.WorkArea.Width, SystemParameters.WorkArea.Height);
+    }
+
     /// <summary>
     /// Resizes the window to fit the scaled image within the current monitor's work area.
     /// </summary>
     private void UpdateWindowSizeForZoom()
     {
-        double monW = SystemParameters.WorkArea.Width;
-        double monH = SystemParameters.WorkArea.Height;
+        var mon = GetOwnerMonitorWorkArea(this);
+        double monW = mon.Width;
+        double monH = mon.Height;
 
         double scaledImgW = _canvas.Width  * _zoom;
         double scaledImgH = _canvas.Height * _zoom;
-        const double toolbarH = 110.0; // toolbar ~40 + chrome ~70
+        const double toolbarH = 110.0;
         const double minW = 580.0;
 
         Width  = Math.Min(monW, Math.Max(minW, scaledImgW + 24));
