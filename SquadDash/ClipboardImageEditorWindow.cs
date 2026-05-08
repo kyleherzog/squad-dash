@@ -707,8 +707,9 @@ internal sealed class ClipboardImageEditorWindow : Window
     }
 
     /// <summary>
-    /// Resizes the window to fit the scaled image within the current monitor's work area,
-    /// then re-centres it on that monitor.
+    /// Resizes the window to fit the scaled image within the current monitor's work area.
+    /// Preserves the current window center so zooming never jumps the window to a different
+    /// monitor (important for monitors with negative screen coordinates).
     /// </summary>
     private void UpdateWindowSizeForZoom()
     {
@@ -724,9 +725,13 @@ internal sealed class ClipboardImageEditorWindow : Window
         double newW = Math.Min(work.Width,  desiredW);
         double newH = Math.Min(work.Height, desiredH);
 
-        double newLeft = work.Left + (work.Width  - newW) / 2.0;
-        double newTop  = work.Top  + (work.Height - newH) / 2.0;
+        // Keep the current window center fixed — don't re-centre on the monitor.
+        // This prevents the window from jumping to a different monitor when the work-area
+        // DIP conversion is imprecise (e.g. monitors with negative screen coordinates).
+        double newLeft = Left + (Width  - newW) / 2.0;
+        double newTop  = Top  + (Height - newH) / 2.0;
 
+        // Clamp to stay fully within the current monitor's work area.
         if (newLeft < work.Left) newLeft = work.Left;
         if (newTop  < work.Top)  newTop  = work.Top;
         if (newLeft + newW > work.Right)  newLeft = work.Right  - newW;
