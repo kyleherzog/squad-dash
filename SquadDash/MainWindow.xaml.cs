@@ -1262,6 +1262,8 @@ public partial class MainWindow : Window, ILiveElementLocator
 
             _startupInitialized = true;
 
+            Microsoft.Win32.SystemEvents.UserPreferenceChanged += OnSystemUserPreferenceChanged;
+
             // Capture Shift state once, before any async work, while we're still on the UI thread.
             _startupShiftHeld = Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift);
 
@@ -18017,6 +18019,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try
         {
+            Microsoft.Win32.SystemEvents.UserPreferenceChanged -= OnSystemUserPreferenceChanged;
             _isClosing = true;
             _promptHealthTimer.Stop();
             _statusPresentationTimer.Stop();
@@ -20069,6 +20072,28 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             HandleUiCallbackException(nameof(ThemeAutoMenuItem_Click), ex);
         }
+    }
+
+    private void OnSystemUserPreferenceChanged(object sender, Microsoft.Win32.UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category != Microsoft.Win32.UserPreferenceCategory.General)
+            return;
+        if (!string.Equals(_themeMode, "Auto", StringComparison.OrdinalIgnoreCase))
+            return;
+        var resolved = ResolveThemeForMode("Auto");
+        if (string.Equals(resolved, _activeThemeName, StringComparison.OrdinalIgnoreCase))
+            return;
+        Dispatcher.InvokeAsync(() =>
+        {
+            try
+            {
+                ApplyTheme(ResolveThemeForMode("Auto"));
+            }
+            catch (Exception ex)
+            {
+                HandleUiCallbackException(nameof(OnSystemUserPreferenceChanged), ex);
+            }
+        });
     }
 
     private static string CollapseWhitespace(string? text)
