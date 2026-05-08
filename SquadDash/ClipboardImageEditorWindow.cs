@@ -437,6 +437,12 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         PreviewKeyDown += (_, e) =>
         {
+            if (e.Key == Key.Enter && Keyboard.FocusedElement is not TextBox)
+            {
+                e.Handled = true;
+                DoInsertImage();
+                return;
+            }
             if (e.Key == Key.Space && !_isPanMode)
             {
                 if (Keyboard.FocusedElement is TextBox) return;
