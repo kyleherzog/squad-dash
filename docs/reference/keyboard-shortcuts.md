@@ -23,6 +23,7 @@ Known keyboard shortcuts and hotkeys in SquadDash.
 | **Ctrl+Shift+C** | Open the screenshot capture overlay |
 | **Ctrl+Scroll** (on transcript) | Adjust transcript font size (persisted globally) |
 | **Ctrl+Scroll** (on prompt) | Adjust prompt font size (persisted globally) |
+| **Ctrl+Break** | Abort the running prompt (same as clicking the Abort button) |
 
 ---
 
