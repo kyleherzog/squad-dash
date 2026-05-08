@@ -677,6 +677,7 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         _addArrowBtn.Click += (_, _) =>
         {
+            if (_inEyedropperMode) ExitEyedropperMode();
             if (_inArrowMode) { ExitArrowMode(); return; }
             EnterArrowMode();
             _addArrowBtn.Content = MakeToolIcon("ImageEditorArrowIcon", active: true);
@@ -684,6 +685,7 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         _addRectBtn.Click += (_, _) =>
         {
+            if (_inEyedropperMode) ExitEyedropperMode();
             if (_inRectMode) { ExitRectMode(); return; }
             EnterRectMode();
             _addRectBtn.Content = MakeToolIcon("ImageEditorRectIcon", active: true);
@@ -691,6 +693,7 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         cursorBtn.Click += (_, _) =>
         {
+            if (_inEyedropperMode) ExitEyedropperMode();
             _cursorEnabled = !_cursorEnabled;
             if (_cursorEnabled)
             {
