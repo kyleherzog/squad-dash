@@ -6801,6 +6801,18 @@ public partial class MainWindow : Window, ILiveElementLocator
                 }
             }
 
+            // ── Ctrl+Shift+C: Quick AI Cleanup — directly revises selection with the configured cleanup prompt ──
+            if (e.Key == Key.C
+                && (Keyboard.Modifiers & ModifierKeys.Control) != 0
+                && (Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+            {
+                if (TryDirectReviseForFocusedTextBox(_settingsSnapshot.CleanupPrompt))
+                {
+                    e.Handled = true;
+                    return;
+                }
+            }
+
             // ── Ctrl+Alt+Shift+PageUp: move prompt panel above the transcript ─────────
             if (e.Key == Key.PageUp
                 && (Keyboard.Modifiers & ModifierKeys.Control) != 0
@@ -10418,6 +10430,15 @@ public partial class MainWindow : Window, ILiveElementLocator
                 reviseItem.Click += (_, _) => ShowDocRevisePopup(DocSourceTextBox, _currentDocPath ?? "", capturedSelStart, capturedSelLen);
                 menu.Items.Add(reviseItem);
 
+                var cleanupItem = new MenuItem
+                {
+                    Header           = "⚡ _Quick Cleanup",
+                    InputGestureText = "Ctrl+Shift+C",
+                };
+                cleanupItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+                cleanupItem.Click += (_, _) => DirectReviseRichTextBox(DocSourceTextBox, _currentDocPath ?? "", _settingsSnapshot.CleanupPrompt);
+                menu.Items.Add(cleanupItem);
+
                 var smoothItem = new MenuItem
                 {
                     Header           = "✨ Smooth Dictation",
@@ -10877,6 +10898,130 @@ public partial class MainWindow : Window, ILiveElementLocator
             return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// Directly runs the Revise with AI operation on the focused text box's current selection
+    /// using <paramref name="instructions"/>, bypassing the popup. Shows the working overlay
+    /// and highlight adorner, then applies the result when the AI responds.
+    /// </summary>
+    private bool TryDirectReviseForFocusedTextBox(string instructions)
+    {
+        if (string.IsNullOrWhiteSpace(instructions)) return false;
+
+        if (Keyboard.FocusedElement is RichTextBox rtb)
+        {
+            if (rtb.GetSelectionLength() <= 0) return false;
+            var filePath = ReferenceEquals(rtb, DocSourceTextBox) ? (_currentDocPath ?? "") : "";
+            DirectReviseRichTextBox(rtb, filePath, instructions);
+            return true;
+        }
+        if (Keyboard.FocusedElement is System.Windows.Controls.TextBox tb)
+        {
+            if (tb.SelectionLength <= 0) return false;
+            DirectReviseTextBox(tb, "", instructions);
+            return true;
+        }
+        return false;
+    }
+
+    private void DirectReviseTextBox(
+        System.Windows.Controls.TextBox textBox,
+        string filePath,
+        string instructions)
+    {
+        var selStart      = textBox.SelectionStart;
+        var selLen        = textBox.SelectionLength;
+        if (selLen <= 0) return;
+
+        var originalText  = textBox.Text.Substring(selStart, selLen);
+        var fullText      = textBox.Text;
+        var capturedStart = selStart;
+        var capturedLen   = selLen;
+
+        ShowRevisionWorkingOverlay(new Point(Left + Width / 2, Top + Height / 2));
+
+        var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(120));
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var cwd = string.IsNullOrEmpty(filePath)
+                    ? string.Empty
+                    : System.IO.Path.GetDirectoryName(filePath) ?? string.Empty;
+                var revised = await _bridge.RunDocRevisionAsync(
+                    instructions, originalText, fullText, cwd, cts.Token);
+                if (!string.IsNullOrWhiteSpace(revised))
+                    Dispatcher.Invoke(() => ApplyDocRevision(textBox, capturedStart, capturedLen, originalText, revised));
+            }
+            catch { /* swallow — user may have navigated away */ }
+            finally
+            {
+                cts.Dispose();
+            }
+        });
+    }
+
+    private void DirectReviseRichTextBox(
+        RichTextBox textBox,
+        string filePath,
+        string instructions)
+    {
+        var selStart = textBox.GetSelectionStart();
+        var selLen   = textBox.GetSelectionLength();
+        if (selLen <= 0) return;
+
+        var originalText = textBox.GetSubstring(selStart, selLen);
+        var fullText     = textBox.GetPlainText();
+        var startPointer = textBox.GetTextPointerAt(selStart);
+        var endPointer   = textBox.GetTextPointerAt(selStart + selLen);
+
+        RevisionHighlightAdorner? highlight = RevisionHighlightAdorner.Attach(textBox, startPointer, endPointer);
+        RevisionPendingIndicator? indicator = RevisionPendingIndicator.Attach(textBox, endPointer);
+
+        ShowRevisionWorkingOverlay(new Point(Left + Width / 2, Top + Height / 2));
+
+        var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(120));
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var cwd = string.IsNullOrEmpty(filePath)
+                    ? string.Empty
+                    : System.IO.Path.GetDirectoryName(filePath) ?? string.Empty;
+                var revised = await _bridge.RunDocRevisionAsync(
+                    instructions, originalText, fullText, cwd, cts.Token);
+                if (!string.IsNullOrWhiteSpace(revised))
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        indicator?.Detach();
+                        highlight?.Remove();
+                        var currentText = new TextRange(startPointer, endPointer).Text;
+                        if (currentText == originalText)
+                        {
+                            var replaceRange = new TextRange(startPointer, endPointer);
+                            replaceRange.Text = revised;
+                        }
+                        else
+                        {
+                            var win = new RevisionResultWindow(revised) { Owner = this };
+                            win.Show();
+                        }
+                    });
+                }
+            }
+            catch { /* swallow */ }
+            finally
+            {
+                cts.Dispose();
+                Dispatcher.Invoke(() =>
+                {
+                    indicator?.Detach();
+                    highlight?.Remove();
+                });
+            }
+        });
     }
 
     private static bool IsCharacterIndexVisible(System.Windows.Controls.TextBox textBox, int charIndex)

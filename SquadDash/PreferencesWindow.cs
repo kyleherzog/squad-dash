@@ -38,6 +38,7 @@ internal sealed class PreferencesWindow : Window {
     private readonly PasswordBox _byokApiKeyPasswordBox;
     private readonly TextBox _byokApiKeyRevealBox;
     private readonly TextBlock _byokTestStatusText;
+    private readonly TextBox _cleanupPromptBox;
 
     private readonly UIElement[] _pages;
     private readonly Button[] _navButtons;
@@ -94,6 +95,19 @@ internal sealed class PreferencesWindow : Window {
             Padding = new Thickness(6, 4, 6, 4),
             Height = 30
         };
+
+        _cleanupPromptBox = new TextBox {
+            Text = currentSettings.CleanupPrompt,
+            Padding = new Thickness(6, 4, 6, 4),
+            TextWrapping = TextWrapping.Wrap,
+            AcceptsReturn = false,
+            Height = 60,
+            VerticalContentAlignment = VerticalAlignment.Top,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
+        _cleanupPromptBox.SetResourceReference(TextBox.BackgroundProperty, "TextBoxBackground");
+        _cleanupPromptBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
+        _cleanupPromptBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
 
         _tunnelModeComboBox = new ComboBox { Height = 30, Margin = new Thickness(0, 0, 0, 12) };
         _tunnelModeComboBox.Items.Add(new ComboBoxItem { Content = "None", Tag = (string?)null });
@@ -271,6 +285,7 @@ internal sealed class PreferencesWindow : Window {
             ("Remote Access", BuildRemoteAccessPage()),
             ("Custom Model",  BuildByokPage()),
             ("Notifications", BuildNotificationsPage(currentSettings)),
+            ("AI",            BuildAiPage()),
         };
         if (showDevOptions)
             pageList.Add(("Dev / Diag.", BuildDevPage()));
@@ -543,6 +558,26 @@ internal sealed class PreferencesWindow : Window {
         return WrapInScrollViewer(form);
     }
 
+    private UIElement BuildAiPage() {
+        var form = new StackPanel { Margin = new Thickness(20, 16, 20, 20) };
+
+        AddSectionHeader(form, "AI");
+
+        AddLabel(form, "Quick Cleanup prompt (Ctrl+Shift+C):", wrap: true);
+        form.Children.Add(_cleanupPromptBox);
+
+        var hint = new TextBlock {
+            Text = "This prompt is sent automatically when you press Ctrl+Shift+C with text selected. The selected text is passed to the AI with this instruction.",
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 6, 0, 0)
+        };
+        hint.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+        form.Children.Add(hint);
+
+        return WrapInScrollViewer(form);
+    }
+
     private void RevealLink_MouseDown(object sender, MouseButtonEventArgs e) {
         _apiKeyRevealBox.Text = _apiKeyPasswordBox.Password;
         _apiKeyPasswordBox.Visibility = Visibility.Collapsed;
@@ -621,6 +656,7 @@ internal sealed class PreferencesWindow : Window {
             string.IsNullOrWhiteSpace(_byokModelBox.Text.Trim()) ? null : _byokModelBox.Text.Trim(),
             byokProviderType,
             string.IsNullOrWhiteSpace(byokApiKey) ? null : byokApiKey);
+        updated = _settingsStore.SaveCleanupPrompt(_cleanupPromptBox.Text.Trim());
         _onSaved(updated);
         Close();
 
