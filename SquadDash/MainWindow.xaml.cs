@@ -6602,6 +6602,14 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try
         {
+            // ── Ctrl+Break: abort running prompt (from anywhere in the window) ─────
+            if (e.Key == Key.Cancel && AbortButton.IsEnabled)
+            {
+                AbortButton_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                return;
+            }
+
             // ── Ctrl+Shift+Z: Redo — works in any focused text control ─────────────
             if (e.Key == Key.Z
                 && (Keyboard.Modifiers & ModifierKeys.Control) != 0
