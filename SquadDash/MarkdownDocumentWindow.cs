@@ -89,7 +89,7 @@ internal sealed class MarkdownDocumentWindow : Window {
     private MarkdownDocumentCaptureContext? _captureContext;
 
     private MarkdownDocumentWindow(string title, IReadOnlyList<MarkdownDocumentSpec> documents,
-        NoteEditContext? noteContext = null) {
+        NoteEditContext? noteContext = null, LoopEditContext? loopEditContext = null) {
         if (documents.Count == 0)
             throw new ArgumentException("At least one markdown document is required.", nameof(documents));
 
@@ -211,6 +211,75 @@ internal sealed class MarkdownDocumentWindow : Window {
             };
 
             _rootPanel.Children.Add(noteTitleRow);
+        }
+
+        // ── Loop description row (only in loop edit mode) ─────────────────────
+        if (loopEditContext is not null) {
+            var displayName = loopEditContext.InitialDescription;
+            var dashIdx     = displayName.IndexOf(" - ", StringComparison.Ordinal);
+            var titlePart   = dashIdx > 0 ? displayName[..dashIdx].Trim() : displayName;
+            Title = $"Edit Loop – {titlePart}";
+
+            var currentLoopDescription = loopEditContext.InitialDescription;
+
+            var loopDescRow = new DockPanel {
+                Margin        = new Thickness(12, 0, 12, 8),
+                LastChildFill = true,
+            };
+            DockPanel.SetDock(loopDescRow, Dock.Top);
+
+            var loopDescLabel = new TextBlock {
+                Text              = "Description:",
+                FontSize          = 12,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin            = new Thickness(0, 0, 8, 0),
+            };
+            loopDescLabel.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
+            DockPanel.SetDock(loopDescLabel, Dock.Left);
+            loopDescRow.Children.Add(loopDescLabel);
+
+            var loopDescHint = new TextBlock {
+                Text              = "e.g. 'My Loop - tooltip hint shown on hover'",
+                FontSize          = 11,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin            = new Thickness(0, 0, 8, 0),
+                FontStyle         = FontStyles.Italic,
+            };
+            loopDescHint.SetResourceReference(TextBlock.ForegroundProperty, "MutedText");
+            DockPanel.SetDock(loopDescHint, Dock.Right);
+            loopDescRow.Children.Add(loopDescHint);
+
+            var loopDescBox = new TextBox {
+                Text                     = loopEditContext.InitialDescription,
+                FontSize                 = 12,
+                Padding                  = new Thickness(6, 4, 6, 4),
+                BorderThickness          = new Thickness(1),
+                Height                   = 28,
+                VerticalContentAlignment = VerticalAlignment.Center,
+            };
+            loopDescBox.SetResourceReference(TextBox.BackgroundProperty, "InputSurface");
+            loopDescBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
+            loopDescBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
+            loopDescRow.Children.Add(loopDescBox);
+
+            void CommitLoopDescription() {
+                var newDesc = loopDescBox.Text.Trim();
+                if (string.IsNullOrWhiteSpace(newDesc) || newDesc == currentLoopDescription)
+                    return;
+                currentLoopDescription = newDesc;
+                loopEditContext.OnDescriptionCommit(newDesc);
+                var di     = newDesc.IndexOf(" - ", StringComparison.Ordinal);
+                var tp     = di > 0 ? newDesc[..di].Trim() : newDesc;
+                Title = $"Edit Loop – {tp}";
+            }
+
+            loopDescBox.LostFocus += (_, _) => CommitLoopDescription();
+            loopDescBox.KeyDown   += (_, e) => {
+                if (e.Key == Key.Enter)  { CommitLoopDescription(); e.Handled = true; }
+                if (e.Key == Key.Escape) { loopDescBox.Text = currentLoopDescription; e.Handled = true; }
+            };
+
+            _rootPanel.Children.Add(loopDescRow);
         }
 
         _contentGrid = new Grid {
@@ -335,7 +404,7 @@ internal sealed class MarkdownDocumentWindow : Window {
 
     public static void Show(Window? owner, string title, string filePath, bool showSource = false,
         MarkdownDocumentCaptureContext? captureContext = null, bool autoSave = false,
-        NoteEditContext? noteContext = null) {
+        NoteEditContext? noteContext = null, LoopEditContext? loopEditContext = null) {
         // If a window already has this file open, bring it to the front instead of opening a duplicate.
         var existing = _openWindows.FirstOrDefault(w =>
             w._documents.Any(d => string.Equals(d.FilePath, filePath, StringComparison.OrdinalIgnoreCase)));
@@ -345,13 +414,13 @@ internal sealed class MarkdownDocumentWindow : Window {
             existing.Activate();
             return;
         }
-        Show(owner, title, [new MarkdownDocumentSpec(Path.GetFileNameWithoutExtension(filePath), filePath)], showSource, captureContext, autoSave, noteContext);
+        Show(owner, title, [new MarkdownDocumentSpec(Path.GetFileNameWithoutExtension(filePath), filePath)], showSource, captureContext, autoSave, noteContext, loopEditContext);
     }
 
     public static void Show(Window? owner, string title, IReadOnlyList<MarkdownDocumentSpec> documents, bool showSource = false,
         MarkdownDocumentCaptureContext? captureContext = null, bool autoSave = false,
-        NoteEditContext? noteContext = null) {
-        var window = new MarkdownDocumentWindow(title, documents, noteContext);
+        NoteEditContext? noteContext = null, LoopEditContext? loopEditContext = null) {
+        var window = new MarkdownDocumentWindow(title, documents, noteContext, loopEditContext);
         window._captureContext = captureContext;
         window._autoSave       = autoSave;
         if (owner is not null)
@@ -2198,6 +2267,12 @@ internal static class MarkdownDocumentScripts {
 /// opening a MarkdownDocumentWindow for note editing.
 /// </summary>
 internal sealed record NoteEditContext(string InitialTitle, Action<string> OnTitleCommit);
+
+/// <summary>
+/// Enables the description editing row and "Edit Loop" window title when
+/// opening a MarkdownDocumentWindow for loop editing.
+/// </summary>
+internal sealed record LoopEditContext(string InitialDescription, Action<string> OnDescriptionCommit);
 
 /// <summary>
 /// Optional services passed to <see cref="MarkdownDocumentWindow.Show"/> to enable

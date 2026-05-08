@@ -9065,9 +9065,6 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (_currentWorkspace is null) return;
             var loopMdPath = GetEffectiveLoopMdPath();
             var config = LoopMdParser.Parse(loopMdPath);
-            // If the file uses options: block, the controls are already inline — nothing to open.
-            if (config?.Options is { Count: > 0 })
-                return;
             OpenLoopConfigFlyout(loopMdPath, LoopConfigFlyoutMode.Edit, existingConfig: config);
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(LoopPanelLoopSettingsMenuItem_Click), ex); }
@@ -18849,7 +18846,18 @@ public partial class MainWindow : Window, ILiveElementLocator
                 UpdateLoopPanelButtonStates();
             }
 
-            OpenMarkdownFile(loopMdPath, "Loop Instructions", showSource: true);
+            var config          = LoopMdParser.Parse(loopMdPath);
+            var initialDesc     = config?.Description ?? "";
+            var loopEditCtx     = new LoopEditContext(initialDesc, newDesc => {
+                LoopMdParser.UpdateDescription(loopMdPath, newDesc);
+                PopulateLoopFilePicker();
+            });
+            MarkdownDocumentWindow.Show(
+                CanShowOwnedWindow() ? this : null,
+                "Loop Instructions",
+                loopMdPath,
+                showSource: true,
+                loopEditContext: loopEditCtx);
         }
         catch (Exception ex)
         {

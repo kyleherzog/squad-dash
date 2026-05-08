@@ -297,6 +297,66 @@ internal static class LoopMdParser {
         return body;
     }
     /// <summary>
+    /// Updates (or inserts) the <c>description:</c> line in the loop file's YAML frontmatter.
+    /// If a <c>description:</c> key already exists it is replaced in-place; otherwise one is
+    /// inserted after the <c>configured:</c> line, or at the end of the frontmatter.
+    /// Does nothing if the file is not found or has no frontmatter.
+    /// </summary>
+    public static void UpdateDescription(string loopMdPath, string newDescription) {
+        if (!File.Exists(loopMdPath))
+            return;
+
+        string[] lines;
+        try {
+            lines = File.ReadAllLines(loopMdPath);
+        }
+        catch {
+            return;
+        }
+
+        // Find opening ---
+        int i = 0;
+        while (i < lines.Length && lines[i].Trim() != "---")
+            i++;
+        if (i >= lines.Length) return;
+        int frontmatterStart = i;
+        i++;
+
+        // Find closing ---
+        int frontmatterEnd = -1;
+        while (i < lines.Length) {
+            if (lines[i].Trim() == "---") { frontmatterEnd = i; break; }
+            i++;
+        }
+        if (frontmatterEnd < 0) return;
+
+        var escaped    = newDescription.Replace("\"", "\\\"");
+        var newLine    = $"description: \"{escaped}\"";
+
+        // Try to update existing description: line
+        for (int j = frontmatterStart + 1; j < frontmatterEnd; j++) {
+            if (lines[j].TrimStart().StartsWith("description:", StringComparison.OrdinalIgnoreCase)) {
+                lines[j] = newLine;
+                try { File.WriteAllLines(loopMdPath, lines); } catch { /* best-effort */ }
+                return;
+            }
+        }
+
+        // No existing description: line — insert after configured: or at end of frontmatter
+        var insertAfter = frontmatterEnd - 1;
+        for (int j = frontmatterStart + 1; j < frontmatterEnd; j++) {
+            if (lines[j].TrimStart().StartsWith("configured:", StringComparison.OrdinalIgnoreCase)) {
+                insertAfter = j;
+                break;
+            }
+        }
+
+        var newLines = new List<string>(lines);
+        newLines.Insert(insertAfter + 1, newLine);
+        try { File.WriteAllLines(loopMdPath, newLines); } catch { /* best-effort */ }
+    }
+
+    /// <summary>
     /// Updates a single option's <c>value:</c> line in the loop file's YAML frontmatter.
     /// Reads the file, finds the <c>options:</c> block, locates <paramref name="optionKey"/>,
     /// updates the first <c>value:</c> sub-key under it, and writes back.
