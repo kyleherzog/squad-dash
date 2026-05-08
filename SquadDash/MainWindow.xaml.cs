@@ -10209,6 +10209,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             _docSaveSuppressionUntil = DateTime.UtcNow.AddMilliseconds(500);
             File.WriteAllText(_currentDocPath, _currentDocFrontMatter + DocSourceTextBox.GetPlainText());
+
+            // If the saved file is a loop file, re-scan so the combo box picks up
+            // any frontmatter changes (e.g. updated description / display name).
+            if (_loopFileEntries.Any(e => string.Equals(e.FilePath, _currentDocPath, StringComparison.OrdinalIgnoreCase)))
+                PopulateLoopFilePicker();
         }
         catch (Exception ex)
         {
