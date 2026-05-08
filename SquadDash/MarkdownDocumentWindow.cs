@@ -758,7 +758,7 @@ internal sealed class MarkdownDocumentWindow : Window {
         var editorTb = _activeDocument?.EditorTextBox;
         if (editorTb is null) return;
 
-        _editorVoiceCaretIndex    = editorTb.GetCaretOffset();
+        _editorVoiceCaretIndex    = editorTb.GetSelectionStart();
         _editorVoiceSelectionLength = editorTb.GetSelectionLength();
 
         _editorVoiceService = new SpeechRecognitionService();
@@ -848,7 +848,8 @@ internal sealed class MarkdownDocumentWindow : Window {
                          precedingChar != '\n' && precedingChar != '\r' ? " " : string.Empty;
         var processed  = VoiceInsertionHeuristics.Apply(left, text, right);
         var insert     = prefix + processed;
-        editorTb.SetPlainText(left + insert + right);
+        editorTb.SelectRange(caretIndex, selEndIndex - caretIndex);
+        editorTb.ReplaceSelection(insert);
         editorTb.SetCaretOffset(caretIndex + insert.Length);
         _editorVoiceCaretIndex = caretIndex + insert.Length;
     }
