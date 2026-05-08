@@ -204,7 +204,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         WindowStyle = WindowStyle.SingleBorderWindow;
         ResizeMode = ResizeMode.CanResizeWithGrip;
         ShowInTaskbar = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        WindowStartupLocation = WindowStartupLocation.Manual;
         this.SetResourceReference(BackgroundProperty, "AppSurface");
 
         LoadArrowDefaults();
@@ -216,7 +216,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         // the image appears at the intended physical size on any monitor.
         // Ctrl+scroll zoom is applied via ScaleTransform on the wrapper so
         // DoInsertImage always renders at the original pixel dimensions.
-        var monitorArea = GetOwnerMonitorWorkArea(owner);
+        var monitorArea = GetMonitorWorkAreaRect(owner);
         double imgW = clipboardImage.PixelWidth;
         double imgH = clipboardImage.PixelHeight;
         double maxWinW = monitorArea.Width  * 0.95;
@@ -246,6 +246,12 @@ internal sealed class ClipboardImageEditorWindow : Window
         Width  = Math.Max(MinWindowWidth, Math.Min(maxWinW, dispW * _zoom + 24));
         Height = Math.Min(maxWinH, dispH * _zoom + toolbarH);
         MinWidth = MinWindowWidth;
+
+        // Center on the monitor the owner is on (WindowStartupLocation = Manual above).
+        double initLeft = monitorArea.Left + (monitorArea.Width  - Width)  / 2.0;
+        double initTop  = monitorArea.Top  + (monitorArea.Height - Height) / 2.0;
+        Left = Math.Max(monitorArea.Left, initLeft);
+        Top  = Math.Max(monitorArea.Top,  initTop);
 
         // ── Canvas ───────────────────────────────────────────────────────────
 
@@ -407,7 +413,11 @@ internal sealed class ClipboardImageEditorWindow : Window
         root.Children.Add(scrollViewer);
         Content = root;
 
-        Loaded += (_, _) => RefreshLayout();
+        Loaded += (_, _) =>
+        {
+            RefreshLayout();
+            UpdateWindowSizeForZoom(); // center on first paint
+        };
     }
 
     // ── Toolbar ───────────────────────────────────────────────────────────────
@@ -655,48 +665,63 @@ internal sealed class ClipboardImageEditorWindow : Window
     private const uint MONITOR_DEFAULTTONEAREST = 2;
 
     /// <summary>
-    /// Returns the work area of the monitor that <paramref name="ownerWindow"/> is on,
-    /// in WPF device-independent pixels (DIPs = physical pixels / DPI scale).
+    /// Returns the work area of the monitor that <paramref name="w"/> is on as a WPF DIP
+    /// <see cref="Rect"/> (origin = top-left of work area in screen coordinates).
     /// Falls back to <see cref="SystemParameters.WorkArea"/> if the call fails.
     /// </summary>
-    private static Size GetOwnerMonitorWorkArea(Window ownerWindow)
+    private static Rect GetMonitorWorkAreaRect(Window w)
     {
         try
         {
-            var helper = new System.Windows.Interop.WindowInteropHelper(ownerWindow);
+            var helper = new System.Windows.Interop.WindowInteropHelper(w);
             var hMonitor = MonitorFromWindow(helper.Handle, MONITOR_DEFAULTTONEAREST);
             var mi = new MonitorInfo { cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<MonitorInfo>() };
             if (GetMonitorInfo(hMonitor, ref mi))
             {
-                // rcWork is in physical pixels. Convert to WPF DIPs using the owner's DPI.
                 var source = System.Windows.Interop.HwndSource.FromHwnd(helper.Handle);
-                double dpiScaleX = source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
-                double dpiScaleY = source?.CompositionTarget?.TransformToDevice.M22 ?? 1.0;
-                double workW = (mi.rcWork.Right  - mi.rcWork.Left) / dpiScaleX;
-                double workH = (mi.rcWork.Bottom - mi.rcWork.Top)  / dpiScaleY;
-                return new Size(workW, workH);
+                double sx = source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
+                double sy = source?.CompositionTarget?.TransformToDevice.M22 ?? 1.0;
+                double l = mi.rcWork.Left   / sx;
+                double t = mi.rcWork.Top    / sy;
+                double ww = (mi.rcWork.Right  - mi.rcWork.Left) / sx;
+                double wh = (mi.rcWork.Bottom - mi.rcWork.Top)  / sy;
+                return new Rect(l, t, ww, wh);
             }
         }
         catch { }
-        return new Size(SystemParameters.WorkArea.Width, SystemParameters.WorkArea.Height);
+        return SystemParameters.WorkArea;
     }
 
     /// <summary>
-    /// Resizes the window to fit the scaled image within the current monitor's work area.
+    /// Resizes the window to fit the scaled image within the current monitor's work area,
+    /// then re-centres it on that monitor.
     /// </summary>
     private void UpdateWindowSizeForZoom()
     {
-        var mon = GetOwnerMonitorWorkArea(this);
-        double monW = mon.Width;
-        double monH = mon.Height;
-
-        double scaledImgW = _canvas.Width  * _zoom;
-        double scaledImgH = _canvas.Height * _zoom;
+        var work = GetMonitorWorkAreaRect(this);
         const double toolbarH = 110.0;
         const double minW = 580.0;
 
-        Width  = Math.Min(monW, Math.Max(minW, scaledImgW + 24));
-        Height = Math.Min(monH, scaledImgH + toolbarH);
+        double scaledImgW = _canvas.Width  * _zoom;
+        double scaledImgH = _canvas.Height * _zoom;
+        double desiredW = Math.Max(minW, scaledImgW + 24);
+        double desiredH = scaledImgH + toolbarH;
+
+        double newW = Math.Min(work.Width,  desiredW);
+        double newH = Math.Min(work.Height, desiredH);
+
+        double newLeft = work.Left + (work.Width  - newW) / 2.0;
+        double newTop  = work.Top  + (work.Height - newH) / 2.0;
+
+        if (newLeft < work.Left) newLeft = work.Left;
+        if (newTop  < work.Top)  newTop  = work.Top;
+        if (newLeft + newW > work.Right)  newLeft = work.Right  - newW;
+        if (newTop  + newH > work.Bottom) newTop  = work.Bottom - newH;
+
+        Width  = newW;
+        Height = newH;
+        Left   = newLeft;
+        Top    = newTop;
     }
 
     /// <summary>
