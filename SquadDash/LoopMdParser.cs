@@ -282,19 +282,48 @@ internal static class LoopMdParser {
 
     /// <summary>
     /// Returns the instructions body with all <c>{{optionKey}}</c> placeholders
-    /// replaced by the current <c>RawValue</c> of the matching option.
+    /// replaced by the current <c>RawValue</c> of the matching option, plus any
+    /// <paramref name="extraSubstitutions"/> (e.g. system variables like {{iteration}}).
     /// Options of type "group" are skipped (they are UI headers, not values).
     /// </summary>
-    public static string BuildMergedBody(LoopMdConfig config)
+    public static string BuildMergedBody(LoopMdConfig config, IReadOnlyDictionary<string, string>? extraSubstitutions = null)
     {
         var body = config.Instructions;
-        if (config.Options is null) return body;
-        foreach (var opt in config.Options)
+        if (config.Options is not null)
         {
-            if (opt.Type == "group") continue;
-            body = body.Replace($"{{{{{opt.Key}}}}}", opt.RawValue, StringComparison.Ordinal);
+            foreach (var opt in config.Options)
+            {
+                if (opt.Type == "group") continue;
+                body = body.Replace($"{{{{{opt.Key}}}}}", opt.RawValue, StringComparison.Ordinal);
+            }
+        }
+        if (extraSubstitutions is not null)
+        {
+            foreach (var kvp in extraSubstitutions)
+                body = body.Replace($"{{{{{kvp.Key}}}}}", kvp.Value, StringComparison.Ordinal);
         }
         return body;
+    }
+
+    /// <summary>
+    /// Returns the complete loop file content (frontmatter + substituted body) suitable for
+    /// Squad CLI mode preview. The frontmatter is reconstructed from the parsed config.
+    /// </summary>
+    public static string BuildMergedFull(LoopMdConfig config, string substitutedBody)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("---");
+        sb.AppendLine("configured: true");
+        sb.AppendLine($"interval: {config.IntervalMinutes}");
+        sb.AppendLine($"timeout: {config.TimeoutMinutes}");
+        if (!string.IsNullOrEmpty(config.Description))
+            sb.AppendLine($"description: \"{config.Description.Replace("\"", "\\\"")}\"");
+        if (config.Commands is { Count: > 0 })
+            sb.AppendLine($"commands: [{string.Join(", ", config.Commands)}]");
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.Append(substitutedBody);
+        return sb.ToString();
     }
     /// <summary>
     /// Updates (or inserts) the <c>description:</c> line in the loop file's YAML frontmatter.

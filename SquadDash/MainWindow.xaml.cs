@@ -9102,10 +9102,10 @@ public partial class MainWindow : Window, ILiveElementLocator
             _loopMergedViewWindow = new LoopMergedViewWindow();
             _loopMergedViewWindow.Closed += (_, _) => {
                 _loopMergedViewWindow = null;
-                LoopPanelShowMergedMenuItem.Header = "Show merged loop file";
+                LoopPanelShowMergedMenuItem.Header = "Preview merged loop";
             };
             _loopMergedViewWindow.Owner = CanShowOwnedWindow() ? this : null;
-            LoopPanelShowMergedMenuItem.Header = "Hide merged loop file";
+            LoopPanelShowMergedMenuItem.Header = "Close preview";
             RefreshLoopMergedView();
             _loopMergedViewWindow.Show();
         }
@@ -9119,17 +9119,44 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         try
         {
+            var tasksFilter = TasksFilterBox?.Text?.Trim() ?? "";
+            var extraSubs = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["iteration"]       = "1",
+                ["copilot_trailer"] = "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>",
+                ["build_command"]   = "",   // not stored in app settings; leave empty for preview
+            };
+
+            var isCliMode = _settingsSnapshot.LoopMode == LoopMode.SquadCli;
             var config = LoopMdParser.Parse(_selectedLoopMdPath);
-            var text = config is not null
-                ? LoopMdParser.BuildMergedBody(config)
-                : File.Exists(_selectedLoopMdPath)
-                    ? LoopMdParser.StripFrontmatter(File.ReadAllText(_selectedLoopMdPath))
-                    : "";
+            string text;
+            if (config is not null)
+            {
+                text = LoopMdParser.BuildMergedBody(config, extraSubs);
+                // For Squad CLI mode, prepend a clean frontmatter block
+                if (isCliMode)
+                    text = LoopMdParser.BuildMergedFull(config, text);
+            }
+            else if (File.Exists(_selectedLoopMdPath))
+            {
+                text = LoopMdParser.StripFrontmatter(File.ReadAllText(_selectedLoopMdPath));
+            }
+            else
+            {
+                text = "";
+            }
+
+            // Substitute [**FILTER**] placeholder with the tasks filter text
+            if (!string.IsNullOrEmpty(tasksFilter))
+                text = text.Replace("[**FILTER**]", tasksFilter, StringComparison.Ordinal);
+            else
+                text = text.Replace("[**FILTER**]", "(no filter — all tasks)", StringComparison.Ordinal);
+
             _loopMergedViewWindow.UpdateContent(text);
         }
         catch
         {
-            _loopMergedViewWindow.UpdateContent("");
+            _loopMergedViewWindow?.UpdateContent("");
         }
     }
 

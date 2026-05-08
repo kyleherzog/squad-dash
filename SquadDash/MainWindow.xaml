@@ -817,7 +817,7 @@
                                               Click="LoopPanelShowInFolderMenuItem_Click" />
                                     <Separator Style="{StaticResource ThemedMenuSeparatorStyle}" />
                                     <MenuItem x:Name="LoopPanelShowMergedMenuItem"
-                                              Header="Show merged loop file"
+                                              Header="Preview merged loop"
                                               Style="{StaticResource ThemedMenuItemStyle}"
                                               Click="LoopPanelShowMergedMenuItem_Click" />
                                     <Separator Style="{StaticResource ThemedMenuSeparatorStyle}" />

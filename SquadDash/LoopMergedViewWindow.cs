@@ -17,7 +17,7 @@ internal sealed class LoopMergedViewWindow : Window
 
     public LoopMergedViewWindow()
     {
-        Title          = "Merged Loop File";
+        Title          = "Loop Preview";
         Width          = 600;
         Height         = 450;
         MinWidth       = 300;
@@ -69,7 +69,7 @@ internal sealed class LoopMergedViewWindow : Window
 
         var titleBlock = new TextBlock
         {
-            Text                = "Merged Loop File",
+            Text                = "Loop Preview",
             FontSize            = 13,
             FontWeight          = FontWeights.SemiBold,
             VerticalAlignment   = VerticalAlignment.Center,
