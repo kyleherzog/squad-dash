@@ -1,6 +1,6 @@
 import { SquadClient } from "@bradygaster/squad-sdk/client";
 
-const SessionIdleTimeoutMs = 40 * 60 * 1000;
+const SessionIdleTimeoutMs = 60 * 60 * 1000;
 
 export type SquadPromptRequest = {
     cwd: string;

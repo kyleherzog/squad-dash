@@ -881,6 +881,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 {
                     CoordinatorThread.CompletedAt = DateTimeOffset.Now;
                     UpdateCompletedTimeFooters();
+                    _backgroundTaskPresenter.PromoteDeferredBackgroundAgentReports("coordinator_idle");
                     SquadDashTrace.Write("Queue", $"setIsPromptRunning(false): queueCount={_promptQueue.Count} deferred={_deferredShutdown} restartPending={_restartPending} isClosing={_isClosing}");
                     if (_deferredShutdown == DeferredShutdownMode.AfterCurrentTurn)
                     {

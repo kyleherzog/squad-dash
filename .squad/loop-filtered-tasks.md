@@ -20,6 +20,9 @@ options:
     choices: [always, never, ask]
     label: "Commit"
     hint: "When to automatically commit completed work"
+  loop_params_header:
+    type: group
+    label: "Loop Parameters:"
   interval:
     value: 1
     type: int
