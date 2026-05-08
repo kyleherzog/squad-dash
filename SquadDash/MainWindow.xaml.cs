@@ -6677,6 +6677,14 @@ public partial class MainWindow : Window, ILiveElementLocator
                 return;
             }
 
+            // ── Escape: dismiss doc find bar from any focus position (incl. WebBrowser preview) ──
+            if (e.Key == Key.Escape && _docSourceFindBar is not null)
+            {
+                HideDocSourceFindBar();
+                e.Handled = true;
+                return;
+            }
+
             // ── Feature 1: Guard against rerouting input when DocSourceTextBox has focus ──
             if (DocSourceTextBox?.IsFocused == true)
             {
@@ -6731,6 +6739,14 @@ public partial class MainWindow : Window, ILiveElementLocator
             // ── Search shortcuts ─────────────────────────────────────────────────
             if (e.Key == Key.F && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
             {
+                // If docs panel is open, Ctrl+F searches the doc — even if focus is on
+                // a toolbar button, the topics tree, or the rendered preview.
+                if (DocsPanel.Visibility == Visibility.Visible && DocSourceTextBox != null)
+                {
+                    ShowDocSourceFindBar();
+                    e.Handled = true;
+                    return;
+                }
                 SearchBox?.Focus();
                 SearchBox?.SelectAll();
                 e.Handled = true;
