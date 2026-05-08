@@ -1297,6 +1297,11 @@ internal sealed class ClipboardImageEditorWindow : Window
                 var baseX = headPt.X - ux2 * HeadLen;
                 var baseY = headPt.Y - uy2 * HeadLen;
                 var px = -uy2; var py = ux2;
+                // Stop the shaft at the head base so the line and polygon don't overlap.
+                // When both shapes share Opacity < 1 and overlap, WPF composites them
+                // independently, making the head appear semi-transparent over the shaft.
+                _arrowDragPreviewLine.X2 = baseX;
+                _arrowDragPreviewLine.Y2 = baseY;
                 _arrowDragPreviewHead.Points = new PointCollection
                 {
                     headPt,
@@ -1592,7 +1597,10 @@ internal sealed class ClipboardImageEditorWindow : Window
         var uy = (tailPt.Y - headPt.Y) / dist;
 
         double arrowLen = _defaultArrowLength;
-        double tailLen = Math.Max(20.0, dist - arrowLen);
+        // TailLength represents the shaft length from center to tail-end.
+        // With center placed at headPt - ux*arrowLen, tailX = center + ux*(arrowLen+tailLen).
+        // We want tailX == tailPt, so: tailLen = dist (not dist - arrowLen).
+        double tailLen = Math.Max(20.0, dist);
 
         // ux = sin(rad), uy = -cos(rad) => rad = atan2(ux, -uy)
         double angleDeg = Math.Atan2(ux, -uy) * 180.0 / Math.PI;
