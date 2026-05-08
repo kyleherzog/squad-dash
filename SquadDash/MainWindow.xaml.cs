@@ -14511,7 +14511,10 @@ public partial class MainWindow : Window, ILiveElementLocator
                 {
                     var p = CreateTranscriptParagraph(bottomMargin: 4);
                     p.Tag = pl;
-                    _markdownRenderer.AppendInlineMarkdown(p.Inlines, pl.TrimStart());
+                    var trimmedPl = pl.TrimStart();
+                    if (trimmedPl.StartsWith("Doing this myself because", StringComparison.OrdinalIgnoreCase))
+                        p.SetResourceReference(TextElement.ForegroundProperty, "SelfHandledText");
+                    _markdownRenderer.AppendInlineMarkdown(p.Inlines, trimmedPl);
                     yield return p;
                 }
             }
