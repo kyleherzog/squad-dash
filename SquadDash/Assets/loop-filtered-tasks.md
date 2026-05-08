@@ -1,6 +1,25 @@
 ---
 configured: true
 options:
+  after_task_header:
+    type: group
+    label: "After Task Completes:"
+  build_verify:
+    value: true
+    type: bool
+    label: "Verify build"
+    hint: "Run the auto-detected build command and confirm it passes before committing"
+  test_after_task:
+    value: true
+    type: bool
+    label: "Write tests"
+    hint: "Write comprehensive tests after each implementation task"
+  commit_after_task:
+    value: ask
+    type: enum
+    choices: [always, never, ask]
+    label: "Commit"
+    hint: "When to automatically commit completed work"
   interval:
     value: 1
     type: int
@@ -16,22 +35,6 @@ options:
     type: int
     label: "Max iterations"
     hint: "Stop after this many iterations. 0 = unlimited."
-  commit_after_task:
-    value: ask
-    type: enum
-    choices: [always, never, ask]
-    label: "Commit after task"
-    hint: "When to automatically commit completed work"
-  build_verify:
-    value: true
-    type: bool
-    label: "Verify build"
-    hint: "Run the auto-detected build command and confirm it passes before committing"
-  test_after_task:
-    value: true
-    type: bool
-    label: "Write tests"
-    hint: "Write comprehensive tests after each implementation task"
 description: "Filtered Task Runner — picks the top open task, implements it, marks it done, repeats"
 commands: [stop_loop]
 ---

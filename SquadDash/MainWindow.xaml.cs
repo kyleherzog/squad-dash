@@ -1119,7 +1119,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         _fixtureLoaderRegistry.Register("loopPanel", new Screenshots.Fixtures.LoopPanelFixtureLoader(
             getStatusText: () => LoopStatusLabel.Text,
-            setStatusText: v => LoopStatusLabel.Text = v,
+            setStatusText: v => { LoopStatusLabel.Text = v; LoopStatusLabel.Visibility = string.IsNullOrEmpty(v) ? Visibility.Collapsed : Visibility.Visible; },
             getStopEnabled: () => StopLoopButton.IsEnabled,
             setStopEnabled: v => StopLoopButton.IsEnabled = v,
             getStartEnabled: () => StartLoopButton.IsEnabled,
@@ -4518,6 +4518,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             status = string.Empty;
 
         LoopStatusLabel.Text = status;
+        LoopStatusLabel.Visibility = string.IsNullOrEmpty(status) ? Visibility.Collapsed : Visibility.Visible;
 
         if (LoopPanelDequeueMenuItem is not null)
             LoopPanelDequeueMenuItem.Visibility = _loopQueued ? Visibility.Visible : Visibility.Collapsed;

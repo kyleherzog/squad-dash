@@ -850,6 +850,7 @@
                                 <TextBlock x:Name="LoopStatusLabel"
                                            DockPanel.Dock="Top"
                                            Text=""
+                                           Visibility="Collapsed"
                                            Margin="0,4,0,6"
                                            Foreground="{DynamicResource BodyText}" />
                                 <ComboBox x:Name="LoopFilePicker"
