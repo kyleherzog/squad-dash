@@ -1315,7 +1315,7 @@ internal sealed class ClipboardImageEditorWindow : Window
                     new Point(baseX - px * HeadHalf, baseY - py * HeadHalf)
                 };
                 // Show crosshair at the future pivot center (ArrowLength past the tip).
-                ShowCrosshair(headPt.X + ux2 * _defaultArrowLength, headPt.Y + uy2 * _defaultArrowLength);
+                ShowCrosshair(headPt.X + ux2 * _defaultArrowLength * 1.5, headPt.Y + uy2 * _defaultArrowLength * 1.5);
             }
             else
             {
@@ -1875,7 +1875,6 @@ internal sealed class ClipboardImageEditorWindow : Window
             arrow.OffsetX = _bodyDragStartOffsetX + (pt.X - _bodyDragStartMouse.X);
             arrow.OffsetY = _bodyDragStartOffsetY + (pt.Y - _bodyDragStartMouse.Y);
             UpdateArrowGeometry(arrow);
-            if (_colorPickerArrow == arrow) ShowColorPicker(arrow);
             ShowCrosshair(
                 arrow.TargetCenterOnCanvas.X + arrow.OffsetX,
                 arrow.TargetCenterOnCanvas.Y + arrow.OffsetY);
@@ -2004,7 +2003,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         var dy = -Math.Cos(rad);
         var ahX = targetCenter.X + dx * arrowheadOffset;
         var ahY = targetCenter.Y + dy * arrowheadOffset;
-        var s = _sel;
+        var s = _sel.IsEmpty ? new Rect(0, 0, _canvas.Width, _canvas.Height) : _sel;
 
         double tMin = double.MaxValue;
         if (Math.Abs(dx) > 1e-9)
@@ -2025,7 +2024,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         var rad = angleDeg * Math.PI / 180.0;
         var dx = Math.Sin(rad);
         var dy = -Math.Cos(rad);
-        var s = _sel;
+        var s = _sel.IsEmpty ? new Rect(0, 0, _canvas.Width, _canvas.Height) : _sel;
 
         double tMin = double.MaxValue;
         if (Math.Abs(dx) > 1e-9)
@@ -2065,32 +2064,22 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     // ── Color picker ──────────────────────────────────────────────────────────
 
-    private static Color[] GetArrowPalette(bool isDark) => isDark
-        ? new[]
-          {
-              Color.FromRgb(255,  80,  80),
-              Color.FromRgb(255, 160,  40),
-              Color.FromRgb(255, 230,  60),
-              Color.FromRgb( 80, 220,  80),
-              Color.FromRgb( 80, 160, 255),
-              Color.FromRgb(255, 255, 255)
-          }
-        : new[]
-          {
-              Color.FromRgb(180,  30,  30),
-              Color.FromRgb(180,  80,   0),
-              Color.FromRgb(140, 120,   0),
-              Color.FromRgb( 20, 130,  20),
-              Color.FromRgb( 20,  80, 200),
-              Color.FromRgb(  0,   0,   0)
-          };
+    private static Color[] GetArrowPalette() => new[]
+    {
+        Color.FromRgb(220,  50,  50),
+        Color.FromRgb(255, 140,   0),
+        Color.FromRgb(240, 210,  40),
+        Color.FromRgb( 50, 185,  50),
+        Color.FromRgb( 50, 130, 230),
+        Color.FromRgb(255, 255, 255),
+        Color.FromRgb(  0,   0,   0),
+    };
 
     private void ShowColorPicker(AnnotationArrow arrow)
     {
         HideColorPicker();
         _colorPickerArrow = arrow;
-        bool isDark = _themeName.IndexOf("dark", StringComparison.OrdinalIgnoreCase) >= 0;
-        var palette = GetArrowPalette(isDark);
+        var palette = GetArrowPalette();
 
         _colorPickerPanel = new StackPanel { Orientation = Orientation.Horizontal };
         Panel.SetZIndex(_colorPickerPanel, 300);
@@ -2098,28 +2087,16 @@ internal sealed class ClipboardImageEditorWindow : Window
         foreach (var color in palette)
         {
             var c = color;
-            var dot = new Ellipse
+            bool isSelected = c == arrow.ArrowColor;
+            var swatch = MakeColorSwatch(c, isSelected, picked =>
             {
-                Width = 16,
-                Height = 16,
-                Fill = new SolidColorBrush(c),
-                Stroke = c == arrow.ArrowColor
-                                      ? (isDark ? Brushes.White : Brushes.Black)
-                                      : Brushes.Transparent,
-                StrokeThickness = 2,
-                Margin = new Thickness(3, 0, 3, 0),
-                Cursor = Cursors.Hand
-            };
-            dot.MouseLeftButtonDown += (_, e) =>
-            {
-                arrow.ArrowColor = c;
-                _defaultArrowColor = c;
+                arrow.ArrowColor = picked;
+                _defaultArrowColor = picked;
                 SaveArrowDefaults();
                 UpdateArrowGeometry(arrow);
                 ShowColorPicker(arrow);
-                e.Handled = true;
-            };
-            _colorPickerPanel.Children.Add(dot);
+            });
+            _colorPickerPanel.Children.Add(swatch);
         }
 
         _canvas.Children.Add(_colorPickerPanel);
@@ -2130,6 +2107,40 @@ internal sealed class ClipboardImageEditorWindow : Window
         double pw = _colorPickerPanel.DesiredSize.Width;
         Canvas.SetLeft(_colorPickerPanel, Math.Max(0, cx - pw / 2));
         Canvas.SetTop(_colorPickerPanel, Math.Max(0, cy - 30));
+    }
+
+    private static FrameworkElement MakeColorSwatch(Color c, bool isSelected, Action<Color> onPick)
+    {
+        if (isSelected)
+        {
+            var grid = new Grid { Width = 20, Height = 20, Margin = new Thickness(3, 0, 3, 0), Cursor = Cursors.Hand };
+            grid.Children.Add(new Ellipse { Fill = Brushes.Black });
+            grid.Children.Add(new Ellipse
+            {
+                Width = 16,
+                Height = 16,
+                Fill = new SolidColorBrush(c),
+                Stroke = Brushes.White,
+                StrokeThickness = 1.5,
+            });
+            grid.MouseLeftButtonDown += (_, e) => { onPick(c); e.Handled = true; };
+            return grid;
+        }
+        else
+        {
+            var dot = new Ellipse
+            {
+                Width = 16,
+                Height = 16,
+                Fill = new SolidColorBrush(c),
+                Stroke = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+                StrokeThickness = 1,
+                Margin = new Thickness(3, 0, 3, 0),
+                Cursor = Cursors.Hand,
+            };
+            dot.MouseLeftButtonDown += (_, e) => { onPick(c); e.Handled = true; };
+            return dot;
+        }
     }
 
     private void HideColorPicker()
@@ -2527,8 +2538,7 @@ internal sealed class ClipboardImageEditorWindow : Window
     {
         HideColorPicker();
         _colorPickerRect = rect;
-        bool isDark = _themeName.IndexOf("dark", StringComparison.OrdinalIgnoreCase) >= 0;
-        var palette = GetArrowPalette(isDark);
+        var palette = GetArrowPalette();
 
         _colorPickerPanel = new StackPanel { Orientation = Orientation.Horizontal };
         Panel.SetZIndex(_colorPickerPanel, 300);
@@ -2536,27 +2546,15 @@ internal sealed class ClipboardImageEditorWindow : Window
         foreach (var color in palette)
         {
             var c = color;
-            var dot = new Ellipse
+            bool isSelected = c == rect.RectColor;
+            var swatch = MakeColorSwatch(c, isSelected, picked =>
             {
-                Width = 16,
-                Height = 16,
-                Fill = new SolidColorBrush(c),
-                Stroke = c == rect.RectColor
-                    ? (isDark ? Brushes.White : Brushes.Black)
-                    : Brushes.Transparent,
-                StrokeThickness = 2,
-                Margin = new Thickness(3, 0, 3, 0),
-                Cursor = Cursors.Hand
-            };
-            dot.MouseLeftButtonDown += (_, e) =>
-            {
-                rect.RectColor = c;
-                _defaultRectColor = c;
+                rect.RectColor = picked;
+                _defaultRectColor = picked;
                 UpdateRectGeometry(rect);
                 ShowColorPickerForRect(rect);
-                e.Handled = true;
-            };
-            _colorPickerPanel.Children.Add(dot);
+            });
+            _colorPickerPanel.Children.Add(swatch);
         }
 
         _canvas.Children.Add(_colorPickerPanel);
