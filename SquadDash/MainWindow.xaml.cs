@@ -1874,6 +1874,15 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
     }
 
+    private void AddEmptyQueueSlot()
+    {
+        _promptQueue.Enqueue(string.Empty, ++_promptQueueSeq);
+        var newId = _promptQueue.Items[^1].Id;
+        SyncQueuePanel();
+        OnQueueTabClicked(newId);
+        PromptTextBox.Focus();
+    }
+
     /// <summary>
     /// Records <paramref name="id"/> as the recently-prioritized item and starts a 3-second
     /// timer that clears the feedback label once it expires. <see cref="SyncQueuePanel"/> reads
@@ -6794,6 +6803,11 @@ public partial class MainWindow : Window, ILiveElementLocator
                     _intelliSenseState = null;
                     _intelliSenseOwnerBox = null;
                     UpdateIntelliSensePopup();
+                    e.Handled = true;
+                    break;
+
+                case PromptInputAction.AddQueueSlot:
+                    AddEmptyQueueSlot();
                     e.Handled = true;
                     break;
             }
@@ -18817,6 +18831,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             Key.Down => PromptInputKey.Down,
             Key.Tab => PromptInputKey.Tab,
             Key.Escape => PromptInputKey.Escape,
+            Key.Q => PromptInputKey.Q,
             _ => PromptInputKey.Other
         };
     }
