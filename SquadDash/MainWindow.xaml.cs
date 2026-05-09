@@ -94,6 +94,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private readonly DispatcherTimer _promptHealthTimer;
     private readonly DispatcherTimer _statusPresentationTimer;
     private readonly DispatcherTimer _responseRenderTimer;
+    private readonly Stopwatch _sdkDeltaTraceStopwatch = Stopwatch.StartNew();
     private PromptExecutionController _pec = null!; // initialized in constructor after all services
     private LoopController _loopController = null!; // initialized in constructor after _pec
     private FileSystemWatcher? _inboxWatcher;
@@ -114,6 +115,10 @@ public partial class MainWindow : Window, ILiveElementLocator
     private SessionWorkspace? _currentWorkspace;
     private readonly PastedImageStore _pastedImageStore = new();
     private SquadInstallationState? _currentInstallationState;
+    private int _pendingThinkingDeltaTraceCount;
+    private int _pendingThinkingDeltaTraceChars;
+    private int _pendingResponseDeltaTraceCount;
+    private int _pendingResponseDeltaTraceChars;
     private SquadRoutingDocumentAssessment? _currentRoutingAssessment;
     private WorkspaceIssuePresentation? _startupIssue;
     private WorkspaceIssuePresentation? _runtimeIssue;
@@ -3062,15 +3067,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void HandleEvent(SquadSdkEvent evt)
     {
-        var loggedChunkLength = evt.Type switch
-        {
-            "thinking_delta" => evt.Text?.Length ?? 0,
-            "response_delta" => evt.Chunk?.Length ?? 0,
-            _ => evt.Chunk?.Length ?? 0
-        };
-        SquadDashTrace.Write(
-            "UI",
-            $"HandleEvent type={evt.Type ?? "(null)"} tool={evt.ToolName ?? "(none)"} chunkLen={loggedChunkLength}");
+        TraceSdkEvent(evt);
         if (!string.Equals(evt.Type, "sdk_diagnostics", StringComparison.Ordinal))
             _pec.MarkActivity(evt);
 
@@ -3400,6 +3397,55 @@ public partial class MainWindow : Window, ILiveElementLocator
                 FlushDeferredSystemLines();
                 break;
         }
+    }
+
+    private void TraceSdkEvent(SquadSdkEvent evt)
+    {
+        switch (evt.Type)
+        {
+            case "thinking_delta":
+                _pendingThinkingDeltaTraceCount++;
+                _pendingThinkingDeltaTraceChars += evt.Text?.Length ?? 0;
+                FlushSdkDeltaTraceIfDue(force: false);
+                return;
+
+            case "response_delta":
+                _pendingResponseDeltaTraceCount++;
+                _pendingResponseDeltaTraceChars += evt.Chunk?.Length ?? 0;
+                FlushSdkDeltaTraceIfDue(force: false);
+                return;
+
+            default:
+                FlushSdkDeltaTraceIfDue(force: true);
+                SquadDashTrace.Write(
+                    "UI",
+                    $"HandleEvent type={evt.Type ?? "(null)"} tool={evt.ToolName ?? "(none)"} chunkLen={evt.Chunk?.Length ?? 0}");
+                return;
+        }
+    }
+
+    private void FlushSdkDeltaTraceIfDue(bool force)
+    {
+        if (!force && _sdkDeltaTraceStopwatch.ElapsedMilliseconds < 1000)
+            return;
+
+        var thinkingCount = _pendingThinkingDeltaTraceCount;
+        var responseCount = _pendingResponseDeltaTraceCount;
+        if (thinkingCount == 0 && responseCount == 0)
+            return;
+
+        var elapsedMs = Math.Max(1, _sdkDeltaTraceStopwatch.ElapsedMilliseconds);
+        SquadDashTrace.Write(
+            "UI",
+            $"HandleEvent stream_delta summary elapsed={elapsedMs}ms " +
+            $"thinkingCount={thinkingCount} thinkingChars={_pendingThinkingDeltaTraceChars} " +
+            $"responseCount={responseCount} responseChars={_pendingResponseDeltaTraceChars}");
+
+        _pendingThinkingDeltaTraceCount = 0;
+        _pendingThinkingDeltaTraceChars = 0;
+        _pendingResponseDeltaTraceCount = 0;
+        _pendingResponseDeltaTraceChars = 0;
+        _sdkDeltaTraceStopwatch.Restart();
     }
 
     private void HandleSdkDiagnostics(SquadSdkEvent evt)
@@ -6717,7 +6763,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 ctrlPressed: modifiers.HasFlag(ModifierKeys.Control),
                 shiftPressed: modifiers.HasFlag(ModifierKeys.Shift),
                 runButtonEnabled: RunButton.IsEnabled,
-                isMultiLinePrompt: IsMultiLinePrompt(),
+                isMultiLinePrompt: false,
                 isIntelliSenseOpen: _intelliSenseState is not null);
 
             switch (action)
@@ -22346,6 +22392,35 @@ public partial class MainWindow : Window, ILiveElementLocator
             }
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(TasksFilterClearButton_Click), ex); }
+    }
+
+    private async void TasksPanelDoTheseButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var workspaceFolder = _currentWorkspace?.FolderPath;
+            if (string.IsNullOrEmpty(workspaceFolder)) return;
+
+            var loopFilePath = Path.Combine(workspaceFolder, ".squad", "loop-filtered-tasks.md");
+            if (!File.Exists(loopFilePath)) return;
+
+            // Select the filtered-tasks loop file and persist the choice
+            _selectedLoopMdPath = loopFilePath;
+            PersistLoopFileSelection();
+
+            // Ensure the loop panel is visible and fully refreshed
+            _loopPanelVisible = true;
+            SyncLoopPanel();
+            PopulateLoopFilePicker();
+            RefreshLoopOptionsPanel();
+
+            // TODO: The [**FILTER**] placeholder in loop-filtered-tasks.md is substituted only
+            // in the merged-view preview (RefreshLoopMergedView), not during actual loop execution.
+            // StartLoopImmediateAsync parses the raw config without injecting TasksFilterBox.Text.
+            // Wiring the live filter into the loop run is a known gap to address in a future change.
+            await StartLoopImmediateAsync();
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(TasksPanelDoTheseButton_Click), ex); }
     }
 
     private void NotesFilterBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
