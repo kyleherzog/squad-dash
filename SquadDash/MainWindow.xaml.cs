@@ -310,6 +310,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _loopPanelVisible = true;
     private LoopOutputWindow? _loopOutputWindow;
     private bool _loopQueued;
+    private LoopMode _activeLoopMode = LoopMode.NativeAgents; // set at loop start; Shift+click overrides to SquadCli
     private bool _loopInterruptedByQueue; // set when user enqueues a prompt while native loop is running
     private bool _startupShiftHeld;       // set in MainWindow_Loaded when Shift is down; suppresses auto-resume
     private string? _loopMdPathForConfig; // stored when loop config flyout is shown
@@ -353,7 +354,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private TranscriptThreadState CoordinatorThread => _coordinatorThread ??= CreateCoordinatorTranscriptThread();
     private bool IsLoopRunning => _pec is { IsLoopRunning: true };
-    private bool IsNativeLoopRunning => IsLoopRunning && _settingsSnapshot.LoopMode == LoopMode.NativeAgents;
+    private bool IsNativeLoopRunning => IsLoopRunning && _activeLoopMode == LoopMode.NativeAgents;
     private TranscriptTurnView? _currentTurn
     {
         get => CoordinatorThread.CurrentTurn;
@@ -4531,25 +4532,15 @@ public partial class MainWindow : Window, ILiveElementLocator
         StopLoopButton.Content = (_loopQueued && !running) ? "✕ Dequeue Loop" : "■ Stop After This";
         AbortLoopButton.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
 
-        LoopModeNativeRadio.IsEnabled = !running;
-        bool cliLoopSupported = SquadCliSupportsLoop(_squadCliAdapter.SquadVersion);
-        LoopModeCliRadio.IsEnabled = !running && cliLoopSupported;
-        LoopModeCliRadio.ToolTip = cliLoopSupported
-            ? null
-            : "Disabled (upgrade Squad for CLI looping)";
         if (LoopFilePicker is not null) LoopFilePicker.IsEnabled = !running;
-        LoopModeNativeRadio.IsChecked = nativeMode;
-        LoopModeCliRadio.IsChecked = _settingsSnapshot.LoopMode == LoopMode.SquadCli;
-
-        bool isCli = _settingsSnapshot.LoopMode == LoopMode.SquadCli;
-        LoopContinuousContextCheckBox.IsEnabled = !running && !isCli;
-        LoopContinuousContextCheckBox.IsChecked = !isCli && _settingsSnapshot.LoopContinuousContext;
+        LoopContinuousContextCheckBox.IsEnabled = !running;
+        LoopContinuousContextCheckBox.IsChecked = _settingsSnapshot.LoopContinuousContext;
 
         string status;
         if (_loopQueued)
             status = "⏸ Paused — dequeuing prompts";
         else if (running
-            && nativeMode
+            && _activeLoopMode == LoopMode.NativeAgents
             && _loopController.StopState == LoopStopState.StopRequested)
             status = "◌ Stopping after this iteration…";
         else if (running && _loopIsWaiting)
@@ -4943,8 +4934,12 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             if (_currentWorkspace is null) return;
 
+            var effectiveLoopMode = (Keyboard.Modifiers & ModifierKeys.Shift) != 0
+                ? LoopMode.SquadCli
+                : LoopMode.NativeAgents;
+
             // In native-agents mode, if the coordinator is busy, queue the loop start.
-            if (_settingsSnapshot.LoopMode == LoopMode.NativeAgents && (_isPromptRunning || _promptQueue.HasReadyItems))
+            if (effectiveLoopMode == LoopMode.NativeAgents && (_isPromptRunning || _promptQueue.HasReadyItems))
             {
                 _loopQueued = true;
                 _conversationManager.UpdateQueuedPromptsState(
@@ -4956,6 +4951,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 return;
             }
 
+            _activeLoopMode = effectiveLoopMode;
             await StartLoopImmediateAsync();
         }
         catch (Exception ex)
@@ -4970,7 +4966,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         BackupAndClearLoopOutput();
         var loopMdPath = GetEffectiveLoopMdPath();
 
-        if (_settingsSnapshot.LoopMode == LoopMode.NativeAgents)
+        if (_activeLoopMode == LoopMode.NativeAgents)
         {
             var config = LoopMdParser.Parse(loopMdPath);
             if (config == null)
@@ -5423,7 +5419,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 SyncLoopPanel();
                 return;
             }
-            if (_settingsSnapshot.LoopMode == LoopMode.NativeAgents)
+            if (_activeLoopMode == LoopMode.NativeAgents)
             {
                 AppendLoopOutputLine("⏹ Clean loop termination requested — current iteration will finish then stop.", LoopLifecycleBrush);
                 _loopController.RequestStop();
@@ -5441,25 +5437,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
     }
 
-    private void LoopModeNativeRadio_Click(object sender, RoutedEventArgs e)
-    {
-        _settingsSnapshot = _settingsStore.SaveLoopMode(LoopMode.NativeAgents);
-        _conversationManager.UpdateLoopSettingsState(LoopMode.NativeAgents, _settingsSnapshot.LoopContinuousContext);
-        SyncLoopPanel();
-    }
-
-    private void LoopModeCliRadio_Click(object sender, RoutedEventArgs e)
-    {
-        _settingsSnapshot = _settingsStore.SaveLoopMode(LoopMode.SquadCli);
-        _conversationManager.UpdateLoopSettingsState(LoopMode.SquadCli, _settingsSnapshot.LoopContinuousContext);
-        SyncLoopPanel();
-    }
-
     private void LoopContinuousContextCheckBox_Click(object sender, RoutedEventArgs e)
     {
         _settingsSnapshot = _settingsStore.SaveLoopContinuousContext(
             LoopContinuousContextCheckBox.IsChecked == true);
-        _conversationManager.UpdateLoopSettingsState(_settingsSnapshot.LoopMode, _settingsSnapshot.LoopContinuousContext);
+        _conversationManager.UpdateLoopSettingsState(_activeLoopMode, _settingsSnapshot.LoopContinuousContext);
     }
 
     private async void AbortLoopButton_Click(object sender, RoutedEventArgs e)
@@ -5474,7 +5456,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (result == MessageBoxResult.OK)
             {
                 AppendLoopOutputLine("⚡ Loop abruptly terminated via Abort — current iteration may be incomplete.", new SolidColorBrush(Color.FromRgb(0xFF, 0x88, 0x44)));
-                if (_settingsSnapshot.LoopMode == LoopMode.NativeAgents)
+                if (_activeLoopMode == LoopMode.NativeAgents)
                     _loopController.RequestAbort();
                 else
                     await _bridge.StopLoopAsync();
@@ -9250,6 +9232,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 ["commit_instruction"] = commitInstruction,
                 ["test_instruction"]   = testInstruction,
                 // build_command intentionally omitted — AI resolves build tooling automatically
+                // Preview always shows NativeAgents routing; Shift+click overrides mode at runtime only.
                 ["routing_instruction"] = _settingsSnapshot.LoopMode == LoopMode.NativeAgents
                     ? "Spawn the correct specialist agent per `.squad/routing.md` to handle this task."
                     : "Route to and adopt the role of the correct specialist per `.squad/routing.md` for this iteration.",

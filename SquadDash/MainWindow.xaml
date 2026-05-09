@@ -1,4 +1,4 @@
-﻿<Window x:Class="SquadDash.MainWindow"
+<Window x:Class="SquadDash.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
@@ -875,19 +875,6 @@
                                            Foreground="{DynamicResource BodyText}" />
                                 <!-- Loop mode options (always visible, not inside scroll) -->
                                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6">
-                                    <RadioButton x:Name="LoopModeCliRadio"
-                                                 Content="Squad CLI"
-                                                 GroupName="LoopMode"
-                                                 ToolTipService.ShowOnDisabled="True"
-                                                 Style="{StaticResource ThemedRadioButtonStyle}"
-                                                 Click="LoopModeCliRadio_Click" />
-                                    <RadioButton x:Name="LoopModeNativeRadio"
-                                                 Content="SquadDash Agents"
-                                                 GroupName="LoopMode"
-                                                 IsChecked="True"
-                                                 Margin="0,2,0,4"
-                                                 Style="{StaticResource ThemedRadioButtonStyle}"
-                                                 Click="LoopModeNativeRadio_Click" />
                                     <CheckBox x:Name="LoopContinuousContextCheckBox"
                                               Content="Continuous context"
                                               IsChecked="True"
@@ -901,6 +888,7 @@
                                         Content="▶ Start Loop"
                                         IsEnabled="False"
                                         Style="{StaticResource ThemedButtonStyle}"
+                                        ToolTip="Hold Shift to run with Squad CLI instead of SquadDash Agents"
                                         Click="StartLoopButton_Click" />
                                 <Button x:Name="StopLoopButton"
                                         DockPanel.Dock="Top"
