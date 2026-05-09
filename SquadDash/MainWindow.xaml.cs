@@ -9250,6 +9250,9 @@ public partial class MainWindow : Window, ILiveElementLocator
                 ["commit_instruction"] = commitInstruction,
                 ["test_instruction"]   = testInstruction,
                 // build_command intentionally omitted — AI resolves build tooling automatically
+                ["routing_instruction"] = _settingsSnapshot.LoopMode == LoopMode.NativeAgents
+                    ? "Spawn the correct specialist agent per `.squad/routing.md` to handle this task."
+                    : "Route to and adopt the role of the correct specialist per `.squad/routing.md` for this iteration.",
             };
 
             var isCliMode = _settingsSnapshot.LoopMode == LoopMode.SquadCli;
@@ -9271,21 +9274,36 @@ public partial class MainWindow : Window, ILiveElementLocator
             }
 
             // Substitute [**FILTER**] placeholder with a context-aware filter instruction
+            // Parse filter: extract @mentions anywhere, remainder is keyword filter
+            var filterText = tasksFilter.Trim();
+            var mentionMatches = Regex.Matches(
+                filterText, @"@(\w[\w\-\.]*)", RegexOptions.IgnoreCase);
+            var agentNames = mentionMatches.Cast<Match>()
+                .Select(m => m.Groups[1].Value)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var keyword = Regex.Replace(filterText, @"@\w[\w\-\.]*", "")
+                .Trim();
+
             string filterInstruction;
-            if (string.IsNullOrWhiteSpace(tasksFilter))
+            if (string.IsNullOrWhiteSpace(filterText))
             {
                 filterInstruction = "No filter — process any unchecked task not owned by User.";
             }
-            else if (tasksFilter.StartsWith("@", StringComparison.Ordinal))
-            {
-                var agentName = tasksFilter.TrimStart('@').Trim();
-                filterInstruction = $"Only process tasks assigned to **@{agentName}** — " +
-                    $"i.e., tasks that include `*(Owner: {agentName})*` on the task line or in its description.";
-            }
             else
             {
-                filterInstruction = $"Only process tasks whose description or content contains: **{tasksFilter}**. " +
-                    "Skip any task that does not match this keyword or phrase.";
+                var parts = new List<string>();
+                if (agentNames.Count > 0)
+                {
+                    var agentList = string.Join(", ", agentNames.Select(a => $"**@{a}**"));
+                    var ownerList = string.Join(" or ", agentNames.Select(a => $"`*(Owner: {a})*`"));
+                    parts.Add($"Only process tasks assigned to {agentList} — i.e., tasks that include {ownerList} on the task line or in its description.");
+                }
+                if (!string.IsNullOrWhiteSpace(keyword))
+                {
+                    parts.Add($"Only process tasks whose description or content contains: **{keyword}**.");
+                }
+                filterInstruction = string.Join(" ", parts);
             }
             text = text.Replace("[**FILTER**]", filterInstruction, StringComparison.Ordinal);
 

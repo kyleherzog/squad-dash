@@ -70,7 +70,7 @@ No unchecked tasks remain (or all remaining tasks are Owner: User). Do the follo
 ## Step 3 — If a task IS found, implement it fully
 
 1. Read `.squad/routing.md` to identify the correct specialist for this task.
-2. Route to and adopt the role of that specialist per their charter. Complete the work — implementation, decisions, tests, as appropriate.
+2. {{routing_instruction}} Complete the work — implementation, decisions, tests, as appropriate.
 3. For **"define…" or "decide…" or "architecture" tasks**: document the decision in `.squad/decisions.md` (create if missing) and update relevant architecture docs, then consider the task done.
 4. For **implementation tasks**:
 {{build_instruction}}{{commit_instruction}}5. After work is complete, mark the task `[x]` in `.squad/tasks.md` and move it to the "Recently Completed" section at the bottom.
