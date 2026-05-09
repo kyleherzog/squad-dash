@@ -34,7 +34,7 @@ The Squad CLI is powerful but command-line driven. SquadDash brings:
 
 - **Discoverability** — Hover on agent cards to see glowing accent highlights; shift-click to open transcripts
 - **Parallel workflows** — Launch multiple agents as background tasks and monitor them all at once
-- **Context preservation** — Every agent conversation is persisted and resumable
+- **Context preservation** — Every agent conversation is persisted, searchable, and resumable across sessions
 - **Better debugging** — See every tool call with labeled icons (🔎 grep, ✏️ edit, 👀 view, 🤖 task)
 - **Less context switching** — Docs, transcripts, and workspace all in one window
 
