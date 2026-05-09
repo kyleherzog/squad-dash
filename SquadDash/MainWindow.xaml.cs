@@ -4798,19 +4798,63 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private UIElement CreateEnumOptionControl(LoopOption opt)
     {
+        var capturedPath = _selectedLoopMdPath;
+        var capturedKey  = opt.Key;
+
+        // ≤ 5 choices → radio button group
+        if (opt.Choices is not null && opt.Choices.Count <= 5)
+        {
+            var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 4) };
+
+            var label = new TextBlock
+            {
+                Text    = opt.Label ?? opt.Key,
+                ToolTip = opt.Hint,
+                Margin  = new Thickness(0, 0, 0, 2),
+            };
+            if (TryFindResource("LabelText") is System.Windows.Media.Brush labelBrush)
+                label.Foreground = labelBrush;
+            stack.Children.Add(label);
+
+            foreach (var choice in opt.Choices)
+            {
+                var rb = new RadioButton
+                {
+                    Content   = choice,
+                    GroupName = opt.Key,
+                    IsChecked = string.Equals(choice, opt.RawValue, StringComparison.Ordinal),
+                    Margin    = new Thickness(12, 0, 0, 0),
+                };
+                if (TryFindResource("LabelText") is System.Windows.Media.Brush rbBrush)
+                    rb.Foreground = rbBrush;
+
+                var capturedChoice = choice;
+                rb.Checked += (_, _) =>
+                {
+                    LoopMdParser.UpdateOptionValue(capturedPath!, capturedKey, capturedChoice);
+                    RefreshLoopMergedView();
+                };
+
+                stack.Children.Add(rb);
+            }
+
+            return stack;
+        }
+
+        // ≥ 6 choices (or null) → existing ComboBox layout
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 4) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        var label = new TextBlock
+        var comboLabel = new TextBlock
         {
             Text              = opt.Label ?? opt.Key,
             ToolTip           = opt.Hint,
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(0, 0, 6, 0),
         };
-        if (TryFindResource("LabelText") is System.Windows.Media.Brush labelBrush)
-            label.Foreground = labelBrush;
+        if (TryFindResource("LabelText") is System.Windows.Media.Brush comboLabelBrush)
+            comboLabel.Foreground = comboLabelBrush;
 
         var combo = new ComboBox
         {
@@ -4826,8 +4870,6 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         combo.SelectedItem = opt.RawValue;
 
-        var capturedPath = _selectedLoopMdPath;
-        var capturedKey  = opt.Key;
         combo.SelectionChanged += (_, _) =>
         {
             if (combo.SelectedItem is string selected)
@@ -4837,9 +4879,9 @@ public partial class MainWindow : Window, ILiveElementLocator
             }
         };
 
-        Grid.SetColumn(label, 0);
+        Grid.SetColumn(comboLabel, 0);
         Grid.SetColumn(combo, 1);
-        grid.Children.Add(label);
+        grid.Children.Add(comboLabel);
         grid.Children.Add(combo);
         return grid;
     }
