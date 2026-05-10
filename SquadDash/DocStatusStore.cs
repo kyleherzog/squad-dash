@@ -36,7 +36,10 @@ internal sealed class DocStatusStore
                            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 return new DocStatusStore(docsRoot, new Dictionary<string, string>(data, StringComparer.OrdinalIgnoreCase));
             }
-            catch { }
+            catch (Exception ex)
+            {
+                SquadDashTrace.Write("DocStatus", $"Failed to load .doc-status.json: {ex.Message}");
+            }
         }
         return new DocStatusStore(docsRoot, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
     }
@@ -84,7 +87,10 @@ internal sealed class DocStatusStore
                     return true;
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            SquadDashTrace.Write("DocStatus", $"Failed to scan {filePath} for screenshot placeholders: {ex.Message}");
+        }
         return false;
     }
 
@@ -103,6 +109,9 @@ internal sealed class DocStatusStore
             var json = JsonSerializer.Serialize(_data, options);
             File.WriteAllText(_jsonPath, json);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            SquadDashTrace.Write("DocStatus", $"Failed to save .doc-status.json: {ex.Message}");
+        }
     }
 }

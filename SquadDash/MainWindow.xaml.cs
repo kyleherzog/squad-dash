@@ -10237,6 +10237,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (DocsSourceSplitterColumn is null || DocsSourceColumn is null) return;
         if (DocsSourceSplitterRow is null || DocsSourceRow is null) return;
 
+        // Flush any pending edits before hiding; stopping the timer without saving
+        // would silently discard content the user typed in the last 400 ms.
+        SaveDocSourceToDisk();
         _docSourceSaveTimer?.Stop();
         DocsSourceSplitterColumn.Width = new GridLength(0);
         DocsSourceColumn.Width = new GridLength(0);
@@ -10406,7 +10409,10 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void DocSourceTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
     {
-        if (_suppressDocSourceTextChanged) return;
+        // During shutdown WPF can fire TextChanged as the visual tree is torn down (template
+        // detachment / document reset).  Restarting the debounce timer at that point would
+        // cause it to fire later with an empty document and wipe the file to frontmatter-only.
+        if (_suppressDocSourceTextChanged || _isClosing) return;
 
         // Live-update the markdown preview
         RefreshDocMarkdownViewerFromSource();
@@ -10424,6 +10430,9 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void DocSourceSaveTimer_Tick(object? sender, EventArgs e)
     {
         _docSourceSaveTimer?.Stop();
+        // The flush in MainWindow_Closing already saved the correct content;
+        // ignore any tick that slips through after shutdown begins.
+        if (_isClosing) return;
         SaveDocSourceToDisk();
     }
 
@@ -18653,6 +18662,16 @@ public partial class MainWindow : Window, ILiveElementLocator
             }
 
             if (e.Cancel) return;
+
+            // Flush any pending doc-source edits to disk BEFORE _isClosing is set.
+            // This prevents two data-loss scenarios on build-triggered restarts:
+            //   1. Unsaved edits in the 400 ms debounce window being silently dropped.
+            //   2. WPF firing TextChanged on the RichTextBox during visual-tree teardown
+            //      (template detachment / document reset) after _isClosing=true, which would
+            //      restart the save timer with an empty document and then write
+            //      frontmatter + "" to disk — wiping the file to frontmatter-only.
+            _docSourceSaveTimer?.Stop();
+            SaveDocSourceToDisk();
 
             _deferredShutdown = DeferredShutdownMode.None;
             _isClosing = true;
