@@ -28,7 +28,12 @@ internal static class Program {
             return LaunchPayload(startup.StartupFolder, startup.RefreshScreenshots, startup.RefreshScreenshotName);
         }
         catch (Exception ex) {
-            Console.Error.WriteLine(ex);
+            // Console.Error is invisible when the launcher is spawned from Explorer
+            // (context menu, desktop shortcut, WinGet launch). Use a MessageBox so
+            // the user sees the failure rather than "nothing happening".
+            ShowErrorDialog(
+                "SquadDash — Launch Failed",
+                $"SquadDash could not start.\n\n{ex.Message}\n\nSee the trace log for full details.");
             return 1;
         }
     }

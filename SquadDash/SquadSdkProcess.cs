@@ -393,9 +393,77 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
             $"Started persistent bridge process pid={process.Id} in {startSw.ElapsedMilliseconds}ms. {SquadDashRuntimeStamp.BuildBridgeStamp()}");
     }
 
+    /// <summary>
+    /// Returns the full path to <c>node.exe</c> to use when starting the Squad SDK bridge.
+    /// </summary>
+    /// <remarks>
+    /// When SquadDash is launched via the Windows Explorer context-menu ("Open SquadDash Here")
+    /// the child process inherits Explorer's stripped-down PATH, which often omits the
+    /// Node.js installation directory even when Node.js is correctly installed system-wide.
+    /// Using a bare <c>"node"</c> as <see cref="ProcessStartInfo.FileName"/> therefore fails
+    /// silently.  This method probes all three PATH scopes (Process → User → Machine) as well
+    /// as the well-known install locations used by the Node.js Windows installer, nvm-windows,
+    /// Volta, and fnm, before falling back to the bare name.
+    /// </remarks>
+    private static string ResolveNodeExecutablePath() {
+        // 1. Check well-known install directories first so we can avoid even touching
+        //    PATH when the standard installer location is present.
+        var pf    = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var pfx86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        var appData      = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        var wellKnownCandidates = new[] {
+            Path.Combine(pf,    "nodejs",       "node.exe"),
+            Path.Combine(pfx86, "nodejs",       "node.exe"),
+            Path.Combine(appData,      "nvm",         "node.exe"),
+            Path.Combine(localAppData, "Volta", "bin", "node.exe"),
+            Path.Combine(localAppData, "fnm",          "node.exe"),
+        };
+
+        foreach (var candidate in wellKnownCandidates) {
+            if (File.Exists(candidate)) {
+                SquadDashTrace.Write("Bridge", $"Resolved node.exe via well-known path: {candidate}");
+                return candidate;
+            }
+        }
+
+        // 2. Walk all three PATH scopes (Process, User, Machine) so we pick up any
+        //    custom or version-manager-managed Node.js that may not be inherited by the
+        //    current process (common in Explorer-spawned shell extensions).
+        foreach (var scope in new[] {
+                     EnvironmentVariableTarget.Process,
+                     EnvironmentVariableTarget.User,
+                     EnvironmentVariableTarget.Machine
+                 }) {
+            var pathValue = Environment.GetEnvironmentVariable("PATH", scope);
+            if (string.IsNullOrWhiteSpace(pathValue))
+                continue;
+
+            foreach (var rawDir in pathValue.Split(
+                         Path.PathSeparator,
+                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) {
+                var dir = rawDir.Trim().Trim('"');
+                if (string.IsNullOrWhiteSpace(dir))
+                    continue;
+
+                var nodeExe = Path.Combine(dir, "node.exe");
+                if (File.Exists(nodeExe)) {
+                    SquadDashTrace.Write("Bridge", $"Resolved node.exe via PATH ({scope}): {nodeExe}");
+                    return nodeExe;
+                }
+            }
+        }
+
+        // 3. Fall back to the bare name — the OS will resolve it using the inherited PATH.
+        //    This preserves backward-compatibility for non-standard Node.js installations.
+        SquadDashTrace.Write("Bridge", "node.exe not found in well-known locations or PATH scopes; falling back to bare 'node'.");
+        return "node";
+    }
+
     private ProcessStartInfo BuildDefaultStartInfo() {
         var psi = new ProcessStartInfo {
-            FileName = "node",
+            FileName = ResolveNodeExecutablePath(),
             Arguments = "runPrompt.js",
             WorkingDirectory = _workspacePaths?.SquadSdkDirectory ?? throw new InvalidOperationException("WorkspacePaths not configured"),
             UseShellExecute = false,

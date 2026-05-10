@@ -9,6 +9,10 @@
     <Company>SquadDash Team</Company>
     <Product>SquadDash</Product>
     <Copyright>Copyright © 2025 SquadDash Team</Copyright>
+    <!-- Embed the SquadDash branded icon so that shell shortcuts and context-menu
+         entries that reference SquadDash.exe,0 display the correct icon rather
+         than the generic Windows window icon. -->
+    <ApplicationIcon>..\SquadDash\Assets\SquadDash.ico</ApplicationIcon>
     <OutputPath>..\SquadDash\bin\$(Configuration)\$(TargetFramework)\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>

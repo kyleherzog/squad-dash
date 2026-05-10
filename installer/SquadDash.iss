@@ -62,3 +62,68 @@ Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\SquadDash\comma
 
 [Run]
 Filename: "{app}\SquadDash.exe"; Description: "{cm:LaunchProgram,SquadDash}"; Flags: nowait postinstall skipifsilent
+
+; ---------------------------------------------------------------------------
+; [Code] — prerequisite checks run before the installer completes
+; ---------------------------------------------------------------------------
+[Code]
+
+// ---------------------------------------------------------------------------
+// IsDotNet10DesktopRuntimeInstalled
+//
+// Checks whether the .NET 10 Windows Desktop Runtime (x64) is present by
+// scanning the shared-framework directory for any 10.x.x sub-folder.
+// SquadDash.App.exe requires Microsoft.WindowsDesktop.App >= 10.0.
+// ---------------------------------------------------------------------------
+function IsDotNet10DesktopRuntimeInstalled: Boolean;
+var
+  FindRec: TFindRec;
+  SearchPattern: String;
+begin
+  Result := False;
+  SearchPattern := ExpandConstant('{pf}\dotnet\shared\Microsoft.WindowsDesktop.App\10.*');
+  if FindFirst(SearchPattern, FindRec) then
+  begin
+    try
+      repeat
+        if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+        begin
+          Result := True;
+          Break;
+        end;
+      until not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
+    end;
+  end;
+end;
+
+// ---------------------------------------------------------------------------
+// InitializeSetup
+//
+// Called before the installer UI appears.  If the required .NET runtime is
+// absent the user is warned with a download URL.  Returning False cancels the
+// install; returning True lets it proceed (user may plan to install .NET
+// afterwards).
+// ---------------------------------------------------------------------------
+function InitializeSetup: Boolean;
+var
+  DownloadUrl: String;
+begin
+  Result := True;
+  DownloadUrl := 'https://dotnet.microsoft.com/download/dotnet/10.0';
+
+  if not IsDotNet10DesktopRuntimeInstalled then
+  begin
+    if MsgBox(
+      '.NET 10 Desktop Runtime (x64) is not installed on this machine.' + #13#10 +
+      'SquadDash requires it to run — the app will not launch until it is installed.' + #13#10#13#10 +
+      'After this installer finishes, download and install the runtime from:' + #13#10 +
+      DownloadUrl + #13#10#13#10 +
+      'Continue with the SquadDash installation anyway?',
+      mbConfirmation, MB_YESNO) = IDNO then
+    begin
+      Result := False;
+    end;
+  end;
+end;

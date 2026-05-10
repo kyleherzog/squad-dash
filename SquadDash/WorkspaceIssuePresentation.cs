@@ -51,6 +51,14 @@ internal static class WorkspaceIssueFactory {
         if (simulation != DeveloperStartupIssueSimulation.None)
             return CreateSimulatedStartupIssue(simulation, installationState, applicationRoot);
 
+        // No workspace is open yet — skip tool-availability checks until the user
+        // selects a folder.  Node.js may not be on the *process* PATH when the app is
+        // launched from Explorer (shell extension / context menu), even when it is
+        // installed system-wide.  Showing a "Node.js missing" banner before any work
+        // has been requested is premature and confusing on a fresh launch.
+        if (installationState is null)
+            return null;
+
         var missingTools = GetMissingTools();
         if (missingTools.Length > 0) {
             var toolList = string.Join(", ", missingTools);
@@ -287,6 +295,37 @@ internal static class WorkspaceIssueFactory {
                 if (seen.Add(normalized))
                     yield return normalized;
             }
+        }
+
+        // Also probe well-known Node.js install locations.  When SquadDash is launched
+        // from Explorer (context-menu shell extension) the child process may not inherit
+        // the user's full PATH, so the PATH scan above can miss a valid Node.js install.
+        // These directories are checked unconditionally — they are simply skipped when
+        // they do not exist on the current machine.
+        var pf   = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var pfx86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        var wellKnownNodeDirs = new[] {
+            // Standard Node.js Windows installer (adds to Machine PATH, but process PATH
+            // from Explorer may not reflect it until Explorer is restarted).
+            Path.Combine(pf,   "nodejs"),
+            Path.Combine(pfx86, "nodejs"),
+            // nvm-windows places the active symlink here and adds it to User PATH.
+            Path.Combine(appData, "nvm"),
+            // Volta (a popular Node.js version manager) installs shims here.
+            Path.Combine(localAppData, "Volta", "bin"),
+            // fnm (Fast Node Manager) default install location.
+            Path.Combine(localAppData, "fnm"),
+        };
+
+        foreach (var dir in wellKnownNodeDirs) {
+            if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir))
+                continue;
+            var normalized = NormalizeDirectory(dir);
+            if (seen.Add(normalized))
+                yield return normalized;
         }
     }
 
