@@ -495,11 +495,44 @@ internal sealed class TranscriptScrollController
     /// </summary>
     public void ScrollToBottom()
     {
+        var executeSw = Stopwatch.StartNew();
         IsUserScrolledAway = false;
         _pendingScrollRequest = false;
         _pendingLockedViewportReanchor = false;
+        _savedDistanceFromBottom = -1;
+        _savedOffsetBeforeShrink = -1;
         HideScrollButton(immediate: true);
-        RequestScrollToEnd();
+
+        var sv = EnsureScrollViewer();
+        if (sv is null)
+            return;
+
+        var updateSw = Stopwatch.StartNew();
+        sv.UpdateLayout();
+        updateSw.Stop();
+
+        var scrollSw = Stopwatch.StartNew();
+        _isProgrammaticScroll = true;
+        try
+        {
+            sv.ScrollToVerticalOffset(sv.ScrollableHeight);
+        }
+        finally
+        {
+            _isProgrammaticScroll = false;
+        }
+        scrollSw.Stop();
+        executeSw.Stop();
+
+        if (executeSw.ElapsedMilliseconds >= 20 || updateSw.ElapsedMilliseconds >= 20)
+        {
+            var message =
+                $"SCROLL_TO_BOTTOM_CLICK updateLayout={updateSw.ElapsedMilliseconds}ms " +
+                $"scroll={scrollSw.ElapsedMilliseconds}ms total={executeSw.ElapsedMilliseconds}ms " +
+                $"extent={sv.ExtentHeight:0.#} viewport={sv.ViewportHeight:0.#} scrollable={sv.ScrollableHeight:0.#}";
+            SquadDashTrace.Write(TraceCategory.Performance, message);
+            ScrollTrace("SCROLL → END CLICK", message);
+        }
     }
 
     /// <summary>
@@ -623,9 +656,9 @@ internal sealed class TranscriptScrollController
     }
 
     /// <summary>
-    /// The lambda enqueued by <see cref="RequestScrollToEnd"/>. Executes after the
-    /// layout pass at <see cref="DispatcherPriority.Loaded"/>, ensuring all newly
-    /// added blocks have been measured before the viewport is moved.
+    /// The lambda enqueued by <see cref="RequestScrollToEnd"/>. Executes after a
+    /// layout pass, ensuring all newly added blocks have been measured before the
+    /// viewport is moved.
     /// </summary>
     private void ExecutePendingScrollToEnd()
     {
@@ -636,7 +669,10 @@ internal sealed class TranscriptScrollController
         _pendingScrollRequest = false;
 
         if (IsUserScrolledAway)
+        {
+            ScrollTrace("SKIPPED", "IsUserScrolledAway=true");
             return;
+        }
 
         var sv = EnsureScrollViewer();
         if (sv is null)

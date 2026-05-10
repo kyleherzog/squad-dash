@@ -1524,6 +1524,8 @@
                             VerticalAlignment="Bottom"
                             Margin="0,0,0,24"
                             Width="36" Height="36"
+                            Focusable="False"
+                            IsTabStop="False"
                             Opacity="0"
                             Visibility="Collapsed"
                             Panel.ZIndex="10"

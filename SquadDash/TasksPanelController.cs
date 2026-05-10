@@ -487,17 +487,30 @@ internal sealed class TasksPanelController {
         row.ContextMenu = menu;
 
         var label = new TextBlock {
-            Text         = item.Text,
-            FontSize     = 12,
-            TextWrapping = TextWrapping.Wrap,
-            MaxWidth     = 220,
-            Opacity      = 0.6,
-            TextDecorations = TextDecorations.Strikethrough,
+            Text              = item.Text,
+            FontSize          = 12,
+            TextWrapping      = TextWrapping.Wrap,
+            VerticalAlignment = VerticalAlignment.Center,
         };
-        label.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+        label.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
+
+        var checkMark = new TextBlock {
+            Text              = "✔",
+            FontSize          = 11,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin            = new Thickness(2, 1, 4, 0),
+        };
+        checkMark.SetResourceReference(TextBlock.ForegroundProperty, "DiffAddedSummary");
 
         var wrapper = new Grid { Margin = new Thickness(4, 3, 4, 3) };
+        wrapper.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });
+        wrapper.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        Grid.SetColumn(checkMark, 0);
+        Grid.SetColumn(label, 1);
+        wrapper.Children.Add(checkMark);
         wrapper.Children.Add(label);
+
         row.Child = wrapper;
         return row;
     }

@@ -242,8 +242,9 @@ internal sealed class MarkdownDocumentWindow : Window {
                 Text              = "e.g. 'My Loop - tooltip hint shown on hover'",
                 FontSize          = 11,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin            = new Thickness(0, 0, 8, 0),
+                Margin            = new Thickness(12, 0, 8, 0),
                 FontStyle         = FontStyles.Italic,
+                Opacity           = 0.55,
             };
             loopDescHint.SetResourceReference(TextBlock.ForegroundProperty, "MutedText");
             DockPanel.SetDock(loopDescHint, Dock.Right);
@@ -280,6 +281,45 @@ internal sealed class MarkdownDocumentWindow : Window {
             };
 
             _rootPanel.Children.Add(loopDescRow);
+
+            // ── Include front matter checkbox ──────────────────────────────────
+            var frontMatterCheckBox = new CheckBox {
+                Content   = "Include front matter",
+                FontSize  = 11,
+                IsChecked = false,
+                Margin    = new Thickness(99, 0, 12, 8),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            frontMatterCheckBox.SetResourceReference(CheckBox.ForegroundProperty, "MutedText");
+
+            var frontMatterRow = new DockPanel { LastChildFill = false };
+            DockPanel.SetDock(frontMatterRow, Dock.Top);
+            frontMatterRow.Children.Add(frontMatterCheckBox);
+
+            frontMatterCheckBox.Checked += (_, _) => {
+                if (_activeDocument is null) return;
+                var wasDirty = _activeDocument.IsDirty;
+                var combined = _activeDocument.FrontMatter + _activeDocument.WorkingText;
+                _activeDocument.WorkingText = combined;
+                _activeDocument.FrontMatter = string.Empty;
+                _activeDocument.EditorTextBox.SetPlainText(combined);
+                _activeDocument.IsDirty = wasDirty;
+                UpdateChrome();
+            };
+
+            frontMatterCheckBox.Unchecked += (_, _) => {
+                if (_activeDocument is null) return;
+                var wasDirty    = _activeDocument.IsDirty;
+                var currentText = _activeDocument.EditorTextBox.GetPlainText();
+                var stripped    = MarkdownDocumentTabState.StripFrontMatter(currentText, out var fm);
+                _activeDocument.FrontMatter = fm;
+                _activeDocument.WorkingText = stripped;
+                _activeDocument.EditorTextBox.SetPlainText(stripped);
+                _activeDocument.IsDirty = wasDirty;
+                UpdateChrome();
+            };
+
+            _rootPanel.Children.Add(frontMatterRow);
         }
 
         _contentGrid = new Grid {
@@ -633,6 +673,92 @@ internal sealed class MarkdownDocumentWindow : Window {
         popup.Show();
     }
 
+    private void TriggerDirectReviseWithAi(
+        RichTextBox tb,
+        Func<string, string, string, string, CancellationToken, Task<string>> reviseCallback,
+        string instructions)
+    {
+        if (tb.GetSelectionLength() == 0) return;
+        if (string.IsNullOrWhiteSpace(instructions)) return;
+
+        var doc          = tb.Tag as MarkdownDocumentTabState;
+        var selectedText = tb.GetSelectedText();
+        var fullText     = tb.GetPlainText();
+        var selStart     = tb.GetSelectionStart();
+        var selLen       = tb.GetSelectionLength();
+        var docPath      = doc?.FilePath ?? "";
+
+        var startPointer = tb.GetTextPointerAt(selStart);
+        var endPointer   = tb.GetTextPointerAt(selStart + selLen);
+
+        RevisionHighlightAdorner? adorner   = null;
+        RevisionPendingIndicator? indicator = null;
+        EditorRevisionLock?       revLock   = null;
+
+        adorner   = RevisionHighlightAdorner.Attach(tb, startPointer, endPointer);
+        indicator = RevisionPendingIndicator.Attach(tb, endPointer);
+        revLock   = doc?.AddRevisionLock(startPointer, endPointer);
+
+        var center = new Point(Left + Width / 2, Top + Height / 2);
+        RevisionWorkingOverlay.ShowAt(center, this);
+
+        var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(120));
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var cwd     = string.IsNullOrEmpty(docPath)
+                    ? string.Empty
+                    : System.IO.Path.GetDirectoryName(docPath) ?? string.Empty;
+                var revised = await reviseCallback(instructions, selectedText, fullText, cwd, cts.Token);
+                if (!string.IsNullOrWhiteSpace(revised))
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        adorner?.Remove();
+                        indicator?.Detach();
+                        if (revLock is not null) doc?.RemoveRevisionLock(revLock);
+                        revLock = null;
+
+                        var currentSelectedText = new TextRange(startPointer, endPointer).Text.Replace("\r\n", "\n");
+                        if (currentSelectedText == selectedText)
+                        {
+                            var replaceRange = new TextRange(startPointer, endPointer);
+                            replaceRange.Text = revised;
+                        }
+                        else
+                        {
+                            var win = new RevisionResultWindow(revised) { Owner = this };
+                            win.Show();
+                        }
+                    });
+                }
+                else
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        adorner?.Remove();
+                        indicator?.Detach();
+                        if (revLock is not null) doc?.RemoveRevisionLock(revLock);
+                    });
+                }
+            }
+            catch
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    adorner?.Remove();
+                    indicator?.Detach();
+                    if (revLock is not null) doc?.RemoveRevisionLock(revLock);
+                });
+            }
+            finally
+            {
+                cts.Dispose();
+            }
+        });
+    }
+
     private void PositionPopupNearCaret(Window popup, RichTextBox richTextBox, int charIndex)
     {
         try
@@ -767,6 +893,13 @@ internal sealed class MarkdownDocumentWindow : Window {
             && _captureContext?.ReviseWithAiCallback is { } revCb
             && tb.GetSelectionLength() > 0) {
             TriggerReviseWithAi(tb, revCb);
+            e.Handled = true;
+        } else if (e.Key == System.Windows.Input.Key.C
+            && (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Shift) != 0
+            && _captureContext?.ReviseWithAiCallback is { } cleanupCb
+            && _captureContext?.CleanupPrompt is { Length: > 0 } cleanupPrompt
+            && tb.GetSelectionLength() > 0) {
+            TriggerDirectReviseWithAi(tb, cleanupCb, cleanupPrompt);
             e.Handled = true;
         }
     }
@@ -2325,4 +2458,10 @@ internal sealed record MarkdownDocumentCaptureContext(
     /// </summary>
     public Action<TextBox>? StartPttCallback { get; init; }
     public Action? StopPttCallback { get; init; }
+
+    /// <summary>
+    /// Prompt sent to the AI when the user presses Ctrl+Shift+C (Quick Cleanup) inside the editor.
+    /// If null or empty, Quick Cleanup is disabled.
+    /// </summary>
+    public string? CleanupPrompt { get; init; }
 }

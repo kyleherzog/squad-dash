@@ -208,11 +208,15 @@ internal sealed class ClipboardImageEditorWindow : Window
     private double _panStartH;    // HorizontalOffset at drag start
     private double _panStartV;    // VerticalOffset at drag start
 
-    // Custom hand cursors — lazy-initialised, generated programmatically at runtime
-    private static Cursor? _openHandCursor;
-    private static Cursor? _closedHandCursor;
-    private static Cursor OpenHandCursor   => _openHandCursor   ??= CreateCursorFromDrawing(CreateOpenHandDrawing(),   32, 32, 10, 3);
-    private static Cursor ClosedHandCursor => _closedHandCursor ??= CreateCursorFromDrawing(CreateClosedHandDrawing(), 32, 32, 14, 14);
+    // ── Annotation — multi-drop mode ──────────────────────────────────────────
+
+    /// <summary>
+    /// When true, arrow/rect mode stays active after each placement so the user can
+    /// drop multiple shapes without re-clicking the toolbar button.
+    /// Activated by Shift+clicking the toolbar button; exited by ESC or switching tool.
+    /// </summary>
+    private bool _inArrowMultiDropMode;
+    private bool _inRectMultiDropMode;
 
     // ────────────────────────────────────────────────────────────────────────
 
@@ -453,9 +457,9 @@ internal sealed class ClipboardImageEditorWindow : Window
             {
                 if (Keyboard.FocusedElement is TextBox) return;
                 _isPanMode = true;
-                _canvas.Cursor = OpenHandCursor;
+                _canvas.Cursor = AnnotationCursors.OpenHand;
                 _canvas.ForceCursor = true;   // prevent child elements (shapes) from overriding cursor
-                _scrollViewer.Cursor = OpenHandCursor;
+                _scrollViewer.Cursor = AnnotationCursors.OpenHand;
                 e.Handled = true;
             }
         };
@@ -536,8 +540,8 @@ internal sealed class ClipboardImageEditorWindow : Window
             _panStartH = _scrollViewer.HorizontalOffset;
             _panStartV = _scrollViewer.VerticalOffset;
             _scrollViewer.CaptureMouse();
-            _canvas.Cursor = ClosedHandCursor;
-            _scrollViewer.Cursor = ClosedHandCursor;
+            _canvas.Cursor = AnnotationCursors.ClosedHand;
+            _scrollViewer.Cursor = AnnotationCursors.ClosedHand;
             e.Handled = true;
         };
 
@@ -557,8 +561,8 @@ internal sealed class ClipboardImageEditorWindow : Window
             if (!_isPanning) return;
             _isPanning = false;
             _scrollViewer.ReleaseMouseCapture();
-            _canvas.Cursor = _isPanMode ? OpenHandCursor : Cursors.Arrow;
-            _scrollViewer.Cursor = _isPanMode ? OpenHandCursor : null;
+            _canvas.Cursor = _isPanMode ? AnnotationCursors.OpenHand : Cursors.Arrow;
+            _scrollViewer.Cursor = _isPanMode ? AnnotationCursors.OpenHand : null;
             e.Handled = true;
         };
 
@@ -678,16 +682,28 @@ internal sealed class ClipboardImageEditorWindow : Window
         _addArrowBtn.Click += (_, _) =>
         {
             if (_inEyedropperMode) ExitEyedropperMode();
-            if (_inArrowMode) { ExitArrowMode(); return; }
+            bool isShift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+            if (_inArrowMode && !isShift) { ExitArrowMode(); return; }
             EnterArrowMode();
+            if (isShift)
+            {
+                _inArrowMultiDropMode = true;
+                ShowModeHint("Multi-drop: drag to place arrows · ESC to exit");
+            }
             _addArrowBtn.Content = MakeToolIcon("ImageEditorArrowIcon", active: true);
         };
 
         _addRectBtn.Click += (_, _) =>
         {
             if (_inEyedropperMode) ExitEyedropperMode();
-            if (_inRectMode) { ExitRectMode(); return; }
+            bool isShift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+            if (_inRectMode && !isShift) { ExitRectMode(); return; }
             EnterRectMode();
+            if (isShift)
+            {
+                _inRectMultiDropMode = true;
+                ShowModeHint("Multi-drop: drag to place rectangles · ESC to exit");
+            }
             _addRectBtn.Content = MakeToolIcon("ImageEditorRectIcon", active: true);
         };
 
@@ -1402,7 +1418,12 @@ internal sealed class ClipboardImageEditorWindow : Window
         // Update cursor shape based on hover zone (not during arrow/cursor drag).
         if (!_draggingCursor && _draggingArrow == null && !_bodyDragging && _draggingAnnotRect == null)
         {
-            if (_sel.IsEmpty)
+            // In a tool mode keep the tool cursor — don't override it with zone/cross cursors.
+            if (_inArrowMode)
+                _canvas.Cursor = AnnotationCursors.ArrowTool;
+            else if (_inRectMode)
+                _canvas.Cursor = AnnotationCursors.RectTool;
+            else if (_sel.IsEmpty)
                 _canvas.Cursor = Cursors.Cross;
             else
             {
@@ -1410,8 +1431,9 @@ internal sealed class ClipboardImageEditorWindow : Window
                 _canvas.Cursor = ZoneCursor(hoverZone);
             }
 
-            // Override with directional cursor when hovering over a selected annotation rect's edge/corner.
-            if (_selectedAnnotRect != null)
+            // Override with directional cursor when hovering over a selected annotation rect's edge/corner
+            // — but not while a tool mode is active (clicking would draw a new shape, not resize).
+            if (_selectedAnnotRect != null && !_inArrowMode && !_inRectMode)
             {
                 var az = HitTestAnnotRect(_selectedAnnotRect, e.GetPosition(_canvas));
                 if (az != HitZone.None)
@@ -1453,7 +1475,6 @@ internal sealed class ClipboardImageEditorWindow : Window
         {
             _creatingAnnotRect = false;
             _canvas.ReleaseMouseCapture();
-            _canvas.Cursor = Cursors.Arrow;
             if (_annotRectPreview != null)
             {
                 _annotRectPreview.Visibility = Visibility.Hidden;
@@ -1468,7 +1489,16 @@ internal sealed class ClipboardImageEditorWindow : Window
                 }
             }
             CommitDragUndo();
-            ExitRectMode();
+            if (_inRectMultiDropMode)
+            {
+                // Multi-drop: stay in rect mode so the next drag places another rectangle.
+                _canvas.Cursor = AnnotationCursors.RectTool;
+                ShowModeHint("Multi-drop: drag to place rectangles · ESC to exit");
+            }
+            else
+            {
+                ExitRectMode();
+            }
             e.Handled = true;
             return;
         }
@@ -1521,7 +1551,24 @@ internal sealed class ClipboardImageEditorWindow : Window
                 e.Handled = true;
                 return;
             }
-            Close();
+            // No active tool mode — prompt the user before discarding unsaved work.
+            if (HasChanges())
+            {
+                var answer = MessageBox.Show(
+                    this,
+                    "You have unsaved annotations. Discard changes and close?",
+                    "Discard Changes?",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question,
+                    MessageBoxResult.No);
+                if (answer == MessageBoxResult.Yes)
+                    Close();
+                // MessageBoxResult.No → return to editor, do nothing
+            }
+            else
+            {
+                Close();
+            }
             e.Handled = true;
         }
         else if (e.Key == Key.Delete && _selectedArrow != null)
@@ -1567,14 +1614,17 @@ internal sealed class ClipboardImageEditorWindow : Window
     private void EnterArrowMode()
     {
         _inArrowMode = true;
-        Cursor = Cursors.Cross;
+        Cursor = AnnotationCursors.ArrowTool;
+        _canvas.Cursor = AnnotationCursors.ArrowTool;
         ShowModeHint("Drag to draw an arrow");
     }
 
     private void ExitArrowMode()
     {
         _inArrowMode = false;
+        _inArrowMultiDropMode = false;
         Cursor = Cursors.Arrow;
+        _canvas.Cursor = Cursors.Arrow;
         HideModeHint();
         if (_addArrowBtn != null) _addArrowBtn.Content = MakeToolIcon("ImageEditorArrowIcon");
     }
@@ -1593,7 +1643,10 @@ internal sealed class ClipboardImageEditorWindow : Window
         // Use a 2×2 rect centred on the click as the "target bounds".
         var targetBounds = new Rect(clamped.X - 1, clamped.Y - 1, 2, 2);
         CreateArrow(targetBounds);
-        ExitArrowMode();
+        if (!_inArrowMultiDropMode)
+            ExitArrowMode();
+        else
+            ShowModeHint("Multi-drop: drag to place arrows · ESC to exit");
     }
 
     /// <summary>
@@ -1639,7 +1692,16 @@ internal sealed class ClipboardImageEditorWindow : Window
         _defaultTailLength = savedTailLen;
 
         SelectArrow(arrow);
-        ExitArrowMode();
+        if (_inArrowMultiDropMode)
+        {
+            // Multi-drop: stay in arrow mode so the next drag places another arrow.
+            _canvas.Cursor = AnnotationCursors.ArrowTool;
+            ShowModeHint("Multi-drop: drag to place arrows · ESC to exit");
+        }
+        else
+        {
+            ExitArrowMode();
+        }
     }
 
     private AnnotationArrow CreateArrow(Rect targetBounds)
@@ -2183,14 +2245,17 @@ internal sealed class ClipboardImageEditorWindow : Window
     private void EnterRectMode()
     {
         _inRectMode = true;
-        Cursor = Cursors.Cross;
+        Cursor = AnnotationCursors.RectTool;
+        _canvas.Cursor = AnnotationCursors.RectTool;
         ShowModeHint("Drag to draw a rectangle");
     }
 
     private void ExitRectMode()
     {
         _inRectMode = false;
+        _inRectMultiDropMode = false;
         Cursor = Cursors.Arrow;
+        _canvas.Cursor = Cursors.Arrow;
         HideModeHint();
         if (_addRectBtn != null) _addRectBtn.Content = MakeToolIcon("ImageEditorRectIcon");
     }
@@ -3188,97 +3253,19 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     private sealed record RectSnap(Rect Bounds, Color RectColor);
 
-    // ── Custom hand cursors ───────────────────────────────────────────────────
+    // ── Change detection ──────────────────────────────────────────────────────
 
-    private static Cursor CreateCursorFromDrawing(Drawing drawing, int widthPx, int heightPx, int hotX, int hotY)
-    {
-        var rtb = new RenderTargetBitmap(widthPx, heightPx, 96, 96, PixelFormats.Pbgra32);
-        var dv = new DrawingVisual();
-        using (var dc = dv.RenderOpen())
-            dc.DrawDrawing(drawing);
-        rtb.Render(dv);
-
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(rtb));
-        using var pngStream = new MemoryStream();
-        encoder.Save(pngStream);
-        var png = pngStream.ToArray();
-
-        using var cur = new MemoryStream();
-        using var bw = new BinaryWriter(cur);
-        bw.Write((short)0);
-        bw.Write((short)2);
-        bw.Write((short)1);
-        bw.Write((byte)widthPx);
-        bw.Write((byte)heightPx);
-        bw.Write((byte)0);
-        bw.Write((byte)0);
-        bw.Write((short)hotX);
-        bw.Write((short)hotY);
-        bw.Write((int)png.Length);
-        bw.Write((int)22);
-        bw.Write(png);
-        cur.Position = 0;
-        return new Cursor(cur);
-    }
-
-    private static Drawing CreateOpenHandDrawing()
-    {
-        var dg = new DrawingGroup();
-        using (var dc = dg.Open())
-        {
-            var fill   = new SolidColorBrush(Color.FromRgb(255, 252, 242));
-            var stroke = new Pen(new SolidColorBrush(Color.FromRgb(35, 35, 35)), 1.3)
-                { LineJoin = PenLineJoin.Round, StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
-
-            // Palm
-            dc.DrawRoundedRectangle(fill, stroke, new Rect(5, 16, 18, 13), 3, 3);
-
-            // Thumb (left side)
-            var thumbGeo = new PathGeometry();
-            var thumbFig = new PathFigure { StartPoint = new Point(5, 20), IsClosed = true };
-            thumbFig.Segments.Add(new BezierSegment(new Point(2, 19), new Point(1, 15), new Point(3, 12), true));
-            thumbFig.Segments.Add(new BezierSegment(new Point(4, 9),  new Point(6, 10), new Point(6, 13), true));
-            thumbFig.Segments.Add(new LineSegment(new Point(5, 16), true));
-            thumbGeo.Figures.Add(thumbFig);
-            dc.DrawGeometry(fill, stroke, thumbGeo);
-
-            // Four fingers: index, middle, ring, pinky
-            double[] fingerX    = { 7,  10, 13, 17 };
-            double[] fingerW    = { 3,   3,  3,  2.5 };
-            double[] fingerTopY = { 5,   3,  4,   7 };
-            for (int i = 0; i < 4; i++)
-                dc.DrawRoundedRectangle(fill, stroke,
-                    new Rect(fingerX[i], fingerTopY[i], fingerW[i], 16 - fingerTopY[i] + 1),
-                    1.5, 1.5);
-        }
-        return dg;
-    }
-
-    private static Drawing CreateClosedHandDrawing()
-    {
-        var dg = new DrawingGroup();
-        using (var dc = dg.Open())
-        {
-            var fill   = new SolidColorBrush(Color.FromRgb(255, 252, 242));
-            var stroke = new Pen(new SolidColorBrush(Color.FromRgb(35, 35, 35)), 1.3)
-                { LineJoin = PenLineJoin.Round, StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
-
-            // Knuckle row
-            dc.DrawRoundedRectangle(fill, stroke, new Rect(5, 11, 19, 8), 3, 3);
-
-            // Palm
-            dc.DrawRoundedRectangle(fill, stroke, new Rect(5, 17, 19, 11), 3, 3);
-
-            // Thumb tucked left
-            dc.DrawRoundedRectangle(fill, stroke, new Rect(2, 14, 5, 7), 2, 2);
-
-            // Finger separation lines on knuckle row
-            var linePen = new Pen(new SolidColorBrush(Color.FromRgb(35, 35, 35)), 0.8);
-            dc.DrawLine(linePen, new Point(10, 11), new Point(10, 19));
-            dc.DrawLine(linePen, new Point(14, 11), new Point(14, 19));
-            dc.DrawLine(linePen, new Point(18, 11), new Point(18, 19));
-        }
-        return dg;
-    }
+    /// <summary>
+    /// Returns <see langword="true"/> if the user has made any editable change since the
+    /// dialog was opened: placed at least one annotation arrow or rectangle, placed a
+    /// cursor-indicator overlay, or defined a crop/region selection.
+    ///
+    /// Used by the Escape-key handler to decide whether to show a "Discard changes?"
+    /// confirmation before closing.
+    /// </summary>
+    private bool HasChanges()
+        => _arrows.Count > 0
+        || _annotRects.Count > 0
+        || (_cursorEnabled && _cursorImage != null)
+        || !_sel.IsEmpty;
 }

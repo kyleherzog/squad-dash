@@ -14117,6 +14117,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             Margin = new Thickness(0, 0, 0, 24),
             Width = 36,
             Height = 36,
+            Focusable = false,
+            IsTabStop = false,
             Opacity = 0,
             Visibility = Visibility.Collapsed,
             Content = scrollToBottomViewbox,
