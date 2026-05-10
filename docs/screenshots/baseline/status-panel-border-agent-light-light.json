@@ -4,12 +4,12 @@
   "description": "",
   "theme": "Light",
   "region": "custom",
-  "capturedAt": "2026-05-04T20:36:33.2031269Z",
+  "capturedAt": "2026-05-10T12:56:37.6220168Z",
   "bounds": {
-    "x": 838.43,
-    "y": 49,
-    "width": 360.4413251019056,
-    "height": 359.79,
+    "x": 459.33333333333326,
+    "y": 47,
+    "width": 290.33333333333326,
+    "height": 363,
     "dpiX": 1,
     "dpiY": 1
   },
@@ -18,53 +18,52 @@
     "elementNames": [
       "StatusPanelBorder",
       "StatusAgentPanelsGrid",
-      "ApprovalPanelBorder",
-      "DocsSplitter"
+      "TasksPanelBorder"
     ],
     "needsName": false,
     "elementLeft": 13,
     "elementTop": 53,
-    "elementWidth": 1181.8713251019055,
-    "elementHeight": 364.79,
-    "distanceToEdge": 4
+    "elementWidth": 1165,
+    "elementHeight": 353.42,
+    "distanceToEdge": 6
   },
   "right": {
     "edge": "Right",
     "elementNames": [
-      "StatusPanelBorder",
-      "StatusAgentPanelsGrid",
-      "ApprovalPanelBorder"
+      "TasksPanelBorder"
     ],
     "needsName": false,
-    "elementLeft": 13,
+    "elementLeft": 465.2966666666667,
     "elementTop": 53,
-    "elementWidth": 1181.8713251019055,
-    "elementHeight": 364.79,
-    "distanceToEdge": 4
+    "elementWidth": 276.9166666666667,
+    "elementHeight": 353.42,
+    "distanceToEdge": 7.453333333333148
   },
   "bottom": {
     "edge": "Bottom",
     "elementNames": [
-      "ApprovalApprovedPanel"
+      "StatusPanelBorder",
+      "StatusAgentPanelsGrid",
+      "TasksPanelBorder"
     ],
     "needsName": false,
-    "elementLeft": 856.4346584352388,
-    "elementTop": 364.87,
-    "elementWidth": 325.43666666666667,
-    "elementHeight": 39.92,
-    "distanceToEdge": 1.0199999999999818
+    "elementLeft": 13,
+    "elementTop": 53,
+    "elementWidth": 1165,
+    "elementHeight": 353.42,
+    "distanceToEdge": 3.579999999999984
   },
   "left": {
     "edge": "Left",
     "elementNames": [
-      "border"
+      "TasksPanelBorder"
     ],
     "needsName": false,
-    "elementLeft": 842.43,
-    "elementTop": 312.78999999999996,
-    "elementWidth": 26.43,
-    "elementHeight": 22.630000000000003,
-    "distanceToEdge": 4
+    "elementLeft": 465.2966666666667,
+    "elementTop": 53,
+    "elementWidth": 276.9166666666667,
+    "elementHeight": 353.42,
+    "distanceToEdge": 5.9633333333334235
   },
   "replayActionId": null,
   "fixturePath": null,

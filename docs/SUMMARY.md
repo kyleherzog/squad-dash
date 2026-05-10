@@ -6,8 +6,10 @@
 
 * [Getting Started](getting-started/README.md)
   * [Installation](getting-started/installation.md)
-  * [VS Tooling](getting-started/VS Tooling.md)
   * [First Run](getting-started/first-run.md)
+  * [Squad Team](concepts/squad-team.md)
+  * [VS Tooling](getting-started/VS Tooling.md)
+* [Installer](getting-started/Installer.md)
 
 ## Features
 
@@ -31,7 +33,6 @@
 
 * [Concepts](concepts/README.md)
   * [Agents](concepts/agents.md)
-  * [Squad Team](concepts/squad-team.md)
   * [Transcripts](concepts/transcripts.md)
   * [Documentation Panel](concepts/documentation-panel.md)
 

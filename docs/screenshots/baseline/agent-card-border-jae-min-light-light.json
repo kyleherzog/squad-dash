@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "name": "agent-card-border-jae-min-light",
+  "description": "",
+  "theme": "Light",
+  "region": "custom",
+  "capturedAt": "2026-05-10T12:42:33.2226717Z",
+  "bounds": {
+    "x": 204,
+    "y": 111.91,
+    "width": 178,
+    "height": 332.47,
+    "dpiX": 1,
+    "dpiY": 1
+  },
+  "top": {
+    "edge": "Top",
+    "elementNames": [
+      "AgentCardBorder(Jae Min Kade)"
+    ],
+    "needsName": false,
+    "elementLeft": 208,
+    "elementTop": 115.91,
+    "elementWidth": 170,
+    "elementHeight": 312.47,
+    "distanceToEdge": 9.909999999999997
+  },
+  "right": {
+    "edge": "Right",
+    "elementNames": [
+      "AgentCardBorder(Jae Min Kade)"
+    ],
+    "needsName": false,
+    "elementLeft": 208,
+    "elementTop": 115.91,
+    "elementWidth": 170,
+    "elementHeight": 312.47,
+    "distanceToEdge": 11
+  },
+  "bottom": {
+    "edge": "Bottom",
+    "elementNames": [
+      "Jae Min Kade"
+    ],
+    "needsName": false,
+    "elementLeft": 208,
+    "elementTop": 115.91,
+    "elementWidth": 170,
+    "elementHeight": 324.47,
+    "distanceToEdge": 9.620000000000005
+  },
+  "left": {
+    "edge": "Left",
+    "elementNames": [
+      "AgentCardBorder(Jae Min Kade)"
+    ],
+    "needsName": false,
+    "elementLeft": 208,
+    "elementTop": 115.91,
+    "elementWidth": 170,
+    "elementHeight": 312.47,
+    "distanceToEdge": 5
+  },
+  "replayActionId": null,
+  "fixturePath": null,
+  "docImagePath": "..\\images\\descriptive-filename.png",
+  "elementInventory": null
+}

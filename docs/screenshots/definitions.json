@@ -339,59 +339,58 @@
       "elementNames": [
         "StatusPanelBorder",
         "StatusAgentPanelsGrid",
-        "ApprovalPanelBorder",
-        "DocsSplitter"
+        "TasksPanelBorder"
       ],
       "needsName": false,
       "elementLeft": 13,
       "elementTop": 53,
-      "elementWidth": 1181.8713251019055,
-      "elementHeight": 364.79,
-      "distanceToEdge": 4
+      "elementWidth": 1165,
+      "elementHeight": 353.42,
+      "distanceToEdge": 6
     },
     "right": {
       "edge": "Right",
       "elementNames": [
-        "StatusPanelBorder",
-        "StatusAgentPanelsGrid",
-        "ApprovalPanelBorder"
+        "TasksPanelBorder"
       ],
       "needsName": false,
-      "elementLeft": 13,
+      "elementLeft": 465.2966666666667,
       "elementTop": 53,
-      "elementWidth": 1181.8713251019055,
-      "elementHeight": 364.79,
-      "distanceToEdge": 4
+      "elementWidth": 276.9166666666667,
+      "elementHeight": 353.42,
+      "distanceToEdge": 7.453333333333148
     },
     "bottom": {
       "edge": "Bottom",
       "elementNames": [
-        "ApprovalApprovedPanel"
+        "StatusPanelBorder",
+        "StatusAgentPanelsGrid",
+        "TasksPanelBorder"
       ],
       "needsName": false,
-      "elementLeft": 856.4346584352388,
-      "elementTop": 364.87,
-      "elementWidth": 325.43666666666667,
-      "elementHeight": 39.92,
-      "distanceToEdge": 1.0199999999999818
+      "elementLeft": 13,
+      "elementTop": 53,
+      "elementWidth": 1165,
+      "elementHeight": 353.42,
+      "distanceToEdge": 3.579999999999984
     },
     "left": {
       "edge": "Left",
       "elementNames": [
-        "border"
+        "TasksPanelBorder"
       ],
       "needsName": false,
-      "elementLeft": 842.43,
-      "elementTop": 312.78999999999996,
-      "elementWidth": 26.43,
-      "elementHeight": 22.630000000000003,
-      "distanceToEdge": 4
+      "elementLeft": 465.2966666666667,
+      "elementTop": 53,
+      "elementWidth": 276.9166666666667,
+      "elementHeight": 353.42,
+      "distanceToEdge": 5.9633333333334235
     },
     "bounds": {
-      "x": 838.43,
-      "y": 49,
-      "width": 360.4413251019056,
-      "height": 359.79,
+      "x": 459.33333333333326,
+      "y": 47,
+      "width": 290.33333333333326,
+      "height": 363,
       "dpiX": 1,
       "dpiY": 1
     },
@@ -900,6 +899,71 @@
       "dpiY": 1
     },
     "docImagePath": "..\\reference\\images\\slash-command-autocomplete.png",
+    "elementInventory": null
+  },
+  {
+    "name": "agent-card-border-jae-min-light",
+    "description": "",
+    "theme": "Light",
+    "replayActionId": null,
+    "fixturePath": null,
+    "top": {
+      "edge": "Top",
+      "elementNames": [
+        "AgentCardBorder(Jae Min Kade)"
+      ],
+      "needsName": false,
+      "elementLeft": 208,
+      "elementTop": 115.91,
+      "elementWidth": 170,
+      "elementHeight": 312.47,
+      "distanceToEdge": 9.909999999999997
+    },
+    "right": {
+      "edge": "Right",
+      "elementNames": [
+        "AgentCardBorder(Jae Min Kade)"
+      ],
+      "needsName": false,
+      "elementLeft": 208,
+      "elementTop": 115.91,
+      "elementWidth": 170,
+      "elementHeight": 312.47,
+      "distanceToEdge": 11
+    },
+    "bottom": {
+      "edge": "Bottom",
+      "elementNames": [
+        "Jae Min Kade"
+      ],
+      "needsName": false,
+      "elementLeft": 208,
+      "elementTop": 115.91,
+      "elementWidth": 170,
+      "elementHeight": 324.47,
+      "distanceToEdge": 9.620000000000005
+    },
+    "left": {
+      "edge": "Left",
+      "elementNames": [
+        "AgentCardBorder(Jae Min Kade)"
+      ],
+      "needsName": false,
+      "elementLeft": 208,
+      "elementTop": 115.91,
+      "elementWidth": 170,
+      "elementHeight": 312.47,
+      "distanceToEdge": 5
+    },
+    "bounds": {
+      "x": 204,
+      "y": 111.91,
+      "width": 178,
+      "height": 332.47,
+      "dpiX": 1,
+      "dpiY": 1
+    },
+    "docImagePath": "..\\images\\descriptive-filename.png",
     "elementInventory": null
   }
 ]

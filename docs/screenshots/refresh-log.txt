@@ -1,4 +1,4 @@
-[2026-05-04 21:41:02.468Z] [screenshot] Starting: status-panel-border-agent-dark
-[2026-05-04 21:41:02.968Z] [screenshot] Comparison skipped for 'status-panel-border-agent-dark' (no baseline).
-[2026-05-04 21:41:02.968Z] [screenshot] Saved: D:\Drive\Source\SquadDash-public\docs\screenshots\status-panel-border-agent-dark-light.png
-[2026-05-04 21:41:02.969Z] [screenshot] Copied to doc image: D:\Drive\Source\SquadDash-public\docs\panels\images\tasks-panel.png
+[2026-05-10 12:56:49.134Z] [screenshot] Starting: status-panel-border-agent-light
+[2026-05-10 12:56:49.431Z] [screenshot] Comparison: 42.24% match (60805 of 105270 pixels differ) — diff: D:\Drive\Source\SquadDash-public\docs\screenshots\diff\status-panel-border-agent-light-light.png
+[2026-05-10 12:56:49.431Z] [screenshot] Saved: D:\Drive\Source\SquadDash-public\docs\screenshots\status-panel-border-agent-light-light.png
+[2026-05-10 12:56:49.432Z] [screenshot] Copied to doc image: D:\Drive\Source\SquadDash-public\docs\panels\images\descriptive-filename.png
