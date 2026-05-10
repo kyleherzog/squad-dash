@@ -20,7 +20,7 @@
   The user's normal selection should be unaffected — the indicator is a separate inline sibling.
   **Blocked by:** Phase 2.
 
-- [ ] **[Vesper audit] Test coverage — BuiltInPromptInjections, PromptContextDiagnostics** *(Owner: Vesper Knox)*
+- [x] **[Vesper audit] Test coverage — BuiltInPromptInjections, PromptContextDiagnostics** *(Owner: Vesper Knox)*
   Both classes have zero test coverage. `BuiltInPromptInjections` depends on the triggered injection
   evaluator — write tests using a fake/stub evaluator. `PromptContextDiagnostics` is pure formatting
   logic and should be straightforward to cover directly.
@@ -163,6 +163,8 @@
 
 > Full details in `.squad/completed-tasks.md`. This section is a compact AI-recall index only.
 
+- [x] Loop panel — enum options with ≤5 choices render as radio buttons — ✅ Implemented (commit 751179a; `CreateEnumOptionControl` branches on choice count; GroupName mutual exclusion; 12px indent; ≥6 choices keep ComboBox)
+- [x] [Vesper audit] Test coverage — BuiltInPromptInjections, PromptContextDiagnostics — ✅ Implemented (commit 6601175; 63 new NUnit tests; fake regex evaluator for injections; all risk bands + trace summary fields covered)
 - [x] Command system — unified HostCommandRegistry/Parser/Executor — ✅ Verified complete (HostCommandRegistry builds catalog injected globally into every prompt; structured JSON multi-command parser; 6 built-in handlers; extensible via `.squad/commands.json`)
 
 - [x] Loop output log pane — ✅ Implemented (collapsible log pane in Loop panel wired to loop_output_line events)
