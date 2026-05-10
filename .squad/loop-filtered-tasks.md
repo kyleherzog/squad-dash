@@ -21,7 +21,7 @@ options:
     value: always
     type: enum
     choices: [always, never, ask]
-    label: "Commit"
+    label: "Commit:"
     hint: "When to automatically commit completed work"
 description: "Filtered Tasks — picks the top open task, implements it, marks it done, repeats"
 commands: [stop_loop]
@@ -32,6 +32,8 @@ commands: [stop_loop]
 You are running as part of a SquadDash autonomous loop. **Each iteration must complete exactly one task** from `.squad/tasks.md`, then stop. The next iteration will pick up the next task.
 
 > Iteration: {{iteration}}
+
+The iteration number above tells you which iteration this is. In the sequence. Elsewhere I may have a setting that tells you the maximum of iterations. You can compare this number against Max, and if it is you can issue a stop command.
 
 ## Step 1 — Find the next **filtered** task
 
