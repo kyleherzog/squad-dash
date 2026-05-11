@@ -20360,6 +20360,41 @@ public partial class MainWindow : Window, ILiveElementLocator
     // ── Screenshot-paste feature ──────────────────────────────────────────────────
 
     /// <summary>
+    /// Sanitizes the filename component of a doc-relative image path so it contains
+    /// only characters that are legal on Windows. Invalid chars (parens, colons, etc.)
+    /// are replaced with hyphens. The directory portion (e.g. "images/") is preserved.
+    /// </summary>
+    private static string SanitizeDocImagePath(string imagePath)
+    {
+        var dir  = imagePath.Replace('\\', '/').Contains('/')
+            ? imagePath.Replace('\\', '/')[..(imagePath.Replace('\\', '/').LastIndexOf('/') + 1)]
+            : "";
+        var file = Path.GetFileNameWithoutExtension(imagePath);
+        var ext  = Path.GetExtension(imagePath);
+        var invalid = Path.GetInvalidFileNameChars().ToHashSet();
+        var sanitized = string.Concat(file.Select(c => invalid.Contains(c) ? '-' : c));
+        // Collapse any run of hyphens down to a single hyphen
+        while (sanitized.Contains("--"))
+            sanitized = sanitized.Replace("--", "-");
+        sanitized = sanitized.Trim('-');
+        return dir + sanitized + ext;
+    }
+
+    /// <summary>
+    /// If <paramref name="sanitizedPath"/> differs from <paramref name="originalPath"/>,
+    /// rewrites all occurrences of the original path in the markdown source file with
+    /// the sanitized one so image links remain valid.
+    /// </summary>
+    private static void UpdateDocImagePathInMarkdown(string docPath, string originalPath, string sanitizedPath)
+    {
+        if (originalPath == sanitizedPath) return;
+        var text = File.ReadAllText(docPath);
+        var updated = text.Replace(originalPath.Replace('\\', '/'), sanitizedPath.Replace('\\', '/'));
+        if (updated != text)
+            File.WriteAllText(docPath, updated);
+    }
+
+    /// <summary>
     /// Called by <see cref="DocViewerScriptingBridge"/> when the user right-clicks a
     /// 📸 placeholder blockquote in the docs viewer.  Shows a context menu with the
     /// "Use screenshot on clipboard" action and a "Capture new screenshot" action.
@@ -20410,6 +20445,12 @@ public partial class MainWindow : Window, ILiveElementLocator
                 "Screenshot", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
+
+        // Sanitize the filename component — strip characters that are illegal on Windows
+        // (parens, colons, etc.) and update the markdown if the path changed.
+        var sanitizedPath = SanitizeDocImagePath(imagePath);
+        UpdateDocImagePathInMarkdown(_currentDocPath, imagePath, sanitizedPath);
+        imagePath = sanitizedPath;
 
         var docDir = Path.GetDirectoryName(_currentDocPath)!;
         var fullImagePath = Path.Combine(docDir, imagePath.Replace('/', '\\'));
@@ -20538,6 +20579,11 @@ public partial class MainWindow : Window, ILiveElementLocator
                 "Replace Screenshot", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
+
+        // Sanitize filename — strip invalid chars and update markdown if path changed.
+        var sanitizedPath = SanitizeDocImagePath(imagePath);
+        UpdateDocImagePathInMarkdown(_currentDocPath, imagePath, sanitizedPath);
+        imagePath = sanitizedPath;
 
         var docDir = Path.GetDirectoryName(_currentDocPath)!;
         var fullImagePath = Path.Combine(docDir, imagePath.Replace('/', '\\'));
