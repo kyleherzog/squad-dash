@@ -1099,7 +1099,13 @@ internal sealed class ClipboardImageEditorWindow : Window
         var s = _sel;
         var cx = s.Left + s.Width / 2;
         var cy = s.Top + s.Height / 2;
-        var hh = HandleSize / 2;
+        var handleScreenSize = HandleSize / _zoom;
+        foreach (var hdl in _handles)
+        {
+            hdl.Width  = handleScreenSize;
+            hdl.Height = handleScreenSize;
+        }
+        var hh = handleScreenSize / 2;
         var w = _canvas.Width;
         var h = _canvas.Height;
 
@@ -1200,19 +1206,19 @@ internal sealed class ClipboardImageEditorWindow : Window
         if (InHandleZone(pt, cx, s.Bottom)) return HitZone.S;
         if (InHandleZone(pt, s.Left, cy)) return HitZone.W;
 
-        const double EdgeBand = 8.0;
-        if (pt.Y >= s.Top - EdgeBand && pt.Y <= s.Top + EdgeBand && pt.X > s.Left && pt.X < s.Right) return HitZone.N;
-        if (pt.Y >= s.Bottom - EdgeBand && pt.Y <= s.Bottom + EdgeBand && pt.X > s.Left && pt.X < s.Right) return HitZone.S;
-        if (pt.X >= s.Left - EdgeBand && pt.X <= s.Left + EdgeBand && pt.Y > s.Top && pt.Y < s.Bottom) return HitZone.W;
-        if (pt.X >= s.Right - EdgeBand && pt.X <= s.Right + EdgeBand && pt.Y > s.Top && pt.Y < s.Bottom) return HitZone.E;
+        double edgeBand = 8.0 / _zoom;
+        if (pt.Y >= s.Top - edgeBand && pt.Y <= s.Top + edgeBand && pt.X > s.Left && pt.X < s.Right) return HitZone.N;
+        if (pt.Y >= s.Bottom - edgeBand && pt.Y <= s.Bottom + edgeBand && pt.X > s.Left && pt.X < s.Right) return HitZone.S;
+        if (pt.X >= s.Left - edgeBand && pt.X <= s.Left + edgeBand && pt.Y > s.Top && pt.Y < s.Bottom) return HitZone.W;
+        if (pt.X >= s.Right - edgeBand && pt.X <= s.Right + edgeBand && pt.Y > s.Top && pt.Y < s.Bottom) return HitZone.E;
 
         if (s.Contains(pt)) return HitZone.Move;
         return HitZone.None;
     }
 
-    private static bool InHandleZone(Point pt, double cx, double cy)
+    private bool InHandleZone(Point pt, double cx, double cy)
     {
-        var r = HandleSize / 2 + HitPad;
+        var r = (HandleSize / 2 + HitPad) / _zoom;
         return pt.X >= cx - r && pt.X <= cx + r &&
                pt.Y >= cy - r && pt.Y <= cy + r;
     }
@@ -4071,7 +4077,7 @@ internal sealed class ClipboardImageEditorWindow : Window
                 Width            = sw,
                 Height           = sh,
                 Stroke           = Brushes.White,
-                StrokeThickness  = 1.5,
+                StrokeThickness  = 1.5 / _zoom,
                 StrokeDashArray  = new DoubleCollection { 4.0, 3.0 },
                 Fill             = Brushes.Transparent,
                 IsHitTestVisible = false,
@@ -4102,8 +4108,9 @@ internal sealed class ClipboardImageEditorWindow : Window
         var b  = _selectedText.Bounds;
         double sw = Math.Max(b.Width  > 0 ? b.Width  + 8 : 30, 30);
         double sh = Math.Max(b.Height > 0 ? b.Height + 4 : 20, 20);
-        _textSelectionRect.Width  = sw;
-        _textSelectionRect.Height = sh;
+        _textSelectionRect.Width           = sw;
+        _textSelectionRect.Height          = sh;
+        _textSelectionRect.StrokeThickness = 1.5 / _zoom;
         Canvas.SetLeft(_textSelectionRect, b.Left - 4);
         Canvas.SetTop(_textSelectionRect,  b.Top  - 2);
     }
