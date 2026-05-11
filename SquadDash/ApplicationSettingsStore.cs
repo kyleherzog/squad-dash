@@ -251,6 +251,17 @@ internal sealed class ApplicationSettingsStore {
         return updated;
     }
 
+    public ApplicationSettingsSnapshot SaveSpeechProvider(SpeechProvider provider, string? openAiKey) {
+        using var mutex = AcquireMutex();
+        var current = LoadCore();
+        var updated = current with {
+            SpeechProvider = provider,
+            OpenAiSpeechApiKey = openAiKey?.Trim()
+        };
+        SaveCore(updated);
+        return updated.Normalize();
+    }
+
     public ApplicationSettingsSnapshot SaveNotificationSettings(
         string? provider,
         IReadOnlyDictionary<string, string>? endpoint,
@@ -738,6 +749,8 @@ internal sealed record ApplicationSettingsSnapshot(
 
     public string? UserName { get; init; }
     public string? SpeechRegion { get; init; }
+    public SpeechProvider SpeechProvider { get; init; } = SpeechProvider.Azure;
+    public string? OpenAiSpeechApiKey { get; init; }
 
     /// <summary>
     /// Prompt sent to AI when the user triggers the Quick Cleanup (Ctrl+Shift+C) command.
@@ -1095,6 +1108,8 @@ internal sealed record ApplicationSettingsSnapshot(
             CleanupPrompt = string.IsNullOrWhiteSpace(CleanupPrompt)
                 ? "Clean up and clarify this text."
                 : CleanupPrompt,
+            SpeechProvider = SpeechProvider,
+            OpenAiSpeechApiKey = string.IsNullOrWhiteSpace(OpenAiSpeechApiKey) ? null : OpenAiSpeechApiKey.Trim(),
         };
     }
 
@@ -1158,3 +1173,5 @@ internal sealed record WorkspaceWindowPlacement(
     private static double NormalizePositive(double value) =>
         IsFinitePositive(value) ? value : 0;
 }
+
+internal enum SpeechProvider { Azure, OpenAI }

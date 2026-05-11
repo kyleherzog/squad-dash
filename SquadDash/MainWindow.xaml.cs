@@ -433,7 +433,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private DispatcherTimer? _pttCtrlPollTimer;   // polls GetAsyncKeyState while window is inactive
     private DateTime _ctrlFirstDownTime;
     private DateTime _ctrlFirstReleaseTime;
-    private SpeechRecognitionService? _speechService;
+    private ISpeechRecognitionService? _speechService;
     private PushToTalkWindow? _pttWindow;
     private TextBox? _pttTargetTextBox;       // resolved at activation; null = PromptTextBox
     private RichTextBox? _pttTargetRichTextBox;  // set when a RichTextBox (e.g. DocSourceTextBox) has focus at PTT activation
@@ -7769,7 +7769,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         _pttWindow.Show();
         _pttWindow.VolumeBar.Height = 0;
 
-        _speechService = new SpeechRecognitionService();
+        _speechService = _settingsSnapshot.SpeechProvider == SpeechProvider.OpenAI
+            ? new WhisperSpeechRecognitionService()
+            : new SpeechRecognitionService();
 
         _speechService.PhraseRecognized += (_, text) =>
             Dispatcher.BeginInvoke(() => AppendSpeechToPrompt(text));

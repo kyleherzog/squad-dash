@@ -7,7 +7,7 @@ using NAudio.Wave;
 
 namespace SquadDash;
 
-internal sealed class SpeechRecognitionService : IDisposable {
+internal sealed class SpeechRecognitionService : ISpeechRecognitionService {
     private SpeechRecognizer? _recognizer;
     private WaveInEvent? _waveIn;
     private PushAudioInputStream? _pushStream;
