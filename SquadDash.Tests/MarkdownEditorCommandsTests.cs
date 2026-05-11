@@ -281,6 +281,164 @@ internal sealed class MarkdownEditorCommandsTests {
         Assert.That(tb.CaretIndex, Is.EqualTo(7));
     }
 
+    // ── ApplyInlineCodeOrFence ───────────────────────────────────────────────
+
+    [Test]
+    public void ApplyInlineCodeOrFence_TrailingSpace_IsPreservedOutsideBacktick() {
+        // Regression: buggy code computed trailingSpaces as raw[(raw.Length - raw.TrimEnd().Length)..]
+        // which for "great " gave raw[1..] = "reat " instead of raw[5..] = " ".
+        var tb = MakeBox("hello great world");
+        Select(tb, 6, 6); // "great "
+        MarkdownEditorCommands.ApplyInlineCodeOrFence(tb);
+        Assert.That(tb.Text, Is.EqualTo("hello `great` world"));
+    }
+
+    [Test]
+    public void ApplyInlineCodeOrFence_TrailingSpace_SelectionCoversWrappedWord() {
+        var tb = MakeBox("hello great world");
+        Select(tb, 6, 6); // "great "
+        MarkdownEditorCommands.ApplyInlineCodeOrFence(tb);
+        Assert.Multiple(() => {
+            Assert.That(tb.SelectionStart,  Is.EqualTo(6));
+            Assert.That(tb.SelectionLength, Is.EqualTo(7)); // "`great`"
+        });
+    }
+
+    [Test]
+    public void ApplyInlineCodeOrFence_LeadingSpace_IsPreservedOutsideBacktick() {
+        var tb = MakeBox(" great");
+        Select(tb, 0, 6); // " great"
+        MarkdownEditorCommands.ApplyInlineCodeOrFence(tb);
+        Assert.That(tb.Text, Is.EqualTo(" `great`"));
+    }
+
+    [Test]
+    public void ApplyInlineCodeOrFence_LeadingSpace_SelectionStartsAfterLeadingSpace() {
+        var tb = MakeBox(" great");
+        Select(tb, 0, 6);
+        MarkdownEditorCommands.ApplyInlineCodeOrFence(tb);
+        Assert.Multiple(() => {
+            Assert.That(tb.SelectionStart,  Is.EqualTo(1));
+            Assert.That(tb.SelectionLength, Is.EqualTo(7)); // "`great`"
+        });
+    }
+
+    [Test]
+    public void ApplyInlineCodeOrFence_CleanSelection_WrapsInBackticks() {
+        var tb = MakeBox("world");
+        Select(tb, 0, 5);
+        MarkdownEditorCommands.ApplyInlineCodeOrFence(tb);
+        Assert.Multiple(() => {
+            Assert.That(tb.Text,            Is.EqualTo("`world`"));
+            Assert.That(tb.SelectionStart,  Is.EqualTo(0));
+            Assert.That(tb.SelectionLength, Is.EqualTo(7));
+        });
+    }
+
+    [Test]
+    public void ApplyInlineCodeOrFence_BothLeadingAndTrailingSpaces_SpacesRemainOutside() {
+        var tb = MakeBox("  hello  ");
+        Select(tb, 0, 9); // "  hello  "
+        MarkdownEditorCommands.ApplyInlineCodeOrFence(tb);
+        Assert.Multiple(() => {
+            Assert.That(tb.Text,            Is.EqualTo("  `hello`  "));
+            Assert.That(tb.SelectionStart,  Is.EqualTo(2));
+            Assert.That(tb.SelectionLength, Is.EqualTo(7)); // "`hello`"
+        });
+    }
+
+    [Test]
+    public void ApplyInlineCodeOrFence_MultiWordSingleLine_ConvertsToCamelCase() {
+        var tb = MakeBox("my method");
+        Select(tb, 0, 9);
+        MarkdownEditorCommands.ApplyInlineCodeOrFence(tb);
+        Assert.Multiple(() => {
+            Assert.That(tb.Text,            Is.EqualTo("`myMethod`"));
+            Assert.That(tb.SelectionStart,  Is.EqualTo(0));
+            Assert.That(tb.SelectionLength, Is.EqualTo(10)); // "`myMethod`"
+        });
+    }
+
+    [Test]
+    public void ApplyInlineCodeOrFence_MultiLineSelection_WrapsInFence() {
+        var tb = MakeBox("line1\nline2");
+        Select(tb, 0, 11);
+        MarkdownEditorCommands.ApplyInlineCodeOrFence(tb);
+        const string expected = "```\nline1\nline2\n```";
+        Assert.Multiple(() => {
+            Assert.That(tb.Text,            Is.EqualTo(expected));
+            Assert.That(tb.SelectionStart,  Is.EqualTo(0));
+            Assert.That(tb.SelectionLength, Is.EqualTo(expected.Length));
+        });
+    }
+
+    [Test]
+    public void ApplyInlineCodeOrFence_EmptySelection_ReturnsFalse_AndTextUnchanged() {
+        var tb = MakeBox("hello");
+        tb.CaretIndex = 2;
+        var result = MarkdownEditorCommands.ApplyInlineCodeOrFence(tb);
+        Assert.Multiple(() => {
+            Assert.That(result,  Is.False);
+            Assert.That(tb.Text, Is.EqualTo("hello"));
+        });
+    }
+
+    // ── ApplyInlineQuote ─────────────────────────────────────────────────────
+
+    [Test]
+    public void ApplyInlineQuote_TrailingSpace_IsPreservedOutsideQuotes() {
+        // Regression: same trailingSpaces bug as ApplyInlineCodeOrFence.
+        var tb = MakeBox("great ");
+        Select(tb, 0, 6); // "great "
+        MarkdownEditorCommands.ApplyInlineQuote(tb);
+        Assert.That(tb.Text, Is.EqualTo("\"great\" "));
+    }
+
+    [Test]
+    public void ApplyInlineQuote_TrailingSpace_SelectionCoversWrappedWord() {
+        var tb = MakeBox("great ");
+        Select(tb, 0, 6);
+        MarkdownEditorCommands.ApplyInlineQuote(tb);
+        Assert.Multiple(() => {
+            Assert.That(tb.SelectionStart,  Is.EqualTo(0));
+            Assert.That(tb.SelectionLength, Is.EqualTo(7)); // "\"great\""
+        });
+    }
+
+    [Test]
+    public void ApplyInlineQuote_CleanSelection_WrapsInQuotes() {
+        var tb = MakeBox("hello");
+        Select(tb, 0, 5);
+        MarkdownEditorCommands.ApplyInlineQuote(tb);
+        Assert.Multiple(() => {
+            Assert.That(tb.Text,            Is.EqualTo("\"hello\""));
+            Assert.That(tb.SelectionStart,  Is.EqualTo(0));
+            Assert.That(tb.SelectionLength, Is.EqualTo(7));
+        });
+    }
+
+    [Test]
+    public void ApplyInlineQuote_MultiLineSelection_ReturnsFalse_AndTextUnchanged() {
+        var tb = MakeBox("hello\nworld");
+        Select(tb, 0, 11);
+        var result = MarkdownEditorCommands.ApplyInlineQuote(tb);
+        Assert.Multiple(() => {
+            Assert.That(result,  Is.False);
+            Assert.That(tb.Text, Is.EqualTo("hello\nworld"));
+        });
+    }
+
+    [Test]
+    public void ApplyInlineQuote_EmptySelection_ReturnsFalse_AndTextUnchanged() {
+        var tb = MakeBox("hello");
+        tb.CaretIndex = 2;
+        var result = MarkdownEditorCommands.ApplyInlineQuote(tb);
+        Assert.Multiple(() => {
+            Assert.That(result,  Is.False);
+            Assert.That(tb.Text, Is.EqualTo("hello"));
+        });
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private static TextBox MakeBox(string text) => new() { Text = text };
