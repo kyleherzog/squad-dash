@@ -473,7 +473,10 @@ internal sealed class ClipboardImageEditorWindow : Window
             if (e.Key == Key.Enter && Keyboard.FocusedElement is not TextBox)
             {
                 e.Handled = true;
-                DoInsertImage();
+                if (!_sel.IsEmpty)
+                    DoCropInPlace();
+                else
+                    DoInsertImage();
                 return;
             }
             if (e.Key == Key.Space && !_isPanMode)
@@ -1284,6 +1287,17 @@ internal sealed class ClipboardImageEditorWindow : Window
             UpdateEyedropperResult(ec);
             e.Handled = true;
             return;
+        }
+
+        if (e.ClickCount == 2 && !_sel.IsEmpty && !_inArrowMode && !_inRectMode && !_inTextMode)
+        {
+            var dpt = e.GetPosition(_canvas);
+            if (_sel.Contains(dpt))
+            {
+                DoCropInPlace();
+                e.Handled = true;
+                return;
+            }
         }
 
         SelectArrow(null);
