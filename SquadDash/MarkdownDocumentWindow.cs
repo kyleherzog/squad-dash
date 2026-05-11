@@ -1110,7 +1110,9 @@ internal sealed class MarkdownDocumentWindow : Window {
         // Step 1: insert conditioned (pre-replacement) text
         editorTb.SelectRange(caretIndex, selEndIndex - caretIndex);
         editorTb.ReplaceSelection(insert);
-        editorTb.SetCaretOffset(caretIndex + insert.Length);
+        // Collapse selection to caret at end of inserted text — SelectRange(x,0) both moves
+        // the caret and collapses the selection; SetCaretOffset alone does not clear selection.
+        editorTb.SelectRange(caretIndex + insert.Length, 0);
         _editorVoiceCaretIndex = caretIndex + insert.Length;
 
         // Step 2 (if rules changed the text): replace with post-replacement text — second undo entry
@@ -1118,7 +1120,7 @@ internal sealed class MarkdownDocumentWindow : Window {
         {
             editorTb.SelectRange(caretIndex, insert.Length);
             editorTb.ReplaceSelection(replaced);
-            editorTb.SetCaretOffset(caretIndex + replaced.Length);
+            editorTb.SelectRange(caretIndex + replaced.Length, 0);
             _editorVoiceCaretIndex = caretIndex + replaced.Length;
         }
     }

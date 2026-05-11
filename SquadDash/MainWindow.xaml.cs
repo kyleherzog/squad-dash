@@ -8044,6 +8044,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         // Use SelectRange + ReplaceSelection — undo-safe, preserves scroll position and formatting.
         rtb.SelectRange(caretIndex, selEndIndex - caretIndex);
         rtb.ReplaceSelection(insert);
+        rtb.SelectRange(caretIndex + insert.Length, 0);
         _sessionCaretIndex = caretIndex + insert.Length;
 
         // Step 2: apply replacements as a separate undo entry
@@ -8051,6 +8052,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             rtb.SelectRange(caretIndex, insert.Length);
             rtb.ReplaceSelection(replaced);
+            rtb.SelectRange(caretIndex + replaced.Length, 0);
             _sessionCaretIndex = caretIndex + replaced.Length;
         }
     }
