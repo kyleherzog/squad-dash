@@ -23240,6 +23240,14 @@ public partial class MainWindow : Window, ILiveElementLocator
             double mainRight = Left + (ActualWidth > 0 ? ActualWidth : Width);
             newLeft = mainRight + off.X;
             newTop = Top + off.Y;
+
+            // Guard: if the saved offset was computed on a different monitor layout (e.g.
+            // a narrower display before the user switched to an ultra-wide), the window
+            // may land off-screen.  Fall back to the default snap so it's always visible.
+            double cx = newLeft + (floater.ActualWidth > 0 ? floater.ActualWidth : floater.Width) / 2;
+            double cy = newTop  + (floater.ActualHeight > 0 ? floater.ActualHeight : floater.Height) / 2;
+            if (!IsLogicalPositionOnAnyMonitor(cx, cy))
+                (newLeft, newTop) = DefaultFloatingWindowSnap(floater, defaultTopOffset);
         }
         else
         {
@@ -23259,6 +23267,21 @@ public partial class MainWindow : Window, ILiveElementLocator
     }
 
     /// <summary>
+    /// Returns <c>true</c> if the WPF logical coordinate (<paramref name="logicalX"/>,
+    /// <paramref name="logicalY"/>) falls on any connected monitor.
+    /// Converts to physical pixels using the main window's DPI transform so that the
+    /// check is correct under per-monitor DPI scaling.
+    /// </summary>
+    private bool IsLogicalPositionOnAnyMonitor(double logicalX, double logicalY)
+    {
+        var src = PresentationSource.FromVisual(this);
+        var m   = src?.CompositionTarget?.TransformToDevice ?? Matrix.Identity;
+        int physX = (int)(logicalX * m.M11);
+        int physY = (int)(logicalY * m.M22);
+        return NativeMethods.IsRectOnAnyMonitor(physX, physY, physX + 1, physY + 1);
+    }
+
+    /// <summary>
     /// Checks whether the centre of <paramref name="floater"/> falls on any monitor and the
     /// window is fully within that monitor. If not, resets the saved offset to null (which
     /// causes the next position call to snap back to the default).
@@ -23268,12 +23291,10 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (floater is not { IsLoaded: true })
             return;
 
-        double cx = floater.Left + floater.Width / 2;
-        double cy = floater.Top + floater.Height / 2;
+        double cx = floater.Left + (floater.ActualWidth > 0 ? floater.ActualWidth : floater.Width) / 2;
+        double cy = floater.Top  + (floater.ActualHeight > 0 ? floater.ActualHeight : floater.Height) / 2;
 
-        // If the centre is on no monitor, or the window bleeds off screen, reset.
-        bool centreOnScreen = NativeMethods.IsRectOnAnyMonitor((int)cx, (int)cy, (int)cx + 1, (int)cy + 1);
-        if (!centreOnScreen)
+        if (!IsLogicalPositionOnAnyMonitor(cx, cy))
             offset = null;
     }
 
