@@ -9,6 +9,7 @@ using System.Windows.Shapes;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using System.Collections.Generic;
+using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 
 namespace SquadDash;
@@ -231,6 +232,12 @@ internal sealed class ClipboardImageEditorWindow : Window
     private Button? _addTextBtn;
     private TextBox? _activeTextBox;
     private AnnotationText? _editingText;
+    private bool _inTextMultiDropMode;
+    private AnnotationText? _selectedText;
+    private AnnotationText? _colorPickerText;
+    private Rectangle? _textSelectionRect;
+    private Color _defaultTextFgColor = Colors.White;
+    private Color _defaultTextBgColor = Colors.Black;
 
     // ────────────────────────────────────────────────────────────────────────
 
@@ -250,6 +257,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         this.SetResourceReference(BackgroundProperty, "AppSurface");
 
         LoadArrowDefaults();
+        LoadTextDefaults();
 
         // Resolve owner screen position early so all monitor lookups use the physical
         // top-left of the owner window — reliable even when the window is maximized.
@@ -621,7 +629,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             Width    = 32, Height = 28,
             Padding  = new Thickness(4, 3, 4, 3),
             Margin   = new Thickness(0, 0, 4, 0),
-            ToolTip  = "Text label `u{00B7} click to place `u{00B7} double-click to re-edit"
+            ToolTip  = "Text label \u00B7 click to place \u00B7 Shift+click for multi-drop \u00B7 double-click to re-edit"
         };
         var cursorBtn = new Button
         {
@@ -732,10 +740,16 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         _addTextBtn.Click += (_, _) =>
         {
-            if (_inTextMode) { ExitTextMode(); return; }
+            bool isShift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+            if (_inTextMode && !isShift) { ExitTextMode(); return; }
             ExitAllToolModes();
             EnterTextMode();
-            _addTextBtn.Content = MakeToolIcon("ImageEditorTextIcon", active: true);
+            if (isShift)
+            {
+                _inTextMultiDropMode = true;
+                ShowModeHint("Multi-drop: click to place text · ESC to exit");
+            }
+            _addTextBtn.Content = MakeToolIcon("ImageEditorTextIcon", active: true, multiDrop: isShift);
         };
 
         cursorBtn.Click += (_, _) =>
@@ -1269,6 +1283,10 @@ internal sealed class ClipboardImageEditorWindow : Window
         SelectArrow(null);
         SelectAnnotationRect(null);
 
+        // Clicking canvas background deselects any selected text annotation
+        if (_selectedText != null)
+            SelectText(null);
+
         var pt = e.GetPosition(_canvas);
         var zone = HitTest(pt);
 
@@ -1727,7 +1745,14 @@ internal sealed class ClipboardImageEditorWindow : Window
         ShowModeHint("Drag to draw an arrow");
     }
 
-    private void ExitAllToolModes() { if (_inArrowMode) ExitArrowMode(); if (_inRectMode) ExitRectMode(); if (_inTextMode) ExitTextMode(); if (_inEyedropperMode) ExitEyedropperMode(); }
+    private void ExitAllToolModes()
+    {
+        if (_inArrowMode)   ExitArrowMode();
+        if (_inRectMode)    ExitRectMode();
+        if (_inTextMode)    ExitTextMode();
+        if (_inEyedropperMode) ExitEyedropperMode();
+        SelectText(null);
+    }
 
     private void ExitArrowMode()
     {
@@ -2333,7 +2358,14 @@ internal sealed class ClipboardImageEditorWindow : Window
             _colorPickerPanel = null;
         }
         _colorPickerArrow = null;
-        _colorPickerRect = null;
+        _colorPickerRect  = null;
+        _colorPickerText  = null;
+        _selectedText     = null;
+        if (_textSelectionRect != null)
+        {
+            _canvas.Children.Remove(_textSelectionRect);
+            _textSelectionRect = null;
+        }
     }
 
     private void RemoveArrow(AnnotationArrow arrow)
@@ -3168,12 +3200,13 @@ internal sealed class ClipboardImageEditorWindow : Window
     {
         _inTextMode = true;
         _canvas.Cursor = Cursors.IBeam;
-        ShowModeHint("Click to place text · Enter to finish · ESC to exit");
+        ShowModeHint("Click to place text · ESC to exit");
     }
 
     private void ExitTextMode()
     {
         CommitActiveTextBox();
+        _inTextMultiDropMode = false;
         _inTextMode = false;
         _canvas.Cursor = Cursors.Arrow;
         HideModeHint();
@@ -3188,9 +3221,10 @@ internal sealed class ClipboardImageEditorWindow : Window
         PushUndo(); // save state before the annotation is born
         var annotation = new AnnotationText
         {
-            Bounds    = new Rect(pt.X, pt.Y, 0, 0),
-            FontSize  = AnnotationText.MaxFontSize,
-            TextColor = Colors.White
+            Bounds          = new Rect(pt.X, pt.Y, 0, 0),
+            FontSize        = AnnotationText.MaxFontSize,
+            TextColor       = _defaultTextFgColor,
+            BackgroundColor = _defaultTextBgColor
         };
         _texts.Add(annotation);
         _editingText = annotation;
@@ -3213,7 +3247,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             _inTextMode = true;
             _canvas.Cursor = Cursors.IBeam;
             if (_addTextBtn != null) _addTextBtn.Content = MakeToolIcon("ImageEditorTextIcon", active: true);
-            ShowModeHint("Click to place text · Enter to finish · ESC to exit");
+            ShowModeHint("Click to place text · ESC to exit");
         }
         CreateTextBoxOverlay(existing);
     }
@@ -3229,14 +3263,18 @@ internal sealed class ClipboardImageEditorWindow : Window
             FontSize      = annotation.FontSize,
             FontWeight    = FontWeights.Bold,
             Foreground    = new SolidColorBrush(annotation.TextColor),
-            Background    = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0)),
+            Background    = annotation.BackgroundColor.A == 0
+                ? new SolidColorBrush(Color.FromArgb(40, 0, 0, 0))
+                : new SolidColorBrush(annotation.BackgroundColor),
             BorderBrush   = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)),
             BorderThickness = new Thickness(1),
             AcceptsReturn = false,
             TextWrapping  = TextWrapping.NoWrap,
             MinWidth      = 60,
             Padding       = new Thickness(4, 2, 4, 2),
-            CaretBrush    = Brushes.White,
+            CaretBrush    = annotation.BackgroundColor.A > 0 && annotation.BackgroundColor.R < 128
+                ? Brushes.White
+                : Brushes.Black,
             SelectionBrush = new SolidColorBrush(Color.FromArgb(120, 100, 160, 255)),
             Text          = annotation.Text
         };
@@ -3311,21 +3349,21 @@ internal sealed class ClipboardImageEditorWindow : Window
     {
         if (_activeTextBox == null || _editingText == null) return;
 
-        var text        = _activeTextBox.Text; // preserve inner whitespace; trim only leading/trailing
+        var text        = _activeTextBox.Text;
         var editCopy    = _editingText;
         var tbRef       = _activeTextBox;
+        bool autoExit   = _inTextMode && !_inTextMultiDropMode;
 
-        // Clear state BEFORE removing from canvas so LostFocus cannot re-enter.
         _activeTextBox = null;
         _editingText   = null;
         _canvas.Children.Remove(tbRef);
 
         if (string.IsNullOrWhiteSpace(text))
         {
-            // Empty annotation — remove it without adding another undo entry.
             _suppressUndo = true;
             try   { _texts.Remove(editCopy); }
             finally { _suppressUndo = false; }
+            if (autoExit) ExitTextMode();
         }
         else
         {
@@ -3333,6 +3371,11 @@ internal sealed class ClipboardImageEditorWindow : Window
             editCopy.FontSize = tbRef.FontSize;
             editCopy.Bounds   = new Rect(Canvas.GetLeft(tbRef), Canvas.GetTop(tbRef), 0, 0);
             UpdateTextDisplay(editCopy);
+            if (autoExit)
+            {
+                ExitTextMode();
+                SelectText(editCopy);
+            }
         }
     }
 
@@ -3348,7 +3391,8 @@ internal sealed class ClipboardImageEditorWindow : Window
                 FontFamily  = new FontFamily("Calibri"),
                 FontWeight  = FontWeights.Bold,
                 Foreground  = new SolidColorBrush(Color.FromArgb(160, 0, 0, 0)),
-                IsHitTestVisible = false
+                IsHitTestVisible = false,
+                Visibility = annotation.BackgroundColor.A == 0 ? Visibility.Visible : Visibility.Collapsed,
             };
 
             var display = new TextBlock
@@ -3357,7 +3401,13 @@ internal sealed class ClipboardImageEditorWindow : Window
                 FontWeight  = FontWeights.Bold,
                 Foreground  = new SolidColorBrush(annotation.TextColor),
                 IsHitTestVisible = true,
-                Cursor      = Cursors.SizeAll
+                Cursor      = Cursors.SizeAll,
+                Background  = annotation.BackgroundColor.A == 0
+                    ? Brushes.Transparent
+                    : new SolidColorBrush(annotation.BackgroundColor),
+                Padding     = annotation.BackgroundColor.A > 0
+                    ? new Thickness(4, 1, 4, 2)
+                    : new Thickness(0),
             };
 
             // Local drag state — captured per-annotation in the closure.
@@ -3373,6 +3423,8 @@ internal sealed class ClipboardImageEditorWindow : Window
                     e.Handled = true;
                     return;
                 }
+                if (!_inTextMode)
+                    SelectText(annotation);
                 _preDragSnapshot = CaptureSnapshot();
                 isDragging       = true;
                 dragStart        = e.GetPosition(_canvas);
@@ -3391,6 +3443,7 @@ internal sealed class ClipboardImageEditorWindow : Window
                 Canvas.SetTop(display,     newY);
                 Canvas.SetLeft(shadow,     newX + 1.5);
                 Canvas.SetTop(shadow,      newY + 1.5);
+                if (_selectedText == annotation) UpdateTextSelectionBorder();
                 e.Handled = true;
             };
             display.MouseLeftButtonUp += (_, e) =>
@@ -3399,10 +3452,12 @@ internal sealed class ClipboardImageEditorWindow : Window
                 CommitDragUndo();
                 isDragging = false;
                 display.ReleaseMouseCapture();
+                if (_selectedText == annotation) UpdateTextSelectionBorder();
                 e.Handled = true;
             };
             display.MouseRightButtonDown += (_, e) =>
             {
+                if (_selectedText == annotation) SelectText(null);
                 PushUndo();
                 RemoveTextAnnotation(annotation);
                 e.Handled = true;
@@ -3420,6 +3475,18 @@ internal sealed class ClipboardImageEditorWindow : Window
         annotation.Display.FontSize = annotation.FontSize;
         annotation.Shadow!.Text     = annotation.Text;
         annotation.Shadow.FontSize  = annotation.FontSize;
+
+        // Update colors (handles re-render after color change)
+        annotation.Display.Foreground = new SolidColorBrush(annotation.TextColor);
+        annotation.Display.Background = annotation.BackgroundColor.A == 0
+            ? Brushes.Transparent
+            : new SolidColorBrush(annotation.BackgroundColor);
+        annotation.Display.Padding = annotation.BackgroundColor.A > 0
+            ? new Thickness(4, 1, 4, 2)
+            : new Thickness(0);
+        annotation.Shadow.Visibility = annotation.BackgroundColor.A == 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         // Measure so Bounds.Width/Height reflect the rendered size (needed for crop-in-place).
         annotation.Display.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
@@ -3465,6 +3532,7 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     private void RemoveTextAnnotation(AnnotationText annotation)
     {
+        if (_selectedText == annotation) { _selectedText = null; HideColorPicker(); }
         if (!_suppressUndo) PushUndo();
         if (annotation.Display != null) _canvas.Children.Remove(annotation.Display);
         if (annotation.Shadow  != null) _canvas.Children.Remove(annotation.Shadow);
@@ -3748,7 +3816,7 @@ internal sealed class ClipboardImageEditorWindow : Window
                            a.UserTailLength, a.ArrowColor, a.TargetCenterOnCanvas,
                            a.OffsetX, a.OffsetY)).ToList(),
         Rects: _annotRects.Select(r => new RectSnap(r.Bounds, r.RectColor)).ToList(),
-        Texts: _texts.Select(t => new TextSnap(t.Bounds, t.Text, t.FontSize, t.TextColor)).ToList(),
+        Texts: _texts.Select(t => new TextSnap(t.Bounds, t.Text, t.FontSize, t.TextColor, t.BackgroundColor)).ToList(),
         CursorEnabled: _cursorEnabled,
         CursorPos: _cursorImage != null
                            ? new Point(Canvas.GetLeft(_cursorImage), Canvas.GetTop(_cursorImage))
@@ -3862,10 +3930,11 @@ internal sealed class ClipboardImageEditorWindow : Window
             {
                 var a = new AnnotationText
                 {
-                    Bounds    = ts.Bounds,
-                    Text      = ts.Text,
-                    FontSize  = ts.FontSize,
-                    TextColor = ts.TextColor
+                    Bounds          = ts.Bounds,
+                    Text            = ts.Text,
+                    FontSize        = ts.FontSize,
+                    TextColor       = ts.TextColor,
+                    BackgroundColor = ts.BackgroundColor
                 };
                 _texts.Add(a);
                 UpdateTextDisplay(a);
@@ -3880,6 +3949,60 @@ internal sealed class ClipboardImageEditorWindow : Window
     }
 
     // ── Arrow defaults — persist / load ───────────────────────────────────────
+
+    private static string TextAnnotDefaultsPath =>
+        System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "SquadDash", "annotation-text-defaults.json");
+
+    private void SaveTextDefaults()
+    {
+        try
+        {
+            var dir = System.IO.Path.GetDirectoryName(TextAnnotDefaultsPath)!;
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(TextAnnotDefaultsPath, JsonSerializer.Serialize(new
+            {
+                fgColor = $"#{_defaultTextFgColor.R:X2}{_defaultTextFgColor.G:X2}{_defaultTextFgColor.B:X2}",
+                bgColor = _defaultTextBgColor.A == 0
+                    ? "transparent"
+                    : $"#{_defaultTextBgColor.R:X2}{_defaultTextBgColor.G:X2}{_defaultTextBgColor.B:X2}",
+            }));
+        }
+        catch { /* non-critical */ }
+    }
+
+    private void LoadTextDefaults()
+    {
+        try
+        {
+            if (!File.Exists(TextAnnotDefaultsPath)) return;
+            using var doc  = JsonDocument.Parse(File.ReadAllText(TextAnnotDefaultsPath));
+            var root = doc.RootElement;
+            if (root.TryGetProperty("fgColor", out var fg) &&
+                fg.GetString() is { Length: 7 } fgHex && fgHex[0] == '#')
+            {
+                _defaultTextFgColor = Color.FromRgb(
+                    Convert.ToByte(fgHex[1..3], 16),
+                    Convert.ToByte(fgHex[3..5], 16),
+                    Convert.ToByte(fgHex[5..7], 16));
+            }
+            if (root.TryGetProperty("bgColor", out var bg))
+            {
+                var bgStr = bg.GetString();
+                if (bgStr == "transparent")
+                    _defaultTextBgColor = Colors.Transparent;
+                else if (bgStr is { Length: 7 } bgHex && bgHex[0] == '#')
+                {
+                    _defaultTextBgColor = Color.FromRgb(
+                        Convert.ToByte(bgHex[1..3], 16),
+                        Convert.ToByte(bgHex[3..5], 16),
+                        Convert.ToByte(bgHex[5..7], 16));
+                }
+            }
+        }
+        catch { /* non-critical */ }
+    }
 
     private static string ArrowDefaultsPath =>
         System.IO.Path.Combine(
@@ -3925,6 +4048,202 @@ internal sealed class ClipboardImageEditorWindow : Window
         catch { /* non-critical */ }
     }
 
+    private void SelectText(AnnotationText? annotation)
+    {
+        if (_textSelectionRect != null)
+        {
+            _canvas.Children.Remove(_textSelectionRect);
+            _textSelectionRect = null;
+        }
+
+        if (annotation != null)
+        {
+            SelectArrow(null);
+            SelectAnnotationRect(null);
+            ShowColorPickerForText(annotation);
+            _selectedText = annotation;
+
+            var b = annotation.Bounds;
+            double sw = Math.Max(b.Width  > 0 ? b.Width  + 8 : 30, 30);
+            double sh = Math.Max(b.Height > 0 ? b.Height + 4 : 20, 20);
+            _textSelectionRect = new Rectangle
+            {
+                Width            = sw,
+                Height           = sh,
+                Stroke           = Brushes.White,
+                StrokeThickness  = 1.5,
+                StrokeDashArray  = new DoubleCollection { 4.0, 3.0 },
+                Fill             = Brushes.Transparent,
+                IsHitTestVisible = false,
+                Effect = new DropShadowEffect
+                {
+                    BlurRadius  = 3,
+                    ShadowDepth = 1,
+                    Color       = Colors.Black,
+                    Opacity     = 0.9,
+                    Direction   = 315
+                }
+            };
+            Panel.SetZIndex(_textSelectionRect, 21);
+            Canvas.SetLeft(_textSelectionRect, b.Left - 4);
+            Canvas.SetTop(_textSelectionRect,  b.Top  - 2);
+            _canvas.Children.Add(_textSelectionRect);
+        }
+        else
+        {
+            _selectedText = null;
+            HideColorPicker();
+        }
+    }
+
+    private void UpdateTextSelectionBorder()
+    {
+        if (_textSelectionRect == null || _selectedText == null) return;
+        var b  = _selectedText.Bounds;
+        double sw = Math.Max(b.Width  > 0 ? b.Width  + 8 : 30, 30);
+        double sh = Math.Max(b.Height > 0 ? b.Height + 4 : 20, 20);
+        _textSelectionRect.Width  = sw;
+        _textSelectionRect.Height = sh;
+        Canvas.SetLeft(_textSelectionRect, b.Left - 4);
+        Canvas.SetTop(_textSelectionRect,  b.Top  - 2);
+    }
+
+    private void ShowColorPickerForText(AnnotationText annotation)
+    {
+        HideColorPicker();
+        _colorPickerText = annotation;
+
+        var outerPanel = new StackPanel { Orientation = Orientation.Vertical };
+        Panel.SetZIndex(outerPanel, 300);
+
+        var bgRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 3) };
+        var bgChoices = new[] { Colors.Black, Colors.White, Colors.Transparent };
+        foreach (var bgColor in bgChoices)
+        {
+            var c = bgColor;
+            bool isSelected = c.A == 0
+                ? annotation.BackgroundColor.A == 0
+                : annotation.BackgroundColor.A > 0
+                  && annotation.BackgroundColor.R == c.R
+                  && annotation.BackgroundColor.G == c.G
+                  && annotation.BackgroundColor.B == c.B;
+
+            var swatch = MakeBgSwatch(c, isSelected, picked =>
+            {
+                annotation.BackgroundColor = picked;
+                _defaultTextBgColor = picked;
+                SaveTextDefaults();
+                UpdateTextDisplay(annotation);
+                UpdateTextSelectionBorder();
+                ShowColorPickerForText(annotation);
+            });
+            bgRow.Children.Add(swatch);
+        }
+
+        var fgRow = new StackPanel { Orientation = Orientation.Horizontal };
+        foreach (var color in GetArrowPalette())
+        {
+            var c = color;
+            bool isSelected = c == annotation.TextColor;
+            var swatch = MakeColorSwatch(c, isSelected, picked =>
+            {
+                annotation.TextColor = picked;
+                _defaultTextFgColor  = picked;
+                SaveTextDefaults();
+                UpdateTextDisplay(annotation);
+                ShowColorPickerForText(annotation);
+            });
+            fgRow.Children.Add(swatch);
+        }
+
+        outerPanel.Children.Add(bgRow);
+        outerPanel.Children.Add(fgRow);
+        _colorPickerPanel = outerPanel;
+        _canvas.Children.Add(outerPanel);
+
+        outerPanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double pw = outerPanel.DesiredSize.Width;
+        double ph = outerPanel.DesiredSize.Height;
+        double cx = annotation.Bounds.Left + Math.Max(annotation.Bounds.Width, 0) / 2;
+        double cy = annotation.Bounds.Top;
+        Canvas.SetLeft(outerPanel, Math.Max(0, Math.Min(cx - pw / 2, _canvas.Width  - pw - 4)));
+        Canvas.SetTop( outerPanel, Math.Max(0, cy - ph - 8));
+    }
+
+    private static FrameworkElement MakeBgSwatch(Color bgColor, bool isSelected, Action<Color> onPick)
+    {
+        FrameworkElement fill;
+        if (bgColor.A == 0)
+        {
+            fill = new Rectangle
+            {
+                Width = 16, Height = 16,
+                Fill = MakeCheckerBrush(),
+                RadiusX = 2, RadiusY = 2,
+            };
+        }
+        else
+        {
+            fill = new Rectangle
+            {
+                Width = 16, Height = 16,
+                Fill = new SolidColorBrush(bgColor),
+                RadiusX = 2, RadiusY = 2,
+            };
+        }
+
+        if (isSelected)
+        {
+            var grid = new Grid { Width = 20, Height = 20, Margin = new Thickness(3, 0, 3, 0), Cursor = Cursors.Hand };
+            grid.Children.Add(new Rectangle { Fill = Brushes.Black, RadiusX = 3, RadiusY = 3 });
+            var inner = new Border
+            {
+                Width = 16, Height = 16,
+                BorderBrush = Brushes.White,
+                BorderThickness = new Thickness(1.5),
+                CornerRadius = new CornerRadius(2),
+                Child = fill,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment   = VerticalAlignment.Center,
+            };
+            grid.Children.Add(inner);
+            grid.MouseLeftButtonDown += (_, e) => { onPick(bgColor); e.Handled = true; };
+            return grid;
+        }
+        else
+        {
+            var grid = new Grid { Width = 16, Height = 16, Margin = new Thickness(3, 0, 3, 0), Cursor = Cursors.Hand };
+            grid.Children.Add(fill);
+            grid.Children.Add(new Rectangle
+            {
+                Fill = Brushes.Transparent,
+                Stroke = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+                StrokeThickness = 1,
+                RadiusX = 2, RadiusY = 2,
+            });
+            grid.MouseLeftButtonDown += (_, e) => { onPick(bgColor); e.Handled = true; };
+            return grid;
+        }
+    }
+
+    private static Brush MakeCheckerBrush()
+    {
+        var dg = new DrawingGroup();
+        dg.Children.Add(new GeometryDrawing(Brushes.LightGray, null,
+            new RectangleGeometry(new Rect(0, 0, 8, 8))));
+        var checkGroup = new GeometryGroup();
+        checkGroup.Children.Add(new RectangleGeometry(new Rect(0, 0, 4, 4)));
+        checkGroup.Children.Add(new RectangleGeometry(new Rect(4, 4, 4, 4)));
+        dg.Children.Add(new GeometryDrawing(Brushes.White, null, checkGroup));
+        return new DrawingBrush
+        {
+            Drawing = dg,
+            TileMode = TileMode.Tile,
+            Viewport = new Rect(0, 0, 8, 8),
+            ViewportUnits = BrushMappingMode.Absolute,
+        };
+    }
+
     // ── Snapshot records ──────────────────────────────────────────────────────
 
     private sealed record EditorSnapshot(
@@ -3954,7 +4273,7 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     private sealed record RectSnap(Rect Bounds, Color RectColor);
 
-    private sealed record TextSnap(Rect Bounds, string Text, double FontSize, Color TextColor);
+    private sealed record TextSnap(Rect Bounds, string Text, double FontSize, Color TextColor, Color BackgroundColor);
 
     // ── Change detection ──────────────────────────────────────────────────────
 

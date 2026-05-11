@@ -3,7 +3,6 @@ title: Agents
 nav_order: 1
 parent: Concepts
 ---
-
 # Agents
 
 What agents are in the Squad context, how they work, and how SquadDash visualizes them.
@@ -110,6 +109,12 @@ Agent cards update in real-time:
 5. **Persisted** — conversation history saved to `.squad/sessions/`
 
 ---
+## Agent Info
+
+You can right click on an agent card and select Agent Info to see a summary of their specialties.
+
+![Screenshot: Agent summary information is available in the Agent Info card](images/agent-info-def3515a.png)
+---
 
 ## Tool Call Tracking
 
@@ -117,18 +122,3 @@ Every tool an agent uses appears in the transcript as a **Thinking** block with 
 
 | Tool | Icon | Label |
 |---|---|---|
-| `grep` | 🔎 | File path or search pattern |
-| `view` | 👀 | File path |
-| `edit` | ✏️ | File path |
-| `create` | 📄 | File path |
-| `task` | 🤖 | Task description |
-| `powershell` | 💻 | Command or description |
-
-See **[Transcripts](transcripts.md)** for more on transcript rendering.
-
----
-
-## Next
-
-- **[Squad Team](squad-team.md)** — How the team roster and routing work
-- **[Transcripts](transcripts.md)** — Multi-transcript panels and live streaming

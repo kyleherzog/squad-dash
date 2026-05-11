@@ -36,4 +36,7 @@ internal sealed class AnnotationText
 
     /// <summary>Drop-shadow copy of <see cref="Display"/> rendered 1.5 px below-right.</summary>
     public TextBlock? Shadow { get; set; }
+
+    /// <summary>Background fill color. <see cref="Colors.Transparent"/> means no background (drop-shadow only).</summary>
+    public Color BackgroundColor { get; set; } = Colors.Black;
 }
