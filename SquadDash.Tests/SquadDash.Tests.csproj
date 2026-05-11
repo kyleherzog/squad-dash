@@ -74,7 +74,12 @@
     <Compile Include="..\SquadDash\LoopMdParser.cs" Link="Source\LoopMdParser.cs" />
     <Compile Include="..\SquadDash\LoopController.cs" Link="Source\LoopController.cs" />
     <Compile Include="..\SquadDash\PromptQueue.cs" Link="Source\PromptQueue.cs" />
+    <Compile Include="..\SquadDash\AgentImagePathResolver.cs" Link="Source\AgentImagePathResolver.cs" />
+    <Compile Include="..\SquadDash\BulletedTextBox.cs" Link="Source\BulletedTextBox.cs" />
+    <Compile Include="..\SquadDash\HireAgentWindow.cs" Link="Source\HireAgentWindow.cs" />
+    <Compile Include="..\SquadDash\PromptExecutionController.cs" Link="Source\PromptExecutionController.cs" />
     <Compile Include="..\SquadDash\PromptInteractionLogic.cs" Link="Source\PromptInteractionLogic.cs" />
+    <Compile Include="..\SquadDash\SquadCliAdapter.cs" Link="Source\SquadCliAdapter.cs" />
     <Compile Include="..\SquadDash\IntelliSenseController.cs" Link="Source\IntelliSenseController.cs" />
     <Compile Include="..\SquadDash\SquadInstallationStateService.cs" Link="Source\SquadInstallationStateService.cs" />
     <Compile Include="..\SquadDash\SquadInstallerService.cs" Link="Source\SquadInstallerService.cs" />
