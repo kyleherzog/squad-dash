@@ -499,7 +499,7 @@ internal static class MarkdownEditorCommands
         {
             var trimmed        = raw.Trim(' ');
             var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
-            var trailingSpaces = raw[(raw.Length - raw.TrimEnd(' ').Length)..];
+            var trailingSpaces = raw[raw.TrimEnd(' ').Length..];
             // NEW: convert voice-dictated phrase to camelCase identifier
             trimmed = ToCamelCaseIdentifier(trimmed);
             result = $"{leadingSpaces}`{trimmed}`{trailingSpaces}";
@@ -521,7 +521,7 @@ internal static class MarkdownEditorCommands
         var selStart       = box.SelectionStart;
         var trimmed        = raw.Trim(' ');
         var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
-        var trailingSpaces = raw[(raw.Length - raw.TrimEnd(' ').Length)..];
+        var trailingSpaces = raw[raw.TrimEnd(' ').Length..];
         var result         = $"{leadingSpaces}\"{trimmed}\"{trailingSpaces}";
         box.SelectedText    = result;
         box.SelectionStart  = selStart + leadingSpaces.Length;
@@ -548,7 +548,7 @@ internal static class MarkdownEditorCommands
         {
             var trimmed        = raw.Trim(' ');
             var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
-            var trailingSpaces = raw[(raw.Length - raw.TrimEnd(' ').Length)..];
+            var trailingSpaces = raw[raw.TrimEnd(' ').Length..];
             // NEW: convert voice-dictated phrase to camelCase identifier
             trimmed = ToCamelCaseIdentifier(trimmed);
             result = $"{leadingSpaces}`{trimmed}`{trailingSpaces}";
@@ -570,7 +570,7 @@ internal static class MarkdownEditorCommands
 
         var trimmed        = raw.Trim(' ');
         var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
-        var trailingSpaces = raw[(raw.Length - raw.TrimEnd(' ').Length)..];
+        var trailingSpaces = raw[raw.TrimEnd(' ').Length..];
         var result         = $"{leadingSpaces}\"{trimmed}\"{trailingSpaces}";
         box.SelectRange(selStart, selLen);
         box.ReplaceSelection(result);
