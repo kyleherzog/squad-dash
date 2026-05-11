@@ -1481,6 +1481,13 @@ internal sealed class ClipboardImageEditorWindow : Window
                     : ZoneCursor(hoverZone);
             }
 
+            // Hover cursor: show the standard arrow pointer over any draggable annotation
+            // (arrow shaft/head, rect border, cursor indicator) in the neutral tool state.
+            // This overrides whatever crop/cross cursor was set above.
+            if (!_inArrowMode && !_inRectMode && !_inCursorPlacementMode && !_inEyedropperMode
+                && IsHoveringOverAnnotation(e.GetPosition(_canvas)))
+                _canvas.Cursor = Cursors.Arrow;
+
             // Override with directional cursor when hovering over a selected annotation rect's edge/corner
             // — but not while a tool mode is active (clicking would draw a new shape, not resize).
             if (_selectedAnnotRect != null && !_inArrowMode && !_inRectMode)
@@ -2360,16 +2367,16 @@ internal sealed class ClipboardImageEditorWindow : Window
             StrokeThickness = 2.5,
             RadiusX = 4,
             RadiusY = 4,
-            Cursor = Cursors.SizeAll,
             IsHitTestVisible = true
+            // Cursor not set — inherits from canvas; Canvas_MouseMove controls it dynamically.
         };
 
         var hitZone = new Rectangle
         {
             Fill = Brushes.Transparent,
             StrokeThickness = 0,
-            IsHitTestVisible = true,
-            Cursor = Cursors.SizeAll
+            IsHitTestVisible = true
+            // Cursor not set — inherits from canvas; Canvas_MouseMove controls it dynamically.
         };
 
         var handles = new Ellipse[8];
@@ -2417,6 +2424,8 @@ internal sealed class ClipboardImageEditorWindow : Window
         border.MouseLeftButtonDown += (_, e) =>
         {
             if (_draggingAnnotRect != null || _inArrowMode || _inRectMode) return;
+            // Only initiate drag when clicking on or near the border edge — not the interior.
+            if (!IsOnRectBorder(annotRect.Bounds, e.GetPosition(_canvas), 6.0)) return;
             SelectAnnotationRect(annotRect);
             _preDragSnapshot = CaptureSnapshot();
             _draggingAnnotRect = annotRect;
@@ -2465,6 +2474,8 @@ internal sealed class ClipboardImageEditorWindow : Window
         hitZone.MouseLeftButtonDown += (_, e) =>
         {
             if (_draggingAnnotRect != null || _inArrowMode || _inRectMode) return;
+            // Only initiate drag when clicking on or near the border edge — not the interior.
+            if (!IsOnRectBorder(annotRect.Bounds, e.GetPosition(_canvas), 6.0)) return;
             SelectAnnotationRect(annotRect);
             _preDragSnapshot = CaptureSnapshot();
             _draggingAnnotRect = annotRect;
@@ -2635,6 +2646,90 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         if (b.Contains(pt)) return HitZone.Move;
         return HitZone.None;
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="pt"/> lies within <paramref name="tol"/> pixels of any
+    /// of the four edges of <paramref name="bounds"/> but NOT solidly in the interior.
+    /// Used to restrict rect annotation dragging and hover cursors to the visible border only.
+    /// </summary>
+    private static bool IsOnRectBorder(Rect bounds, Point pt, double tol)
+    {
+        // Must be within the outer envelope (rect expanded by tol on every side).
+        if (pt.X < bounds.Left  - tol || pt.X > bounds.Right  + tol ||
+            pt.Y < bounds.Top   - tol || pt.Y > bounds.Bottom + tol)
+            return false;
+
+        // If the point is further than tol from EVERY edge it is solidly in the interior.
+        var innerLeft   = bounds.Left   + tol;
+        var innerTop    = bounds.Top    + tol;
+        var innerRight  = bounds.Right  - tol;
+        var innerBottom = bounds.Bottom - tol;
+        return !(innerLeft < innerRight && innerTop < innerBottom &&
+                 pt.X > innerLeft && pt.X < innerRight &&
+                 pt.Y > innerTop  && pt.Y < innerBottom);
+    }
+
+    /// <summary>
+    /// Euclidean distance from <paramref name="p"/> to the nearest point on segment
+    /// <paramref name="a"/>→<paramref name="b"/>.
+    /// </summary>
+    private static double PointToSegmentDist(Point p, Point a, Point b)
+    {
+        var dx = b.X - a.X;
+        var dy = b.Y - a.Y;
+        if (dx == 0.0 && dy == 0.0)
+            return Math.Sqrt((p.X - a.X) * (p.X - a.X) + (p.Y - a.Y) * (p.Y - a.Y));
+        var t  = Math.Max(0.0, Math.Min(1.0,
+            ((p.X - a.X) * dx + (p.Y - a.Y) * dy) / (dx * dx + dy * dy)));
+        var cx = a.X + t * dx;
+        var cy = a.Y + t * dy;
+        return Math.Sqrt((p.X - cx) * (p.X - cx) + (p.Y - cy) * (p.Y - cy));
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="pt"/> is close enough to any draggable annotation
+    /// (arrow shaft/head, rect border, or cursor indicator) to warrant showing
+    /// <see cref="Cursors.Arrow"/> as a hover cue.
+    /// </summary>
+    private bool IsHoveringOverAnnotation(Point pt)
+    {
+        const double ArrowTol  = 6.0;
+        const double RectTol   = 6.0;
+        const double CursorTol = 16.0;
+
+        // Arrows: check proximity to shaft segment and arrowhead tip.
+        foreach (var arrow in _arrows)
+        {
+            if (PointToSegmentDist(pt,
+                    new Point(arrow.Line.X1, arrow.Line.Y1),
+                    new Point(arrow.Line.X2, arrow.Line.Y2)) <= ArrowTol)
+                return true;
+
+            if (arrow.Head.Points.Count > 0)
+            {
+                var tip = arrow.Head.Points[0];
+                var tdx = pt.X - tip.X; var tdy = pt.Y - tip.Y;
+                if (Math.Sqrt(tdx * tdx + tdy * tdy) <= ArrowTol) return true;
+            }
+        }
+
+        // Rect annotation borders (not interior).
+        foreach (var r in _annotRects)
+        {
+            if (IsOnRectBorder(r.Bounds, pt, RectTol)) return true;
+        }
+
+        // Cursor indicator image.
+        if (_cursorEnabled && _cursorImage != null)
+        {
+            var cx  = Canvas.GetLeft(_cursorImage);
+            var cy  = Canvas.GetTop(_cursorImage);
+            var cdx = pt.X - cx; var cdy = pt.Y - cy;
+            if (Math.Sqrt(cdx * cdx + cdy * cdy) <= CursorTol) return true;
+        }
+
+        return false;
     }
 
     private void RemoveAnnotationRect(AnnotationRect rect)
