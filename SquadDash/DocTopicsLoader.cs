@@ -193,13 +193,13 @@ internal static class DocTopicsLoader
             }
 
             if (needsScreenshots)
-                panel.Children.Add(MakeStatusIcon("📷", null, "Needs screenshots"));
+                panel.Children.Add(MakeStatusIcon("📷", null, "Needs screenshots", opacity: 0.45));
         }
 
         return panel;
     }
 
-    private static TextBlock MakeStatusIcon(string text, Brush? foreground, string tooltip)
+    private static TextBlock MakeStatusIcon(string text, Brush? foreground, string tooltip, double opacity = 1.0)
     {
         var tb = new TextBlock
         {
@@ -207,6 +207,7 @@ internal static class DocTopicsLoader
             VerticalAlignment = VerticalAlignment.Center,
             FontSize = 11,
             ToolTip = tooltip,
+            Opacity = opacity,
         };
         if (foreground != null)
             tb.Foreground = foreground;
