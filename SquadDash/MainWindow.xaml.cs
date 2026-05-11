@@ -119,6 +119,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private int _pendingThinkingDeltaTraceChars;
     private int _pendingResponseDeltaTraceCount;
     private int _pendingResponseDeltaTraceChars;
+    private int _pendingSubagentViewToolTraceCount;
+    private readonly Stopwatch _subagentViewToolTraceStopwatch = Stopwatch.StartNew();
     private SquadRoutingDocumentAssessment? _currentRoutingAssessment;
     private WorkspaceIssuePresentation? _startupIssue;
     private WorkspaceIssuePresentation? _runtimeIssue;
@@ -3444,13 +3446,25 @@ public partial class MainWindow : Window, ILiveElementLocator
                 FlushSdkDeltaTraceIfDue(force: false);
                 return;
 
+            case "subagent_tool_start":
+            case "subagent_tool_progress":
+            case "subagent_tool_complete":
+                if (string.Equals(evt.ToolName, "view", StringComparison.OrdinalIgnoreCase))
+                {
+                    TraceSubagentViewToolEvent();
+                    return;
+                }
+                break;
+
             default:
-                FlushSdkDeltaTraceIfDue(force: true);
-                SquadDashTrace.Write(
-                    "UI",
-                    $"HandleEvent type={evt.Type ?? "(null)"} tool={evt.ToolName ?? "(none)"} chunkLen={evt.Chunk?.Length ?? 0}");
-                return;
+                break;
         }
+
+        FlushSdkDeltaTraceIfDue(force: true);
+        FlushSubagentViewToolTraceIfDue(force: true);
+        SquadDashTrace.Write(
+            "UI",
+            $"HandleEvent type={evt.Type ?? "(null)"} tool={evt.ToolName ?? "(none)"} chunkLen={evt.Chunk?.Length ?? 0}");
     }
 
     private void FlushSdkDeltaTraceIfDue(bool force)
@@ -3475,6 +3489,29 @@ public partial class MainWindow : Window, ILiveElementLocator
         _pendingResponseDeltaTraceCount = 0;
         _pendingResponseDeltaTraceChars = 0;
         _sdkDeltaTraceStopwatch.Restart();
+    }
+
+    private void TraceSubagentViewToolEvent()
+    {
+        FlushSdkDeltaTraceIfDue(force: true);
+        _pendingSubagentViewToolTraceCount++;
+        FlushSubagentViewToolTraceIfDue(force: false);
+    }
+
+    private void FlushSubagentViewToolTraceIfDue(bool force)
+    {
+        if (_pendingSubagentViewToolTraceCount == 0)
+            return;
+
+        if (!force && _subagentViewToolTraceStopwatch.ElapsedMilliseconds < 1000)
+            return;
+
+        var elapsedMs = Math.Max(1, _subagentViewToolTraceStopwatch.ElapsedMilliseconds);
+        SquadDashTrace.Write(
+            "UI",
+            $"HandleEvent subagent view tool summary elapsed={elapsedMs}ms count={_pendingSubagentViewToolTraceCount}");
+        _pendingSubagentViewToolTraceCount = 0;
+        _subagentViewToolTraceStopwatch.Restart();
     }
 
     private void HandleSdkDiagnostics(SquadSdkEvent evt)
@@ -3706,9 +3743,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         thread.IsCurrentBackgroundRun = true;
         thread.DetailText = ToolTranscriptFormatter.BuildRunningText(CreateToolDescriptor(evt), evt.ProgressMessage);
         SyncThreadChip(thread);
-        UpdateAgentCardFromThread(thread);
+        UpdateAgentCardFromThread(thread, syncBuckets: false);
         _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, "subagent_tool_start");
-        _conversationManager.PersistAgentThreadSnapshot(thread);
+        _conversationManager.SchedulePersistAgentThreadSnapshot(thread);
     }
 
     private void HandleSubagentToolProgress(SquadSdkEvent evt)
@@ -3739,12 +3776,18 @@ public partial class MainWindow : Window, ILiveElementLocator
         thread.StatusText = "Running";
         thread.IsCurrentBackgroundRun = true;
         if (!string.IsNullOrWhiteSpace(evt.OutputText))
-            thread.DetailText = BuildThreadPreview(evt.OutputText);
+        {
+            var previewText = ToolTranscriptOutputLimiter.TrimForLiveTranscript(
+                CreateToolDescriptor(evt),
+                evt.OutputText);
+            if (!string.IsNullOrWhiteSpace(previewText))
+                thread.DetailText = BuildThreadPreview(previewText);
+        }
 
         SyncThreadChip(thread);
-        UpdateAgentCardFromThread(thread);
+        UpdateAgentCardFromThread(thread, syncBuckets: false);
         _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, "subagent_tool_complete");
-        _conversationManager.PersistAgentThreadSnapshot(thread);
+        _conversationManager.SchedulePersistAgentThreadSnapshot(thread);
     }
 
     private void HandleSubagentCompleted(SquadSdkEvent evt)
@@ -17152,7 +17195,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (!string.IsNullOrWhiteSpace(evt.ProgressMessage))
             entry.ProgressText = evt.ProgressMessage;
         if (!string.IsNullOrWhiteSpace(evt.PartialOutput))
-            entry.OutputText = MergeToolOutput(entry.OutputText, evt.PartialOutput);
+            entry.OutputText = ToolTranscriptOutputLimiter.TrimForLiveTranscript(
+                entry.Descriptor,
+                MergeToolOutput(entry.OutputText, evt.PartialOutput));
 
         EnsureCurrentTurnThinkingVisible(thread);
         RenderToolEntry(entry);
@@ -17188,7 +17233,9 @@ public partial class MainWindow : Window, ILiveElementLocator
             entry.ThinkingBlock.LastUpdatedAt = finishedAt;
 
         if (!string.IsNullOrWhiteSpace(evt.OutputText))
-            entry.OutputText = evt.OutputText.Trim();
+            entry.OutputText = ToolTranscriptOutputLimiter.TrimForLiveTranscript(
+                entry.Descriptor,
+                evt.OutputText);
 
         entry.DetailContent = ToolTranscriptFormatter.BuildDetailContent(new ToolTranscriptDetail(
             entry.Descriptor,
@@ -17479,8 +17526,8 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         entry.FinishedAt = tool.FinishedAt;
         entry.ProgressText = tool.ProgressText;
-        entry.OutputText = tool.OutputText;
-        entry.DetailContent = tool.DetailContent;
+        entry.OutputText = ToolTranscriptOutputLimiter.TrimForLiveTranscript(entry.Descriptor, tool.OutputText);
+        entry.DetailContent = ToolTranscriptOutputLimiter.TrimForLiveTranscript(entry.Descriptor, tool.DetailContent);
         entry.IsCompleted = tool.IsCompleted;
         entry.Success = tool.Success;
         RenderToolEntry(entry);

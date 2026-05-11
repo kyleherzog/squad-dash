@@ -34,6 +34,36 @@ internal sealed record ToolEditDiffSummary(
     bool IsNewFile,
     bool IsDeletedFile);
 
+internal static class ToolTranscriptOutputLimiter {
+    internal const int DefaultLiveOutputCharLimit = 100_000;
+    internal const int ViewToolLiveOutputCharLimit = 20_000;
+
+    internal static string? TrimForLiveTranscript(
+        ToolTranscriptDescriptor descriptor,
+        string? text) {
+        var limit = string.Equals(descriptor.ToolName, "view", StringComparison.OrdinalIgnoreCase)
+            ? ViewToolLiveOutputCharLimit
+            : DefaultLiveOutputCharLimit;
+
+        return TrimForLiveTranscript(text, limit);
+    }
+
+    internal static string? TrimForLiveTranscript(string? text, int maxChars) {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        var normalized = text.Trim();
+        if (normalized.Length <= maxChars)
+            return normalized;
+
+        var omitted = normalized.Length - maxChars;
+        return normalized[..maxChars].TrimEnd()
+            + Environment.NewLine
+            + Environment.NewLine
+            + $"[SquadDash truncated {omitted:N0} characters from live tool output. Use a narrower view if you need the omitted text.]";
+    }
+}
+
 // ── Detail content builder ────────────────────────────────────────────────────
 // Builds the persisted detail-content string for a tool call.
 // Located in the data layer so the persistence layer (WorkspaceConversationStore)
