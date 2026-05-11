@@ -1,10 +1,12 @@
 using System;
+using System.Linq;
 using System.Windows;
 using System.Net.Http;
 using System.Windows.Input;
 using System.Threading.Tasks;
 using System.Windows.Controls;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 
 namespace SquadDash;
 
@@ -42,6 +44,7 @@ internal sealed class PreferencesWindow : Window {
     private readonly TextBox _byokApiKeyRevealBox;
     private readonly TextBlock _byokTestStatusText;
     private readonly TextBox _cleanupPromptBox;
+    private readonly ObservableCollection<VoiceReplacementRuleViewModel> _voiceReplacementRules;
 
     private readonly UIElement[] _pages;
     private readonly Button[] _navButtons;
@@ -137,7 +140,11 @@ internal sealed class PreferencesWindow : Window {
         _cleanupPromptBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
         _cleanupPromptBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
 
-        _tunnelModeComboBox = new ComboBox { Height = 30, Margin = new Thickness(0, 0, 0, 12) };
+        _voiceReplacementRules = new ObservableCollection<VoiceReplacementRuleViewModel>(
+            currentSettings.VoiceReplacementRules.Select(r =>
+                new VoiceReplacementRuleViewModel { Pattern = r.Pattern, Replacement = r.Replacement }));
+
+        _tunnelModeComboBox= new ComboBox { Height = 30, Margin = new Thickness(0, 0, 0, 12) };
         _tunnelModeComboBox.Items.Add(new ComboBoxItem { Content = "None", Tag = (string?)null });
         _tunnelModeComboBox.Items.Add(new ComboBoxItem { Content = "ngrok", Tag = "ngrok" });
         _tunnelModeComboBox.Items.Add(new ComboBoxItem { Content = "Cloudflare", Tag = "cloudflare" });
@@ -414,7 +421,101 @@ internal sealed class PreferencesWindow : Window {
 
         _openAiSpeechKeyBox.TextChanged += (_, _) => SaveSpeechProviderNow();
 
+        // ── Voice Text Replacements ───────────────────────────────────────
+        AddSectionHeader(form, "Voice Text Replacements");
+        AddLabel(form, "Pattern (regex) → Replacement — applied to every voice phrase in order.", topMargin: 4);
+
+        var gridHint = new TextBlock {
+            Text = "Double-click a cell to edit. Changes are saved automatically.",
+            FontSize = 11,
+            Margin = new Thickness(0, 2, 0, 6)
+        };
+        gridHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+        form.Children.Add(gridHint);
+
+        var replacementsGrid = new DataGrid {
+            AutoGenerateColumns = false,
+            CanUserAddRows = false,
+            CanUserDeleteRows = false,
+            ItemsSource = _voiceReplacementRules,
+            Height = 180,
+            Margin = new Thickness(0, 0, 0, 0),
+            SelectionMode = DataGridSelectionMode.Single,
+            HeadersVisibility = DataGridHeadersVisibility.Column
+        };
+        replacementsGrid.SetResourceReference(DataGrid.BackgroundProperty, "PanelBackground");
+        replacementsGrid.SetResourceReference(DataGrid.ForegroundProperty, "LabelText");
+        replacementsGrid.SetResourceReference(DataGrid.BorderBrushProperty, "SubtleBorder");
+
+        var patternCol = new DataGridTextColumn {
+            Header = "Pattern (regex)",
+            Binding = new System.Windows.Data.Binding(nameof(VoiceReplacementRuleViewModel.Pattern)) {
+                UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged
+            },
+            Width = new DataGridLength(1, DataGridLengthUnitType.Star)
+        };
+        var replacementCol = new DataGridTextColumn {
+            Header = "Replacement",
+            Binding = new System.Windows.Data.Binding(nameof(VoiceReplacementRuleViewModel.Replacement)) {
+                UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged
+            },
+            Width = new DataGridLength(1, DataGridLengthUnitType.Star)
+        };
+        replacementsGrid.Columns.Add(patternCol);
+        replacementsGrid.Columns.Add(replacementCol);
+        form.Children.Add(replacementsGrid);
+
+        var btnPanel = new StackPanel {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 4, 0, 0)
+        };
+
+        var addBtn = new Button {
+            Content = "Add Rule",
+            Height = 28,
+            Padding = new Thickness(12, 4, 12, 4),
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        addBtn.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
+        addBtn.Click += (_, _) => {
+            var newRule = new VoiceReplacementRuleViewModel();
+            newRule.PropertyChanged += (_, _) => SaveVoiceReplacementsNow();
+            _voiceReplacementRules.Add(newRule);
+            replacementsGrid.SelectedItem = newRule;
+            replacementsGrid.ScrollIntoView(newRule);
+        };
+        btnPanel.Children.Add(addBtn);
+
+        var removeBtn = new Button {
+            Content = "Remove Selected",
+            Height = 28,
+            Padding = new Thickness(12, 4, 12, 4)
+        };
+        removeBtn.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
+        removeBtn.Click += (_, _) => {
+            if (replacementsGrid.SelectedItem is VoiceReplacementRuleViewModel selected)
+                _voiceReplacementRules.Remove(selected);
+        };
+        btnPanel.Children.Add(removeBtn);
+        form.Children.Add(btnPanel);
+
+        // Subscribe PropertyChanged on pre-existing rules loaded from settings
+        foreach (var rule in _voiceReplacementRules)
+            rule.PropertyChanged += (_, _) => SaveVoiceReplacementsNow();
+
+        // Auto-save on add/remove
+        _voiceReplacementRules.CollectionChanged += (_, e) => {
+            SaveVoiceReplacementsNow();
+        };
+
         return WrapInScrollViewer(form);
+    }
+
+    private void SaveVoiceReplacementsNow() {
+        var rules = _voiceReplacementRules
+            .Where(r => !string.IsNullOrWhiteSpace(r.Pattern))
+            .Select(r => new VoiceReplacementRule(r.Pattern.Trim(), r.Replacement ?? string.Empty));
+        _settingsStore.SaveVoiceReplacementRules(rules);
     }
 
     private void SaveSpeechProviderNow() {
@@ -740,6 +841,7 @@ internal sealed class PreferencesWindow : Window {
             byokProviderType,
             string.IsNullOrWhiteSpace(byokApiKey) ? null : byokApiKey);
         updated = _settingsStore.SaveCleanupPrompt(_cleanupPromptBox.Text.Trim());
+        SaveVoiceReplacementsNow();
         _onSaved(updated);
         Close();
 
@@ -892,5 +994,20 @@ internal sealed class PreferencesWindow : Window {
     private static bool GetToggle(ApplicationSettingsSnapshot s, string key, bool defaultValue) {
         if (s.NotificationEventToggles is null) return defaultValue;
         return s.NotificationEventToggles.TryGetValue(key, out var v) ? v : defaultValue;
+    }
+
+    private sealed class VoiceReplacementRuleViewModel : System.ComponentModel.INotifyPropertyChanged {
+        private string _pattern = string.Empty;
+        private string _replacement = string.Empty;
+
+        public string Pattern {
+            get => _pattern;
+            set { _pattern = value; PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Pattern))); }
+        }
+        public string Replacement {
+            get => _replacement;
+            set { _replacement = value; PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Replacement))); }
+        }
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
     }
 }
