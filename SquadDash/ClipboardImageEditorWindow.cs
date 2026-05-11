@@ -1381,6 +1381,16 @@ internal sealed class ClipboardImageEditorWindow : Window
     {
         if (e.LeftButton != MouseButtonState.Pressed) return;
 
+        // If a child element (e.g. a text annotation display TextBlock) already captured the mouse
+        // during its own MouseLeftButtonDown handler (which runs before this MouseDown bubble), let
+        // that element manage the drag.  Without this guard, Canvas_MouseDown would deselect the
+        // annotation and steal mouse capture, silently breaking text annotation dragging.
+        if (Mouse.Captured is not null && !ReferenceEquals(Mouse.Captured, _canvas))
+        {
+            SquadDashTrace.Write("AnnotatorDrag", $"Canvas_MouseDown: skip — mouse already captured by {Mouse.Captured.GetType().Name}");
+            return;
+        }
+
         // Note: text resize handle hits are handled via PreviewMouseLeftButtonDown
         // wired directly on each handle Rectangle in AddTextResizeHandles — that
         // fires in the tunnel phase before LostFocus can recreate/reposition handles.
@@ -4071,6 +4081,7 @@ internal sealed class ClipboardImageEditorWindow : Window
                 dragStart        = e.GetPosition(_canvas);
                 dragOrigBounds   = annotation.Bounds;
                 display.CaptureMouse();
+                SquadDashTrace.Write("AnnotatorDrag", $"TextAnnotation drag start at ({dragStart.X:F0},{dragStart.Y:F0}) captured={Mouse.Captured?.GetType().Name ?? "null"}");
                 e.Handled = true;
             };
             display.MouseMove += (_, e) =>
@@ -4094,6 +4105,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             display.MouseLeftButtonUp += (_, e) =>
             {
                 if (!isDragging) return;
+                SquadDashTrace.Write("AnnotatorDrag", $"TextAnnotation drag end at ({e.GetPosition(_canvas).X:F0},{e.GetPosition(_canvas).Y:F0}) → bounds=({annotation.Bounds.X:F0},{annotation.Bounds.Y:F0})");
                 CommitDragUndo();
                 isDragging = false;
                 display.ReleaseMouseCapture();
@@ -4970,8 +4982,12 @@ internal sealed class ClipboardImageEditorWindow : Window
         double ph = outerPanel.DesiredSize.Height;
         double cx = annotation.Bounds.Left + Math.Max(annotation.Bounds.Width, 0) / 2;
         double cy = annotation.Bounds.Top;
+        // Prefer above the annotation; flip below if it would overlap (not enough vertical space).
+        double annotBottom = cy + Math.Max(annotation.Bounds.Height, 20);
+        double topAbove    = cy - ph - 8;
+        double pickerTop   = topAbove >= 0 ? topAbove : annotBottom + 4;
         Canvas.SetLeft(outerPanel, Math.Max(0, Math.Min(cx - pw / 2, _canvas.Width  - pw - 4)));
-        Canvas.SetTop( outerPanel, Math.Max(0, cy - ph - 8));
+        Canvas.SetTop( outerPanel, Math.Max(0, pickerTop));
     }
 
     private static FrameworkElement MakeBgSwatch(Color bgColor, bool isSelected, Action<Color> onPick)
