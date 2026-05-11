@@ -753,6 +753,27 @@ internal sealed class RunButtonLabelPolicyTests {
         Assert.That(label, Is.EqualTo(RunButtonLabelPolicy.LabelSubmit));
     }
 
+    // ── queueManuallyPaused: draft tab (null activeTabId) ─────────────────────
+
+    [Test]
+    public void Compute_DraftTab_QueueManuallyPaused_CoordinatorIdle_ReturnsSend() {
+        // Active draft with manual pause and items queued: "Send" so the user can
+        // submit the draft directly, which will clear the pause.
+        var label = RunButtonLabelPolicy.Compute(
+            coordinatorBusy: false, queuePausedAwaitingInput: false,
+            queueCount: 3, activeTabId: null, queueManuallyPaused: true);
+        Assert.That(label, Is.EqualTo(RunButtonLabelPolicy.LabelSend));
+    }
+
+    [Test]
+    public void Compute_DraftTab_QueueManuallyPaused_CoordinatorBusy_ReturnsQueue() {
+        // Busy coordinator still takes priority over the manual-pause override.
+        var label = RunButtonLabelPolicy.Compute(
+            coordinatorBusy: true, queuePausedAwaitingInput: false,
+            queueCount: 2, activeTabId: null, queueManuallyPaused: true);
+        Assert.That(label, Is.EqualTo(RunButtonLabelPolicy.LabelQueue));
+    }
+
     // ── queueManuallyPaused overrides "Submit" for any tab ────────────────────
 
     [Test]

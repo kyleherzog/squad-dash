@@ -1792,6 +1792,13 @@ public partial class MainWindow : Window, ILiveElementLocator
 
             _markdownRenderer.DismissKeyboardHint();
             ResetQueuePausedState();
+            // Sending from the draft tab while the queue is manually paused resumes
+            // normal drain after this turn completes.
+            if (_queueManuallyPaused)
+            {
+                SetQueuePaused(false);
+                SyncQueuePanel();
+            }
             if (_remoteAccessActive)
                 _ = _bridge.BroadcastRcPromptAsync(prompt);
             await _pec.ExecutePromptAsync(ApplyFollowUpHeader(prompt, ""), addToHistory: true, clearPromptBox: true);

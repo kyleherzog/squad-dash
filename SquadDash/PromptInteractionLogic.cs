@@ -318,6 +318,11 @@ internal static class RunButtonLabelPolicy {
         if (queuePausedAwaitingInput && queueCount > 0)
             return LabelSend;
 
+        // Draft tab with queue manually paused: show "Send" so the user can submit
+        // directly and clear the pause, as long as the coordinator is free.
+        if (queueManuallyPaused && !coordinatorBusy)
+            return LabelSend;
+
         bool queueMode = coordinatorBusy || queueCount > 0;
         return queueMode ? LabelQueue : LabelSend;
     }
