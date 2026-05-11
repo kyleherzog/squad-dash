@@ -697,8 +697,14 @@ internal sealed class ClipboardImageEditorWindow : Window
             BorderThickness = new Thickness(1),
             Margin = new Thickness(0, 0, 4, 0),
             VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = "Sampled color",
+            Cursor = Cursors.Hand,
+            ToolTip = "Copy",
             Visibility = Visibility.Collapsed
+        };
+        _eyedropperSwatch.MouseLeftButtonUp += (_, _) =>
+        {
+            if (_eyedropperHexLabel != null && !string.IsNullOrEmpty(_eyedropperHexLabel.Text))
+                Clipboard.SetText(_eyedropperHexLabel.Text);
         };
         _eyedropperHexLabel = new TextBlock
         {
@@ -706,7 +712,14 @@ internal sealed class ClipboardImageEditorWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             FontFamily = new FontFamily("Consolas"),
             FontSize = 13,
-            Margin = new Thickness(0, 0, 8, 0)
+            Margin = new Thickness(0, 0, 8, 0),
+            Cursor = Cursors.Hand,
+            ToolTip = "Copy"
+        };
+        _eyedropperHexLabel.MouseLeftButtonUp += (_, _) =>
+        {
+            if (!string.IsNullOrEmpty(_eyedropperHexLabel.Text))
+                Clipboard.SetText(_eyedropperHexLabel.Text);
         };
         _eyedropperHexLabel.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
         _eyedropperHexLabel.ContextMenu = new ContextMenu();
