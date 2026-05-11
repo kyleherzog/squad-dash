@@ -125,6 +125,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private WorkspaceIssuePresentation? _startupIssue;
     private WorkspaceIssuePresentation? _runtimeIssue;
     private string? _dismissedWorkspaceIssueKey;
+    private bool _installSquadButtonPressed;
     private string? _currentSolutionPath;
     private string? _currentSolutionName;
     private AgentStatusCard? _leadAgent;
@@ -9174,6 +9175,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (_currentWorkspace is null)
                 return;
 
+            _installSquadButtonPressed = true;
+
             if (IsDeveloperSimulationActive())
             {
                 SetInstallStatus("Developer simulation is active. Install Squad is disabled while previewing issue states.");
@@ -18186,6 +18189,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _startupIssue = WorkspaceIssueFactory.CreateStartupIssue(
             _currentInstallationState,
             _settingsSnapshot.StartupIssueSimulation);
+        _installSquadButtonPressed = false;
         UpdateWorkspaceIssuePanel();
         UpdateInteractiveControlState();
     }
@@ -18330,6 +18334,19 @@ public partial class MainWindow : Window, ILiveElementLocator
             var issue = _runtimeIssue ?? _startupIssue;
             if (issue is null)
                 return;
+
+            // If the panel shows an install button but the user hasn't pressed it yet,
+            // warn before dismissing — SquadDash won't work without Squad installed.
+            if (issue.ShowInstallButton && !_installSquadButtonPressed)
+            {
+                var result = MessageBox.Show(
+                    "Are you sure you want to close this panel? SquadDash cannot run without having Squad installed first.",
+                    "Close Panel",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+                if (result != MessageBoxResult.Yes)
+                    return;
+            }
 
             _dismissedWorkspaceIssueKey = WorkspaceIssuePanelState.BuildDismissalKey(issue);
             UpdateWorkspaceIssuePanel();
