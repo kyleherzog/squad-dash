@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Windows;
 using System.Net.Http;
@@ -19,7 +19,8 @@ internal sealed class PreferencesWindow : Window {
     private readonly TextBox _speechRegionBox;
     private readonly RadioButton _azureSpeechRadio;
     private readonly RadioButton _openAiSpeechRadio;
-    private readonly TextBox _openAiSpeechKeyBox;
+    private readonly PasswordBox _openAiSpeechKeyPasswordBox;
+    private readonly TextBox _openAiSpeechKeyRevealBox;
     private readonly ComboBox? _startupIssueSimulationComboBox;
     private readonly ComboBox? _runtimeIssueSimulationComboBox;
     private readonly TextBlock _statusText;
@@ -121,14 +122,24 @@ internal sealed class PreferencesWindow : Window {
         };
         _openAiSpeechRadio.SetResourceReference(Control.StyleProperty, "ThemedRadioButtonStyle");
 
-        _openAiSpeechKeyBox = new TextBox {
-            Text = currentSettings.OpenAiSpeechApiKey ?? string.Empty,
+        var currentOpenAiKey = currentSettings.OpenAiSpeechApiKey ?? string.Empty;
+        _openAiSpeechKeyPasswordBox = new PasswordBox {
+            Password = currentOpenAiKey,
             Padding = new Thickness(6, 4, 6, 4),
             Height = 30
         };
-        _openAiSpeechKeyBox.SetResourceReference(TextBox.BackgroundProperty, "TextBoxBackground");
-        _openAiSpeechKeyBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
-        _openAiSpeechKeyBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
+        _openAiSpeechKeyPasswordBox.SetResourceReference(PasswordBox.BackgroundProperty, "TextBoxBackground");
+        _openAiSpeechKeyPasswordBox.SetResourceReference(PasswordBox.BorderBrushProperty, "InputBorder");
+        _openAiSpeechKeyPasswordBox.SetResourceReference(PasswordBox.ForegroundProperty, "LabelText");
+        _openAiSpeechKeyRevealBox = new TextBox {
+            Text = currentOpenAiKey,
+            Padding = new Thickness(6, 4, 6, 4),
+            Height = 30,
+            Visibility = Visibility.Collapsed
+        };
+        _openAiSpeechKeyRevealBox.SetResourceReference(TextBox.BackgroundProperty, "TextBoxBackground");
+        _openAiSpeechKeyRevealBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
+        _openAiSpeechKeyRevealBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
 
         _cleanupPromptBox= new TextBox {
             Text = currentSettings.CleanupPrompt,
@@ -231,6 +242,9 @@ internal sealed class PreferencesWindow : Window {
             Height = 30,
             Margin = new Thickness(0, 0, 0, 6)
         };
+        _notificationTopicBox.SetResourceReference(TextBox.BackgroundProperty, "TextBoxBackground");
+        _notificationTopicBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
+        _notificationTopicBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
         _notificationTopicBox.TextChanged += (_, _) => UpdateQrCode();
 
         _qrCodeImage = new Image {
@@ -406,7 +420,15 @@ internal sealed class PreferencesWindow : Window {
         };
 
         AddLabel(openAiSection, "OpenAI speech API key", topMargin: 20);
-        openAiSection.Children.Add(_openAiSpeechKeyBox);
+        var openAiKeyHost = new Grid();
+        openAiKeyHost.Children.Add(_openAiSpeechKeyPasswordBox);
+        openAiKeyHost.Children.Add(_openAiSpeechKeyRevealBox);
+        openAiSection.Children.Add(openAiKeyHost);
+
+        var openAiRevealLink = MakeRevealLink("(reveal key)");
+        openAiRevealLink.MouseLeftButtonDown += OpenAiRevealLink_MouseDown;
+        openAiRevealLink.MouseLeftButtonUp += OpenAiRevealLink_MouseUp;
+        openAiSection.Children.Add(openAiRevealLink);
 
         form.Children.Add(openAiSection);
 
@@ -422,7 +444,7 @@ internal sealed class PreferencesWindow : Window {
             SaveSpeechProviderNow();
         };
 
-        _openAiSpeechKeyBox.TextChanged += (_, _) => SaveSpeechProviderNow();
+        _openAiSpeechKeyPasswordBox.PasswordChanged += (_, _) => SaveSpeechProviderNow();
 
         // ── Voice Text Replacements ───────────────────────────────────────
         AddSectionHeader(form, "Voice Text Replacements", topMargin: 24);
@@ -548,7 +570,7 @@ internal sealed class PreferencesWindow : Window {
 
     private void SaveSpeechProviderNow() {
         var provider = _openAiSpeechRadio.IsChecked == true ? SpeechProvider.OpenAI : SpeechProvider.Azure;
-        var openAiKey = _openAiSpeechKeyBox.Text.Trim();
+        var openAiKey = _openAiSpeechKeyPasswordBox.Password.Trim();
         _settingsStore.SaveSpeechProvider(provider, string.IsNullOrWhiteSpace(openAiKey) ? null : openAiKey);
     }
 
@@ -797,6 +819,18 @@ internal sealed class PreferencesWindow : Window {
         _apiKeyPasswordBox.Visibility = Visibility.Visible;
     }
 
+    private void OpenAiRevealLink_MouseDown(object sender, MouseButtonEventArgs e) {
+        _openAiSpeechKeyRevealBox.Text = _openAiSpeechKeyPasswordBox.Password;
+        _openAiSpeechKeyPasswordBox.Visibility = Visibility.Collapsed;
+        _openAiSpeechKeyRevealBox.Visibility = Visibility.Visible;
+    }
+
+    private void OpenAiRevealLink_MouseUp(object sender, MouseButtonEventArgs e) {
+        _openAiSpeechKeyPasswordBox.Password = _openAiSpeechKeyRevealBox.Text;
+        _openAiSpeechKeyRevealBox.Visibility = Visibility.Collapsed;
+        _openAiSpeechKeyPasswordBox.Visibility = Visibility.Visible;
+    }
+
     private async void ByokTestButton_Click(object sender, RoutedEventArgs e) {
         var url = _byokProviderUrlBox.Text.Trim().TrimEnd('/');
         if (string.IsNullOrEmpty(url)) {
@@ -840,7 +874,7 @@ internal sealed class PreferencesWindow : Window {
         updated = _settingsStore.SaveSpeechRegion(string.IsNullOrWhiteSpace(speechRegion) ? null : speechRegion);
         updated = _settingsStore.SaveSpeechProvider(
             _openAiSpeechRadio.IsChecked == true ? SpeechProvider.OpenAI : SpeechProvider.Azure,
-            string.IsNullOrWhiteSpace(_openAiSpeechKeyBox.Text.Trim()) ? null : _openAiSpeechKeyBox.Text.Trim());
+            string.IsNullOrWhiteSpace(_openAiSpeechKeyPasswordBox.Password.Trim()) ? null : _openAiSpeechKeyPasswordBox.Password.Trim());
         updated = _settingsStore.SaveDeveloperIssueSimulation(startupIssueSimulation, runtimeIssueSimulation);
         var notifEnabled = _notificationsEnabledCheckBox.IsChecked == true;
         var notifTopic = _notificationTopicBox.Text.Trim();
