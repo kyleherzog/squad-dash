@@ -934,6 +934,16 @@ internal sealed class MarkdownDocumentWindow : Window {
             return;
         }
         if (sender is not RichTextBox tb) return;
+
+        // Paren embedding (works on all keyboard layouts)
+        if ((e.Text == "(" || e.Text == ")") && tb.GetSelectionLength() > 0
+            && !tb.GetSelectedText().Contains('\n')) {
+            if (MarkdownEditorCommands.ApplyInlineParens(tb)) {
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (tb.Tag is MarkdownDocumentTabState doc
             && doc.HasLockedRanges
             && IsCaretInLockedRange(tb, doc))

@@ -6841,6 +6841,18 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             _suppressPromptNextTextInput = false;
             e.Handled = true;
+            return;
+        }
+
+        // Paren embedding (works on all keyboard layouts)
+        if ((e.Text == "(" || e.Text == ")") && PromptTextBox.SelectionLength > 0
+            && !PromptTextBox.SelectedText.Contains('\n'))
+        {
+            if (MarkdownEditorCommands.ApplyInlineParens(PromptTextBox))
+            {
+                e.Handled = true;
+                return;
+            }
         }
     }
 
@@ -11025,6 +11037,18 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             _suppressDocSourceNextTextInput = false;
             e.Handled = true;
+            return;
+        }
+
+        // Paren embedding (works on all keyboard layouts)
+        if ((e.Text == "(" || e.Text == ")") && DocSourceTextBox.GetSelectionLength() > 0
+            && !DocSourceTextBox.GetSelectedText().Contains('\n'))
+        {
+            if (MarkdownEditorCommands.ApplyInlineParens(DocSourceTextBox))
+            {
+                e.Handled = true;
+                return;
+            }
         }
     }
 

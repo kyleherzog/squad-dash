@@ -487,31 +487,34 @@ internal static class MarkdownEditorCommands
         if (selLen == 0) return false;
 
         var raw = box.SelectedText;
-        string result;
         if (raw.Contains('\n'))
         {
-            result = $"```\n{raw}\n```";
+            var result = $"```\n{raw}\n```";
             box.SelectedText    = result;
             box.SelectionStart  = selStart;
             box.SelectionLength = result.Length;
+            return true;
         }
-        else
-        {
-            var trimmed        = raw.Trim(' ');
-            var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
-            var trailingSpaces = raw[raw.TrimEnd(' ').Length..];
-            // NEW: convert voice-dictated phrase to camelCase identifier
-            trimmed = ToCamelCaseIdentifier(trimmed);
-            result = $"{leadingSpaces}`{trimmed}`{trailingSpaces}";
-            box.SelectedText    = result;
-            box.SelectionStart  = selStart + leadingSpaces.Length;
-            box.SelectionLength = 1 + trimmed.Length + 1;
-        }
+
+        // Step 1: wrap in backticks (no transform) — creates undo record 1
+        var trimmed        = raw.Trim(' ');
+        var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
+        var trailingSpaces = raw[raw.TrimEnd(' ').Length..];
+        var step1 = $"{leadingSpaces}`{trimmed}`{trailingSpaces}";
+        box.SelectedText    = step1;
+        // Select inner content (between the backticks)
+        box.SelectionStart  = selStart + leadingSpaces.Length + 1;
+        box.SelectionLength = trimmed.Length;
+
+        // Step 2: apply camelCase identifier transform — creates undo record 2 only when text changes
+        var transformed = ToCamelCaseIdentifier(box.SelectedText);
+        if (transformed != box.SelectedText)
+            box.SelectedText = transformed;
+
         return true;
     }
 
-    internal static bool ApplyInlineQuote(TextBox box)
-    {
+    internal static bool ApplyInlineQuote(TextBox box)    {
         var selLen = box.SelectionLength;
         if (selLen == 0) return false;
 
@@ -536,26 +539,30 @@ internal static class MarkdownEditorCommands
         if (selLen == 0) return false;
 
         var raw = box.GetSelectedText();
-        string result;
         if (raw.Contains('\n'))
         {
-            result = $"```\n{raw}\n```";
+            var result = $"```\n{raw}\n```";
             box.SelectRange(selStart, selLen);
             box.ReplaceSelection(result);
             box.SelectRange(selStart, result.Length);
+            return true;
         }
-        else
-        {
-            var trimmed        = raw.Trim(' ');
-            var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
-            var trailingSpaces = raw[raw.TrimEnd(' ').Length..];
-            // NEW: convert voice-dictated phrase to camelCase identifier
-            trimmed = ToCamelCaseIdentifier(trimmed);
-            result = $"{leadingSpaces}`{trimmed}`{trailingSpaces}";
-            box.SelectRange(selStart, selLen);
-            box.ReplaceSelection(result);
-            box.SelectRange(selStart + leadingSpaces.Length, 1 + trimmed.Length + 1);
-        }
+
+        // Step 1: wrap in backticks (no transform) — creates undo record 1
+        var trimmed        = raw.Trim(' ');
+        var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
+        var trailingSpaces = raw[raw.TrimEnd(' ').Length..];
+        var step1 = $"{leadingSpaces}`{trimmed}`{trailingSpaces}";
+        box.SelectRange(selStart, selLen);
+        box.ReplaceSelection(step1);
+        // Select inner content (between the backticks)
+        box.SelectRange(selStart + leadingSpaces.Length + 1, trimmed.Length);
+
+        // Step 2: apply camelCase identifier transform — creates undo record 2 only when text changes
+        var transformed = ToCamelCaseIdentifier(box.GetSelectedText());
+        if (transformed != box.GetSelectedText())
+            box.ReplaceSelection(transformed);
+
         return true;
     }
 
@@ -572,6 +579,44 @@ internal static class MarkdownEditorCommands
         var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
         var trailingSpaces = raw[raw.TrimEnd(' ').Length..];
         var result         = $"{leadingSpaces}\"{trimmed}\"{trailingSpaces}";
+        box.SelectRange(selStart, selLen);
+        box.ReplaceSelection(result);
+        box.SelectRange(selStart + leadingSpaces.Length, 1 + trimmed.Length + 1);
+        return true;
+    }
+
+    internal static bool ApplyInlineParens(TextBox box)
+    {
+        var selLen = box.SelectionLength;
+        if (selLen == 0) return false;
+
+        var raw = box.SelectedText;
+        if (raw.Contains('\n')) return false;
+
+        var selStart       = box.SelectionStart;
+        var trimmed        = raw.Trim(' ');
+        var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
+        var trailingSpaces = raw[raw.TrimEnd(' ').Length..];
+        var result         = $"{leadingSpaces}({trimmed}){trailingSpaces}";
+        box.SelectedText    = result;
+        box.SelectionStart  = selStart + leadingSpaces.Length;
+        box.SelectionLength = 1 + trimmed.Length + 1;
+        return true;
+    }
+
+    internal static bool ApplyInlineParens(RichTextBox box)
+    {
+        var selLen = box.GetSelectionLength();
+        if (selLen == 0) return false;
+
+        var raw = box.GetSelectedText();
+        if (raw.Contains('\n')) return false;
+
+        var selStart       = box.GetSelectionStart();
+        var trimmed        = raw.Trim(' ');
+        var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
+        var trailingSpaces = raw[raw.TrimEnd(' ').Length..];
+        var result         = $"{leadingSpaces}({trimmed}){trailingSpaces}";
         box.SelectRange(selStart, selLen);
         box.ReplaceSelection(result);
         box.SelectRange(selStart + leadingSpaces.Length, 1 + trimmed.Length + 1);

@@ -1,4 +1,5 @@
 using System.Threading;
+using System.Windows;
 using System.Windows.Controls;
 
 namespace SquadDash.Tests;
@@ -298,9 +299,10 @@ internal sealed class MarkdownEditorCommandsTests {
         var tb = MakeBox("hello great world");
         Select(tb, 6, 6); // "great "
         MarkdownEditorCommands.ApplyInlineCodeOrFence(tb);
+        // After step 1, inner content (between backticks) is selected; step 2 skipped for single word.
         Assert.Multiple(() => {
-            Assert.That(tb.SelectionStart,  Is.EqualTo(6));
-            Assert.That(tb.SelectionLength, Is.EqualTo(7)); // "`great`"
+            Assert.That(tb.SelectionStart,  Is.EqualTo(7));
+            Assert.That(tb.SelectionLength, Is.EqualTo(5)); // "great"
         });
     }
 
@@ -317,9 +319,10 @@ internal sealed class MarkdownEditorCommandsTests {
         var tb = MakeBox(" great");
         Select(tb, 0, 6);
         MarkdownEditorCommands.ApplyInlineCodeOrFence(tb);
+        // After step 1, inner content is selected; step 2 skipped for single word.
         Assert.Multiple(() => {
-            Assert.That(tb.SelectionStart,  Is.EqualTo(1));
-            Assert.That(tb.SelectionLength, Is.EqualTo(7)); // "`great`"
+            Assert.That(tb.SelectionStart,  Is.EqualTo(2));
+            Assert.That(tb.SelectionLength, Is.EqualTo(5)); // "great"
         });
     }
 
@@ -328,10 +331,11 @@ internal sealed class MarkdownEditorCommandsTests {
         var tb = MakeBox("world");
         Select(tb, 0, 5);
         MarkdownEditorCommands.ApplyInlineCodeOrFence(tb);
+        // After step 1, inner content is selected; step 2 skipped for single word.
         Assert.Multiple(() => {
             Assert.That(tb.Text,            Is.EqualTo("`world`"));
-            Assert.That(tb.SelectionStart,  Is.EqualTo(0));
-            Assert.That(tb.SelectionLength, Is.EqualTo(7));
+            Assert.That(tb.SelectionStart,  Is.EqualTo(1));
+            Assert.That(tb.SelectionLength, Is.EqualTo(5)); // "world"
         });
     }
 
@@ -340,10 +344,11 @@ internal sealed class MarkdownEditorCommandsTests {
         var tb = MakeBox("  hello  ");
         Select(tb, 0, 9); // "  hello  "
         MarkdownEditorCommands.ApplyInlineCodeOrFence(tb);
+        // After step 1, inner content is selected; step 2 skipped for single word.
         Assert.Multiple(() => {
             Assert.That(tb.Text,            Is.EqualTo("  `hello`  "));
-            Assert.That(tb.SelectionStart,  Is.EqualTo(2));
-            Assert.That(tb.SelectionLength, Is.EqualTo(7)); // "`hello`"
+            Assert.That(tb.SelectionStart,  Is.EqualTo(3));
+            Assert.That(tb.SelectionLength, Is.EqualTo(5)); // "hello"
         });
     }
 
@@ -352,11 +357,8 @@ internal sealed class MarkdownEditorCommandsTests {
         var tb = MakeBox("my method");
         Select(tb, 0, 9);
         MarkdownEditorCommands.ApplyInlineCodeOrFence(tb);
-        Assert.Multiple(() => {
-            Assert.That(tb.Text,            Is.EqualTo("`myMethod`"));
-            Assert.That(tb.SelectionStart,  Is.EqualTo(0));
-            Assert.That(tb.SelectionLength, Is.EqualTo(10)); // "`myMethod`"
-        });
+        // Step 2 fires (multi-word → camelCase transform), leaving caret after transformed text.
+        Assert.That(tb.Text, Is.EqualTo("`myMethod`"));
     }
 
     [Test]
@@ -439,9 +441,141 @@ internal sealed class MarkdownEditorCommandsTests {
         });
     }
 
+    // ── ApplyInlineCodeOrFence two-step undo ─────────────────────────────────
+
+    [Test]
+    public void ApplyInlineCodeOrFence_MultiWord_TwoUndoRecords_IntermediateStateIsBacktickWrapped() {
+        RunWithUndoBox("my variable", tb => {
+            Select(tb, 0, 11);
+            MarkdownEditorCommands.ApplyInlineCodeOrFence(tb);
+            Assert.That(tb.Text, Is.EqualTo("`myVariable`"));
+            Assert.That(tb.CanUndo, Is.True);
+
+            // Undo step 2: reverts camelCase → inner content selected
+            tb.Undo();
+            Assert.Multiple(() => {
+                Assert.That(tb.Text,            Is.EqualTo("`my variable`"));
+                Assert.That(tb.SelectionStart,  Is.EqualTo(1));
+                Assert.That(tb.SelectionLength, Is.EqualTo(11)); // "my variable"
+            });
+
+            // Undo step 1: reverts backtick wrap → original text
+            tb.Undo();
+            Assert.That(tb.Text, Is.EqualTo("my variable"));
+        });
+    }
+
+    [Test]
+    public void ApplyInlineCodeOrFence_SingleWord_OnlyOneUndoRecord() {
+        RunWithUndoBox("word", tb => {
+            Select(tb, 0, 4);
+            MarkdownEditorCommands.ApplyInlineCodeOrFence(tb);
+            Assert.That(tb.Text, Is.EqualTo("`word`"));
+            Assert.That(tb.CanUndo, Is.True);
+
+            // Single undo reverts the backtick wrap → original text
+            tb.Undo();
+            Assert.That(tb.Text, Is.EqualTo("word"));
+            Assert.That(tb.CanUndo, Is.False);
+        });
+    }
+
+    [Test]
+    public void ApplyInlineCodeOrFence_FilenamePhraseWithDotWord_CorrectExtensionHandling() {
+        var tb = MakeBox("my config dot yaml");
+        Select(tb, 0, 18);
+        MarkdownEditorCommands.ApplyInlineCodeOrFence(tb);
+        Assert.That(tb.Text, Is.EqualTo("`myConfig.yaml`"));
+    }
+
+    // ── ApplyInlineParens ─────────────────────────────────────────────────────
+
+    [Test]
+    public void ApplyInlineParens_SingleLineSelection_EmbedsInParens() {
+        var tb = MakeBox("hello world");
+        Select(tb, 6, 5); // "world"
+        var result = MarkdownEditorCommands.ApplyInlineParens(tb);
+        Assert.That(result, Is.True);
+        Assert.Multiple(() => {
+            Assert.That(tb.Text,            Is.EqualTo("hello (world)"));
+            Assert.That(tb.SelectionStart,  Is.EqualTo(6));
+            Assert.That(tb.SelectionLength, Is.EqualTo(7)); // "(world)"
+        });
+    }
+
+    [Test]
+    public void ApplyInlineParens_LeadingAndTrailingSpaces_SpacesRemainOutsideParens() {
+        var tb = MakeBox("  hello  ");
+        Select(tb, 0, 9); // "  hello  "
+        MarkdownEditorCommands.ApplyInlineParens(tb);
+        Assert.Multiple(() => {
+            Assert.That(tb.Text,            Is.EqualTo("  (hello)  "));
+            Assert.That(tb.SelectionStart,  Is.EqualTo(2));
+            Assert.That(tb.SelectionLength, Is.EqualTo(7)); // "(hello)"
+        });
+    }
+
+    [Test]
+    public void ApplyInlineParens_MultiLineSelection_ReturnsFalse_AndTextUnchanged() {
+        var tb = MakeBox("hello\nworld");
+        Select(tb, 0, 11);
+        var result = MarkdownEditorCommands.ApplyInlineParens(tb);
+        Assert.Multiple(() => {
+            Assert.That(result,  Is.False);
+            Assert.That(tb.Text, Is.EqualTo("hello\nworld"));
+        });
+    }
+
+    [Test]
+    public void ApplyInlineParens_EmptySelection_ReturnsFalse_AndTextUnchanged() {
+        var tb = MakeBox("hello");
+        tb.CaretIndex = 2;
+        var result = MarkdownEditorCommands.ApplyInlineParens(tb);
+        Assert.Multiple(() => {
+            Assert.That(result,  Is.False);
+            Assert.That(tb.Text, Is.EqualTo("hello"));
+        });
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private static TextBox MakeBox(string text) => new() { Text = text };
+
+    // Creates a TextBox with undo enabled (requires ApplyTemplate to initialize the UndoManager).
+    private static TextBox MakeUndoBox(string text) {
+        var tb = new TextBox();
+        tb.ApplyTemplate();       // initializes TextEditor which enables the UndoManager
+        tb.IsUndoEnabled = false; // clear any initial records and pause recording
+        tb.Text = text;           // set initial text without creating an undo record
+        tb.IsUndoEnabled = true;  // re-enable; undo stack is now empty and ready
+        return tb;
+    }
+
+    // Runs an action with a TextBox that has a fully-functional undo stack.
+    // WPF undo requires the TextBox to be connected to a visual tree (Window).
+    private static void RunWithUndoBox(string text, Action<TextBox> test) {
+        if (Application.Current == null)
+            _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        var tb = new TextBox();
+        var win = new Window {
+            Content = tb,
+            Width = 1, Height = 1,
+            ShowInTaskbar = false,
+            WindowStyle = WindowStyle.None,
+            ResizeMode = ResizeMode.NoResize,
+            Left = -32000, Top = -32000,
+            Opacity = 0
+        };
+        win.Show();
+        try {
+            tb.IsUndoEnabled = false;
+            tb.Text = text;
+            tb.IsUndoEnabled = true;
+            test(tb);
+        } finally {
+            win.Close();
+        }
+    }
 
     private static void Select(TextBox tb, int start, int length) {
         tb.SelectionStart  = start;
