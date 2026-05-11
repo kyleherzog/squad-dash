@@ -74,6 +74,48 @@ internal sealed class SmoothDictationHelperTests {
         Assert.That(result, Is.EqualTo("done they came. I agreed the end."));
     }
 
+    // ── Duplicate-word removal ───────────────────────────────────────────────
+
+    [Test]
+    public void Apply_DuplicateWordLowercase_CollapsesToOne() {
+        Assert.That(SmoothDictationHelper.Apply("the the quick brown fox"), Is.EqualTo("the quick brown fox"));
+    }
+
+    [Test]
+    public void Apply_DuplicateWordMixedCase_KeepsFirstWordCase() {
+        // "The the" → "The"
+        Assert.That(SmoothDictationHelper.Apply("The the quick brown fox"), Is.EqualTo("The quick brown fox"));
+    }
+
+    [Test]
+    public void Apply_DuplicateWordUppercase_KeepsFirstWordCase() {
+        // "THE THE" → "THE"
+        Assert.That(SmoothDictationHelper.Apply("THE THE quick"), Is.EqualTo("THE quick"));
+    }
+
+    [Test]
+    public void Apply_TripleDuplicateWord_CollapsesToOne() {
+        // Loop handles triple repetition.
+        Assert.That(SmoothDictationHelper.Apply("the the the fox"), Is.EqualTo("the fox"));
+    }
+
+    [Test]
+    public void Apply_DuplicateWordAtEnd_Collapsed() {
+        Assert.That(SmoothDictationHelper.Apply("I went there there"), Is.EqualTo("I went there"));
+    }
+
+    [Test]
+    public void Apply_NoDuplicates_ReturnsOriginal() {
+        var input = "the quick brown fox";
+        Assert.That(SmoothDictationHelper.Apply(input), Is.EqualTo(input));
+    }
+
+    [Test]
+    public void Apply_DuplicateAndSentenceBreak_BothFixed() {
+        // "the the. Quick" → duplicate removed → sentence break smoothed.
+        Assert.That(SmoothDictationHelper.Apply("see the the. Quick brown fox"), Is.EqualTo("see the quick brown fox"));
+    }
+
     // ── ApplyToTextBox ───────────────────────────────────────────────────────
 
     [Test, Apartment(ApartmentState.STA)]
