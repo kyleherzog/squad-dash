@@ -1812,7 +1812,7 @@
                                     Padding="0" Margin="0,0,2,0"
                                     ToolTip="Insert table"
                                     Click="DocTableButton_Click">
-                                <TextBlock FontSize="16" Text="⊞" />
+                                <TextBlock FontSize="22" Text="⊞" />
                             </Button>
                             <Separator Width="1" Height="18" Margin="2,0,4,0"
                                        Background="{DynamicResource PanelBorder}" />
@@ -1842,11 +1842,11 @@
                                 <Viewbox Width="24" Height="20" Stretch="Uniform">
                                     <Canvas Width="20" Height="16">
                                         <Ellipse   Canvas.Left="0" Canvas.Top="1.25"  Width="3.5" Height="3.5" Fill="{DynamicResource LabelText}"/>
-                                        <Rectangle Canvas.Left="5" Canvas.Top="2"     Width="15"  Height="2"   Fill="{DynamicResource LabelText}" RadiusX="1" RadiusY="1"/>
+                                        <Rectangle Canvas.Left="5" Canvas.Top="2.5"   Width="15"  Height="1"   Fill="{DynamicResource LabelText}" Opacity="0.5" RadiusX="0.5" RadiusY="0.5"/>
                                         <Ellipse   Canvas.Left="0" Canvas.Top="6.25"  Width="3.5" Height="3.5" Fill="{DynamicResource LabelText}"/>
-                                        <Rectangle Canvas.Left="5" Canvas.Top="7"     Width="15"  Height="2"   Fill="{DynamicResource LabelText}" RadiusX="1" RadiusY="1"/>
+                                        <Rectangle Canvas.Left="5" Canvas.Top="7.5"   Width="15"  Height="1"   Fill="{DynamicResource LabelText}" Opacity="0.5" RadiusX="0.5" RadiusY="0.5"/>
                                         <Ellipse   Canvas.Left="0" Canvas.Top="11.25" Width="3.5" Height="3.5" Fill="{DynamicResource LabelText}"/>
-                                        <Rectangle Canvas.Left="5" Canvas.Top="12"    Width="15"  Height="2"   Fill="{DynamicResource LabelText}" RadiusX="1" RadiusY="1"/>
+                                        <Rectangle Canvas.Left="5" Canvas.Top="12.5"  Width="15"  Height="1"   Fill="{DynamicResource LabelText}" Opacity="0.5" RadiusX="0.5" RadiusY="0.5"/>
                                     </Canvas>
                                 </Viewbox>
                             </Button>
@@ -1860,11 +1860,11 @@
                                 <Viewbox Width="24" Height="20" Stretch="Uniform">
                                     <Canvas Width="20" Height="16">
                                         <TextBlock Canvas.Left="0" Canvas.Top="-0.5" FontSize="7" Foreground="{DynamicResource LabelText}" Text="1"/>
-                                        <Rectangle Canvas.Left="6.5" Canvas.Top="2"  Width="13.5" Height="2"   Fill="{DynamicResource LabelText}" RadiusX="1" RadiusY="1"/>
+                                        <Rectangle Canvas.Left="6.5" Canvas.Top="2.5"  Width="13.5" Height="1"   Fill="{DynamicResource LabelText}" Opacity="0.5" RadiusX="0.5" RadiusY="0.5"/>
                                         <TextBlock Canvas.Left="0" Canvas.Top="4.5"  FontSize="7" Foreground="{DynamicResource LabelText}" Text="2"/>
-                                        <Rectangle Canvas.Left="6.5" Canvas.Top="7"  Width="13.5" Height="2"   Fill="{DynamicResource LabelText}" RadiusX="1" RadiusY="1"/>
+                                        <Rectangle Canvas.Left="6.5" Canvas.Top="7.5"  Width="13.5" Height="1"   Fill="{DynamicResource LabelText}" Opacity="0.5" RadiusX="0.5" RadiusY="0.5"/>
                                         <TextBlock Canvas.Left="0" Canvas.Top="9.5"  FontSize="7" Foreground="{DynamicResource LabelText}" Text="3"/>
-                                        <Rectangle Canvas.Left="6.5" Canvas.Top="12" Width="13.5" Height="2"   Fill="{DynamicResource LabelText}" RadiusX="1" RadiusY="1"/>
+                                        <Rectangle Canvas.Left="6.5" Canvas.Top="12.5" Width="13.5" Height="1"   Fill="{DynamicResource LabelText}" Opacity="0.5" RadiusX="0.5" RadiusY="0.5"/>
                                     </Canvas>
                                 </Viewbox>
                             </Button>

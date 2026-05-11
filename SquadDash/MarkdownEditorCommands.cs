@@ -284,11 +284,13 @@ internal static class MarkdownEditorCommands
 
         if (selLen > 0)
         {
-            var text = box.SelectedText;
-            var md   = $"`{text}`";
+            var raw            = box.SelectedText;
+            var trimmed        = raw.TrimEnd(' ');
+            var trailingSpaces = raw[trimmed.Length..];
+            var md             = $"`{trimmed}`{trailingSpaces}";
             box.SelectedText    = md;
             box.SelectionStart  = selStart;
-            box.SelectionLength = md.Length;
+            box.SelectionLength = trimmed.Length + 2;
         }
         else
         {
@@ -423,11 +425,13 @@ internal static class MarkdownEditorCommands
 
         if (selLen > 0)
         {
-            var text = box.GetSelectedText();
-            var md   = $"`{text}`";
+            var raw            = box.GetSelectedText();
+            var trimmed        = raw.TrimEnd(' ');
+            var trailingSpaces = raw[trimmed.Length..];
+            var md             = $"`{trimmed}`{trailingSpaces}";
             box.SelectRange(selStart, selLen);
             box.ReplaceSelection(md);
-            box.SelectRange(selStart, md.Length);
+            box.SelectRange(selStart, trimmed.Length + 2);
         }
         else
         {
