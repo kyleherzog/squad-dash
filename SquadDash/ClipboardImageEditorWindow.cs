@@ -244,6 +244,10 @@ internal sealed class ClipboardImageEditorWindow : Window
     private Point _textHandleDragStart;
     private double _textHandleDragOrigFontSize;
     private AnnotationText? _textHandleDragAnnotation;
+    // Set in CommitActiveTextBox when the commit is triggered by a LostFocus (i.e. a canvas click).
+    // Canvas_MouseDown reads and clears this flag to prevent immediately deselecting the annotation
+    // that was just committed by the same click.
+    private bool _suppressNextTextDeselect;
     private Color _defaultTextFgColor = Colors.White;
     private Color _defaultTextBgColor = Colors.Black;
     private bool _textDragCreating;
@@ -1365,9 +1369,15 @@ internal sealed class ClipboardImageEditorWindow : Window
             }
         }
 
-        // Clicking canvas background deselects any selected text annotation
+        // Clicking canvas background deselects any selected text annotation.
+        // Skip if a text annotation was just committed by this same click (LostFocus → commit → select).
         if (_selectedText != null)
-            SelectText(null);
+        {
+            if (_suppressNextTextDeselect)
+                _suppressNextTextDeselect = false;
+            else
+                SelectText(null);
+        }
 
         var pt = e.GetPosition(_canvas);
         var zone = HitTest(pt);
@@ -3747,7 +3757,13 @@ internal sealed class ClipboardImageEditorWindow : Window
             if (autoExit) ExitTextMode();
             // Always select the committed annotation (unless in multi-drop mode) so resize
             // handles appear regardless of whether text mode was still active at commit time.
-            if (!inMultiDrop) SelectText(editCopy);
+            // Set the suppress flag so the canvas MouseDown that triggered this LostFocus-commit
+            // doesn't immediately deselect the annotation we just selected.
+            if (!inMultiDrop)
+            {
+                _suppressNextTextDeselect = true;
+                SelectText(editCopy);
+            }
         }
     }
 
