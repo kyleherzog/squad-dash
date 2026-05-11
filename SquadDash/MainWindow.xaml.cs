@@ -2294,7 +2294,9 @@ public partial class MainWindow : Window, ILiveElementLocator
                 QueueStatusLabel.ClearValue(ForegroundProperty);
             }
         }
-        _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with { QueuePaused = paused ? true : null };
+        // Save true when paused, false (not null) when resuming. Using null would cause the
+        // merge logic in SaveDocsPanelState to preserve any stale "true" from a prior session.
+        _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with { QueuePaused = paused ? (bool?)true : false };
         _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
     }
 
