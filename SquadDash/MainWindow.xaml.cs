@@ -211,6 +211,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private string? _currentDocPath;          // tracks currently displayed doc for link resolution
     private string  _currentDocFrontMatter = string.Empty;  // Jekyll/JTD YAML block stripped from source editor; prepended on save
     private DateTime _docSaveSuppressionUntil;
+    private string? _lastSavedDocPath;   // path written by SaveDocSourceToDisk; used to suppress watcher-triggered approval revocation
     private DocStatusStore? _docStatusStore;
     private bool _activeAgentLaneNudgeScheduled;
     private bool _inactiveAgentLaneNudgeScheduled;
@@ -10932,6 +10933,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             }
 
             _docSaveSuppressionUntil = DateTime.UtcNow.AddMilliseconds(500);
+            _lastSavedDocPath = _currentDocPath;
             File.WriteAllText(_currentDocPath, _currentDocFrontMatter + bodyText);
 
             // If the saved file is a loop file, re-scan so the combo box picks up
@@ -20032,7 +20034,16 @@ public partial class MainWindow : Window, ILiveElementLocator
                 return;
             }
 
-            if (_docStatusStore != null)
+            // If the changed file was recently written by our own save (e.g. the user approved a
+            // topic then navigated away — SaveDocSourceToDisk wrote the previously-selected file
+            // while _currentDocPath had already advanced to the new topic), don't revoke its
+            // approval status.  Without this guard the watcher would see an approved file change
+            // and call SetNeedsReview, silently losing the just-granted approval.
+            bool isOwnSave = DateTime.UtcNow < _docSaveSuppressionUntil
+                && !string.IsNullOrEmpty(_lastSavedDocPath)
+                && string.Equals(e.FullPath, _lastSavedDocPath, StringComparison.OrdinalIgnoreCase);
+
+            if (!isOwnSave && _docStatusStore != null)
             {
                 var fullPath = e.FullPath;
                 if (_docStatusStore.GetStatus(fullPath) == DocApprovalStatus.Approved)
