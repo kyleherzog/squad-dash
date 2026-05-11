@@ -2303,7 +2303,13 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (_queueManuallyPaused)
         {
             SetQueuePaused(false);
-            _ = DrainQueueIfNeededAsync();
+
+            // If the rightmost tab is currently holding the queue (user is editing it),
+            // resume by immediately submitting it — same effect as clicking Send.
+            if (_rightmostTabHoldNotificationFired && _activeTabId is not null)
+                _ = DispatchQueuedTabAsync(_activeTabId);
+            else
+                _ = DrainQueueIfNeededAsync();
         }
         else
         {
