@@ -4894,6 +4894,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                     IsChecked = string.Equals(choice, opt.RawValue, StringComparison.Ordinal),
                     Margin    = new Thickness(12, 0, 0, 0),
                 };
+                rb.SetResourceReference(Control.StyleProperty, "ThemedRadioButtonStyle");
                 if (TryFindResource("LabelText") is System.Windows.Media.Brush rbBrush)
                     rb.Foreground = rbBrush;
 
