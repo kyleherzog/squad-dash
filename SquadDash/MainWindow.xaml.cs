@@ -10418,17 +10418,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     /// the body text.  <paramref name="frontMatter"/> receives the stripped block (including
     /// the trailing newline) so it can be prepended on save without data loss.
     /// </summary>
-    private static string StripDocFrontMatter(string raw, out string frontMatter)
-    {
-        var m = FrontMatterRegex.Match(raw);
-        if (m.Success)
-        {
-            frontMatter = m.Value;
-            return raw[m.Length..];
-        }
-        frontMatter = string.Empty;
-        return raw;
-    }
+    private static string StripDocFrontMatter(string raw, out string frontMatter) =>
+        DocumentUtilities.StripDocFrontMatter(raw, out frontMatter);
 
     private bool _suppressDocSourceTextChanged;
     private bool _suppressDocSourceNextTextInput;
@@ -14768,7 +14759,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     }
 
     internal static string SanitizeResponseText(string? text) =>
-        StripHostCommandBlock(StripAwaitInputSentinel(ToolTranscriptFormatter.StripSystemNotifications(text))).TrimEnd();
+        TranscriptTextUtilities.SanitizeResponseText(text);
 
     private static string StripHostCommandBlock(string text)
     {
@@ -14781,26 +14772,17 @@ public partial class MainWindow : Window, ILiveElementLocator
         text.Replace(PromptExecutionController.QueueAwaitInputSentinel, string.Empty,
                      StringComparison.Ordinal);
 
-    internal static string? SanitizeResponseTextOrNull(string? text)
-    {
-        var sanitized = SanitizeResponseText(text);
-        return string.IsNullOrWhiteSpace(sanitized) ? null : sanitized;
-    }
+    internal static string? SanitizeResponseTextOrNull(string? text) =>
+        TranscriptTextUtilities.SanitizeResponseTextOrNull(text);
 
     internal static string GetSanitizedTurnResponseText(TranscriptTurnView? turn) =>
-        SanitizeResponseText(turn?.ResponseTextBuilder.ToString());
+        TranscriptTextUtilities.GetSanitizedTurnResponseText(turn);
 
     private static string? GetSanitizedTurnResponseTextOrNull(TranscriptTurnView? turn) =>
         SanitizeResponseTextOrNull(turn?.ResponseTextBuilder.ToString());
 
-    internal static string BuildThreadPreview(string text)
-    {
-        var collapsed = CollapseWhitespace(RemoveQuickReplySuffix(SanitizeResponseText(text)));
-        if (collapsed.Length <= 120)
-            return collapsed;
-
-        return collapsed[..117] + "...";
-    }
+    internal static string BuildThreadPreview(string text) =>
+        TranscriptTextUtilities.BuildThreadPreview(text);
 
     private static string RemoveQuickReplySuffix(string text)
     {
@@ -17073,23 +17055,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             : text.Replace("\r\n", "\n").Replace('\r', '\n');
     }
 
-    internal static string FormatThinkingText(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return string.Empty;
-
-        var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
-        normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
-        normalized = Regex.Replace(normalized, @"(?<=\w)\s+'(?=\w)", "'");
-        normalized = Regex.Replace(
-            normalized,
-            @"(?<=[A-Za-z]{4,})\s+(?=(?:ize|ized|ization|ise|ised|ises|ing|ed|er|ers|ly|ment|ments|tion|tions|able|ible|ality|ality|ities|ity)\b)",
-            string.Empty,
-            RegexOptions.IgnoreCase);
-        normalized = Regex.Replace(normalized, @"\s+([,.;:!?%\)\]\}])", "$1");
-        normalized = Regex.Replace(normalized, @"([\(\[\{])\s+", "$1");
-        return normalized;
-    }
+    internal static string FormatThinkingText(string? text) =>
+        TranscriptTextUtilities.FormatThinkingText(text);
 
     private Brush ResolveThoughtBrush(string speaker)
     {
@@ -17940,15 +17907,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         string? statusText,
         DateTimeOffset? startedAt,
         DateTimeOffset? completedAt,
-        DateTimeOffset now)
-    {
-        var status = AgentThreadRegistry.HumanizeThreadStatus(statusText);
-        if (string.IsNullOrWhiteSpace(status))
-            status = completedAt is null ? "Running" : "Completed";
-
-        var effectiveStartedAt = startedAt ?? completedAt ?? now;
-        return StatusTimingPresentation.BuildStatus(status, effectiveStartedAt, completedAt, now);
-    }
+        DateTimeOffset now) =>
+        TranscriptTextUtilities.BuildTimedStatusText(statusText, startedAt, completedAt, now);
 
     private static string? TryFormatJson(JsonElement element)
     {
@@ -18635,36 +18595,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         return v[2] >= 5;
     }
 
-    private static bool IsNewerSquadVersion(string candidate, string? current)
-    {
-        if (string.IsNullOrWhiteSpace(current))
-            return false;
-        var a = ParseSimpleVersion(candidate);
-        var b = ParseSimpleVersion(current);
-        if (a is null || b is null)
-            return false;
-        for (var i = 0; i < 3; i++)
-        {
-            if (a[i] > b[i]) return true;
-            if (a[i] < b[i]) return false;
-        }
-        return false;
-    }
+    private static bool IsNewerSquadVersion(string candidate, string? current) =>
+        DocumentUtilities.IsNewerSquadVersion(candidate, current);
 
-    private static int[]? ParseSimpleVersion(string v)
-    {
-        var parts = v.TrimStart('v').Split('.');
-        if (parts.Length < 3)
-            return null;
-        var result = new int[3];
-        for (var i = 0; i < 3; i++)
-        {
-            var numPart = parts[i].Split('-')[0];
-            if (!int.TryParse(numPart, out result[i]))
-                return null;
-        }
-        return result;
-    }
+    private static int[]? ParseSimpleVersion(string v) =>
+        DocumentUtilities.ParseSimpleVersion(v);
 
     private void CopySquadSystemInfoToClipboard()
     {
@@ -21029,21 +20964,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         Dispatcher.InvokeAsync(() => ApplyTheme(resolved));
     }
 
-    private static string CollapseWhitespace(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return string.Empty;
+    private static string CollapseWhitespace(string? text) =>
+        TranscriptTextUtilities.CollapseWhitespace(text);
 
-        return string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-    }
-
-    private static string FormatJson(JsonElement element)
-    {
-        return JsonSerializer.Serialize(element, new JsonSerializerOptions
-        {
-            WriteIndented = true
-        });
-    }
+    private static string FormatJson(JsonElement element) =>
+        TranscriptTextUtilities.FormatJson(element);
 
     private void OpenSidebarEntry(SidebarEntry entry)
     {
@@ -21689,15 +21614,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         CommitDocRename(item, filePath, oldName, newName);
     }
 
-    private static string SlugifyDocName(string name)
-    {
-        name = name.Trim().ToLowerInvariant();
-        name = System.Text.RegularExpressions.Regex.Replace(name, @"\s+", "-");
-        name = System.Text.RegularExpressions.Regex.Replace(name, @"[^a-z0-9\-]", string.Empty);
-        name = System.Text.RegularExpressions.Regex.Replace(name, @"-+", "-");
-        name = name.Trim('-');
-        return string.IsNullOrEmpty(name) ? "new-document" : name;
-    }
+    private static string SlugifyDocName(string name) =>
+        DocumentUtilities.SlugifyDocName(name);
 
     private void CommitDocRename(TreeViewItem item, string filePath, string oldName, string newName)
     {

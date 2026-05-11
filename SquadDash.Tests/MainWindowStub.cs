@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace SquadDash;
 
@@ -17,17 +17,21 @@ internal static class MainWindow {
         string? status,
         DateTimeOffset? startedAt,
         DateTimeOffset? completedAt,
-        DateTimeOffset now) => status ?? string.Empty;
+        DateTimeOffset now) =>
+        TranscriptTextUtilities.BuildTimedStatusText(status, startedAt, completedAt, now);
 
-    internal static string BuildThreadPreview(string text) => text;
+    internal static string BuildThreadPreview(string text) =>
+        TranscriptTextUtilities.BuildThreadPreview(text);
 
-    internal static string GetSanitizedTurnResponseText(TranscriptTurnView? turn)
-        => turn?.ResponseTextBuilder.ToString() ?? string.Empty;
+    internal static string GetSanitizedTurnResponseText(TranscriptTurnView? turn) =>
+        TranscriptTextUtilities.GetSanitizedTurnResponseText(turn);
 
-    internal static string FormatThinkingText(string text) => text;
+    internal static string FormatThinkingText(string text) =>
+        TranscriptTextUtilities.FormatThinkingText(text);
 
-    internal static string SanitizeResponseText(string text) => text;
+    internal static string SanitizeResponseText(string text) =>
+        TranscriptTextUtilities.SanitizeResponseText(text);
 
-    internal static string? SanitizeResponseTextOrNull(string? text)
-        => string.IsNullOrWhiteSpace(text) ? null : text.TrimEnd();
+    internal static string? SanitizeResponseTextOrNull(string? text) =>
+        TranscriptTextUtilities.SanitizeResponseTextOrNull(text);
 }
