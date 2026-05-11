@@ -4394,6 +4394,13 @@ public partial class MainWindow : Window, ILiveElementLocator
                 UseShellExecute = true,
             });
 
+            // Flush any pending doc-source edits before shutting down.
+            // RestartAsAdministrator calls Application.Current.Shutdown() directly and
+            // therefore bypasses MainWindow_Closing, so the normal pre-close flush never
+            // runs.  Stop the debounce timer and save synchronously here instead.
+            _docSourceSaveTimer?.Stop();
+            SaveDocSourceToDisk();
+
             // Release workspace resources immediately so the elevated instance doesn't
             // find us still registered and fail with "Workspace Already Open".
             RemoveRunningInstanceRegistration();
@@ -10599,8 +10606,22 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (DocSourceTextBox is null || string.IsNullOrEmpty(_currentDocPath)) return;
         try
         {
+            var bodyText = DocSourceTextBox.GetPlainText();
+
+            // Safety net: never overwrite a doc file with an empty body.
+            // WPF fires TextChanged (and can thereby trigger saves) during visual-tree
+            // teardown with an empty document.  Writing at that point would reduce the
+            // file to frontmatter-only — silently destroying user content.
+            // This guard catches any remaining code-path that reaches SaveDocSourceToDisk
+            // with a blank text box, regardless of whether _isClosing is set.
+            if (string.IsNullOrWhiteSpace(bodyText))
+            {
+                SquadDashTrace.Write("DocSave", $"Skipping save — body is empty, likely a teardown artifact: {_currentDocPath}");
+                return;
+            }
+
             _docSaveSuppressionUntil = DateTime.UtcNow.AddMilliseconds(500);
-            File.WriteAllText(_currentDocPath, _currentDocFrontMatter + DocSourceTextBox.GetPlainText());
+            File.WriteAllText(_currentDocPath, _currentDocFrontMatter + bodyText);
 
             // If the saved file is a loop file, re-scan so the combo box picks up
             // any frontmatter changes (e.g. updated description / display name).
