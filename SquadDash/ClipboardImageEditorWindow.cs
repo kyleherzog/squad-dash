@@ -224,6 +224,14 @@ internal sealed class ClipboardImageEditorWindow : Window
     private bool _inArrowMultiDropMode;
     private bool _inRectMultiDropMode;
 
+    // ── Annotation — text labels ───────────────────────────────────────────────
+
+    private readonly List<AnnotationText> _texts = new();
+    private bool _inTextMode;
+    private Button? _addTextBtn;
+    private TextBox? _activeTextBox;
+    private AnnotationText? _editingText;
+
     // ────────────────────────────────────────────────────────────────────────
 
     internal ClipboardImageEditorWindow(Window owner, BitmapSource clipboardImage, bool isPromptMode = false)
@@ -607,6 +615,14 @@ internal sealed class ClipboardImageEditorWindow : Window
             Margin   = new Thickness(0, 0, 4, 0),
             ToolTip  = "Rectangle annotation (drag to draw) `u{00B7} Shift+click for multi-drop"
         };
+        _addTextBtn = new Button
+        {
+            Content  = MakeToolIcon("ImageEditorTextIcon"),
+            Width    = 32, Height = 28,
+            Padding  = new Thickness(4, 3, 4, 3),
+            Margin   = new Thickness(0, 0, 4, 0),
+            ToolTip  = "Text label `u{00B7} click to place `u{00B7} double-click to re-edit"
+        };
         var cursorBtn = new Button
         {
             Content  = MakeToolIcon("ImageEditorCursorIcon"),
@@ -681,8 +697,8 @@ internal sealed class ClipboardImageEditorWindow : Window
             roundCornersBtn.Visibility = Visibility.Collapsed;
 
         var styleButtons = _isPromptMode
-            ? new[] { _addArrowBtn, _addRectBtn, cursorBtn, _eyedropperBtn, insertBtn, cancelBtn }
-            : new[] { _addArrowBtn, _addRectBtn, cursorBtn, _eyedropperBtn, roundCornersBtn, insertBtn, cancelBtn };
+            ? new[] { _addArrowBtn, _addRectBtn, _addTextBtn, cursorBtn, _eyedropperBtn, insertBtn, cancelBtn }
+            : new[] { _addArrowBtn, _addRectBtn, _addTextBtn, cursorBtn, _eyedropperBtn, roundCornersBtn, insertBtn, cancelBtn };
         foreach (var btn in styleButtons)
             btn.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
 
@@ -712,6 +728,14 @@ internal sealed class ClipboardImageEditorWindow : Window
                 ShowModeHint("Multi-drop: drag to place rectangles · ESC to exit");
             }
             _addRectBtn.Content = MakeToolIcon("ImageEditorRectIcon", active: true, multiDrop: isShift);
+        };
+
+        _addTextBtn.Click += (_, _) =>
+        {
+            if (_inTextMode) { ExitTextMode(); return; }
+            ExitAllToolModes();
+            EnterTextMode();
+            _addTextBtn.Content = MakeToolIcon("ImageEditorTextIcon", active: true);
         };
 
         cursorBtn.Click += (_, _) =>
@@ -809,6 +833,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         };
         leftStack.Children.Add(_addArrowBtn);
         leftStack.Children.Add(_addRectBtn);
+        leftStack.Children.Add(_addTextBtn);
         leftStack.Children.Add(cursorBtn);
         leftStack.Children.Add(_eyedropperBtn);
         leftStack.Children.Add(_eyedropperSwatch);
@@ -1315,6 +1340,15 @@ internal sealed class ClipboardImageEditorWindow : Window
             return;
         }
 
+        // Text placement mode: click canvas to begin a new text annotation at this point.
+        // (The active TextBox loses focus → LostFocus handler commits it before this fires.)
+        if (_inTextMode)
+        {
+            BeginEditText(pt);
+            e.Handled = true;
+            return;
+        }
+
         // Move the selection.
         if (zone == HitZone.Move)
         {
@@ -1330,7 +1364,7 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         // Draw a new crop region from scratch — works whether or not a selection already exists.
         // Clicking outside the current selection (zone == None) replaces it; undo restores the old one.
-        if (!_inArrowMode && !_inCursorPlacementMode && !_inRectMode)
+        if (!_inArrowMode && !_inCursorPlacementMode && !_inRectMode && !_inTextMode)
         {
             _creatingNewSel = true;
             _newSelAnchor = pt;
@@ -1468,6 +1502,8 @@ internal sealed class ClipboardImageEditorWindow : Window
                 _canvas.Cursor = AnnotationCursors.ArrowTool;
             else if (_inRectMode)
                 _canvas.Cursor = AnnotationCursors.RectTool;
+            else if (_inTextMode)
+                _canvas.Cursor = Cursors.IBeam;
             else if (_inCursorPlacementMode)
                 _canvas.Cursor = AnnotationCursors.DropCursorTool;
             else if (_sel.IsEmpty)
@@ -1484,7 +1520,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             // Hover cursor: show the standard arrow pointer over any draggable annotation
             // (arrow shaft/head, rect border, cursor indicator) in the neutral tool state.
             // This overrides whatever crop/cross cursor was set above.
-            if (!_inArrowMode && !_inRectMode && !_inCursorPlacementMode && !_inEyedropperMode
+            if (!_inArrowMode && !_inRectMode && !_inTextMode && !_inCursorPlacementMode && !_inEyedropperMode
                 && IsHoveringOverAnnotation(e.GetPosition(_canvas)))
                 _canvas.Cursor = Cursors.Arrow;
 
@@ -1601,6 +1637,14 @@ internal sealed class ClipboardImageEditorWindow : Window
                 ExitArrowMode(); e.Handled = true; return;
             }
             if (_inRectMode) { ExitRectMode(); e.Handled = true; return; }
+            if (_inTextMode)
+            {
+                // TextBox ESC is already handled in CreateTextBoxOverlay's KeyDown (e.Handled=true there),
+                // so this branch handles text mode with no active textbox — just exit the mode.
+                if (_activeTextBox == null) ExitTextMode();
+                e.Handled = true;
+                return;
+            }
             if (_inCursorPlacementMode)
             {
                 _inCursorPlacementMode = false;
@@ -1653,11 +1697,13 @@ internal sealed class ClipboardImageEditorWindow : Window
         }
         else if (e.Key == Key.Z && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
         {
+            if (Keyboard.FocusedElement is TextBox) return; // let TextBox handle its own undo
             PerformUndo();
             e.Handled = true;
         }
         else if (e.Key == Key.Y && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
         {
+            if (Keyboard.FocusedElement is TextBox) return;
             PerformRedo();
             e.Handled = true;
         }
@@ -1681,7 +1727,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         ShowModeHint("Drag to draw an arrow");
     }
 
-    private void ExitAllToolModes() { if (_inArrowMode) ExitArrowMode(); if (_inRectMode) ExitRectMode(); if (_inEyedropperMode) ExitEyedropperMode(); }
+    private void ExitAllToolModes() { if (_inArrowMode) ExitArrowMode(); if (_inRectMode) ExitRectMode(); if (_inTextMode) ExitTextMode(); if (_inEyedropperMode) ExitEyedropperMode(); }
 
     private void ExitArrowMode()
     {
@@ -2729,6 +2775,12 @@ internal sealed class ClipboardImageEditorWindow : Window
             if (Math.Sqrt(cdx * cdx + cdy * cdy) <= CursorTol) return true;
         }
 
+        // Text annotation labels (allow drag/select click anywhere inside bounds).
+        foreach (var t in _texts)
+        {
+            if (t.Bounds.Contains(pt)) return true;
+        }
+
         return false;
     }
 
@@ -3110,6 +3162,315 @@ internal sealed class ClipboardImageEditorWindow : Window
             _eyedropperHexLabel.Text = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
     }
 
+    // ── Text annotations ──────────────────────────────────────────────────────
+
+    private void EnterTextMode()
+    {
+        _inTextMode = true;
+        _canvas.Cursor = Cursors.IBeam;
+        ShowModeHint("Click to place text · Enter to finish · ESC to exit");
+    }
+
+    private void ExitTextMode()
+    {
+        CommitActiveTextBox();
+        _inTextMode = false;
+        _canvas.Cursor = Cursors.Arrow;
+        HideModeHint();
+        if (_addTextBtn != null) _addTextBtn.Content = MakeToolIcon("ImageEditorTextIcon");
+    }
+
+    /// <summary>
+    /// Creates a new text annotation at <paramref name="pt"/> and opens a TextBox overlay for editing.
+    /// </summary>
+    private void BeginEditText(Point pt)
+    {
+        PushUndo(); // save state before the annotation is born
+        var annotation = new AnnotationText
+        {
+            Bounds    = new Rect(pt.X, pt.Y, 0, 0),
+            FontSize  = AnnotationText.MaxFontSize,
+            TextColor = Colors.White
+        };
+        _texts.Add(annotation);
+        _editingText = annotation;
+        CreateTextBoxOverlay(annotation);
+    }
+
+    /// <summary>
+    /// Re-opens an existing committed text annotation for editing.
+    /// Double-clicking a text label calls this.
+    /// </summary>
+    private void BeginEditText(AnnotationText existing)
+    {
+        PushUndo(); // save state in case the user actually changes the text
+        _editingText = existing;
+        if (existing.Display != null) existing.Display.Visibility = Visibility.Collapsed;
+        if (existing.Shadow  != null) existing.Shadow.Visibility  = Visibility.Collapsed;
+        if (!_inTextMode)
+        {
+            ExitAllToolModes();
+            _inTextMode = true;
+            _canvas.Cursor = Cursors.IBeam;
+            if (_addTextBtn != null) _addTextBtn.Content = MakeToolIcon("ImageEditorTextIcon", active: true);
+            ShowModeHint("Click to place text · Enter to finish · ESC to exit");
+        }
+        CreateTextBoxOverlay(existing);
+    }
+
+    /// <summary>
+    /// Places a live TextBox on the canvas at the annotation's current position.
+    /// </summary>
+    private void CreateTextBoxOverlay(AnnotationText annotation)
+    {
+        var tb = new TextBox
+        {
+            FontFamily    = new FontFamily("Calibri"),
+            FontSize      = annotation.FontSize,
+            FontWeight    = FontWeights.Bold,
+            Foreground    = new SolidColorBrush(annotation.TextColor),
+            Background    = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0)),
+            BorderBrush   = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)),
+            BorderThickness = new Thickness(1),
+            AcceptsReturn = false,
+            TextWrapping  = TextWrapping.NoWrap,
+            MinWidth      = 60,
+            Padding       = new Thickness(4, 2, 4, 2),
+            CaretBrush    = Brushes.White,
+            SelectionBrush = new SolidColorBrush(Color.FromArgb(120, 100, 160, 255)),
+            Text          = annotation.Text
+        };
+
+        // Auto-shrink/grow font to keep text within canvas right edge.
+        tb.TextChanged += (_, _) =>
+        {
+            if (string.IsNullOrEmpty(tb.Text)) { tb.FontSize = AnnotationText.MaxFontSize; return; }
+            double maxW = _canvas.Width - annotation.Bounds.Left - 8;
+            AdjustTextFontSize(tb, Math.Max(80, maxW));
+        };
+
+        // Enter = commit; ESC = cancel (handled before Window_KeyDown sees them).
+        tb.KeyDown += (_, e) =>
+        {
+            if (e.Key is Key.Return or Key.Enter)
+            {
+                CommitActiveTextBox();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                var editingCopy = _editingText;
+                var wasNew      = string.IsNullOrEmpty(editingCopy?.Text ?? "");
+                var tbRef       = _activeTextBox;
+
+                // Clear state before removing from canvas (prevents LostFocus re-entry).
+                _activeTextBox = null;
+                _editingText   = null;
+                _canvas.Children.Remove(tbRef);
+
+                if (wasNew && editingCopy != null)
+                {
+                    _texts.Remove(editingCopy); // never committed — no visuals to remove
+                }
+                else if (editingCopy?.Display != null)
+                {
+                    editingCopy.Display.Visibility = Visibility.Visible;
+                    if (editingCopy.Shadow != null) editingCopy.Shadow.Visibility = Visibility.Visible;
+                }
+
+                // Discard the BeginEditText undo push — nothing actually changed.
+                if (_undoStack.Count > 0) _undoStack.Pop();
+                e.Handled = true;
+            }
+        };
+
+        // LostFocus (e.g. clicking elsewhere) commits the annotation.
+        tb.LostFocus += (_, _) =>
+        {
+            if (_activeTextBox == tb)
+                CommitActiveTextBox();
+        };
+
+        Canvas.SetLeft(tb, annotation.Bounds.Left);
+        Canvas.SetTop(tb,  annotation.Bounds.Top);
+        Panel.SetZIndex(tb, 200);
+        _canvas.Children.Add(tb);
+        _activeTextBox = tb;
+
+        tb.Focus();
+        tb.CaretIndex = tb.Text.Length; // place caret at end; SelectAll can be distracting for re-edit
+        if (string.IsNullOrEmpty(annotation.Text)) tb.SelectAll();
+    }
+
+    /// <summary>
+    /// Commits the active TextBox: writes back text/fontSize/bounds to the annotation,
+    /// updates the display TextBlock, and removes the TextBox from the canvas.
+    /// If the text is empty the annotation is silently discarded.
+    /// </summary>
+    private void CommitActiveTextBox()
+    {
+        if (_activeTextBox == null || _editingText == null) return;
+
+        var text        = _activeTextBox.Text; // preserve inner whitespace; trim only leading/trailing
+        var editCopy    = _editingText;
+        var tbRef       = _activeTextBox;
+
+        // Clear state BEFORE removing from canvas so LostFocus cannot re-enter.
+        _activeTextBox = null;
+        _editingText   = null;
+        _canvas.Children.Remove(tbRef);
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            // Empty annotation — remove it without adding another undo entry.
+            _suppressUndo = true;
+            try   { _texts.Remove(editCopy); }
+            finally { _suppressUndo = false; }
+        }
+        else
+        {
+            editCopy.Text     = text;
+            editCopy.FontSize = tbRef.FontSize;
+            editCopy.Bounds   = new Rect(Canvas.GetLeft(tbRef), Canvas.GetTop(tbRef), 0, 0);
+            UpdateTextDisplay(editCopy);
+        }
+    }
+
+    /// <summary>
+    /// Creates or updates the shadow + display TextBlocks for a committed annotation.
+    /// </summary>
+    private void UpdateTextDisplay(AnnotationText annotation)
+    {
+        if (annotation.Display == null)
+        {
+            var shadow = new TextBlock
+            {
+                FontFamily  = new FontFamily("Calibri"),
+                FontWeight  = FontWeights.Bold,
+                Foreground  = new SolidColorBrush(Color.FromArgb(160, 0, 0, 0)),
+                IsHitTestVisible = false
+            };
+
+            var display = new TextBlock
+            {
+                FontFamily  = new FontFamily("Calibri"),
+                FontWeight  = FontWeights.Bold,
+                Foreground  = new SolidColorBrush(annotation.TextColor),
+                IsHitTestVisible = true,
+                Cursor      = Cursors.SizeAll
+            };
+
+            // Local drag state — captured per-annotation in the closure.
+            Point  dragStart        = default;
+            Rect   dragOrigBounds   = default;
+            bool   isDragging       = false;
+
+            display.MouseLeftButtonDown += (_, e) =>
+            {
+                if (e.ClickCount == 2)
+                {
+                    BeginEditText(annotation);
+                    e.Handled = true;
+                    return;
+                }
+                _preDragSnapshot = CaptureSnapshot();
+                isDragging       = true;
+                dragStart        = e.GetPosition(_canvas);
+                dragOrigBounds   = annotation.Bounds;
+                display.CaptureMouse();
+                e.Handled = true;
+            };
+            display.MouseMove += (_, e) =>
+            {
+                if (!isDragging) return;
+                var pt    = e.GetPosition(_canvas);
+                var newX  = Math.Max(0, Math.Min(dragOrigBounds.X + (pt.X - dragStart.X), _canvas.Width  - 20));
+                var newY  = Math.Max(0, Math.Min(dragOrigBounds.Y + (pt.Y - dragStart.Y), _canvas.Height - 16));
+                annotation.Bounds = new Rect(newX, newY, annotation.Bounds.Width, annotation.Bounds.Height);
+                Canvas.SetLeft(display,    newX);
+                Canvas.SetTop(display,     newY);
+                Canvas.SetLeft(shadow,     newX + 1.5);
+                Canvas.SetTop(shadow,      newY + 1.5);
+                e.Handled = true;
+            };
+            display.MouseLeftButtonUp += (_, e) =>
+            {
+                if (!isDragging) return;
+                CommitDragUndo();
+                isDragging = false;
+                display.ReleaseMouseCapture();
+                e.Handled = true;
+            };
+            display.MouseRightButtonDown += (_, e) =>
+            {
+                PushUndo();
+                RemoveTextAnnotation(annotation);
+                e.Handled = true;
+            };
+
+            annotation.Shadow  = shadow;
+            annotation.Display = display;
+            Panel.SetZIndex(shadow,  19);
+            Panel.SetZIndex(display, 20);
+            _canvas.Children.Add(shadow);
+            _canvas.Children.Add(display);
+        }
+
+        annotation.Display.Text     = annotation.Text;
+        annotation.Display.FontSize = annotation.FontSize;
+        annotation.Shadow!.Text     = annotation.Text;
+        annotation.Shadow.FontSize  = annotation.FontSize;
+
+        // Measure so Bounds.Width/Height reflect the rendered size (needed for crop-in-place).
+        annotation.Display.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        annotation.Bounds = new Rect(
+            annotation.Bounds.Left,
+            annotation.Bounds.Top,
+            Math.Max(annotation.Bounds.Width,  annotation.Display.DesiredSize.Width),
+            Math.Max(annotation.Bounds.Height, annotation.Display.DesiredSize.Height));
+
+        Canvas.SetLeft(annotation.Display, annotation.Bounds.Left);
+        Canvas.SetTop(annotation.Display,  annotation.Bounds.Top);
+        Canvas.SetLeft(annotation.Shadow,  annotation.Bounds.Left + 1.5);
+        Canvas.SetTop(annotation.Shadow,   annotation.Bounds.Top  + 1.5);
+        annotation.Display.Visibility = Visibility.Visible;
+        annotation.Shadow.Visibility  = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Adjusts <paramref name="tb"/>.FontSize so the text fits within <paramref name="maxWidth"/>,
+    /// growing back toward <see cref="AnnotationText.MaxFontSize"/> when content shrinks.
+    /// </summary>
+    private static void AdjustTextFontSize(TextBox tb, double maxWidth)
+    {
+        var typeface = new Typeface(
+            new FontFamily("Calibri"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
+
+        double fs = AnnotationText.MaxFontSize;
+        while (fs > AnnotationText.MinFontSize)
+        {
+            var ft = new FormattedText(
+                tb.Text,
+                System.Globalization.CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight,
+                typeface,
+                fs,
+                Brushes.White,
+                1.0);
+            if (ft.Width <= maxWidth) break;
+            fs -= 1.0;
+        }
+        tb.FontSize = Math.Max(AnnotationText.MinFontSize, fs);
+    }
+
+    private void RemoveTextAnnotation(AnnotationText annotation)
+    {
+        if (!_suppressUndo) PushUndo();
+        if (annotation.Display != null) _canvas.Children.Remove(annotation.Display);
+        if (annotation.Shadow  != null) _canvas.Children.Remove(annotation.Shadow);
+        _texts.Remove(annotation);
+    }
+
     // ── Crop In-Place ─────────────────────────────────────────────────────────
 
     /// <summary>
@@ -3123,6 +3484,7 @@ internal sealed class ClipboardImageEditorWindow : Window
     {
         if (_sel.IsEmpty) return;
 
+        CommitActiveTextBox(); // finalize any in-progress text edit before cropping
         PushUndo();  // full snapshot before crop — Ctrl+Z will restore everything
 
         var sel = _sel;
@@ -3221,6 +3583,26 @@ internal sealed class ClipboardImageEditorWindow : Window
             }
         }
 
+        // Shift or remove text annotations relative to the new origin.
+        _suppressUndo = true;
+        try
+        {
+            foreach (var t in _texts.ToList())
+            {
+                if (!sel.IntersectsWith(t.Bounds))
+                {
+                    RemoveTextAnnotation(t);
+                }
+                else
+                {
+                    t.Bounds = new Rect(t.Bounds.Left - dx, t.Bounds.Top - dy,
+                                        t.Bounds.Width, t.Bounds.Height);
+                    UpdateTextDisplay(t);
+                }
+            }
+        }
+        finally { _suppressUndo = false; }
+
         // Clear the selection and deselect any annotation so we start fresh.
         _sel = Rect.Empty;
         SelectArrow(null);
@@ -3233,6 +3615,8 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     private void DoInsertImage()
     {
+        CommitActiveTextBox(); // finalize any in-progress text edit so it renders in the output
+
         // Hide chrome before rendering so handles/color-picker don't appear in the output.
         foreach (var h in _handles) h.Visibility = Visibility.Collapsed;
         _selBorderRect.Visibility  = Visibility.Collapsed;
@@ -3364,6 +3748,7 @@ internal sealed class ClipboardImageEditorWindow : Window
                            a.UserTailLength, a.ArrowColor, a.TargetCenterOnCanvas,
                            a.OffsetX, a.OffsetY)).ToList(),
         Rects: _annotRects.Select(r => new RectSnap(r.Bounds, r.RectColor)).ToList(),
+        Texts: _texts.Select(t => new TextSnap(t.Bounds, t.Text, t.FontSize, t.TextColor)).ToList(),
         CursorEnabled: _cursorEnabled,
         CursorPos: _cursorImage != null
                            ? new Point(Canvas.GetLeft(_cursorImage), Canvas.GetTop(_cursorImage))
@@ -3445,6 +3830,7 @@ internal sealed class ClipboardImageEditorWindow : Window
                 CreateAnnotationRect(rs.Bounds, rs.RectColor);
 
             SelectAnnotationRect(null);
+            foreach (var t in _texts.ToList()) RemoveTextAnnotation(t);
             _sel = snap.Sel;
             _cursorEnabled = snap.CursorEnabled;
 
@@ -3470,6 +3856,19 @@ internal sealed class ClipboardImageEditorWindow : Window
             {
                 _cursorImage.Visibility = Visibility.Collapsed;
                 _draggingCursor = false;
+            }
+
+            foreach (var ts in snap.Texts)
+            {
+                var a = new AnnotationText
+                {
+                    Bounds    = ts.Bounds,
+                    Text      = ts.Text,
+                    FontSize  = ts.FontSize,
+                    TextColor = ts.TextColor
+                };
+                _texts.Add(a);
+                UpdateTextDisplay(a);
             }
 
             RefreshLayout();
@@ -3532,6 +3931,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         Rect Sel,
         IReadOnlyList<ArrowSnap> Arrows,
         IReadOnlyList<RectSnap> Rects,
+        IReadOnlyList<TextSnap> Texts,
         bool CursorEnabled,
         Point CursorPos,
         BitmapSource WorkingImage,
@@ -3554,6 +3954,8 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     private sealed record RectSnap(Rect Bounds, Color RectColor);
 
+    private sealed record TextSnap(Rect Bounds, string Text, double FontSize, Color TextColor);
+
     // ── Change detection ──────────────────────────────────────────────────────
 
     /// <summary>
@@ -3567,6 +3969,7 @@ internal sealed class ClipboardImageEditorWindow : Window
     private bool HasChanges()
         => _arrows.Count > 0
         || _annotRects.Count > 0
+        || _texts.Count > 0
         || (_cursorEnabled && _cursorImage != null)
         || !_sel.IsEmpty;
 }

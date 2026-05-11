@@ -80,6 +80,18 @@
         </Canvas>
     </Viewbox>
 
+    <!-- Text annotation tool icon — bold "T" letterform -->
+    <Viewbox x:Key="ImageEditorTextIcon" Width="18" Height="18" Stretch="Uniform">
+        <Canvas Width="100" Height="100">
+            <!-- Horizontal crossbar -->
+            <Rectangle Canvas.Left="8" Canvas.Top="10" Width="84" Height="14"
+                       Fill="{DynamicResource LabelText}" RadiusX="3" RadiusY="3"/>
+            <!-- Vertical stem -->
+            <Rectangle Canvas.Left="43" Canvas.Top="10" Width="14" Height="78"
+                       Fill="{DynamicResource LabelText}" RadiusX="3" RadiusY="3"/>
+        </Canvas>
+    </Viewbox>
+
     <!-- Round corners mask icon -->
     <Viewbox x:Key="ImageEditorRoundCornersIcon" Width="18" Height="18" Stretch="Uniform">
         <!-- Replace with your design -->
