@@ -39,6 +39,10 @@ internal sealed class PreferencesWindow : Window {
     private readonly TextBox _byokApiKeyRevealBox;
     private readonly TextBlock _byokTestStatusText;
     private readonly TextBox _cleanupPromptBox;
+    private readonly CheckBox _completionSoundEnabledCheckBox;
+    private readonly TextBlock _completionSoundPathText;
+    private readonly Button _completionSoundBrowseButton;
+    private readonly Button _completionSoundClearButton;
 
     private readonly UIElement[] _pages;
     private readonly Button[] _navButtons;
@@ -108,6 +112,34 @@ internal sealed class PreferencesWindow : Window {
         _cleanupPromptBox.SetResourceReference(TextBox.BackgroundProperty, "TextBoxBackground");
         _cleanupPromptBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
         _cleanupPromptBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
+
+        _completionSoundEnabledCheckBox = new CheckBox {
+            Content = "Enable completion sounds",
+            IsChecked = currentSettings.CompletionSoundEnabled,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        _completionSoundEnabledCheckBox.SetResourceReference(ForegroundProperty, "BodyText");
+
+        _completionSoundPathText = new TextBlock {
+            Text = currentSettings.CompletionSoundFilePath ?? "(System default)",
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        _completionSoundPathText.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+
+        _completionSoundBrowseButton = new Button {
+            Content = "Browse…",
+            Width = 80,
+            Margin = new Thickness(0, 0, 4, 0)
+        };
+        _completionSoundBrowseButton.Click += CompletionSoundBrowse_Click;
+
+        _completionSoundClearButton = new Button {
+            Content = "Clear",
+            Width = 60
+        };
+        _completionSoundClearButton.Click += CompletionSoundClear_Click;
 
         _tunnelModeComboBox = new ComboBox { Height = 30, Margin = new Thickness(0, 0, 0, 12) };
         _tunnelModeComboBox.Items.Add(new ComboBoxItem { Content = "None", Tag = (string?)null });
@@ -283,6 +315,7 @@ internal sealed class PreferencesWindow : Window {
         var pageList = new List<(string label, UIElement page)> {
             ("General",       BuildGeneralPage()),
             ("Speech",        BuildSpeechPage()),
+            ("Sounds",        BuildSoundsPage()),
             ("Remote Access", BuildRemoteAccessPage()),
             ("Custom Model",  BuildByokPage()),
             ("Notifications", BuildNotificationsPage(currentSettings)),
@@ -350,6 +383,35 @@ internal sealed class PreferencesWindow : Window {
         };
         regionHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
         form.Children.Add(regionHint);
+
+        return WrapInScrollViewer(form);
+    }
+
+    private UIElement BuildSoundsPage() {
+        var form = new StackPanel { Margin = new Thickness(20, 16, 20, 20) };
+
+        AddSectionHeader(form, "Completion Sound");
+
+        form.Children.Add(_completionSoundEnabledCheckBox);
+
+        var fileGroup = new StackPanel { Margin = new Thickness(20, 0, 0, 0) };
+        var soundFileLabel = new TextBlock {
+            Text = "Custom sound file (.mp3 or .wav):",
+            Margin = new Thickness(0, 8, 0, 4)
+        };
+        soundFileLabel.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
+        fileGroup.Children.Add(soundFileLabel);
+
+        var fileRow = new StackPanel {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 4, 0, 0)
+        };
+        fileRow.Children.Add(_completionSoundPathText);
+        fileRow.Children.Add(_completionSoundBrowseButton);
+        fileRow.Children.Add(_completionSoundClearButton);
+        fileGroup.Children.Add(fileRow);
+
+        form.Children.Add(fileGroup);
 
         return WrapInScrollViewer(form);
     }
@@ -599,6 +661,21 @@ internal sealed class PreferencesWindow : Window {
         _apiKeyPasswordBox.Visibility = Visibility.Visible;
     }
 
+    private void CompletionSoundBrowse_Click(object sender, RoutedEventArgs e) {
+        var dlg = new Microsoft.Win32.OpenFileDialog {
+            Title = "Select sound file",
+            Filter = "Audio files (*.mp3;*.wav)|*.mp3;*.wav",
+            CheckFileExists = true
+        };
+        if (dlg.ShowDialog(this) == true) {
+            _completionSoundPathText.Text = dlg.FileName;
+        }
+    }
+
+    private void CompletionSoundClear_Click(object sender, RoutedEventArgs e) {
+        _completionSoundPathText.Text = "(System default)";
+    }
+
     private async void ByokTestButton_Click(object sender, RoutedEventArgs e) {
         var url = _byokProviderUrlBox.Text.Trim().TrimEnd('/');
         if (string.IsNullOrEmpty(url)) {
@@ -668,6 +745,9 @@ internal sealed class PreferencesWindow : Window {
             byokProviderType,
             string.IsNullOrWhiteSpace(byokApiKey) ? null : byokApiKey);
         updated = _settingsStore.SaveCleanupPrompt(_cleanupPromptBox.Text.Trim());
+        updated = _settingsStore.SaveCompletionSoundSettings(
+            _completionSoundEnabledCheckBox.IsChecked == true,
+            _completionSoundPathText.Text == "(System default)" ? null : _completionSoundPathText.Text);
         _onSaved(updated);
         Close();
 

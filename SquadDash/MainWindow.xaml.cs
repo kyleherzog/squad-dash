@@ -86,6 +86,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private readonly InstanceActivationChannel _instanceActivationChannel;
     private PreferencesWindow? _preferencesWindow;
     private readonly PushNotificationService _pushNotificationService;
+    private readonly CompletionSoundService _completionSoundService;
     private readonly ObservableCollection<AgentStatusCard> _agents = [];
     private readonly ObservableCollection<AgentStatusCard> _activeAgentCards = [];
     private readonly ObservableCollection<AgentStatusCard> _inactiveAgentCards = [];
@@ -464,6 +465,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _squadCliAdapter = new SquadCliAdapter(_workspacePaths, (op, ex) => HandleUiCallbackException(op, ex));
         _workspaceOpenCoordinator = new WorkspaceOpenCoordinator(_instanceRegistry);
         _pushNotificationService = new PushNotificationService(_settingsStore);
+        _completionSoundService = new CompletionSoundService(_settingsStore.Load());
         InitializeComponent();
         SquadDashTrace.Write(TraceCategory.Startup, $"Constructor: InitializeComponent {ctorSw.ElapsedMilliseconds}ms.");
         OutputTextBox.CacheMode = CreateTranscriptBitmapCache();
@@ -3383,6 +3385,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                         // ─────────────────────────────────────────────────────────────────
                     }
                     _ = _pushNotificationService.NotifyEventAsync("assistant_turn_complete", "SquadDash", notifMessage);
+                    _completionSoundService.PlayCompletionSound();
 
                     // Handle SquadDash loop commands embedded in the AI response.
                     if (squadashPayload?.Command is string cmd)
@@ -9205,6 +9208,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 {
                     _settingsSnapshot = snapshot;
                     _pushNotificationService.ReloadProvider();
+                    _completionSoundService.UpdateSettings(snapshot);
                     UpdateVoiceHintVisibility();
                     RefreshInstallationState();
                     RefreshDeveloperRuntimeIssuePreview();

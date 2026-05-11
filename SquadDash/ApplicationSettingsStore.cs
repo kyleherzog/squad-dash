@@ -227,6 +227,17 @@ internal sealed class ApplicationSettingsStore {
         return updated;
     }
 
+    public ApplicationSettingsSnapshot SaveCompletionSoundSettings(bool enabled, string? filePath) {
+        using var mutex = AcquireMutex();
+        var current = LoadCore();
+        var updated = current with {
+            CompletionSoundEnabled = enabled,
+            CompletionSoundFilePath = string.IsNullOrWhiteSpace(filePath) ? null : filePath.Trim()
+        };
+        SaveCore(updated);
+        return updated;
+    }
+
     public ApplicationSettingsSnapshot SaveCleanupPrompt(string? prompt) {
         using var mutex = AcquireMutex();
         var current = LoadCore();
@@ -800,6 +811,13 @@ internal sealed record ApplicationSettingsSnapshot(
     /// </summary>
     public double? DocsSourceWidth { get; init; }
 
+    // ── Sounds ────────────────────────────────────────────────────────────
+    /// <summary>Whether to play a sound when a squad agent completes a prompt turn.</summary>
+    public bool CompletionSoundEnabled { get; init; } = true;
+
+    /// <summary>Path to custom .mp3 or .wav sound file. Null means use Windows system notification sound.</summary>
+    public string? CompletionSoundFilePath { get; init; }
+
     // ── Notifications ──────────────────────────────────────────────────────
     /// <summary>Push notification provider. "ntfy" or null (disabled).</summary>
     public string? NotificationProvider { get; init; }
@@ -1071,6 +1089,8 @@ internal sealed record ApplicationSettingsSnapshot(
             NotificationProvider = string.IsNullOrWhiteSpace(NotificationProvider) ? null : NotificationProvider.Trim(),
             NotificationEndpoint = NotificationEndpoint,
             NotificationEventToggles = NotificationEventToggles,
+            CompletionSoundEnabled = CompletionSoundEnabled,
+            CompletionSoundFilePath = string.IsNullOrWhiteSpace(CompletionSoundFilePath) ? null : CompletionSoundFilePath.Trim(),
             TunnelMode = TunnelMode is "ngrok" or "cloudflare" ? TunnelMode : null,
             TunnelToken = string.IsNullOrWhiteSpace(TunnelToken) ? null : TunnelToken.Trim(),
             ByokProviderUrl = string.IsNullOrWhiteSpace(ByokProviderUrl) ? null : ByokProviderUrl.Trim(),
