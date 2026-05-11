@@ -36,24 +36,15 @@ internal static class SmoothDictationHelper
     /// </summary>
     public static string Apply(string input)
     {
-        // Pass 1 — collapse duplicate words (loop in case of triple+ repetition).
-        string result = input;
-        string prev;
-        do
-        {
-            prev   = result;
-            result = _duplicateWord.Replace(result, m => m.Groups[1].Value);
-        } while (!string.Equals(result, prev, StringComparison.Ordinal));
-
-        // Pass 2 — sentence-break smoothing.
-        result = _sentenceBreak.Replace(result, m =>
+        // Pass 1 — sentence-break smoothing (removes dictation periods, lowercases next word).
+        string result = _sentenceBreak.Replace(input, m =>
         {
             char upper    = m.Groups[1].Value[0];
             int  afterPos = m.Index + m.Length;
 
             // Preserve the pronoun "I" — identified as a lone 'I' not followed by another letter.
             bool isPronounI = upper == 'I'
-                && (afterPos >= result.Length || !char.IsLetter(result[afterPos]));
+                && (afterPos >= input.Length || !char.IsLetter(input[afterPos]));
 
             if (isPronounI)
                 return m.Value; // leave untouched
@@ -63,6 +54,15 @@ internal static class SmoothDictationHelper
             string ws = m.Value[1..^1]; // skip leading '.' and trailing uppercase letter
             return ws + char.ToLowerInvariant(upper);
         });
+
+        // Pass 2 — collapse duplicate words (runs last so sentence-break removal can't create
+        // new duplicates that would be missed; loops in case of triple+ repetition).
+        string prev;
+        do
+        {
+            prev   = result;
+            result = _duplicateWord.Replace(result, m => m.Groups[1].Value);
+        } while (!string.Equals(result, prev, StringComparison.Ordinal));
 
         return result;
     }
