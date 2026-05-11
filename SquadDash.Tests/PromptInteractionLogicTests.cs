@@ -737,11 +737,20 @@ internal sealed class RunButtonLabelPolicyTests {
     // ── Active tab (editing a queued item) ────────────────────────────────────
 
     [Test]
-    public void Compute_ActiveTab_CoordinatorIdle_ReturnsSend() {
+    public void Compute_ActiveTab_RightmostTab_CoordinatorIdle_ReturnsSend() {
         var label = RunButtonLabelPolicy.Compute(
             coordinatorBusy: false, queuePausedAwaitingInput: false,
-            queueCount: 1, activeTabId: "tab-42");
+            queueCount: 1, activeTabId: "tab-42", isRightmostTab: true);
         Assert.That(label, Is.EqualTo(RunButtonLabelPolicy.LabelSend));
+    }
+
+    [Test]
+    public void Compute_ActiveTab_NotRightmostTab_CoordinatorIdle_ReturnsSubmit() {
+        // Non-rightmost tab: items exist to the right, so submitting queues behind them.
+        var label = RunButtonLabelPolicy.Compute(
+            coordinatorBusy: false, queuePausedAwaitingInput: false,
+            queueCount: 2, activeTabId: "tab-42", isRightmostTab: false);
+        Assert.That(label, Is.EqualTo(RunButtonLabelPolicy.LabelSubmit));
     }
 
     [Test]
@@ -753,11 +762,20 @@ internal sealed class RunButtonLabelPolicyTests {
     }
 
     [Test]
-    public void Compute_ActiveTab_QueuePaused_CoordinatorIdle_ReturnsSend() {
+    public void Compute_ActiveTab_NotRightmostTab_CoordinatorBusy_ReturnsQueue() {
+        // Busy coordinator always returns Queue regardless of tab position.
+        var label = RunButtonLabelPolicy.Compute(
+            coordinatorBusy: true, queuePausedAwaitingInput: false,
+            queueCount: 2, activeTabId: "tab-42", isRightmostTab: false);
+        Assert.That(label, Is.EqualTo(RunButtonLabelPolicy.LabelQueue));
+    }
+
+    [Test]
+    public void Compute_ActiveTab_QueuePaused_RightmostTab_CoordinatorIdle_ReturnsSend() {
         // Active-tab path ignores queuePausedAwaitingInput entirely.
         var label = RunButtonLabelPolicy.Compute(
             coordinatorBusy: false, queuePausedAwaitingInput: true,
-            queueCount: 1, activeTabId: "tab-99");
+            queueCount: 1, activeTabId: "tab-99", isRightmostTab: true);
         Assert.That(label, Is.EqualTo(RunButtonLabelPolicy.LabelSend));
     }
 

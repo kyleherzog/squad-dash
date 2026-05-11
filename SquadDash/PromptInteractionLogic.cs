@@ -277,8 +277,9 @@ internal static class LocalPromptSubmissionPolicy {
 /// without a WPF dependency.
 /// </summary>
 internal static class RunButtonLabelPolicy {
-    public const string LabelSend  = "Send";
-    public const string LabelQueue = "Queue";
+    public const string LabelSend   = "Send";
+    public const string LabelQueue  = "Queue";
+    public const string LabelSubmit = "Submit";
 
     /// <summary>
     /// Computes the label that should appear on the Run button.
@@ -288,15 +289,23 @@ internal static class RunButtonLabelPolicy {
     /// i.e. the queue has been halted because the last AI turn requested human input.</param>
     /// <param name="queueCount">Number of items currently in the prompt queue.</param>
     /// <param name="activeTabId">The currently-active queued-tab ID, or null if on the live tab.</param>
+    /// <param name="isRightmostTab">True when the active tab is the rightmost (oldest/first-to-dispatch)
+    /// queue item — the one that will actually be sent on the next dispatch cycle.</param>
     public static string Compute(
         bool coordinatorBusy,
         bool queuePausedAwaitingInput,
         int  queueCount,
-        string? activeTabId) {
+        string? activeTabId,
+        bool isRightmostTab = false) {
 
-        // Editing a specific queued tab: "Send" only when coordinator is free.
+        // Editing a specific queued tab.
         if (activeTabId is not null)
-            return coordinatorBusy ? LabelQueue : LabelSend;
+        {
+            if (coordinatorBusy) return LabelQueue;
+            // "Send" only on the rightmost tab (the one about to be dispatched).
+            // Non-rightmost tabs show "Submit" to indicate they are queued behind others.
+            return isRightmostTab ? LabelSend : LabelSubmit;
+        }
 
         // Queue is paused for input: bypass the "items in queue → Queue" logic so
         // the user's reply fires immediately rather than being added to the back.
