@@ -236,6 +236,11 @@ internal sealed class ClipboardImageEditorWindow : Window
     private AnnotationText? _selectedText;
     private AnnotationText? _colorPickerText;
     private Rectangle? _textSelectionRect;
+    private List<Rectangle> _textResizeHandles = new();
+    private bool _draggingTextHandle;
+    private Point _textHandleDragStart;
+    private double _textHandleDragOrigFontSize;
+    private AnnotationText? _textHandleDragAnnotation;
     private Color _defaultTextFgColor = Colors.White;
     private Color _defaultTextBgColor = Colors.Black;
 
@@ -1285,6 +1290,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             var ept = e.GetPosition(_canvas);
             var ec = SamplePixelAtCanvasPoint(ept);
             UpdateEyedropperResult(ec);
+            ExitEyedropperMode();
             e.Handled = true;
             return;
         }
@@ -1302,6 +1308,29 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         SelectArrow(null);
         SelectAnnotationRect(null);
+
+        // Text annotation resize handle hit test
+        if (_selectedText != null && _textResizeHandles.Count == 4)
+        {
+            double hs = HandleSize / _zoom / 2;
+            var ptHandle = e.GetPosition(_canvas);
+            foreach (var handle in _textResizeHandles)
+            {
+                double hx = Canvas.GetLeft(handle) + hs;
+                double hy = Canvas.GetTop(handle)  + hs;
+                if (Math.Abs(ptHandle.X - hx) <= hs + 2 && Math.Abs(ptHandle.Y - hy) <= hs + 2)
+                {
+                    _draggingTextHandle       = true;
+                    _textHandleDragStart      = ptHandle;
+                    _textHandleDragOrigFontSize = _selectedText.FontSize;
+                    _textHandleDragAnnotation = _selectedText;
+                    _preDragSnapshot          = CaptureSnapshot();
+                    _canvas.CaptureMouse();
+                    e.Handled = true;
+                    return;
+                }
+            }
+        }
 
         // Clicking canvas background deselects any selected text annotation
         if (_selectedText != null)
@@ -1522,6 +1551,18 @@ internal sealed class ClipboardImageEditorWindow : Window
             return;
         }
 
+        if (_draggingTextHandle && _textHandleDragAnnotation != null)
+        {
+            var pt = e.GetPosition(_canvas);
+            double delta = (pt.X - _textHandleDragStart.X + pt.Y - _textHandleDragStart.Y) / 2.0;
+            double newSize = Math.Max(8, Math.Min(_textHandleDragOrigFontSize + delta, AnnotationText.MaxFontSize));
+            _textHandleDragAnnotation.FontSize = newSize;
+            RefreshTextAnnotation(_textHandleDragAnnotation);
+            PositionTextResizeHandles(_textHandleDragAnnotation);
+            e.Handled = true;
+            return;
+        }
+
         // Eyedropper mode: show live color tooltip.
         if (_inEyedropperMode)
         {
@@ -1652,6 +1693,14 @@ internal sealed class ClipboardImageEditorWindow : Window
             _canvas.ReleaseMouseCapture();
             _canvas.Cursor = Cursors.Arrow;
             e.Handled = true;
+        }
+
+        if (_draggingTextHandle)
+        {
+            _draggingTextHandle = false;
+            _canvas.ReleaseMouseCapture();
+            CommitDragUndo();
+            _textHandleDragAnnotation = null;
         }
     }
 
@@ -3258,6 +3307,9 @@ internal sealed class ClipboardImageEditorWindow : Window
         _texts.Add(annotation);
         _editingText = annotation;
         CreateTextBoxOverlay(annotation);
+        // Revert canvas cursor immediately — TextBox will show IBeam on its own when hovered
+        if (!_inTextMultiDropMode)
+            _canvas.Cursor = Cursors.Arrow;
     }
 
     /// <summary>
@@ -3446,6 +3498,9 @@ internal sealed class ClipboardImageEditorWindow : Window
 
             display.MouseLeftButtonDown += (_, e) =>
             {
+                // In tool placement/eyedropper modes, let event bubble to canvas
+                if (_inCursorPlacementMode || _inEyedropperMode) return;
+
                 if (e.ClickCount == 2)
                 {
                     BeginEditText(annotation);
@@ -4117,9 +4172,11 @@ internal sealed class ClipboardImageEditorWindow : Window
             Canvas.SetLeft(_textSelectionRect, b.Left - 4);
             Canvas.SetTop(_textSelectionRect,  b.Top  - 2);
             _canvas.Children.Add(_textSelectionRect);
+            AddTextResizeHandles(annotation);
         }
         else
         {
+            RemoveTextResizeHandles();
             _selectedText = null;
             HideColorPicker();
         }
@@ -4136,6 +4193,63 @@ internal sealed class ClipboardImageEditorWindow : Window
         _textSelectionRect.StrokeThickness = 1.5 / _zoom;
         Canvas.SetLeft(_textSelectionRect, b.Left - 4);
         Canvas.SetTop(_textSelectionRect,  b.Top  - 2);
+        PositionTextResizeHandles(_selectedText);
+    }
+
+    private void RefreshTextAnnotation(AnnotationText annotation)
+    {
+        if (annotation.Display != null) annotation.Display.FontSize = annotation.FontSize;
+        if (annotation.Shadow  != null) annotation.Shadow.FontSize  = annotation.FontSize;
+        UpdateTextSelectionBorder();
+    }
+
+    private void AddTextResizeHandles(AnnotationText annotation)
+    {
+        RemoveTextResizeHandles();
+        for (int i = 0; i < 4; i++)
+        {
+            var handle = new Rectangle
+            {
+                Fill             = Brushes.White,
+                Stroke           = Brushes.Black,
+                StrokeThickness  = 1,
+                Width            = HandleSize / _zoom,
+                Height           = HandleSize / _zoom,
+                IsHitTestVisible = true
+            };
+            Panel.SetZIndex(handle, 22);
+            _canvas.Children.Add(handle);
+            _textResizeHandles.Add(handle);
+        }
+        PositionTextResizeHandles(annotation);
+    }
+
+    private void PositionTextResizeHandles(AnnotationText annotation)
+    {
+        if (_textResizeHandles.Count != 4 || annotation.Display == null) return;
+        double hs = HandleSize / _zoom / 2;
+        double l = annotation.Bounds.Left - 4;
+        double t = annotation.Bounds.Top  - 2;
+        double w = annotation.Display.DesiredSize.Width  + 8;
+        double h = annotation.Display.DesiredSize.Height + 4;
+        Point[] corners =
+        {
+            new Point(l,     t),
+            new Point(l + w, t),
+            new Point(l,     t + h),
+            new Point(l + w, t + h),
+        };
+        for (int i = 0; i < 4; i++)
+        {
+            Canvas.SetLeft(_textResizeHandles[i], corners[i].X - hs);
+            Canvas.SetTop (_textResizeHandles[i], corners[i].Y - hs);
+        }
+    }
+
+    private void RemoveTextResizeHandles()
+    {
+        foreach (var h in _textResizeHandles) _canvas.Children.Remove(h);
+        _textResizeHandles.Clear();
     }
 
     private void ShowColorPickerForText(AnnotationText annotation)
