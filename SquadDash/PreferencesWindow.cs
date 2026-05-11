@@ -83,6 +83,9 @@ internal sealed class PreferencesWindow : Window {
             Height = 30,
             Margin = new Thickness(0, 0, 0, 20)
         };
+        _userNameBox.SetResourceReference(TextBox.BackgroundProperty, "TextBoxBackground");
+        _userNameBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
+        _userNameBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
 
         var currentApiKey = Environment.GetEnvironmentVariable("SQUAD_SPEECH_KEY", EnvironmentVariableTarget.User) ?? string.Empty;
         _apiKeyPasswordBox = new PasswordBox {
@@ -90,18 +93,27 @@ internal sealed class PreferencesWindow : Window {
             Padding = new Thickness(6, 4, 6, 4),
             Height = 30
         };
+        _apiKeyPasswordBox.SetResourceReference(PasswordBox.BackgroundProperty, "TextBoxBackground");
+        _apiKeyPasswordBox.SetResourceReference(PasswordBox.BorderBrushProperty, "InputBorder");
+        _apiKeyPasswordBox.SetResourceReference(PasswordBox.ForegroundProperty, "LabelText");
         _apiKeyRevealBox = new TextBox {
             Text = currentApiKey,
             Padding = new Thickness(6, 4, 6, 4),
             Height = 30,
             Visibility = Visibility.Collapsed
         };
+        _apiKeyRevealBox.SetResourceReference(TextBox.BackgroundProperty, "TextBoxBackground");
+        _apiKeyRevealBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
+        _apiKeyRevealBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
 
         _speechRegionBox = new TextBox {
             Text = currentSettings.SpeechRegion ?? string.Empty,
             Padding = new Thickness(6, 4, 6, 4),
             Height = 30
         };
+        _speechRegionBox.SetResourceReference(TextBox.BackgroundProperty, "TextBoxBackground");
+        _speechRegionBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
+        _speechRegionBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
 
         var isOpenAi = currentSettings.SpeechProvider == SpeechProvider.OpenAI;
         _azureSpeechRadio = new RadioButton {
@@ -175,24 +187,36 @@ internal sealed class PreferencesWindow : Window {
             Padding = new Thickness(6, 4, 6, 4),
             Height = 30
         };
+        _tunnelTokenPasswordBox.SetResourceReference(PasswordBox.BackgroundProperty, "TextBoxBackground");
+        _tunnelTokenPasswordBox.SetResourceReference(PasswordBox.BorderBrushProperty, "InputBorder");
+        _tunnelTokenPasswordBox.SetResourceReference(PasswordBox.ForegroundProperty, "LabelText");
         _tunnelTokenRevealBox = new TextBox {
             Text = currentTunnelToken,
             Padding = new Thickness(6, 4, 6, 4),
             Height = 30,
             Visibility = Visibility.Collapsed
         };
+        _tunnelTokenRevealBox.SetResourceReference(TextBox.BackgroundProperty, "TextBoxBackground");
+        _tunnelTokenRevealBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
+        _tunnelTokenRevealBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
 
         _byokProviderUrlBox = new TextBox {
             Text = currentSettings.ByokProviderUrl ?? string.Empty,
             Padding = new Thickness(6, 4, 6, 4),
             Height = 30
         };
+        _byokProviderUrlBox.SetResourceReference(TextBox.BackgroundProperty, "TextBoxBackground");
+        _byokProviderUrlBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
+        _byokProviderUrlBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
         _byokModelBox = new TextBox {
             Text = currentSettings.ByokModel ?? string.Empty,
             Padding = new Thickness(6, 4, 6, 4),
             Height = 30,
             Margin = new Thickness(0, 0, 0, 12)
         };
+        _byokModelBox.SetResourceReference(TextBox.BackgroundProperty, "TextBoxBackground");
+        _byokModelBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
+        _byokModelBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
 
         _byokProviderTypeComboBox = new ComboBox { Height = 30, Margin = new Thickness(0, 0, 0, 12) };
         _byokProviderTypeComboBox.Items.Add(new ComboBoxItem { Content = "OpenAI / Ollama (default)", Tag = "openai" });
@@ -216,12 +240,18 @@ internal sealed class PreferencesWindow : Window {
             Padding = new Thickness(6, 4, 6, 4),
             Height = 30
         };
+        _byokApiKeyPasswordBox.SetResourceReference(PasswordBox.BackgroundProperty, "TextBoxBackground");
+        _byokApiKeyPasswordBox.SetResourceReference(PasswordBox.BorderBrushProperty, "InputBorder");
+        _byokApiKeyPasswordBox.SetResourceReference(PasswordBox.ForegroundProperty, "LabelText");
         _byokApiKeyRevealBox = new TextBox {
             Text = currentByokApiKey,
             Padding = new Thickness(6, 4, 6, 4),
             Height = 30,
             Visibility = Visibility.Collapsed
         };
+        _byokApiKeyRevealBox.SetResourceReference(TextBox.BackgroundProperty, "TextBoxBackground");
+        _byokApiKeyRevealBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
+        _byokApiKeyRevealBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
         _byokTestStatusText = new TextBlock {
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(10, 0, 0, 0),
