@@ -430,7 +430,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private DateTime _ctrlFirstReleaseTime;
     private SpeechRecognitionService? _speechService;
     private PushToTalkWindow? _pttWindow;
-    private TextBox? _pttTargetTextBox;   // resolved at activation; null = PromptTextBox
+    private TextBox? _pttTargetTextBox;       // resolved at activation; null = PromptTextBox
+    private RichTextBox? _pttTargetRichTextBox;  // set when a RichTextBox (e.g. DocSourceTextBox) has focus at PTT activation
     private int _sessionCaretIndex;       // caret captured before PTT panel becomes visible
     private int _sessionSelectionLength;  // selection length captured before PTT panel becomes visible
     private DispatcherTimer? _promptNavHintTimer;
@@ -7365,23 +7366,42 @@ public partial class MainWindow : Window, ILiveElementLocator
                         var gapMs = (DateTime.UtcNow - _ctrlFirstReleaseTime).TotalMilliseconds;
                         if (gapMs <= PttDoubleClickTime)
                         {
-                            // Resolve the target TextBox at activation time.
-                            // Use Keyboard.FocusedElement so any focused TextBox (not just
-                            // DocSourceTextBox) receives the dictated text.
-                            var focusedTextBox = Keyboard.FocusedElement as TextBox;
-                            _pttTargetTextBox = focusedTextBox != null && focusedTextBox != PromptTextBox
-                                ? focusedTextBox
-                                : PromptTextBox;
+                            // Resolve the target at activation time — prefer a focused RichTextBox
+                            // (e.g. DocSourceTextBox) over the fallback TextBox path.
+                            var focusedTextBox     = Keyboard.FocusedElement as TextBox;
+                            var focusedRichTextBox = Keyboard.FocusedElement as RichTextBox;
 
-                            if (_pttTargetTextBox != null)
+                            _pttTargetRichTextBox = null;
+                            if (focusedRichTextBox != null)
+                            {
+                                _pttTargetRichTextBox = focusedRichTextBox;
+                                _pttTargetTextBox = null;
+                            }
+                            else
+                            {
+                                _pttTargetTextBox = focusedTextBox != null && focusedTextBox != PromptTextBox
+                                    ? focusedTextBox
+                                    : PromptTextBox;
+                            }
+
+                            var pttTargetExists = _pttTargetRichTextBox != null || _pttTargetTextBox != null;
+                            if (pttTargetExists)
                             {
                                 // Capture caret/selection before the PTT panel becomes visible (layout shifts can reset it).
-                                _sessionCaretIndex = _pttTargetTextBox.SelectionStart;
-                                _sessionSelectionLength = _pttTargetTextBox.SelectionLength;
+                                if (_pttTargetRichTextBox != null)
+                                {
+                                    _sessionCaretIndex      = _pttTargetRichTextBox.GetSelectionStart();
+                                    _sessionSelectionLength = _pttTargetRichTextBox.GetSelectionLength();
+                                }
+                                else
+                                {
+                                    _sessionCaretIndex      = _pttTargetTextBox!.SelectionStart;
+                                    _sessionSelectionLength = _pttTargetTextBox!.SelectionLength;
+                                }
                                 // Queue whenever the target is the prompt box.
                                 // EnqueueCurrentPrompt works whether or not a prompt is currently running,
                                 // so we no longer need to gate on !_isPromptRunning.
-                                _voiceStartedWithSendEnabled = _pttTargetTextBox == PromptTextBox;
+                                _voiceStartedWithSendEnabled = _pttTargetRichTextBox == null && _pttTargetTextBox == PromptTextBox;
                                 _pttState = PttState.Active;
                                 _ = StartPushToTalkAsync();
                             }
@@ -7591,14 +7611,16 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private async Task StartPushToTalkAsync()
     {
-        var target = _pttTargetTextBox ?? PromptTextBox;
+        var targetIsPrompt = _pttTargetRichTextBox == null && (_pttTargetTextBox == null || _pttTargetTextBox == PromptTextBox);
+        var targetHasText  = _pttTargetRichTextBox != null
+            ? !string.IsNullOrEmpty(_pttTargetRichTextBox.GetPlainText())
+            : !string.IsNullOrEmpty((_pttTargetTextBox ?? PromptTextBox).Text);
+        _pttHadPreexistingText = targetHasText;
         RecordHintFeatureUsed(PromptHintFeature.PushToTalk);
 
         // In fullscreen transcript mode, peek the prompt so the user can see dictated text.
         if (_transcriptFullScreenEnabled && !_fullScreenPromptVisible)
             ShowFullScreenPrompt();
-
-        _pttHadPreexistingText = !string.IsNullOrEmpty(target.Text);
         _pttShiftTappedDuringRecording = false;
         _pttLostFocusDuringRecording = false;
         var key = Environment.GetEnvironmentVariable("SQUAD_SPEECH_KEY", EnvironmentVariableTarget.User);
@@ -7611,7 +7633,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
 
         // Only show the "release to send" hint when targeting the prompt and it's empty.
-        _pttWindow = new PushToTalkWindow(this, showHint: target == PromptTextBox && !_pttHadPreexistingText);
+        _pttWindow = new PushToTalkWindow(this, showHint: targetIsPrompt && !_pttHadPreexistingText);
         PositionPttWindow();
         _pttWindow.Show();
         _pttWindow.VolumeBar.Height = 0;
@@ -7692,25 +7714,45 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (_pttWindow is null)
             return;
 
-        var target = _pttTargetTextBox ?? PromptTextBox;
         System.Windows.Point physicalPoint;
-        try
+        FrameworkElement dpiSource;
+        if (_pttTargetRichTextBox != null)
         {
-            var caretRect = target.GetRectFromCharacterIndex(_sessionCaretIndex);
-            physicalPoint = target.PointToScreen(new System.Windows.Point(caretRect.Left, caretRect.Bottom));
+            dpiSource = _pttTargetRichTextBox;
+            try
+            {
+                var caretRect = _pttTargetRichTextBox.GetRectFromOffset(_sessionCaretIndex);
+                physicalPoint = _pttTargetRichTextBox.PointToScreen(
+                    new System.Windows.Point(caretRect.Left, caretRect.Bottom));
+            }
+            catch
+            {
+                physicalPoint = _pttTargetRichTextBox.PointToScreen(
+                    new System.Windows.Point(0, _pttTargetRichTextBox.ActualHeight + 4));
+            }
         }
-        catch
+        else
         {
-            physicalPoint = target.PointToScreen(new System.Windows.Point(0, target.ActualHeight + 4));
+            var target = _pttTargetTextBox ?? PromptTextBox;
+            dpiSource = target;
+            try
+            {
+                var caretRect = target.GetRectFromCharacterIndex(_sessionCaretIndex);
+                physicalPoint = target.PointToScreen(new System.Windows.Point(caretRect.Left, caretRect.Bottom));
+            }
+            catch
+            {
+                physicalPoint = target.PointToScreen(new System.Windows.Point(0, target.ActualHeight + 4));
+            }
         }
 
         // Get the work area (physical px) for whichever monitor the caret is on.
         var physWa = NativeMethods.GetWorkAreaForPhysicalPoint((int)physicalPoint.X, (int)physicalPoint.Y);
 
         // Convert everything to WPF logical DIPs.
-        var logicalPoint = DpiHelper.PhysicalToLogical(target, physicalPoint);
-        var logicalWaOrigin = DpiHelper.PhysicalToLogical(target, new System.Windows.Point(physWa.Left, physWa.Top));
-        var logicalWaCorner = DpiHelper.PhysicalToLogical(target, new System.Windows.Point(physWa.Right, physWa.Bottom));
+        var logicalPoint = DpiHelper.PhysicalToLogical(dpiSource, physicalPoint);
+        var logicalWaOrigin = DpiHelper.PhysicalToLogical(dpiSource, new System.Windows.Point(physWa.Left, physWa.Top));
+        var logicalWaCorner = DpiHelper.PhysicalToLogical(dpiSource, new System.Windows.Point(physWa.Right, physWa.Bottom));
         var logicalWorkArea = new System.Windows.Rect(logicalWaOrigin, logicalWaCorner);
 
         _pttWindow.PositionUnderCaret(logicalPoint, logicalWorkArea);
@@ -7727,7 +7769,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         _pttState = PttState.Idle;
         StopPttCtrlPollTimer();
         _pttLostFocusDuringRecording = false;
-        var wasTargetingPrompt = _pttTargetTextBox is null || _pttTargetTextBox == PromptTextBox;
+        var wasTargetingPrompt = _pttTargetRichTextBox == null
+            && (_pttTargetTextBox is null || _pttTargetTextBox == PromptTextBox);
         // Do NOT null _pttTargetTextBox here — pending AppendSpeechToPrompt BeginInvoke
         // callbacks in the dispatcher queue still need it to route text to the correct target.
         // It is cleared inside the Background-priority dispatcher callback below, after all
@@ -7763,6 +7806,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         await Dispatcher.InvokeAsync(() =>
         {
             _pttTargetTextBox = null;  // Clear after all Normal-priority phrase callbacks have run.
+            _pttTargetRichTextBox = null;
             _pttDraining = false;
             if (_restartPending && !_isPromptRunning && !MarkdownDocumentWindow.AnyRevisionInFlight)
             {
@@ -7792,6 +7836,13 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void AppendSpeechToPrompt(string text)
     {
         _promptHasVoiceInput = true;
+
+        if (_pttTargetRichTextBox != null)
+        {
+            AppendSpeechToRichTextBox(_pttTargetRichTextBox, text);
+            return;
+        }
+
         var target = _pttTargetTextBox ?? PromptTextBox;
         var current = target.Text;
         // Clamp in case text was externally modified since session start.
@@ -7815,6 +7866,31 @@ public partial class MainWindow : Window, ILiveElementLocator
         var insert = prefix + processed;
         target.Text = leftContext + insert + rightContext;
         target.CaretIndex = caretIndex + insert.Length;
+        _sessionCaretIndex = caretIndex + insert.Length;
+    }
+
+    private void AppendSpeechToRichTextBox(RichTextBox rtb, string text)
+    {
+        var current    = rtb.GetPlainText();
+        var caretIndex = Math.Min(_sessionCaretIndex, current.Length);
+        var selLength  = _sessionSelectionLength;
+        _sessionSelectionLength = 0; // consume once; subsequent dictation appends
+        var selEndIndex   = Math.Min(caretIndex + selLength, current.Length);
+        var leftContext   = current[..caretIndex];
+        var rightContext  = current[selEndIndex..];
+        var precedingChar = caretIndex > 0 ? current[caretIndex - 1] : '\0';
+        // Suppress the auto-inserted leading space when the caret sits immediately after
+        // an opening double-quote that is itself preceded by a space — e.g. `like "`.
+        var isQuoteAfterSpace = (precedingChar == '"' || precedingChar == '\u201C')
+                                && caretIndex >= 2 && current[caretIndex - 2] == ' ';
+        var prefix = precedingChar != '\0' && precedingChar != ' ' && precedingChar != '('
+                     && precedingChar != '\n' && precedingChar != '\r' && !isQuoteAfterSpace
+                     ? " " : string.Empty;
+        var processed = VoiceInsertionHeuristics.Apply(leftContext, text, rightContext);
+        var insert    = prefix + processed;
+        // Use SelectRange + ReplaceSelection — undo-safe, preserves scroll position and formatting.
+        rtb.SelectRange(caretIndex, selEndIndex - caretIndex);
+        rtb.ReplaceSelection(insert);
         _sessionCaretIndex = caretIndex + insert.Length;
     }
 
