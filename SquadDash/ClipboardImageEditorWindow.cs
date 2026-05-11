@@ -3149,7 +3149,7 @@ internal sealed class ClipboardImageEditorWindow : Window
     private void EnterEyedropperMode()
     {
         _inEyedropperMode = true;
-        _canvas.Cursor = Cursors.Cross;
+        _canvas.Cursor = AnnotationCursors.EyedropperTool;
         ShowModeHint("Hover to preview color — click to capture");
     }
 

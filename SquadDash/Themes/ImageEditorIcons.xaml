@@ -69,18 +69,26 @@
     </Viewbox>
 
 
-    <!-- Eyedropper / colour picker icon -->
+    <!-- Eyedropper / colour picker icon — classic pipette, tip at lower-left -->
     <Viewbox x:Key="ImageEditorEyedropperIcon" Width="18" Height="18" Stretch="Uniform">
-        <Canvas Width="18" Height="18">
-            <!-- Dropper body — solid filled rectangle at ~45° -->
-            <Path Fill="{DynamicResource LabelText}"
-                  Data="M 12,1 L 17,6 L 10,13 L 5,8 Z"/>
-            <!-- Nozzle connector from body tip to sample dot -->
-            <Line X1="5" Y1="8" X2="2" Y2="15"
-                  Stroke="{DynamicResource LabelText}" StrokeThickness="1.5"
+        <Canvas Width="32" Height="32">
+            <!-- Body: horizontal rounded-rect rotated -45°, giving a diagonal tube
+                 with a natural rounded cap at upper-right and collar end at lower-left.
+                 Center lands at ~(16,15.5); cap ~(23–28, 4–9); nozzle end ~(4–9, 22–27). -->
+            <Rectangle Canvas.Left="3" Canvas.Top="12" Width="26" Height="7"
+                       RadiusX="3.5" RadiusY="3.5"
+                       Fill="{DynamicResource LabelText}"
+                       RenderTransformOrigin="0.5,0.5">
+                <Rectangle.RenderTransform>
+                    <RotateTransform Angle="-45"/>
+                </Rectangle.RenderTransform>
+            </Rectangle>
+            <!-- Nozzle: short connector from body end to tip -->
+            <Line X1="7" Y1="25" X2="4" Y2="28"
+                  Stroke="{DynamicResource LabelText}" StrokeThickness="2.5"
                   StrokeStartLineCap="Flat" StrokeEndLineCap="Round"/>
-            <!-- Sample drop at tip -->
-            <Ellipse Canvas.Left="0.5" Canvas.Top="13.5" Width="4" Height="4"
+            <!-- Tip sample dot -->
+            <Ellipse Canvas.Left="1.5" Canvas.Top="25.5" Width="5" Height="5"
                      Fill="{DynamicResource LabelText}"/>
         </Canvas>
     </Viewbox>
