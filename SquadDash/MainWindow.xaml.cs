@@ -2011,8 +2011,6 @@ public partial class MainWindow : Window, ILiveElementLocator
         var seqNum = item.SequenceNumber;
         SquadDashTrace.Write("Queue", $"DrainQueueAsync: dispatching #{seqNum} queueCount={_promptQueue.Count}");
         _promptQueue.Remove(item.Id);
-        if (_promptQueue.Count == 0)
-            SetQueuePaused(true);
         SyncQueuePanel();
 
         AppendLine("📤 Dispatching queued item…", (Brush)FindResource("SubtleText"));
@@ -2048,8 +2046,6 @@ public partial class MainWindow : Window, ILiveElementLocator
             var seqNum = item.SequenceNumber;
             SquadDashTrace.Write("Queue", $"DrainQueueIfNeededAsync: dispatching #{seqNum} queueCount={_promptQueue.Count}");
             _promptQueue.Remove(item.Id);
-            if (_promptQueue.Count == 0)
-                SetQueuePaused(true);
             SyncQueuePanel();
 
             AppendLine("📤 Dispatching queued item…", (Brush)FindResource("SubtleText"));
