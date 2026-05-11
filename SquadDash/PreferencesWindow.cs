@@ -126,8 +126,11 @@ internal sealed class PreferencesWindow : Window {
             Padding = new Thickness(6, 4, 6, 4),
             Height = 30
         };
+        _openAiSpeechKeyBox.SetResourceReference(TextBox.BackgroundProperty, "TextBoxBackground");
+        _openAiSpeechKeyBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
+        _openAiSpeechKeyBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
 
-        _cleanupPromptBox = new TextBox {
+        _cleanupPromptBox= new TextBox {
             Text = currentSettings.CleanupPrompt,
             Padding = new Thickness(6, 4, 6, 4),
             TextWrapping = TextWrapping.Wrap,
@@ -422,7 +425,7 @@ internal sealed class PreferencesWindow : Window {
         _openAiSpeechKeyBox.TextChanged += (_, _) => SaveSpeechProviderNow();
 
         // ── Voice Text Replacements ───────────────────────────────────────
-        AddSectionHeader(form, "Voice Text Replacements");
+        AddSectionHeader(form, "Voice Text Replacements", topMargin: 24);
         AddLabel(form, "Pattern (regex) → Replacement — applied to every voice phrase in order.", topMargin: 4);
 
         var gridHint = new TextBlock {
@@ -443,9 +446,26 @@ internal sealed class PreferencesWindow : Window {
             SelectionMode = DataGridSelectionMode.Single,
             HeadersVisibility = DataGridHeadersVisibility.Column
         };
-        replacementsGrid.SetResourceReference(DataGrid.BackgroundProperty, "PanelBackground");
+        replacementsGrid.SetResourceReference(DataGrid.BackgroundProperty, "AppSurface");
         replacementsGrid.SetResourceReference(DataGrid.ForegroundProperty, "LabelText");
         replacementsGrid.SetResourceReference(DataGrid.BorderBrushProperty, "SubtleBorder");
+        replacementsGrid.SetResourceReference(DataGrid.RowBackgroundProperty, "AppSurface");
+        replacementsGrid.SetResourceReference(DataGrid.AlternatingRowBackgroundProperty, "AppSurface");
+        replacementsGrid.SetResourceReference(DataGrid.HorizontalGridLinesBrushProperty, "SubtleBorder");
+        replacementsGrid.SetResourceReference(DataGrid.VerticalGridLinesBrushProperty, "SubtleBorder");
+
+        var headerStyle = new Style(typeof(System.Windows.Controls.Primitives.DataGridColumnHeader));
+        headerStyle.Setters.Add(new Setter(System.Windows.Controls.Primitives.DataGridColumnHeader.BackgroundProperty, new DynamicResourceExtension("AppSurface")));
+        headerStyle.Setters.Add(new Setter(System.Windows.Controls.Primitives.DataGridColumnHeader.ForegroundProperty, new DynamicResourceExtension("LabelText")));
+        headerStyle.Setters.Add(new Setter(System.Windows.Controls.Primitives.DataGridColumnHeader.BorderBrushProperty, new DynamicResourceExtension("SubtleBorder")));
+        headerStyle.Setters.Add(new Setter(System.Windows.Controls.Primitives.DataGridColumnHeader.PaddingProperty, new Thickness(6, 4, 6, 4)));
+        replacementsGrid.ColumnHeaderStyle = headerStyle;
+
+        var cellStyle = new Style(typeof(DataGridCell));
+        cellStyle.Setters.Add(new Setter(DataGridCell.BackgroundProperty, new DynamicResourceExtension("AppSurface")));
+        cellStyle.Setters.Add(new Setter(DataGridCell.ForegroundProperty, new DynamicResourceExtension("LabelText")));
+        cellStyle.Setters.Add(new Setter(DataGridCell.BorderBrushProperty, new DynamicResourceExtension("SubtleBorder")));
+        replacementsGrid.CellStyle = cellStyle;
 
         var patternCol = new DataGridTextColumn {
             Header = "Pattern (regex)",
@@ -463,6 +483,14 @@ internal sealed class PreferencesWindow : Window {
         };
         replacementsGrid.Columns.Add(patternCol);
         replacementsGrid.Columns.Add(replacementCol);
+
+        var editingElementStyle = new Style(typeof(TextBox));
+        editingElementStyle.Setters.Add(new Setter(TextBox.BackgroundProperty, new DynamicResourceExtension("TextBoxBackground")));
+        editingElementStyle.Setters.Add(new Setter(TextBox.ForegroundProperty, new DynamicResourceExtension("LabelText")));
+        editingElementStyle.Setters.Add(new Setter(TextBox.BorderBrushProperty, new DynamicResourceExtension("InputBorder")));
+        patternCol.EditingElementStyle = editingElementStyle;
+        replacementCol.EditingElementStyle = editingElementStyle;
+
         form.Children.Add(replacementsGrid);
 
         var btnPanel = new StackPanel {
@@ -905,12 +933,12 @@ internal sealed class PreferencesWindow : Window {
         parent.Children.Add(label);
     }
 
-    private static void AddSectionHeader(Panel parent, string text) {
+    private static void AddSectionHeader(Panel parent, string text, double topMargin = 0) {
         var header = new TextBlock {
             Text = text,
             FontWeight = FontWeights.SemiBold,
             FontSize = 14,
-            Margin = new Thickness(0, 0, 0, 12)
+            Margin = new Thickness(0, topMargin, 0, 12)
         };
         header.SetResourceReference(TextBlock.ForegroundProperty, "ImportantText");
         parent.Children.Add(header);
