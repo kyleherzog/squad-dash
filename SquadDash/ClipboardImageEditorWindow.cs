@@ -3700,6 +3700,7 @@ internal sealed class ClipboardImageEditorWindow : Window
 
                 // Discard the BeginEditText undo push — nothing actually changed.
                 if (_undoStack.Count > 0) _undoStack.Pop();
+                RemoveTextResizeHandles();
                 e.Handled = true;
             }
         };
@@ -3720,6 +3721,12 @@ internal sealed class ClipboardImageEditorWindow : Window
         tb.Focus();
         tb.CaretIndex = tb.Text.Length; // place caret at end; SelectAll can be distracting for re-edit
         if (string.IsNullOrEmpty(annotation.Text)) tb.SelectAll();
+
+        // Show resize handles immediately around the active TextBox so the user can see them
+        // as soon as the text box is placed — before typing or committing anything.
+        AddTextResizeHandles(annotation);
+        tb.SizeChanged += (_, _) =>
+            Dispatcher.BeginInvoke(DispatcherPriority.Render, () => PositionTextResizeHandles(annotation));
     }
 
     /// <summary>
@@ -4559,13 +4566,26 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     private void PositionTextResizeHandles(AnnotationText annotation)
     {
-        if (_textResizeHandles.Count != 8 || annotation.Display == null) return;
+        if (_textResizeHandles.Count != 8) return;
         double hs = HandleSize / _zoom / 2;
-        double l = annotation.Bounds.Left - 4;
-        double t = annotation.Bounds.Top  - 2;
-        // Use Bounds dimensions (reliably set by UpdateTextDisplay) with fallback to DesiredSize.
-        double w = (annotation.Bounds.Width  > 0 ? annotation.Bounds.Width  : annotation.Display.DesiredSize.Width)  + 8;
-        double h = (annotation.Bounds.Height > 0 ? annotation.Bounds.Height : annotation.Display.DesiredSize.Height) + 4;
+        double l, t, w, h;
+        if (annotation.Display != null)
+        {
+            // Committed annotation — use Bounds with fallback to Display.DesiredSize.
+            l = annotation.Bounds.Left - 4;
+            t = annotation.Bounds.Top  - 2;
+            w = (annotation.Bounds.Width  > 0 ? annotation.Bounds.Width  : annotation.Display.DesiredSize.Width)  + 8;
+            h = (annotation.Bounds.Height > 0 ? annotation.Bounds.Height : annotation.Display.DesiredSize.Height) + 4;
+        }
+        else if (_activeTextBox != null)
+        {
+            // Still editing — position handles around the live TextBox itself.
+            l = Canvas.GetLeft(_activeTextBox) - 4;
+            t = Canvas.GetTop(_activeTextBox)  - 2;
+            w = (_activeTextBox.ActualWidth  > 0 ? _activeTextBox.ActualWidth  : _activeTextBox.DesiredSize.Width)  + 8;
+            h = (_activeTextBox.ActualHeight > 0 ? _activeTextBox.ActualHeight : _activeTextBox.DesiredSize.Height) + 4;
+        }
+        else return;
         // 8 handles: 4 corners (NW,NE,SW,SE) + 4 edge midpoints (N,E,S,W)
         Point[] positions =
         {
