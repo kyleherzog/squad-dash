@@ -809,7 +809,7 @@
                                       Margin="0,0,6,0">
                                     <Ellipse x:Name="OuterRing"
                                              Width="14" Height="14"
-                                             Stroke="{DynamicResource LabelText}"
+                                             Stroke="{DynamicResource CheckBoxBorder}"
                                              StrokeThickness="1.5"
                                              Fill="Transparent"/>
                                     <!-- Inner fill dot (visible when checked) -->
