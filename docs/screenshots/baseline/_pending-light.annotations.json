@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "description": "One of the SquadDash agents working on a particular task.",
-  "rawDescription": "One of the SquadDash agents working on a particular task.",
+  "description": "The main SquadDash window showing the Coordinator transcript pane selected on the left side of the transcript area, with a visible orchestration conversation delegating tasks to specialist agents.",
+  "rawDescription": "The main SquadDash window showing the Coordinator transcript pane selected on the left side of the transcript area, with a visible orchestration conversation delegating tasks to specialist agents.",
   "cursor": null,
   "arrows": []
 }

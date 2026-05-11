@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "name": "active-panel-title-text-light",
+  "description": "",
+  "theme": "Light",
+  "region": "custom",
+  "capturedAt": "2026-05-11T17:00:46.9046131Z",
+  "bounds": {
+    "x": 14,
+    "y": 62,
+    "width": 195,
+    "height": 316.78999999999996,
+    "dpiX": 1,
+    "dpiY": 1
+  },
+  "top": {
+    "edge": "Top",
+    "elementNames": [
+      "ActivePanelTitleTextBlock"
+    ],
+    "needsName": false,
+    "elementLeft": 26,
+    "elementTop": 66,
+    "elementWidth": 41.92666666666667,
+    "elementHeight": 19.950000000000003,
+    "distanceToEdge": 4
+  },
+  "right": {
+    "edge": "Right",
+    "elementNames": [
+      "Squad"
+    ],
+    "needsName": false,
+    "elementLeft": 26,
+    "elementTop": 115.91,
+    "elementWidth": 182,
+    "elementHeight": 270.88,
+    "distanceToEdge": 1
+  },
+  "bottom": {
+    "edge": "Bottom",
+    "elementNames": [
+      "ExpanderToggle"
+    ],
+    "needsName": false,
+    "elementLeft": 51,
+    "elementTop": 361.2650000000025,
+    "elementWidth": 10.8,
+    "elementHeight": 14.16,
+    "distanceToEdge": 3.364999999997451
+  },
+  "left": {
+    "edge": "Left",
+    "elementNames": [
+      "AgentCardBorder(Squad)"
+    ],
+    "needsName": false,
+    "elementLeft": 26,
+    "elementTop": 115.91,
+    "elementWidth": 170,
+    "elementHeight": 246.88000000000002,
+    "distanceToEdge": 12
+  },
+  "replayActionId": null,
+  "fixturePath": null,
+  "docImagePath": "..\\concepts\\images\\coordinator-bf15ba21.png",
+  "elementInventory": null
+}

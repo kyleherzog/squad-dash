@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "name": "transcript-panels-grid-main-light",
+  "description": "",
+  "theme": "Light",
+  "region": "custom",
+  "capturedAt": "2026-05-11T17:05:09.5635342Z",
+  "bounds": {
+    "x": 8,
+    "y": 460,
+    "width": 469,
+    "height": 532,
+    "dpiX": 1,
+    "dpiY": 1
+  },
+  "top": {
+    "edge": "Top",
+    "elementNames": [
+      "TranscriptPanelsGrid",
+      "MainTranscriptBorder"
+    ],
+    "needsName": false,
+    "elementLeft": 13,
+    "elementTop": 463.4200000000001,
+    "elementWidth": 1393,
+    "elementHeight": 523.6599999999999,
+    "distanceToEdge": 3.4200000000000728
+  },
+  "right": {
+    "edge": "Right",
+    "elementNames": [
+      "MainTranscriptBorder"
+    ],
+    "needsName": false,
+    "elementLeft": 13,
+    "elementTop": 463.4200000000001,
+    "elementWidth": 459,
+    "elementHeight": 523.6599999999999,
+    "distanceToEdge": 5
+  },
+  "bottom": {
+    "edge": "Bottom",
+    "elementNames": [
+      "TranscriptPanelsGrid",
+      "MainTranscriptBorder"
+    ],
+    "needsName": false,
+    "elementLeft": 13,
+    "elementTop": 463.4200000000001,
+    "elementWidth": 1393,
+    "elementHeight": 523.6599999999999,
+    "distanceToEdge": 4.920000000000073
+  },
+  "left": {
+    "edge": "Left",
+    "elementNames": [
+      "MainGrid",
+      "TranscriptPanelsGrid",
+      "MainTranscriptBorder"
+    ],
+    "needsName": false,
+    "elementLeft": 13,
+    "elementTop": 15,
+    "elementWidth": 2545,
+    "elementHeight": 1169,
+    "distanceToEdge": 5
+  },
+  "replayActionId": null,
+  "fixturePath": null,
+  "docImagePath": "..\\concepts\\images\\coordinator-transcript.png",
+  "elementInventory": null
+}

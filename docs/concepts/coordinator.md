@@ -1,5 +1,5 @@
 # The Coordinator
-
+![Screenshot: brief description](images/screenshot-47fb547a.png)
 The Coordinator is the primary AI agent in a SquadDash session. It is the default agent — every prompt you send goes to the Coordinator first, unless you explicitly target a specialist.
 
 See [Agents](agents.md) for how individual agents work.
@@ -7,6 +7,8 @@ See [Agents](agents.md) for how individual agents work.
 ---
 
 ## What Is the Coordinator?
+
+![Screenshot: brief description](images/coordinator-bf15ba21.png)
 
 The Coordinator is the agent that:
 
@@ -39,13 +41,11 @@ This fan-out pattern lets the Coordinator coordinate parallel workstreams — fo
 
 The Coordinator has its own transcript pane. It is the **primary transcript**:
 
-- Displayed on the **left side** of the transcript area
+- Displayed below the agent cards and to the left of any other visible transcripts
 - **Shown by default** when no other agent transcript is selected
 - Contains all orchestration messages — delegation decisions, handoff notes, and result summaries
 
 ![Screenshot: The Coordinator transcript pane](images/coordinator-transcript.png)
-> 📸 *Screenshot needed: The main SquadDash window showing the Coordinator transcript pane selected on the left side of the transcript area, with a visible orchestration conversation delegating tasks to specialist agents.*
-
 You can shift-click any specialist agent card to open its transcript alongside the Coordinator's. See [Transcripts](transcripts.md) for more on the multi-transcript panel system.
 
 ---
@@ -61,6 +61,7 @@ When there is no `.squad/team.md` in the workspace, the Coordinator handles all 
 ### Team configured
 
 When a team is present, the Coordinator shifts into a **manager role**. It delegates implementation, investigation, and testing to the right specialist agents and synthesises their results back to you. Direct implementation by the Coordinator is the exception rather than the rule.
+You can create a team by using the /hire command.
 
 ---
 

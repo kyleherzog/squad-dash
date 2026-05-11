@@ -1030,5 +1030,139 @@
     },
     "docImagePath": "..\\concepts\\images\\agent-82c2d144.png",
     "elementInventory": null
+  },
+  {
+    "name": "active-panel-title-text-light",
+    "description": "",
+    "theme": "Light",
+    "replayActionId": null,
+    "fixturePath": null,
+    "top": {
+      "edge": "Top",
+      "elementNames": [
+        "ActivePanelTitleTextBlock"
+      ],
+      "needsName": false,
+      "elementLeft": 26,
+      "elementTop": 66,
+      "elementWidth": 41.92666666666667,
+      "elementHeight": 19.950000000000003,
+      "distanceToEdge": 4
+    },
+    "right": {
+      "edge": "Right",
+      "elementNames": [
+        "Squad"
+      ],
+      "needsName": false,
+      "elementLeft": 26,
+      "elementTop": 115.91,
+      "elementWidth": 182,
+      "elementHeight": 270.88,
+      "distanceToEdge": 1
+    },
+    "bottom": {
+      "edge": "Bottom",
+      "elementNames": [
+        "ExpanderToggle"
+      ],
+      "needsName": false,
+      "elementLeft": 51,
+      "elementTop": 361.2650000000025,
+      "elementWidth": 10.8,
+      "elementHeight": 14.16,
+      "distanceToEdge": 3.364999999997451
+    },
+    "left": {
+      "edge": "Left",
+      "elementNames": [
+        "AgentCardBorder(Squad)"
+      ],
+      "needsName": false,
+      "elementLeft": 26,
+      "elementTop": 115.91,
+      "elementWidth": 170,
+      "elementHeight": 246.88000000000002,
+      "distanceToEdge": 12
+    },
+    "bounds": {
+      "x": 14,
+      "y": 62,
+      "width": 195,
+      "height": 316.78999999999996,
+      "dpiX": 1,
+      "dpiY": 1
+    },
+    "docImagePath": "..\\concepts\\images\\coordinator-bf15ba21.png",
+    "elementInventory": null
+  },
+  {
+    "name": "transcript-panels-grid-main-light",
+    "description": "",
+    "theme": "Light",
+    "replayActionId": null,
+    "fixturePath": null,
+    "top": {
+      "edge": "Top",
+      "elementNames": [
+        "TranscriptPanelsGrid",
+        "MainTranscriptBorder"
+      ],
+      "needsName": false,
+      "elementLeft": 13,
+      "elementTop": 463.4200000000001,
+      "elementWidth": 1393,
+      "elementHeight": 523.6599999999999,
+      "distanceToEdge": 3.4200000000000728
+    },
+    "right": {
+      "edge": "Right",
+      "elementNames": [
+        "MainTranscriptBorder"
+      ],
+      "needsName": false,
+      "elementLeft": 13,
+      "elementTop": 463.4200000000001,
+      "elementWidth": 459,
+      "elementHeight": 523.6599999999999,
+      "distanceToEdge": 5
+    },
+    "bottom": {
+      "edge": "Bottom",
+      "elementNames": [
+        "TranscriptPanelsGrid",
+        "MainTranscriptBorder"
+      ],
+      "needsName": false,
+      "elementLeft": 13,
+      "elementTop": 463.4200000000001,
+      "elementWidth": 1393,
+      "elementHeight": 523.6599999999999,
+      "distanceToEdge": 4.920000000000073
+    },
+    "left": {
+      "edge": "Left",
+      "elementNames": [
+        "MainGrid",
+        "TranscriptPanelsGrid",
+        "MainTranscriptBorder"
+      ],
+      "needsName": false,
+      "elementLeft": 13,
+      "elementTop": 15,
+      "elementWidth": 2545,
+      "elementHeight": 1169,
+      "distanceToEdge": 5
+    },
+    "bounds": {
+      "x": 8,
+      "y": 460,
+      "width": 469,
+      "height": 532,
+      "dpiX": 1,
+      "dpiY": 1
+    },
+    "docImagePath": "..\\concepts\\images\\coordinator-transcript.png",
+    "elementInventory": null
   }
 ]

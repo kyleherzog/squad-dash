@@ -33,8 +33,8 @@
 ## Concepts
 
 * [Concepts](concepts/README.md)
-  * [Agents](concepts/agents.md)
   * [The Coordinator](concepts/coordinator.md)
+  * [Agents](concepts/agents.md)
   * [Transcripts](concepts/transcripts.md)
   * [Documentation Panel](concepts/documentation-panel.md)
 

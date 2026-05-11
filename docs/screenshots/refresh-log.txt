@@ -1,4 +1,4 @@
-[2026-05-11 01:39:54.694Z] [screenshot] Starting: agent-card-border-lyra-morn-light
-[2026-05-11 01:39:55.196Z] [screenshot] Comparison: 15.09% match (48515 of 57138 pixels differ) — diff: D:\Drive\Source\SquadDash-public\docs\screenshots\diff\agent-card-border-lyra-morn-light-light.png
-[2026-05-11 01:39:55.196Z] [screenshot] Saved: D:\Drive\Source\SquadDash-public\docs\screenshots\agent-card-border-lyra-morn-light-light.png
-[2026-05-11 01:39:55.196Z] [screenshot] Copied to doc image: D:\Drive\Source\SquadDash-public\docs\concepts\images\agent-82c2d144.png
+[2026-05-11 17:05:27.351Z] [screenshot] Starting: transcript-panels-grid-main-light
+[2026-05-11 17:05:28.180Z] [screenshot] Comparison: 71.80% match (70351 of 249508 pixels differ) — diff: D:\Drive\Source\SquadDash-public\docs\screenshots\diff\transcript-panels-grid-main-light-light.png
+[2026-05-11 17:05:28.180Z] [screenshot] Saved: D:\Drive\Source\SquadDash-public\docs\screenshots\transcript-panels-grid-main-light-light.png
+[2026-05-11 17:05:28.181Z] [screenshot] Copied to doc image: D:\Drive\Source\SquadDash-public\docs\concepts\images\coordinator-transcript.png
