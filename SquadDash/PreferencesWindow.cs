@@ -15,6 +15,9 @@ internal sealed class PreferencesWindow : Window {
     private readonly PasswordBox _apiKeyPasswordBox;
     private readonly TextBox _apiKeyRevealBox;
     private readonly TextBox _speechRegionBox;
+    private readonly RadioButton _azureSpeechRadio;
+    private readonly RadioButton _openAiSpeechRadio;
+    private readonly TextBox _openAiSpeechKeyBox;
     private readonly ComboBox? _startupIssueSimulationComboBox;
     private readonly ComboBox? _runtimeIssueSimulationComboBox;
     private readonly TextBlock _statusText;
@@ -92,6 +95,31 @@ internal sealed class PreferencesWindow : Window {
 
         _speechRegionBox = new TextBox {
             Text = currentSettings.SpeechRegion ?? string.Empty,
+            Padding = new Thickness(6, 4, 6, 4),
+            Height = 30
+        };
+
+        var isOpenAi = currentSettings.SpeechProvider == SpeechProvider.OpenAI;
+        _azureSpeechRadio = new RadioButton {
+            Content = "Azure Cognitive Services",
+            GroupName = "SpeechProvider",
+            FontSize = 13,
+            Margin = new Thickness(0, 0, 0, 6),
+            IsChecked = !isOpenAi
+        };
+        _azureSpeechRadio.SetResourceReference(Control.StyleProperty, "ThemedRadioButtonStyle");
+
+        _openAiSpeechRadio = new RadioButton {
+            Content = "OpenAI Whisper",
+            GroupName = "SpeechProvider",
+            FontSize = 13,
+            Margin = new Thickness(0, 0, 0, 6),
+            IsChecked = isOpenAi
+        };
+        _openAiSpeechRadio.SetResourceReference(Control.StyleProperty, "ThemedRadioButtonStyle");
+
+        _openAiSpeechKeyBox = new TextBox {
+            Text = currentSettings.OpenAiSpeechApiKey ?? string.Empty,
             Padding = new Thickness(6, 4, 6, 4),
             Height = 30
         };
@@ -329,19 +357,28 @@ internal sealed class PreferencesWindow : Window {
 
         AddSectionHeader(form, "Speech");
 
-        AddLabel(form, "Azure Speech API Key");
+        AddLabel(form, "Provider");
+        form.Children.Add(_azureSpeechRadio);
+        form.Children.Add(_openAiSpeechRadio);
+
+        // Azure-specific fields
+        var azureSection = new StackPanel {
+            Visibility = _azureSpeechRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed
+        };
+
+        AddLabel(azureSection, "Azure Speech API Key", topMargin: 20);
         var apiKeyHost = new Grid();
         apiKeyHost.Children.Add(_apiKeyPasswordBox);
         apiKeyHost.Children.Add(_apiKeyRevealBox);
-        form.Children.Add(apiKeyHost);
+        azureSection.Children.Add(apiKeyHost);
 
         var revealLink = MakeRevealLink("(reveal key)");
         revealLink.MouseLeftButtonDown += RevealLink_MouseDown;
         revealLink.MouseLeftButtonUp += RevealLink_MouseUp;
-        form.Children.Add(revealLink);
+        azureSection.Children.Add(revealLink);
 
-        AddLabel(form, "Azure Speech Region", topMargin: 20);
-        form.Children.Add(_speechRegionBox);
+        AddLabel(azureSection, "Azure Speech Region", topMargin: 20);
+        azureSection.Children.Add(_speechRegionBox);
 
         var regionHint = new TextBlock {
             Text = "e.g. eastus, westus2, westeurope",
@@ -349,9 +386,41 @@ internal sealed class PreferencesWindow : Window {
             Margin = new Thickness(0, 3, 0, 0)
         };
         regionHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
-        form.Children.Add(regionHint);
+        azureSection.Children.Add(regionHint);
+
+        form.Children.Add(azureSection);
+
+        // OpenAI Whisper-specific fields
+        var openAiSection = new StackPanel {
+            Visibility = _openAiSpeechRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed
+        };
+
+        AddLabel(openAiSection, "OpenAI speech API key", topMargin: 20);
+        openAiSection.Children.Add(_openAiSpeechKeyBox);
+
+        form.Children.Add(openAiSection);
+
+        // Wire radio buttons to toggle sections and auto-save
+        _azureSpeechRadio.Checked += (_, _) => {
+            azureSection.Visibility = Visibility.Visible;
+            openAiSection.Visibility = Visibility.Collapsed;
+            SaveSpeechProviderNow();
+        };
+        _openAiSpeechRadio.Checked += (_, _) => {
+            azureSection.Visibility = Visibility.Collapsed;
+            openAiSection.Visibility = Visibility.Visible;
+            SaveSpeechProviderNow();
+        };
+
+        _openAiSpeechKeyBox.TextChanged += (_, _) => SaveSpeechProviderNow();
 
         return WrapInScrollViewer(form);
+    }
+
+    private void SaveSpeechProviderNow() {
+        var provider = _openAiSpeechRadio.IsChecked == true ? SpeechProvider.OpenAI : SpeechProvider.Azure;
+        var openAiKey = _openAiSpeechKeyBox.Text.Trim();
+        _settingsStore.SaveSpeechProvider(provider, string.IsNullOrWhiteSpace(openAiKey) ? null : openAiKey);
     }
 
     private UIElement BuildRemoteAccessPage() {
@@ -640,6 +709,9 @@ internal sealed class PreferencesWindow : Window {
 
         var updated = _settingsStore.SaveUserName(string.IsNullOrWhiteSpace(userName) ? null : userName);
         updated = _settingsStore.SaveSpeechRegion(string.IsNullOrWhiteSpace(speechRegion) ? null : speechRegion);
+        updated = _settingsStore.SaveSpeechProvider(
+            _openAiSpeechRadio.IsChecked == true ? SpeechProvider.OpenAI : SpeechProvider.Azure,
+            string.IsNullOrWhiteSpace(_openAiSpeechKeyBox.Text.Trim()) ? null : _openAiSpeechKeyBox.Text.Trim());
         updated = _settingsStore.SaveDeveloperIssueSimulation(startupIssueSimulation, runtimeIssueSimulation);
         var notifEnabled = _notificationsEnabledCheckBox.IsChecked == true;
         var notifTopic = _notificationTopicBox.Text.Trim();

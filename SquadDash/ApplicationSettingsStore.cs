@@ -256,7 +256,7 @@ internal sealed class ApplicationSettingsStore {
         var current = LoadCore();
         var updated = current with {
             SpeechProvider = provider,
-            OpenAiSpeechApiKey = openAiKey?.Trim()
+            OpenAiSpeechApiKey = string.IsNullOrWhiteSpace(openAiKey) ? null : openAiKey.Trim()
         };
         SaveCore(updated);
         return updated.Normalize();
@@ -1122,6 +1122,8 @@ internal sealed record ApplicationSettingsSnapshot(
 
 public enum LoopMode { NativeAgents, SquadCli }
 
+internal enum SpeechProvider { Azure, OpenAI }
+
 internal enum LoopConfigFlyoutMode { Configure, Edit }
 
 internal enum DeveloperStartupIssueSimulation {
@@ -1173,5 +1175,3 @@ internal sealed record WorkspaceWindowPlacement(
     private static double NormalizePositive(double value) =>
         IsFinitePositive(value) ? value : 0;
 }
-
-internal enum SpeechProvider { Azure, OpenAI }
