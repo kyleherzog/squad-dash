@@ -367,7 +367,9 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
             if (string.IsNullOrWhiteSpace(e.Data))
                 return;
 
-            EnqueueError(e.Data);
+            if (!IsBenignBridgeStderr(e.Data))
+                EnqueueError(e.Data);
+
             SquadDashTrace.Write("Bridge", $"stderr: {e.Data}");
             ErrorReceived?.Invoke(this, e.Data);
         };
@@ -721,6 +723,10 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
 
         return $"{fallbackMessage}{Environment.NewLine}{Environment.NewLine}{string.Join(Environment.NewLine, recentErrors)}";
     }
+
+    private static bool IsBenignBridgeStderr(string text) =>
+        text.Contains("ExperimentalWarning: SQLite is an experimental feature", StringComparison.OrdinalIgnoreCase) ||
+        text.Contains("Use `node --trace-warnings", StringComparison.OrdinalIgnoreCase);
 
     private static bool ShouldResetSessionAndRetry(string? sessionId, string? message) {
         if (string.IsNullOrWhiteSpace(sessionId) || string.IsNullOrWhiteSpace(message))

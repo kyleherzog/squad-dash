@@ -325,6 +325,47 @@ internal sealed class SquadSdkProcessTests {
     }
 
     [Test]
+    public async Task RunPromptAsync_Timeout_DoesNotAppendBenignNodeSQLiteWarning() {
+        await using var sut = new SquadSdkProcess(
+            () => BuildPowerShellScriptStartInfo("""
+                [Console]::Error.WriteLine("(node:43416) ExperimentalWarning: SQLite is an experimental feature and might change at any time")
+                [Console]::Error.WriteLine('(Use `node --trace-warnings ...` to show where the warning was created)')
+                Start-Sleep -Seconds 60
+                """),
+            new SquadSdkProcessOptions {
+                PromptInactivityTimeout = TimeSpan.FromMilliseconds(500),
+                PromptTimeoutPollInterval = TimeSpan.FromMilliseconds(50)
+            });
+
+        var ex = Assert.ThrowsAsync<TimeoutException>(
+            async () => await sut.RunPromptAsync("hello", _tempDir));
+
+        Assert.Multiple(() => {
+            Assert.That(ex!.Message, Does.Contain("without bridge activity"));
+            Assert.That(ex.Message, Does.Not.Contain("ExperimentalWarning: SQLite"));
+            Assert.That(ex.Message, Does.Not.Contain("trace-warnings"));
+        });
+    }
+
+    [Test]
+    public async Task RunPromptAsync_Timeout_AppendsActionableStderr() {
+        await using var sut = new SquadSdkProcess(
+            () => BuildPowerShellScriptStartInfo("""
+                [Console]::Error.WriteLine("real provider failure")
+                Start-Sleep -Seconds 60
+                """),
+            new SquadSdkProcessOptions {
+                PromptInactivityTimeout = TimeSpan.FromMilliseconds(500),
+                PromptTimeoutPollInterval = TimeSpan.FromMilliseconds(50)
+            });
+
+        var ex = Assert.ThrowsAsync<TimeoutException>(
+            async () => await sut.RunPromptAsync("hello", _tempDir));
+
+        Assert.That(ex!.Message, Does.Contain("real provider failure"));
+    }
+
+    [Test]
     public async Task DisposeAsync_ActivePrompt_CompletesPromptImmediately() {
         var promptStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var sut = new SquadSdkProcess(
