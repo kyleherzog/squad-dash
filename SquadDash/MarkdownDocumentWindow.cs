@@ -866,6 +866,26 @@ internal sealed class MarkdownDocumentWindow : Window {
             return;
         }
 
+        // ── Selection embedding: backtick ─────────────────────────────────────────
+        if (e.Key == System.Windows.Input.Key.OemTilde
+            && System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.None
+            && tb.GetSelectionLength() > 0) {
+            if (MarkdownEditorCommands.ApplyInlineCodeOrFence(tb)) {
+                e.Handled = true;
+                return;
+            }
+        }
+
+        // ── Selection embedding: double-quote ─────────────────────────────────────
+        if (e.Key == System.Windows.Input.Key.OemQuotes
+            && System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Shift
+            && tb.GetSelectionLength() > 0) {
+            if (MarkdownEditorCommands.ApplyInlineQuote(tb)) {
+                e.Handled = true;
+                return;
+            }
+        }
+
         // ── List continuation: Enter at end of a bullet/numbered line ─────────
         if (e.Key == System.Windows.Input.Key.Return
             && System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.None) {

@@ -473,4 +473,94 @@ internal static class MarkdownEditorCommands
             box.SetCaretOffset(caret + 5);
         }
     }
+
+    // ── Selection embedding ───────────────────────────────────────────────────
+
+    internal static bool ApplyInlineCodeOrFence(TextBox box)
+    {
+        var selStart = box.SelectionStart;
+        var selLen   = box.SelectionLength;
+        if (selLen == 0) return false;
+
+        var raw = box.SelectedText;
+        string result;
+        if (raw.Contains('\n'))
+        {
+            result = $"```\n{raw}\n```";
+        }
+        else
+        {
+            var trimmed        = raw.Trim(' ');
+            var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
+            var trailingSpaces = raw[(raw.Length - raw.TrimEnd(' ').Length)..];
+            result = $"{leadingSpaces}`{trimmed}`{trailingSpaces}";
+        }
+        box.SelectedText    = result;
+        box.SelectionStart  = selStart;
+        box.SelectionLength = result.Length;
+        return true;
+    }
+
+    internal static bool ApplyInlineQuote(TextBox box)
+    {
+        var selLen = box.SelectionLength;
+        if (selLen == 0) return false;
+
+        var raw = box.SelectedText;
+        if (raw.Contains('\n')) return false;
+
+        var selStart       = box.SelectionStart;
+        var trimmed        = raw.Trim(' ');
+        var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
+        var trailingSpaces = raw[(raw.Length - raw.TrimEnd(' ').Length)..];
+        var result         = $"{leadingSpaces}\"{trimmed}\"{trailingSpaces}";
+        box.SelectedText    = result;
+        box.SelectionStart  = selStart;
+        box.SelectionLength = result.Length;
+        return true;
+    }
+
+    internal static bool ApplyInlineCodeOrFence(RichTextBox box)
+    {
+        var selStart = box.GetSelectionStart();
+        var selLen   = box.GetSelectionLength();
+        if (selLen == 0) return false;
+
+        var raw = box.GetSelectedText();
+        string result;
+        if (raw.Contains('\n'))
+        {
+            result = $"```\n{raw}\n```";
+        }
+        else
+        {
+            var trimmed        = raw.Trim(' ');
+            var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
+            var trailingSpaces = raw[(raw.Length - raw.TrimEnd(' ').Length)..];
+            result = $"{leadingSpaces}`{trimmed}`{trailingSpaces}";
+        }
+        box.SelectRange(selStart, selLen);
+        box.ReplaceSelection(result);
+        box.SelectRange(selStart, result.Length);
+        return true;
+    }
+
+    internal static bool ApplyInlineQuote(RichTextBox box)
+    {
+        var selStart = box.GetSelectionStart();
+        var selLen   = box.GetSelectionLength();
+        if (selLen == 0) return false;
+
+        var raw = box.GetSelectedText();
+        if (raw.Contains('\n')) return false;
+
+        var trimmed        = raw.Trim(' ');
+        var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
+        var trailingSpaces = raw[(raw.Length - raw.TrimEnd(' ').Length)..];
+        var result         = $"{leadingSpaces}\"{trimmed}\"{trailingSpaces}";
+        box.SelectRange(selStart, selLen);
+        box.ReplaceSelection(result);
+        box.SelectRange(selStart, result.Length);
+        return true;
+    }
 }

@@ -6816,6 +6816,30 @@ public partial class MainWindow : Window, ILiveElementLocator
             return;
         }
 
+        // ── Selection embedding: backtick wraps inline code or fence ─────────────
+        if (e.Key == System.Windows.Input.Key.OemTilde
+            && Keyboard.Modifiers == ModifierKeys.None
+            && DocSourceTextBox.GetSelectionLength() > 0)
+        {
+            if (MarkdownEditorCommands.ApplyInlineCodeOrFence(DocSourceTextBox))
+            {
+                e.Handled = true;
+                return;
+            }
+        }
+
+        // ── Selection embedding: double-quote wraps inline quote ──────────────────
+        if (e.Key == System.Windows.Input.Key.OemQuotes
+            && Keyboard.Modifiers == ModifierKeys.Shift
+            && DocSourceTextBox.GetSelectionLength() > 0)
+        {
+            if (MarkdownEditorCommands.ApplyInlineQuote(DocSourceTextBox))
+            {
+                e.Handled = true;
+                return;
+            }
+        }
+
         // ── List continuation: Enter at end of a bullet/numbered line ─────────────
         if (e.Key == System.Windows.Input.Key.Return
             && Keyboard.Modifiers == ModifierKeys.None)
@@ -6904,6 +6928,28 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 e.Handled = SmoothDictationHelper.ApplyToTextBox(PromptTextBox);
                 return;
+            }
+
+            // ── Selection embedding: backtick ─────────────────────────────────────────
+            if (e.Key == Key.OemTilde && modifiers == ModifierKeys.None
+                && PromptTextBox.SelectionLength > 0)
+            {
+                if (MarkdownEditorCommands.ApplyInlineCodeOrFence(PromptTextBox))
+                {
+                    e.Handled = true;
+                    return;
+                }
+            }
+
+            // ── Selection embedding: double-quote ─────────────────────────────────────
+            if (e.Key == Key.OemQuotes && modifiers == ModifierKeys.Shift
+                && PromptTextBox.SelectionLength > 0)
+            {
+                if (MarkdownEditorCommands.ApplyInlineQuote(PromptTextBox))
+                {
+                    e.Handled = true;
+                    return;
+                }
             }
 
             // Record Shift+Enter before dispatching so the hint hides even though WPF
