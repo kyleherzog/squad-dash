@@ -2269,7 +2269,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             QueuePauseIcon.Visibility = Visibility.Collapsed;
             // Pending is not fully-paused — ensure no stale styling.
             QueueStatusLabel.ClearValue(BackgroundProperty);
-            QueueStatusLabel.ClearValue(ForegroundProperty);
+            QueueStatusLabel.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
         }
         else
         {
@@ -2291,7 +2291,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             else
             {
                 QueueStatusLabel.ClearValue(BackgroundProperty);
-                QueueStatusLabel.ClearValue(ForegroundProperty);
+                QueueStatusLabel.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
             }
         }
         // Save true when paused, false (not null) when resuming. Using null would cause the
@@ -2317,7 +2317,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             // Turn completed with no pending pause — ensure no stale styling remains.
             QueueStatusLabel.ClearValue(BackgroundProperty);
-            QueueStatusLabel.ClearValue(ForegroundProperty);
+            QueueStatusLabel.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
         }
     }
 
