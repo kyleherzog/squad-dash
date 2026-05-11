@@ -1338,7 +1338,8 @@ internal sealed class MarkdownDocumentWindow : Window {
             HandleLinkNavigation,
             lineHint  => Dispatcher.BeginInvoke(new Action(() => HighlightSourceFromHover(lineHint))),
             imagePath => Dispatcher.BeginInvoke(new Action(() => HandleShowScreenshotMenu(imagePath))),
-            imagePath => Dispatcher.BeginInvoke(new Action(() => HandleShowImageMenu(imagePath))));
+            imagePath => Dispatcher.BeginInvoke(new Action(() => HandleShowImageMenu(imagePath))),
+            lineHint  => Dispatcher.BeginInvoke(new Action(() => ScrollToSourceLine(lineHint))));
         browser.Navigating += WebBrowser_Navigating;
         browser.LoadCompleted += WebBrowser_LoadCompleted;
     }
@@ -1761,6 +1762,24 @@ internal sealed class MarkdownDocumentWindow : Window {
             startPos += lines[i].Length + 1;
         var lineLength = lines[lineNum - 1].Length;
 
+        HighlightSourceRange(textBox, startPos, lineLength);
+    }
+
+    private void ScrollToSourceLine(string lineHint) {
+        if (_activeDocument is null || string.IsNullOrEmpty(lineHint)) return;
+        if (!int.TryParse(lineHint, out var lineNum) || lineNum < 1) return;
+        var textBox = _activeDocument.EditorTextBox;
+        if (textBox.Visibility != Visibility.Visible) return;
+
+        var lines = textBox.GetPlainText().Split('\n');
+        if (lineNum > lines.Length) return;
+
+        int startPos = 0;
+        for (int i = 0; i < lineNum - 1; i++)
+            startPos += lines[i].Length + 1;
+        var lineLength = lines[lineNum - 1].Length;
+
+        textBox.ScrollToOffset(startPos);
         HighlightSourceRange(textBox, startPos, lineLength);
     }
 
@@ -2405,22 +2424,26 @@ public sealed class MarkdownDocumentScriptingBridge {
     private readonly Action<string>? _hoverElement;
     private readonly Action<string>? _showScreenshotMenu;
     private readonly Action<string>? _showImageMenu;
+    private readonly Action<string>? _clickElement;
 
     public MarkdownDocumentScriptingBridge(
         Action<string>  navigate,
         Action<string>? hoverElement       = null,
         Action<string>? showScreenshotMenu = null,
-        Action<string>? showImageMenu      = null) {
+        Action<string>? showImageMenu      = null,
+        Action<string>? clickElement       = null) {
         _navigate           = navigate;
         _hoverElement       = hoverElement;
         _showScreenshotMenu = showScreenshotMenu;
         _showImageMenu      = showImageMenu;
+        _clickElement       = clickElement;
     }
 
     public void Navigate(string href)            => _navigate(href);
     public void HoverElement(string lineHint)    => _hoverElement?.Invoke(lineHint);
     public void ShowScreenshotMenu(string path)  => _showScreenshotMenu?.Invoke(path);
     public void ShowImageMenu(string path)       => _showImageMenu?.Invoke(path);
+    public void ClickElement(string lineHint)    => _clickElement?.Invoke(lineHint);
 }
 
 internal static class MarkdownDocumentScripts {
@@ -2440,6 +2463,13 @@ internal static class MarkdownDocumentScripts {
                 var lineHint = el.getAttribute('data-source-line');
                 if (lineHint) {
                     try { window.external.HoverElement(lineHint); } catch(ex) {}
+                }
+            });
+            el.addEventListener('click', function(ev) {
+                ev.stopPropagation();
+                var lineHint = el.getAttribute('data-source-line');
+                if (lineHint) {
+                    try { window.external.ClickElement(lineHint); } catch(ex) {}
                 }
             });
         })(elements[i]);
