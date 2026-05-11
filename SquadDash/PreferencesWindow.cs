@@ -576,7 +576,7 @@ internal sealed class PreferencesWindow : Window {
         form.Children.Add(_cleanupPromptBox);
 
         var hint = new TextBlock {
-            Text = "This prompt is sent automatically when you press Ctrl+Shift+C with text selected in any markdown source editor. The selection passed to the AI with this instruction and after a moment replaced with the edited version from AI.",
+            Text = "This prompt is sent automatically when you press Ctrl+Shift+C with text selected in any markdown source editor. When the AI revision lands, the original selection is replaced with the cleaned-up version. You can work elsewhere in the document while waiting for AI to return.",
             FontSize = 11,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 0)
