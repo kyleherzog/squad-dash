@@ -240,9 +240,13 @@ internal sealed class ClipboardImageEditorWindow : Window
     private AnnotationText? _colorPickerText;
     private Rectangle? _textSelectionRect;
     private List<Rectangle> _textResizeHandles = new();
-    private bool _draggingTextHandle;
-    private Point _textHandleDragStart;
+    private bool   _draggingTextHandle;
+    private int    _textHandleDragIndex;
+    private Point  _textHandleDragStart;
     private double _textHandleDragOrigFontSize;
+    private double _textHandleDragOrigDisplayW;
+    private double _textHandleDragOrigDisplayH;
+    private Rect   _textHandleDragOrigBounds;
     private AnnotationText? _textHandleDragAnnotation;
     // Set in CommitActiveTextBox when the commit is triggered by a LostFocus (i.e. a canvas click).
     // Canvas_MouseDown reads and clears this flag to prevent immediately deselecting the annotation
@@ -1321,30 +1325,9 @@ internal sealed class ClipboardImageEditorWindow : Window
     {
         if (e.LeftButton != MouseButtonState.Pressed) return;
 
-        // Text annotation resize handle hit test — ABSOLUTE HIGHEST PRIORITY.
-        // Runs before every other mode check so handles always respond regardless of active tool.
-        var textHandleTarget = _selectedText ?? _editingText;
-        if (textHandleTarget != null && _textResizeHandles.Count == 8)
-        {
-            double hs = HandleSize / _zoom / 2;
-            var ptHandle = e.GetPosition(_canvas);
-            foreach (var handle in _textResizeHandles)
-            {
-                double hx = Canvas.GetLeft(handle) + hs;
-                double hy = Canvas.GetTop(handle)  + hs;
-                if (Math.Abs(ptHandle.X - hx) <= hs + 2 && Math.Abs(ptHandle.Y - hy) <= hs + 2)
-                {
-                    _draggingTextHandle         = true;
-                    _textHandleDragStart        = ptHandle;
-                    _textHandleDragOrigFontSize = textHandleTarget.FontSize;
-                    _textHandleDragAnnotation   = textHandleTarget;
-                    _preDragSnapshot            = CaptureSnapshot();
-                    _canvas.CaptureMouse();
-                    e.Handled = true;
-                    return;
-                }
-            }
-        }
+        // Note: text resize handle hits are handled via PreviewMouseLeftButtonDown
+        // wired directly on each handle Rectangle in AddTextResizeHandles — that
+        // fires in the tunnel phase before LostFocus can recreate/reposition handles.
 
         // Eyedropper mode: sample pixel on click.
         if (_inEyedropperMode)
@@ -1642,12 +1625,65 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         if (_draggingTextHandle && _textHandleDragAnnotation != null)
         {
-            var pt = e.GetPosition(_canvas);
-            double delta = (pt.X - _textHandleDragStart.X + pt.Y - _textHandleDragStart.Y) / 2.0;
-            double newSize = Math.Max(8, Math.Min(_textHandleDragOrigFontSize + delta, AnnotationText.MaxFontSize));
-            _textHandleDragAnnotation.FontSize = newSize;
-            RefreshTextAnnotation(_textHandleDragAnnotation);
-            PositionTextResizeHandles(_textHandleDragAnnotation);
+            var pt    = e.GetPosition(_canvas);
+            var ann   = _textHandleDragAnnotation;
+            double origW = _textHandleDragOrigDisplayW > 0 ? _textHandleDragOrigDisplayW : 80;
+            double origH = _textHandleDragOrigDisplayH > 0 ? _textHandleDragOrigDisplayH : 20;
+            double dx = pt.X - _textHandleDragStart.X;
+            double dy = pt.Y - _textHandleDragStart.Y;
+
+            // Scale factors per handle: how much does this handle movement grow/shrink the box?
+            double sx = 1.0, sy = 1.0;
+            switch (_textHandleDragIndex)
+            {
+                case 0: sx = (origW - dx) / origW; sy = (origH - dy) / origH; break; // NW
+                case 1: sx = (origW + dx) / origW; sy = (origH - dy) / origH; break; // NE
+                case 2: sx = (origW - dx) / origW; sy = (origH + dy) / origH; break; // SW
+                case 3: sx = (origW + dx) / origW; sy = (origH + dy) / origH; break; // SE
+                case 4: sy = (origH - dy) / origH; break; // N
+                case 5: sx = (origW + dx) / origW; break; // E
+                case 6: sy = (origH + dy) / origH; break; // S
+                case 7: sx = (origW - dx) / origW; break; // W
+            }
+
+            // Uniform font-size scale: take the larger factor so the text grows to fill the box.
+            double scale = Math.Max(sx, sy);
+            scale = Math.Max(0.2, scale);
+            double newFontSize = Math.Max(AnnotationText.MinFontSize,
+                                 Math.Min(_textHandleDragOrigFontSize * scale, 150.0));
+            ann.FontSize = newFontSize;
+            if (ann.Display != null) ann.Display.FontSize = newFontSize;
+            if (ann.Shadow  != null) ann.Shadow.FontSize  = newFontSize;
+            if (_activeTextBox != null && ann == _editingText) _activeTextBox.FontSize = newFontSize;
+
+            // Compute expected pixel size from the font scale for live handle positioning
+            // (layout hasn't run yet so ActualWidth/Height would be stale).
+            double fontScale  = newFontSize / _textHandleDragOrigFontSize;
+            double expectedW  = origW * fontScale;
+            double expectedH  = origH * fontScale;
+
+            bool isFixedWidth = _textHandleDragOrigBounds.Width > 0;
+            if (isFixedWidth)
+            {
+                double newW = Math.Max(20, origW * Math.Max(0.2, sx));
+                if (ann.Display != null) ann.Display.Width = newW;
+                ann.Bounds = new Rect(_textHandleDragOrigBounds.Left, _textHandleDragOrigBounds.Top, newW, expectedH);
+                expectedW  = newW;
+            }
+            else
+            {
+                ann.Bounds = new Rect(_textHandleDragOrigBounds.Left, _textHandleDragOrigBounds.Top, expectedW, expectedH);
+            }
+
+            // Update selection rect live.
+            if (_textSelectionRect != null)
+            {
+                _textSelectionRect.Width  = Math.Max(30, expectedW + 8);
+                _textSelectionRect.Height = Math.Max(20, expectedH + 4);
+                Canvas.SetLeft(_textSelectionRect, ann.Bounds.Left - 4);
+                Canvas.SetTop (_textSelectionRect, ann.Bounds.Top  - 2);
+            }
+            PositionTextResizeHandles(ann);
             e.Handled = true;
             return;
         }
@@ -4572,6 +4608,28 @@ internal sealed class ClipboardImageEditorWindow : Window
             Panel.SetZIndex(handle, 22);
             _canvas.Children.Add(handle);
             _textResizeHandles.Add(handle);
+
+            // Wire drag in the PREVIEW (tunnel) phase so it fires before TextBox LostFocus
+            // can recreate handles at position (0,0) and break the coordinate hit-test.
+            int idx = i;
+            handle.PreviewMouseLeftButtonDown += (_, ev) =>
+            {
+                var target = _selectedText ?? _editingText;
+                if (target == null) return;
+                double dispW = target.Display?.ActualWidth  ?? (_activeTextBox?.ActualWidth  ?? 80);
+                double dispH = target.Display?.ActualHeight ?? (_activeTextBox?.ActualHeight ?? 20);
+                _draggingTextHandle         = true;
+                _textHandleDragIndex        = idx;
+                _textHandleDragStart        = ev.GetPosition(_canvas);
+                _textHandleDragOrigFontSize = target.FontSize;
+                _textHandleDragOrigDisplayW = dispW > 0 ? dispW : 80;
+                _textHandleDragOrigDisplayH = dispH > 0 ? dispH : 20;
+                _textHandleDragOrigBounds   = target.Bounds;
+                _textHandleDragAnnotation   = target;
+                _preDragSnapshot            = CaptureSnapshot();
+                _canvas.CaptureMouse();
+                ev.Handled = true;
+            };
         }
         // Defer positioning until after layout so Bounds/DesiredSize are valid on first placement.
         Dispatcher.BeginInvoke(DispatcherPriority.Render, () => PositionTextResizeHandles(annotation));
