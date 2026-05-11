@@ -4867,10 +4867,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             ToolTip   = opt.Hint,
             Margin    = new Thickness(0, 0, 0, 4),
         };
-        if (TryFindResource("ThemedCheckBoxStyle") is Style cbStyle)
-            cb.Style = cbStyle;
-        else
-            cb.Foreground = (System.Windows.Media.Brush)FindResource("LabelText");
+        cb.SetResourceReference(Control.StyleProperty, "ThemedCheckBoxStyle");
 
         var capturedPath = _selectedLoopMdPath;
         var capturedKey  = opt.Key;
@@ -4892,8 +4889,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(0, 0, 6, 0),
         };
-        if (TryFindResource("LabelText") is System.Windows.Media.Brush labelBrush)
-            label.Foreground = labelBrush;
+        label.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
 
         var tb = new TextBox
         {
@@ -4901,12 +4897,9 @@ public partial class MainWindow : Window, ILiveElementLocator
             Width  = 50,
             HorizontalAlignment = HorizontalAlignment.Left,
         };
-        if (TryFindResource("InputSurface") is System.Windows.Media.Brush bg)
-            tb.Background = bg;
-        if (TryFindResource("InputBorder") is System.Windows.Media.Brush border)
-            tb.BorderBrush = border;
-        if (TryFindResource("LabelText") is System.Windows.Media.Brush fg)
-            tb.Foreground = fg;
+        tb.SetResourceReference(Control.BackgroundProperty, "InputSurface");
+        tb.SetResourceReference(Control.BorderBrushProperty, "InputBorder");
+        tb.SetResourceReference(Control.ForegroundProperty, "LabelText");
 
         var capturedPath = _selectedLoopMdPath;
         var capturedKey  = opt.Key;
@@ -4950,8 +4943,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 ToolTip = opt.Hint,
                 Margin  = new Thickness(0, 0, 0, 2),
             };
-            if (TryFindResource("LabelText") is System.Windows.Media.Brush labelBrush)
-                label.Foreground = labelBrush;
+            label.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
             stack.Children.Add(label);
 
             foreach (var choice in opt.Choices)
@@ -4964,8 +4956,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                     Margin    = new Thickness(12, 0, 0, 0),
                 };
                 rb.SetResourceReference(Control.StyleProperty, "ThemedRadioButtonStyle");
-                if (TryFindResource("LabelText") is System.Windows.Media.Brush rbBrush)
-                    rb.Foreground = rbBrush;
+                rb.SetResourceReference(Control.ForegroundProperty, "LabelText");
 
                 var capturedChoice = choice;
                 rb.Checked += (_, _) =>
@@ -4992,16 +4983,14 @@ public partial class MainWindow : Window, ILiveElementLocator
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(0, 0, 6, 0),
         };
-        if (TryFindResource("LabelText") is System.Windows.Media.Brush comboLabelBrush)
-            comboLabel.Foreground = comboLabelBrush;
+        comboLabel.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
 
         var combo = new ComboBox
         {
             HorizontalAlignment = HorizontalAlignment.Left,
             MaxWidth            = 90,
         };
-        if (TryFindResource("ThemedComboBoxStyle") is Style comboStyle)
-            combo.Style = comboStyle;
+        combo.SetResourceReference(Control.StyleProperty, "ThemedComboBoxStyle");
 
         if (opt.Choices is not null)
             foreach (var choice in opt.Choices)
