@@ -10807,6 +10807,24 @@ public partial class MainWindow : Window, ILiveElementLocator
         HighlightDocSourceRange(startPos, lineLength);
     }
 
+    // Called when the user clicks an element in the preview — scrolls source to that line and highlights it.
+    internal void ScrollDocSourceToLine(string lineHint)
+    {
+        if (DocSourceTextBox is null || string.IsNullOrEmpty(lineHint)) return;
+        if (!int.TryParse(lineHint, out var lineNum) || lineNum < 1) return;
+
+        var lines = DocSourceTextBox.GetPlainText().Split('\n');
+        if (lineNum > lines.Length) return;
+
+        int startPos = 0;
+        for (int i = 0; i < lineNum - 1; i++)
+            startPos += lines[i].Length + 1;
+
+        var lineLength = lineNum - 1 < lines.Length ? lines[lineNum - 1].Length : 0;
+        DocSourceTextBox.ScrollToOffset(startPos);
+        HighlightDocSourceRange(startPos, lineLength);
+    }
+
     private Canvas EnsureDocSourceOverlayCanvas()
     {
         if (_docSourceOverlayCanvas is not null) return _docSourceOverlayCanvas;
@@ -24799,6 +24817,15 @@ public sealed class DocViewerScriptingBridge
     public void HoverElement(string lineHint)
     {
         _window.Dispatcher.BeginInvoke(() => _window.HighlightDocSourceFromHover(lineHint));
+    }
+
+    /// <summary>
+    /// Called when the user clicks an element in the doc viewer preview.
+    /// Scrolls the source editor to the corresponding line and highlights it.
+    /// </summary>
+    public void ClickElement(string lineHint)
+    {
+        _window.Dispatcher.BeginInvoke(() => _window.ScrollDocSourceToLine(lineHint));
     }
 }
 
