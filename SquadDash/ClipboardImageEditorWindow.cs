@@ -3942,12 +3942,30 @@ internal sealed class ClipboardImageEditorWindow : Window
             ? Visibility.Visible
             : Visibility.Collapsed;
 
+        // Apply fixed-width wrapping when annotation was drag-drawn with an explicit width.
+        bool hasFixedWidth = annotation.Bounds.Width > 0;
+        if (hasFixedWidth)
+        {
+            annotation.Display.Width        = annotation.Bounds.Width;
+            annotation.Display.TextWrapping = TextWrapping.Wrap;
+            annotation.Shadow!.Width        = annotation.Bounds.Width;
+            annotation.Shadow.TextWrapping  = TextWrapping.Wrap;
+        }
+        else
+        {
+            annotation.Display.Width        = double.NaN;
+            annotation.Display.TextWrapping = TextWrapping.NoWrap;
+            annotation.Shadow!.Width        = double.NaN;
+            annotation.Shadow.TextWrapping  = TextWrapping.NoWrap;
+        }
+
         // Measure so Bounds.Width/Height reflect the rendered size (needed for crop-in-place).
-        annotation.Display.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double measureW = hasFixedWidth ? annotation.Bounds.Width : double.PositiveInfinity;
+        annotation.Display.Measure(new Size(measureW, double.PositiveInfinity));
         annotation.Bounds = new Rect(
             annotation.Bounds.Left,
             annotation.Bounds.Top,
-            Math.Max(annotation.Bounds.Width,  annotation.Display.DesiredSize.Width),
+            hasFixedWidth ? annotation.Bounds.Width : Math.Max(annotation.Bounds.Width, annotation.Display.DesiredSize.Width),
             Math.Max(annotation.Bounds.Height, annotation.Display.DesiredSize.Height));
 
         Canvas.SetLeft(annotation.Display, annotation.Bounds.Left);
