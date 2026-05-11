@@ -313,7 +313,7 @@ internal sealed class ApplicationSettingsStore {
         using var mutex = AcquireMutex();
         var current = LoadCore();
         var updated = current with {
-            Theme = theme is "Light" or "Dark" ? theme : null
+            Theme = theme is "Light" or "Dark" or "Auto" ? theme : null
         };
         SaveCore(updated);
         return updated;
@@ -1044,7 +1044,7 @@ internal sealed record ApplicationSettingsSnapshot(
             DocSourceFontSize = NormalizeFontSize(DocSourceFontSize),
             StartupIssueSimulation = StartupIssueSimulation,
             RuntimeIssueSimulation = RuntimeIssueSimulation,
-            Theme = Theme is "Light" or "Dark" ? Theme : null,
+            Theme = Theme is "Light" or "Dark" or "Auto" ? Theme : null,
             LastUsedModel = string.IsNullOrWhiteSpace(LastUsedModel) ? null : LastUsedModel.Trim(),
             TasksWindowOpen = TasksWindowOpen,
             TraceWindowOpen = TraceWindowOpen,

@@ -339,6 +339,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, RemoteSpeechSession> _remoteSpeechSessions = new();
     private ApplicationSettingsSnapshot _settingsSnapshot = ApplicationSettingsSnapshot.Empty;
     private string _activeThemeName = "Light";
+    private string _themePreference = "Auto"; // "Auto", "Light", or "Dark"
     private readonly long _processStartedAtUtcTicks = ProcessIdentity.GetCurrentProcessStartedAtUtcTicks();
     private readonly string? _startupFolderArgument;
     private readonly bool _noWorkspaceOnStart;
@@ -729,6 +730,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         Loaded += MainWindow_Loaded;
         ContentRendered += MainWindow_ContentRendered;
         Activated += MainWindow_Activated;
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
         LocationChanged += (_, _) =>
         {
             try
@@ -1680,7 +1682,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         ApplyPromptFontSize();
         ApplyTranscriptFontSize();
         ApplyDocSourceFontSize();
-        ApplyTheme(_settingsSnapshot.Theme ?? "Light");
+        _themePreference = _settingsSnapshot.Theme ?? "Auto";
+        var resolvedTheme = string.Equals(_themePreference, "Auto", StringComparison.OrdinalIgnoreCase)
+            ? GetWindowsTheme()
+            : _themePreference;
+        ApplyTheme(resolvedTheme);
         RefreshRecentFoldersMenu(_settingsSnapshot.RecentFolders);
         UpdateVoiceHintVisibility();
         SquadDashTrace.Write(TraceCategory.Startup, $"InitializeWorkspace: theme/UI applied {initWsSw.ElapsedMilliseconds}ms.");
@@ -18701,6 +18707,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try
         {
+            Microsoft.Win32.SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
             _isClosing = true;
             _promptHealthTimer.Stop();
             _statusPresentationTimer.Stop();
@@ -20857,30 +20864,63 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void UpdateThemeMenuState()
     {
-        if (ThemeToggleMenuItem is not null)
-            ThemeToggleMenuItem.Header = string.Equals(_activeThemeName, "Dark", StringComparison.OrdinalIgnoreCase)
-                ? "_Light Theme"
-                : "_Dark Theme";
+        if (ThemeAutoMenuItem is not null)
+            ThemeAutoMenuItem.IsChecked = string.Equals(_themePreference, "Auto", StringComparison.OrdinalIgnoreCase);
+        if (ThemeLightMenuItem is not null)
+            ThemeLightMenuItem.IsChecked = string.Equals(_themePreference, "Light", StringComparison.OrdinalIgnoreCase);
+        if (ThemeDarkMenuItem is not null)
+            ThemeDarkMenuItem.IsChecked = string.Equals(_themePreference, "Dark", StringComparison.OrdinalIgnoreCase);
     }
 
-    private void SetTheme(string themeName)
+    private void SetThemePreference(string preference)
     {
-        if (string.Equals(_activeThemeName, themeName, StringComparison.OrdinalIgnoreCase))
-            return;
-        ApplyTheme(themeName);
-        _settingsSnapshot = _settingsStore.SaveTheme(themeName);
+        _themePreference = preference;
+        _settingsSnapshot = _settingsStore.SaveTheme(preference);
+        var resolved = string.Equals(preference, "Auto", StringComparison.OrdinalIgnoreCase)
+            ? GetWindowsTheme()
+            : preference;
+        ApplyTheme(resolved);
     }
 
-    private void ThemeToggleMenuItem_Click(object sender, RoutedEventArgs e)
+    private void ThemeAutoMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try { SetThemePreference("Auto"); }
+        catch (Exception ex) { HandleUiCallbackException(nameof(ThemeAutoMenuItem_Click), ex); }
+    }
+
+    private void ThemeLightMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try { SetThemePreference("Light"); }
+        catch (Exception ex) { HandleUiCallbackException(nameof(ThemeLightMenuItem_Click), ex); }
+    }
+
+    private void ThemeDarkMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try { SetThemePreference("Dark"); }
+        catch (Exception ex) { HandleUiCallbackException(nameof(ThemeDarkMenuItem_Click), ex); }
+    }
+
+    private static string GetWindowsTheme()
     {
         try
         {
-            SetTheme(string.Equals(_activeThemeName, "Dark", StringComparison.OrdinalIgnoreCase) ? "Light" : "Dark");
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            var value = key?.GetValue("AppsUseLightTheme");
+            return value is int i && i == 0 ? "Dark" : "Light";
         }
-        catch (Exception ex)
+        catch
         {
-            HandleUiCallbackException(nameof(ThemeToggleMenuItem_Click), ex);
+            return "Light"; // safe fallback
         }
+    }
+
+    private void OnUserPreferenceChanged(object sender, Microsoft.Win32.UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category != Microsoft.Win32.UserPreferenceCategory.General) return;
+        if (!string.Equals(_themePreference, "Auto", StringComparison.OrdinalIgnoreCase)) return;
+        var resolved = GetWindowsTheme();
+        Dispatcher.InvokeAsync(() => ApplyTheme(resolved));
     }
 
     private static string CollapseWhitespace(string? text)
