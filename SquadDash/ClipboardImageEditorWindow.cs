@@ -3834,17 +3834,27 @@ internal sealed class ClipboardImageEditorWindow : Window
             };
             display.MouseMove += (_, e) =>
             {
-                if (!isDragging) return;
-                var pt    = e.GetPosition(_canvas);
-                var newX  = Math.Max(0, Math.Min(dragOrigBounds.X + (pt.X - dragStart.X), _canvas.Width  - 20));
-                var newY  = Math.Max(0, Math.Min(dragOrigBounds.Y + (pt.Y - dragStart.Y), _canvas.Height - 16));
-                annotation.Bounds = new Rect(newX, newY, annotation.Bounds.Width, annotation.Bounds.Height);
-                Canvas.SetLeft(display,    newX);
-                Canvas.SetTop(display,     newY);
-                Canvas.SetLeft(shadow,     newX + 1.5);
-                Canvas.SetTop(shadow,      newY + 1.5);
-                if (_selectedText == annotation) UpdateTextSelectionBorder();
-                e.Handled = true;
+                if (isDragging)
+                {
+                    var pt    = e.GetPosition(_canvas);
+                    var newX  = Math.Max(0, Math.Min(dragOrigBounds.X + (pt.X - dragStart.X), _canvas.Width  - 20));
+                    var newY  = Math.Max(0, Math.Min(dragOrigBounds.Y + (pt.Y - dragStart.Y), _canvas.Height - 16));
+                    annotation.Bounds = new Rect(newX, newY, annotation.Bounds.Width, annotation.Bounds.Height);
+                    Canvas.SetLeft(display,    newX);
+                    Canvas.SetTop(display,     newY);
+                    Canvas.SetLeft(shadow,     newX + 1.5);
+                    Canvas.SetTop(shadow,      newY + 1.5);
+                    UpdateTextSelectionBorder();
+                    e.Handled = true;
+                    return;
+                }
+                // Show SizeAll cursor when hovering within 3 px of the annotation border.
+                const double BorderZone = 3.0;
+                var pos = e.GetPosition(display);
+                bool nearBorder = pos.X <= BorderZone || pos.Y <= BorderZone
+                    || pos.X >= display.ActualWidth  - BorderZone
+                    || pos.Y >= display.ActualHeight - BorderZone;
+                display.Cursor = nearBorder ? Cursors.SizeAll : Cursors.Arrow;
             };
             display.MouseLeftButtonUp += (_, e) =>
             {
@@ -3852,7 +3862,8 @@ internal sealed class ClipboardImageEditorWindow : Window
                 CommitDragUndo();
                 isDragging = false;
                 display.ReleaseMouseCapture();
-                if (_selectedText == annotation) UpdateTextSelectionBorder();
+                // Explicitly re-select so resize handles remain visible after drag.
+                SelectText(annotation);
                 e.Handled = true;
             };
             display.MouseRightButtonDown += (_, e) =>
