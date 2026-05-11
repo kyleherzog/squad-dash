@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -590,7 +590,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             Width    = 32, Height = 28,
             Padding  = new Thickness(4, 3, 4, 3),
             Margin   = new Thickness(0, 0, 4, 0),
-            ToolTip  = "Arrow (drag to draw)"
+            ToolTip  = "Arrow (drag to draw) `u{00B7} Shift+click for multi-drop"
         };
         _addRectBtn = new Button
         {
@@ -598,7 +598,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             Width    = 32, Height = 28,
             Padding  = new Thickness(4, 3, 4, 3),
             Margin   = new Thickness(0, 0, 4, 0),
-            ToolTip  = "Rectangle annotation (drag to draw)"
+            ToolTip  = "Rectangle annotation (drag to draw) `u{00B7} Shift+click for multi-drop"
         };
         var cursorBtn = new Button
         {
@@ -681,46 +681,60 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         _addArrowBtn.Click += (_, _) =>
         {
-            if (_inEyedropperMode) ExitEyedropperMode();
             bool isShift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
             if (_inArrowMode && !isShift) { ExitArrowMode(); return; }
+            ExitAllToolModes();
             EnterArrowMode();
             if (isShift)
             {
                 _inArrowMultiDropMode = true;
                 ShowModeHint("Multi-drop: drag to place arrows · ESC to exit");
             }
-            _addArrowBtn.Content = MakeToolIcon("ImageEditorArrowIcon", active: true);
+            _addArrowBtn.Content = MakeToolIcon("ImageEditorArrowIcon", active: true, multiDrop: isShift);
         };
 
         _addRectBtn.Click += (_, _) =>
         {
-            if (_inEyedropperMode) ExitEyedropperMode();
             bool isShift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
             if (_inRectMode && !isShift) { ExitRectMode(); return; }
+            ExitAllToolModes();
             EnterRectMode();
             if (isShift)
             {
                 _inRectMultiDropMode = true;
                 ShowModeHint("Multi-drop: drag to place rectangles · ESC to exit");
             }
-            _addRectBtn.Content = MakeToolIcon("ImageEditorRectIcon", active: true);
+            _addRectBtn.Content = MakeToolIcon("ImageEditorRectIcon", active: true, multiDrop: isShift);
         };
 
         cursorBtn.Click += (_, _) =>
         {
-            if (_inEyedropperMode) ExitEyedropperMode();
+            // Bug fix: if cursor was already placed (_cursorEnabled true but placement mode
+            // exited), re-enter placement mode instead of toggling off.
+            if (_cursorEnabled && !_inCursorPlacementMode)
+            {
+                ExitAllToolModes();
+                _cursorEnabled = true;
+                _inCursorPlacementMode = true;
+                cursorBtn.Content = MakeToolIcon("ImageEditorCursorIcon", active: true);
+                _canvas.Cursor = AnnotationCursors.DropCursorTool;
+                ShowModeHint("Click to place the cursor indicator");
+                return;
+            }
+            ExitAllToolModes();
             _cursorEnabled = !_cursorEnabled;
             if (_cursorEnabled)
             {
                 _inCursorPlacementMode = true;
                 cursorBtn.Content = MakeToolIcon("ImageEditorCursorIcon", active: true);
+                _canvas.Cursor = AnnotationCursors.DropCursorTool;
                 ShowModeHint("Click to place the cursor indicator");
             }
             else
             {
                 _inCursorPlacementMode = false;
                 cursorBtn.Content = MakeToolIcon("ImageEditorCursorIcon");
+                _canvas.Cursor = Cursors.Arrow;
                 ToggleCursorOverlay(false);
                 HideModeHint();
             }
@@ -729,6 +743,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         _eyedropperBtn.Click += (_, _) =>
         {
             if (_inEyedropperMode) { ExitEyedropperMode(); return; }
+            ExitAllToolModes();
             EnterEyedropperMode();
             _eyedropperBtn.Content = "✓ ⊕ Color";
         };
@@ -767,22 +782,41 @@ internal sealed class ClipboardImageEditorWindow : Window
             }
         };
 
-        var row = new StackPanel
+        // ── Toolbar layout: DockPanel so action buttons are always at the far right ─────
+        // Right-docked sub-panel (must be added FIRST — DockPanel rule)
+        var rightStack = new StackPanel
         {
             Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(4, 0, 0, 0)
+        };
+        rightStack.Children.Add(insertBtn);
+        rightStack.Children.Add(cancelBtn);
+        DockPanel.SetDock(rightStack, Dock.Right);
+
+        // Tool buttons + aux controls fill the remaining left space
+        var leftStack = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        leftStack.Children.Add(_addArrowBtn);
+        leftStack.Children.Add(_addRectBtn);
+        leftStack.Children.Add(cursorBtn);
+        leftStack.Children.Add(_eyedropperBtn);
+        leftStack.Children.Add(_eyedropperSwatch);
+        leftStack.Children.Add(_eyedropperHexLabel);
+        leftStack.Children.Add(roundCornersBtn);
+        leftStack.Children.Add(_zoomLabel);
+        leftStack.Children.Add(resetZoomBtn);
+
+        var row = new DockPanel
+        {
+            LastChildFill = true,
             Margin = new Thickness(8, 6, 8, 6)
         };
-        row.Children.Add(_addArrowBtn);
-        row.Children.Add(_addRectBtn);
-        row.Children.Add(cursorBtn);
-        row.Children.Add(_eyedropperBtn);
-        row.Children.Add(_eyedropperSwatch);
-        row.Children.Add(_eyedropperHexLabel);
-        row.Children.Add(roundCornersBtn);
-        row.Children.Add(insertBtn);
-        row.Children.Add(cancelBtn);
-        row.Children.Add(_zoomLabel);
-        row.Children.Add(resetZoomBtn);
+        row.Children.Add(rightStack);  // right-docked must come before fill child
+        row.Children.Add(leftStack);
 
         var border = new Border { BorderThickness = new Thickness(0, 1, 0, 0) };
         border.SetResourceReference(Border.BorderBrushProperty, "PopupBorder");
@@ -795,7 +829,7 @@ internal sealed class ClipboardImageEditorWindow : Window
     /// ImageEditorIcons.xaml). When <paramref name="active"/> is true a small accent
     /// underline is added so the user can see which tool is currently engaged.
     /// </summary>
-    private UIElement MakeToolIcon(string resourceKey, bool active = false)
+    private UIElement MakeToolIcon(string resourceKey, bool active = false, bool multiDrop = false)
     {
         var resource = TryFindResource(resourceKey);
         if (resource == null)
@@ -817,11 +851,15 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         if (!active) return icon;
 
-        // Active state: stack icon over a 2px accent bar at the bottom.
+        // Active state: stack icon over an accent bar at the bottom.
+        // multiDrop = true: slightly taller bar with rounded ends and centre margin (~70% width)
+        // to visually distinguish multi-drop mode from a normal single-drop activation.
         var accent = new Border
         {
-            Height = 2,
-            VerticalAlignment = VerticalAlignment.Bottom
+            Height = multiDrop ? 3 : 2,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = multiDrop ? new Thickness(4, 0, 4, 0) : new Thickness(0),
+            CornerRadius = multiDrop ? new CornerRadius(2) : new CornerRadius(0)
         };
         accent.SetResourceReference(Border.BackgroundProperty, "AccentBrush");
 
@@ -1217,7 +1255,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         }
 
         // Cursor placement mode.
-        if (_inCursorPlacementMode && _sel.Contains(pt))
+        if (_inCursorPlacementMode && (_sel.IsEmpty || _sel.Contains(pt)))
         {
             PlaceCursorAtPoint(pt);
             e.Handled = true;
@@ -1291,7 +1329,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             _newSelAnchor = pt;
             _preDragSnapshot = CaptureSnapshot();
             _canvas.CaptureMouse();
-            _canvas.Cursor = Cursors.Cross;
+            _canvas.Cursor = AnnotationCursors.CropTool;
             e.Handled = true;
         }
     }
@@ -1423,12 +1461,17 @@ internal sealed class ClipboardImageEditorWindow : Window
                 _canvas.Cursor = AnnotationCursors.ArrowTool;
             else if (_inRectMode)
                 _canvas.Cursor = AnnotationCursors.RectTool;
+            else if (_inCursorPlacementMode)
+                _canvas.Cursor = AnnotationCursors.DropCursorTool;
             else if (_sel.IsEmpty)
-                _canvas.Cursor = Cursors.Cross;
+                _canvas.Cursor = AnnotationCursors.CropTool;
             else
             {
                 var hoverZone = HitTest(e.GetPosition(_canvas));
-                _canvas.Cursor = ZoneCursor(hoverZone);
+                // Outside the crop rect: show crop cursor so user knows they can redraw it.
+                _canvas.Cursor = hoverZone == HitZone.None
+                    ? AnnotationCursors.CropTool
+                    : ZoneCursor(hoverZone);
             }
 
             // Override with directional cursor when hovering over a selected annotation rect's edge/corner
@@ -1458,7 +1501,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             var dy = headPt.Y - tailPt.Y;
             var dist = Math.Sqrt(dx * dx + dy * dy);
 
-            if (dist >= 20.0)
+            if (dist >= 40.0)
             {
                 _preDragSnapshot = null; // let CreateArrow handle its own undo push
                 PlaceArrowFromDrag(tailPt, headPt, dist);
@@ -1485,6 +1528,7 @@ internal sealed class ClipboardImageEditorWindow : Window
                         Canvas.GetTop(_annotRectPreview),
                         _annotRectPreview.Width,
                         _annotRectPreview.Height);
+                    _preDragSnapshot = null; // let CreateAnnotationRect handle its own undo push
                     CreateAnnotationRect(bounds);
                 }
             }
@@ -1547,6 +1591,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             {
                 _inCursorPlacementMode = false;
                 _cursorEnabled = false;
+                _canvas.Cursor = Cursors.Arrow;
                 HideModeHint();
                 e.Handled = true;
                 return;
@@ -1618,6 +1663,8 @@ internal sealed class ClipboardImageEditorWindow : Window
         _canvas.Cursor = AnnotationCursors.ArrowTool;
         ShowModeHint("Drag to draw an arrow");
     }
+
+    private void ExitAllToolModes() { if (_inArrowMode) ExitArrowMode(); if (_inRectMode) ExitRectMode(); if (_inEyedropperMode) ExitEyedropperMode(); }
 
     private void ExitArrowMode()
     {
@@ -2679,8 +2726,17 @@ internal sealed class ClipboardImageEditorWindow : Window
         {
             if (!_draggingCursor) return;
             var pt = e.GetPosition(_canvas);
-            var x = Math.Max(_sel.Left, Math.Min(pt.X, _sel.Right - 20));
-            var y = Math.Max(_sel.Top, Math.Min(pt.Y, _sel.Bottom - 24));
+            double x, y;
+            if (_sel.IsEmpty)
+            {
+                x = Math.Max(0, Math.Min(pt.X, _canvas.Width  - 20));
+                y = Math.Max(0, Math.Min(pt.Y, _canvas.Height - 24));
+            }
+            else
+            {
+                x = Math.Max(_sel.Left, Math.Min(pt.X, _sel.Right  - 20));
+                y = Math.Max(_sel.Top,  Math.Min(pt.Y, _sel.Bottom - 24));
+            }
             Canvas.SetLeft(_cursorImage!, x);
             Canvas.SetTop(_cursorImage!, y);
             e.Handled = true;

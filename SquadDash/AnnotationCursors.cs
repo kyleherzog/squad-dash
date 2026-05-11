@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -23,6 +23,8 @@ internal static class AnnotationCursors
     private static Cursor? _closedHand;
     private static Cursor? _arrowTool;
     private static Cursor? _rectTool;
+    private static Cursor? _dropCursorTool;
+    private static Cursor? _cropTool;
 
     // ── Public properties ─────────────────────────────────────────────────────
 
@@ -47,6 +49,22 @@ internal static class AnnotationCursors
     /// </summary>
     public static Cursor RectTool
         => _rectTool ??= CreateCursorFromDrawing(CreateRectToolDrawing(), 32, 32, hotX: 16, hotY: 16);
+
+    /// <summary>
+    /// Drop-cursor-tool cursor: a small pointer-arrow icon at the upper-left corner
+    /// plus a precision crosshair. Shown while in cursor-placement mode.
+    /// The crosshair centre is the hotspot (16, 16).
+    /// </summary>
+    public static Cursor DropCursorTool
+        => _dropCursorTool ??= CreateCursorFromDrawing(CreateDropCursorToolDrawing(), 32, 32, hotX: 16, hotY: 16);
+
+    /// <summary>
+    /// Crop-tool cursor: corner bracket marks in each quadrant with a crosshair at
+    /// centre. Shown when the canvas is in crop-draw state (no tool active).
+    /// The crosshair centre is the hotspot (16, 16).
+    /// </summary>
+    public static Cursor CropTool
+        => _cropTool ??= CreateCursorFromDrawing(CreateCropToolDrawing(), 32, 32, hotX: 16, hotY: 16);
 
     // ── Cursor factory ────────────────────────────────────────────────────────
 
@@ -242,6 +260,68 @@ internal static class AnnotationCursors
     /// Each arm is rendered first in white (2 px wide) then in dark grey (1.2 px)
     /// so it is legible on both light and dark canvas content.
     /// </summary>
+    private static Drawing CreateDropCursorToolDrawing()
+    {
+        var dg = new DrawingGroup();
+        using (var dc = dg.Open())
+        {
+            var fill      = new SolidColorBrush(Color.FromRgb(255, 252, 242));
+            var outlinePen = new Pen(new SolidColorBrush(Color.FromRgb(30, 30, 30)), 1.2)
+            {
+                LineJoin     = PenLineJoin.Round,
+                StartLineCap = PenLineCap.Round,
+                EndLineCap   = PenLineCap.Round
+            };
+            var pointer = new PathGeometry();
+            var fig = new PathFigure { StartPoint = new Point(2.5, 2), IsClosed = true };
+            fig.Segments.Add(new LineSegment(new Point(2.5, 12.5), true));
+            fig.Segments.Add(new LineSegment(new Point(5.5, 9.5),  true));
+            fig.Segments.Add(new LineSegment(new Point(7.5, 13.5), true));
+            fig.Segments.Add(new LineSegment(new Point(9.0, 12.8), true));
+            fig.Segments.Add(new LineSegment(new Point(7.0, 8.5),  true));
+            fig.Segments.Add(new LineSegment(new Point(9.5, 8.5),  true));
+            pointer.Figures.Add(fig);
+            dc.DrawGeometry(fill, outlinePen, pointer);
+            DrawCrosshair(dc, cx: 16, cy: 16);
+        }
+        return dg;
+    }
+
+    private static Drawing CreateCropToolDrawing()
+    {
+        var dg = new DrawingGroup();
+        using (var dc = dg.Open())
+        {
+            const double M = 2.0;
+            const double E = 30.0;
+            const double B = 6.0;
+            var whitePen = new Pen(Brushes.White, 2.5)
+                { StartLineCap = PenLineCap.Square, EndLineCap = PenLineCap.Square };
+            var darkPen = new Pen(new SolidColorBrush(Color.FromRgb(30, 30, 30)), 1.5)
+                { StartLineCap = PenLineCap.Square, EndLineCap = PenLineCap.Square };
+            // White backing for legibility
+            dc.DrawLine(whitePen, new Point(M, M + B), new Point(M, M));
+            dc.DrawLine(whitePen, new Point(M, M),     new Point(M + B, M));
+            dc.DrawLine(whitePen, new Point(E - B, M), new Point(E, M));
+            dc.DrawLine(whitePen, new Point(E, M),     new Point(E, M + B));
+            dc.DrawLine(whitePen, new Point(M, E - B), new Point(M, E));
+            dc.DrawLine(whitePen, new Point(M, E),     new Point(M + B, E));
+            dc.DrawLine(whitePen, new Point(E - B, E), new Point(E, E));
+            dc.DrawLine(whitePen, new Point(E, E),     new Point(E, E - B));
+            // Dark bracket arms
+            dc.DrawLine(darkPen, new Point(M, M + B), new Point(M, M));
+            dc.DrawLine(darkPen, new Point(M, M),     new Point(M + B, M));
+            dc.DrawLine(darkPen, new Point(E - B, M), new Point(E, M));
+            dc.DrawLine(darkPen, new Point(E, M),     new Point(E, M + B));
+            dc.DrawLine(darkPen, new Point(M, E - B), new Point(M, E));
+            dc.DrawLine(darkPen, new Point(M, E),     new Point(M + B, E));
+            dc.DrawLine(darkPen, new Point(E - B, E), new Point(E, E));
+            dc.DrawLine(darkPen, new Point(E, E),     new Point(E, E - B));
+            DrawCrosshair(dc, cx: 16, cy: 16);
+        }
+        return dg;
+    }
+
     private static void DrawCrosshair(DrawingContext dc, double cx, double cy)
     {
         const double Arm = 7.0;   // arm length from centre tip to end
