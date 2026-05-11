@@ -1104,10 +1104,25 @@ internal sealed class MarkdownDocumentWindow : Window {
                          precedingChar != '\n' && precedingChar != '\r' ? " " : string.Empty;
         var processed  = VoiceInsertionHeuristics.Apply(left, text, right);
         var insert     = prefix + processed;
+        var rules      = new ApplicationSettingsStore().Load().VoiceReplacementRules;
+        var replaced   = rules.Count > 0
+            ? prefix + VoiceInsertionHeuristics.ApplyReplacementRules(processed, rules)
+            : insert;
+
+        // Step 1: insert conditioned (pre-replacement) text
         editorTb.SelectRange(caretIndex, selEndIndex - caretIndex);
         editorTb.ReplaceSelection(insert);
         editorTb.SetCaretOffset(caretIndex + insert.Length);
         _editorVoiceCaretIndex = caretIndex + insert.Length;
+
+        // Step 2 (if rules changed the text): replace with post-replacement text — second undo entry
+        if (!string.Equals(replaced, insert, StringComparison.Ordinal))
+        {
+            editorTb.SelectRange(caretIndex, insert.Length);
+            editorTb.ReplaceSelection(replaced);
+            editorTb.SetCaretOffset(caretIndex + replaced.Length);
+            _editorVoiceCaretIndex = caretIndex + replaced.Length;
+        }
     }
 
 

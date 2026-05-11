@@ -243,9 +243,23 @@ internal sealed class PushToTalkController : IDisposable {
                                : string.Empty;
         var processed = VoiceInsertionHeuristics.Apply(leftContext, text, rightContext);
         var insert    = prefix + processed;
+        var rules = _settingsSnapshotProvider().VoiceReplacementRules;
+        var replaced = rules.Count > 0
+            ? prefix + VoiceInsertionHeuristics.ApplyReplacementRules(processed, rules)
+            : insert;
+
+        // Step 1: insert conditioned text
         _promptTextBox.Text       = current[..caretIndex] + insert + current[caretIndex..];
         _promptTextBox.CaretIndex = caretIndex + insert.Length;
         _sessionCaretIndex        = caretIndex + insert.Length;
+
+        // Step 2: apply replacements as a separate undo entry
+        if (!string.Equals(replaced, insert, StringComparison.Ordinal))
+        {
+            _promptTextBox.Text       = current[..caretIndex] + replaced + current[caretIndex..];
+            _promptTextBox.CaretIndex = caretIndex + replaced.Length;
+            _sessionCaretIndex        = caretIndex + replaced.Length;
+        }
     }
 
     // ── UI hint ────────────────────────────────────────────────────────────

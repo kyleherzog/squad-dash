@@ -251,6 +251,15 @@ internal sealed class ApplicationSettingsStore {
         return updated;
     }
 
+    public ApplicationSettingsSnapshot SaveVoiceReplacementRules(IEnumerable<VoiceReplacementRule> rules) {
+        using var mutex = AcquireMutex();
+        var list = rules.Where(r => !string.IsNullOrWhiteSpace(r.Pattern)).ToList();
+        var current = LoadCore();
+        var updated = current with { VoiceReplacementRules = list.AsReadOnly() };
+        SaveCore(updated);
+        return updated.Normalize();
+    }
+
     public ApplicationSettingsSnapshot SaveSpeechProvider(SpeechProvider provider, string? openAiKey) {
         using var mutex = AcquireMutex();
         var current = LoadCore();
@@ -851,6 +860,13 @@ internal sealed record ApplicationSettingsSnapshot(
     public string? ByokApiKey { get; init; }
 
     /// <summary>
+    /// Ordered list of regex find/replace rules applied to every voice phrase
+    /// before it is inserted at the cursor. Rules are applied in order.
+    /// </summary>
+    public IReadOnlyList<VoiceReplacementRule> VoiceReplacementRules { get; init; } =
+        Array.Empty<VoiceReplacementRule>();
+
+    /// <summary>
     /// Names of <see cref="TraceCategory"/> values that should be suppressed in
     /// the live trace window.  Stored as strings so the JSON round-trips cleanly
     /// if new enum members are added later.
@@ -1110,6 +1126,9 @@ internal sealed record ApplicationSettingsSnapshot(
                 : CleanupPrompt,
             SpeechProvider = SpeechProvider,
             OpenAiSpeechApiKey = string.IsNullOrWhiteSpace(OpenAiSpeechApiKey) ? null : OpenAiSpeechApiKey.Trim(),
+            VoiceReplacementRules = VoiceReplacementRules
+                .Where(r => !string.IsNullOrWhiteSpace(r?.Pattern))
+                .ToArray(),
         };
     }
 

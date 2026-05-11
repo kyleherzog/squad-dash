@@ -7996,9 +7996,23 @@ public partial class MainWindow : Window, ILiveElementLocator
                      precedingChar != '\n' && precedingChar != '\r' && !isQuoteAfterSpace ? " " : string.Empty;
         var processed = VoiceInsertionHeuristics.Apply(leftContext, text, rightContext);
         var insert = prefix + processed;
+        var rules = _settingsSnapshot.VoiceReplacementRules;
+        var replaced = rules.Count > 0
+            ? prefix + VoiceInsertionHeuristics.ApplyReplacementRules(processed, rules)
+            : insert;
+
+        // Step 1: insert conditioned text
         target.Text = leftContext + insert + rightContext;
         target.CaretIndex = caretIndex + insert.Length;
         _sessionCaretIndex = caretIndex + insert.Length;
+
+        // Step 2: apply replacements as a separate undo entry
+        if (!string.Equals(replaced, insert, StringComparison.Ordinal))
+        {
+            target.Text = leftContext + replaced + rightContext;
+            target.CaretIndex = caretIndex + replaced.Length;
+            _sessionCaretIndex = caretIndex + replaced.Length;
+        }
     }
 
     private void AppendSpeechToRichTextBox(RichTextBox rtb, string text)
@@ -8020,10 +8034,24 @@ public partial class MainWindow : Window, ILiveElementLocator
                      ? " " : string.Empty;
         var processed = VoiceInsertionHeuristics.Apply(leftContext, text, rightContext);
         var insert    = prefix + processed;
+        var rules = _settingsSnapshot.VoiceReplacementRules;
+        var replaced = rules.Count > 0
+            ? prefix + VoiceInsertionHeuristics.ApplyReplacementRules(processed, rules)
+            : insert;
+
+        // Step 1: insert conditioned text
         // Use SelectRange + ReplaceSelection — undo-safe, preserves scroll position and formatting.
         rtb.SelectRange(caretIndex, selEndIndex - caretIndex);
         rtb.ReplaceSelection(insert);
         _sessionCaretIndex = caretIndex + insert.Length;
+
+        // Step 2: apply replacements as a separate undo entry
+        if (!string.Equals(replaced, insert, StringComparison.Ordinal))
+        {
+            rtb.SelectRange(caretIndex, insert.Length);
+            rtb.ReplaceSelection(replaced);
+            _sessionCaretIndex = caretIndex + replaced.Length;
+        }
     }
 
     private void UpdateVoiceHintVisibility()

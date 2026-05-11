@@ -582,6 +582,27 @@ public static class VoiceInsertionHeuristics
         return slug + extension;
     }
 
+    /// <summary>
+    /// Applies a list of regex replacement rules to <paramref name="text"/> in order.
+    /// Rules with invalid regex patterns are silently skipped.
+    /// Returns the transformed text (unchanged if no rules match or list is empty).
+    /// </summary>
+    public static string ApplyReplacementRules(string text, IEnumerable<VoiceReplacementRule> rules)
+    {
+        foreach (var rule in rules)
+        {
+            if (string.IsNullOrWhiteSpace(rule.Pattern)) continue;
+            try
+            {
+                text = Regex.Replace(text, rule.Pattern, rule.Replacement ?? string.Empty,
+                                     RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100));
+            }
+            catch (ArgumentException) { /* invalid regex — skip */ }
+            catch (RegexMatchTimeoutException) { /* runaway regex — skip */ }
+        }
+        return text;
+    }
+
     private static bool TryMatchTrailingWord(string text, string targetWord, out int stemLength)
     {
         // Trim trailing whitespace (speech recognizers sometimes append a space).
@@ -605,3 +626,8 @@ public static class VoiceInsertionHeuristics
         return false;
     }
 }
+
+/// <summary>Represents a single voice text replacement rule.</summary>
+/// <param name="Pattern">A .NET regular expression to match against the dictated text.</param>
+/// <param name="Replacement">The replacement string (supports $1, $2 backreferences).</param>
+public record VoiceReplacementRule(string Pattern, string Replacement);
