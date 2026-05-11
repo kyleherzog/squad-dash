@@ -3883,7 +3883,7 @@ internal sealed class ClipboardImageEditorWindow : Window
                     e.Handled = true;
                     return;
                 }
-                if (!_inTextMode)
+                if (!_inTextMode && _selectedText != annotation)
                     SelectText(annotation);
                 _preDragSnapshot = CaptureSnapshot();
                 isDragging       = true;
@@ -3908,13 +3908,7 @@ internal sealed class ClipboardImageEditorWindow : Window
                     e.Handled = true;
                     return;
                 }
-                // Show SizeAll cursor when hovering within 3 px of the annotation border.
-                const double BorderZone = 3.0;
-                var pos = e.GetPosition(display);
-                bool nearBorder = pos.X <= BorderZone || pos.Y <= BorderZone
-                    || pos.X >= display.ActualWidth  - BorderZone
-                    || pos.Y >= display.ActualHeight - BorderZone;
-                display.Cursor = nearBorder ? Cursors.SizeAll : Cursors.Arrow;
+                // Body of annotation always shows the move cursor — resize handles show their own cursors.
             };
             display.MouseLeftButtonUp += (_, e) =>
             {
