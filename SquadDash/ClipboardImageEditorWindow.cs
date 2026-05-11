@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Controls;
+using System.Threading.Tasks;
 using System.Windows.Threading;
 using System.Collections.Generic;
 using System.Windows.Media.Effects;
@@ -258,6 +259,15 @@ internal sealed class ClipboardImageEditorWindow : Window
     private Point _textDragStart;
     private Rectangle? _textDragPreview;
 
+    // ── Annotation text-box voice / PTT ───────────────────────────────────────
+    private AzureSpeechRecognitionService? _textBoxVoiceService;
+    private PushToTalkWindow?              _textBoxPttWindow;
+    private bool                           _textBoxVoiceStopOnCtrlRelease;
+    private int                            _textBoxVoiceCaretIndex;
+    private int                            _textBoxVoiceSelectionLength;
+    private readonly CtrlDoubleTapGestureTracker _textBoxPttGesture =
+        new(maxTapHoldMs: 250, doubleTapGapMs: 350);
+
     // ────────────────────────────────────────────────────────────────────────
 
     internal ClipboardImageEditorWindow(Window owner, BitmapSource clipboardImage, bool isPromptMode = false)
@@ -498,6 +508,24 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         PreviewKeyDown += (_, e) =>
         {
+            // Double-Ctrl voice dictation when an annotation text box has focus.
+            if (_activeTextBox is not null && _activeTextBox.IsKeyboardFocusWithin)
+            {
+                var action = _textBoxPttGesture.HandleKeyDown(e.Key, e.IsRepeat, DateTime.UtcNow);
+                if (action == CtrlDoubleTapGestureAction.Triggered)
+                {
+                    if (_textBoxVoiceService is null) {
+                        _textBoxVoiceStopOnCtrlRelease = true;
+                        _ = StartTextBoxVoiceAsync();
+                    } else {
+                        _ = StopTextBoxVoiceAsync();
+                    }
+                    e.Handled = true;
+                    return;
+                }
+                if (action != CtrlDoubleTapGestureAction.None) return; // gesture in-flight — let it play out
+            }
+
             if (e.Key == Key.Enter && Keyboard.FocusedElement is not TextBox)
             {
                 e.Handled = true;
@@ -520,6 +548,17 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         PreviewKeyUp += (_, e) =>
         {
+            if (CtrlDoubleTapGestureTracker.IsCtrlKey(e.Key) && _activeTextBox is not null && _activeTextBox.IsKeyboardFocusWithin)
+            {
+                if (_textBoxVoiceStopOnCtrlRelease && (_textBoxVoiceService is not null || _textBoxPttWindow is not null))
+                {
+                    _ = StopTextBoxVoiceAsync();
+                    e.Handled = true;
+                    return;
+                }
+                _textBoxPttGesture.HandleKeyUp(e.Key, DateTime.UtcNow);
+            }
+
             if (e.Key == Key.Space && _isPanMode)
             {
                 _isPanMode = false;
@@ -3794,6 +3833,128 @@ internal sealed class ClipboardImageEditorWindow : Window
         ShowColorPickerForText(annotation);
     }
 
+    // ── Annotation text-box voice ─────────────────────────────────────────────
+
+    private async Task StartTextBoxVoiceAsync()
+    {
+        var key    = Environment.GetEnvironmentVariable("SQUAD_SPEECH_KEY", EnvironmentVariableTarget.User);
+        var region = new ApplicationSettingsStore().Load().SpeechRegion;
+
+        if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(region)) {
+            _textBoxVoiceStopOnCtrlRelease = false;
+            _textBoxPttGesture.Reset();
+            return;
+        }
+
+        var tb = _activeTextBox;
+        if (tb is null) return;
+
+        _textBoxVoiceCaretIndex     = tb.SelectionStart;
+        _textBoxVoiceSelectionLength = tb.SelectionLength;
+
+        _textBoxVoiceService = new AzureSpeechRecognitionService();
+
+        _textBoxVoiceService.PhraseRecognized += (_, text) =>
+            Dispatcher.BeginInvoke(() => AppendSpeechToTextBox(text));
+
+        _textBoxVoiceService.VolumeChanged += (_, level) =>
+            Dispatcher.BeginInvoke(() => {
+                if (_textBoxPttWindow is not null)
+                    _textBoxPttWindow.VolumeBar.Height = Math.Max(2, level * 36);
+            });
+
+        _textBoxVoiceService.RecognitionError += (_, _) =>
+            Dispatcher.BeginInvoke(() => _ = StopTextBoxVoiceAsync());
+
+        try {
+            System.Windows.Point physicalPt;
+            try {
+                var rect = tb.GetRectFromCharacterIndex(Math.Max(0, _textBoxVoiceCaretIndex - 1));
+                physicalPt = tb.PointToScreen(new System.Windows.Point(rect.Right, rect.Bottom));
+            } catch {
+                physicalPt = tb.PointToScreen(new System.Windows.Point(0, tb.ActualHeight + 4));
+            }
+
+            var physWa = NativeMethods.GetWorkAreaForPhysicalPoint((int)physicalPt.X, (int)physicalPt.Y);
+            var logicalPt       = DpiHelper.PhysicalToLogical(tb, physicalPt);
+            var logicalWaOrigin = DpiHelper.PhysicalToLogical(tb, new System.Windows.Point(physWa.Left, physWa.Top));
+            var logicalWaCorner = DpiHelper.PhysicalToLogical(tb, new System.Windows.Point(physWa.Right, physWa.Bottom));
+            var logicalWorkArea = new System.Windows.Rect(logicalWaOrigin, logicalWaCorner);
+
+            _textBoxPttWindow = new PushToTalkWindow(this, showHint: false);
+            _textBoxPttWindow.PositionUnderCaret(logicalPt, logicalWorkArea);
+            _textBoxPttWindow.Show();
+            tb.Focus();
+
+            await _textBoxVoiceService.StartAsync(key, region).ConfigureAwait(false);
+        }
+        catch {
+            await Dispatcher.InvokeAsync(() => {
+                _textBoxPttWindow?.Close();
+                _textBoxPttWindow = null;
+            });
+            _textBoxVoiceService?.Dispose();
+            _textBoxVoiceService = null;
+            _textBoxVoiceStopOnCtrlRelease = false;
+            _textBoxPttGesture.Reset();
+        }
+    }
+
+    private async Task StopTextBoxVoiceAsync()
+    {
+        await Dispatcher.InvokeAsync(() => {
+            _textBoxPttWindow?.Close();
+            _textBoxPttWindow = null;
+        });
+
+        var service = _textBoxVoiceService;
+        _textBoxVoiceService = null;
+
+        if (service is not null) {
+            try { await service.StopAsync().ConfigureAwait(false); } catch { }
+            service.Dispose();
+        }
+
+        _textBoxVoiceStopOnCtrlRelease = false;
+        _textBoxPttGesture.Reset();
+    }
+
+    private void AppendSpeechToTextBox(string text)
+    {
+        var tb = _activeTextBox;
+        if (tb is null) return;
+
+        var current     = tb.Text;
+        var caretIndex  = Math.Min(_textBoxVoiceCaretIndex, current.Length);
+        var selLength   = _textBoxVoiceSelectionLength;
+        _textBoxVoiceSelectionLength = 0;
+        var selEndIndex = Math.Min(caretIndex + selLength, current.Length);
+        var left        = current[..caretIndex];
+        var right       = current[selEndIndex..];
+        var prefix      = VoiceInsertionHeuristics.LeadingInsertionSpace(left, right);
+        var processed   = VoiceInsertionHeuristics.Apply(left, text, right);
+        var insert      = prefix + processed;
+        var rules       = new ApplicationSettingsStore().Load().VoiceReplacementRules;
+        var replaced    = rules.Count > 0
+            ? prefix + VoiceInsertionHeuristics.ApplyReplacementRules(processed, rules)
+            : insert;
+
+        // Step 1: insert conditioned (pre-replacement) text
+        tb.Select(caretIndex, selEndIndex - caretIndex);
+        tb.SelectedText = insert;
+        tb.Select(caretIndex + insert.Length, 0);
+        _textBoxVoiceCaretIndex = caretIndex + insert.Length;
+
+        // Step 2 (if rules changed the text): apply replacements as a second undo step
+        if (!string.Equals(replaced, insert, StringComparison.Ordinal))
+        {
+            tb.Select(caretIndex, insert.Length);
+            tb.SelectedText = replaced;
+            tb.Select(caretIndex + replaced.Length, 0);
+            _textBoxVoiceCaretIndex = caretIndex + replaced.Length;
+        }
+    }
+
     /// <summary>
     /// Commits the active TextBox: writes back text/fontSize/bounds to the annotation,
     /// updates the display TextBlock, and removes the TextBox from the canvas.
@@ -3802,6 +3963,9 @@ internal sealed class ClipboardImageEditorWindow : Window
     private void CommitActiveTextBox()
     {
         if (_activeTextBox == null || _editingText == null) return;
+
+        if (_textBoxVoiceService is not null || _textBoxPttWindow is not null)
+            _ = StopTextBoxVoiceAsync();
 
         var text          = _activeTextBox.Text;
         var editCopy      = _editingText;
