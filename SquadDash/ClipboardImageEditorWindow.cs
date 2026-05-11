@@ -915,15 +915,16 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         if (!active) return icon;
 
-        // Active state: stack icon over an accent bar at the bottom.
-        // multiDrop = true: slightly taller bar with rounded ends and centre margin (~70% width)
-        // to visually distinguish multi-drop mode from a normal single-drop activation.
+        // Active state: icon + rounded accent underline at the bottom, matching the
+        // document-chip selection indicator style used in agent cards.
+        // multiDrop adds a slightly narrower bar (with bigger margin) to distinguish
+        // multi-drop mode from single-drop activation.
         var accent = new Border
         {
-            Height = multiDrop ? 3 : 2,
+            Height = 2,
             VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = multiDrop ? new Thickness(4, 0, 4, 0) : new Thickness(0),
-            CornerRadius = multiDrop ? new CornerRadius(2) : new CornerRadius(0)
+            CornerRadius = new CornerRadius(1.5),
+            Margin = multiDrop ? new Thickness(6, 0, 6, 0) : new Thickness(2, 0, 2, 0)
         };
         accent.SetResourceReference(Border.BackgroundProperty, "AccentBrush");
 
