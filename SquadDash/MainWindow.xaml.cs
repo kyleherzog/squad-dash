@@ -10709,12 +10709,12 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void DocSourceTextBox_InsertImagePlaceholder()
     {
         if (DocSourceTextBox is null) return;
-        var caret = DocSourceTextBox.GetCaretOffset();
-        const string placeholder =
-            "![Screenshot: brief description](images/descriptive-filename.png)\n" +
+        var id = Guid.NewGuid().ToString("N")[..8];
+        var placeholder =
+            $"![Screenshot: brief description](images/screenshot-{id}.png)\n" +
             "> 📸 *Screenshot needed: Detailed description of what to capture in this screenshot.*";
-        DocSourceTextBox.SetPlainText(DocSourceTextBox.GetPlainText().Insert(caret, placeholder));
-        DocSourceTextBox.SetCaretOffset(caret + placeholder.Length);
+        DocSourceTextBox.Focus();
+        DocSourceTextBox.Selection.Text = placeholder; // inserts at caret, participates in WPF undo stack
     }
 
     private void DocTableButton_Click(object sender, RoutedEventArgs e)
