@@ -1667,6 +1667,8 @@ internal sealed class ClipboardImageEditorWindow : Window
             {
                 double newW = Math.Max(20, origW * Math.Max(0.2, sx));
                 if (ann.Display != null) ann.Display.Width = newW;
+                // Also resize the live TextBox if this annotation is being edited.
+                if (_activeTextBox != null && ann == _editingText) _activeTextBox.Width = newW;
                 ann.Bounds = new Rect(_textHandleDragOrigBounds.Left, _textHandleDragOrigBounds.Top, newW, expectedH);
                 expectedW  = newW;
             }
@@ -3649,6 +3651,11 @@ internal sealed class ClipboardImageEditorWindow : Window
             HideModeHint();
             if (_addTextBtn != null) _addTextBtn.Content = MakeToolIcon("ImageEditorTextIcon");
         }
+
+        // Show resize handles around the active TextBox immediately (same as CreateTextBoxOverlay).
+        AddTextResizeHandles(annotation);
+        tb.SizeChanged += (_, _) =>
+            Dispatcher.BeginInvoke(DispatcherPriority.Render, () => PositionTextResizeHandles(annotation));
     }
 
     /// <summary>
