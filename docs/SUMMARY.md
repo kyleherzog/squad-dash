@@ -20,6 +20,7 @@
   * [Fullscreen Transcript](features/fullscreen-transcript.md)
   * [Prompt Queue](features/prompt-queue.md)
   * [Hiring Agents](features/hiring-agents.md)
+  * [Text Formatting Shortcuts](features/text-formatting.md)
 
 ## Panels
 
