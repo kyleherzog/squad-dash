@@ -2271,6 +2271,9 @@ public partial class MainWindow : Window, ILiveElementLocator
             // Show play icon ▶ — clicking again will cancel the pending pause.
             QueuePlayIcon.Visibility  = Visibility.Visible;
             QueuePauseIcon.Visibility = Visibility.Collapsed;
+            // Pending is not fully-paused — ensure no stale styling.
+            QueueStatusLabel.ClearValue(BackgroundProperty);
+            QueueStatusLabel.ClearValue(ForegroundProperty);
         }
         else
         {
@@ -2311,6 +2314,12 @@ public partial class MainWindow : Window, ILiveElementLocator
             // Apply high-contrast styling now that pause is fully active.
             QueueStatusLabel.Background = Brushes.Black;
             QueueStatusLabel.Foreground = Brushes.Yellow;
+        }
+        else
+        {
+            // Turn completed with no pending pause — ensure no stale styling remains.
+            QueueStatusLabel.ClearValue(BackgroundProperty);
+            QueueStatusLabel.ClearValue(ForegroundProperty);
         }
     }
 
