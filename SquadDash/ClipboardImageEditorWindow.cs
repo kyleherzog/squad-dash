@@ -1330,7 +1330,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         SelectAnnotationRect(null);
 
         // Text annotation resize handle hit test
-        if (_selectedText != null && _textResizeHandles.Count == 4)
+        if (_selectedText != null && _textResizeHandles.Count == 8)
         {
             double hs = HandleSize / _zoom / 2;
             var ptHandle = e.GetPosition(_canvas);
@@ -1902,6 +1902,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         if (_inArrowMode)   ExitArrowMode();
         if (_inRectMode)    ExitRectMode();
         if (_inTextMode)    ExitTextMode();
+        if (_activeTextBox != null) CommitActiveTextBox(); // commit in-progress edit even if text mode was already exited
         if (_inEyedropperMode) ExitEyedropperMode();
         SelectText(null);
     }
@@ -3406,9 +3407,14 @@ internal sealed class ClipboardImageEditorWindow : Window
         _texts.Add(annotation);
         _editingText = annotation;
         CreateTextBoxOverlay(annotation);
-        // Revert canvas cursor immediately — TextBox will show IBeam on its own when hovered
+        // Exit text mode immediately so cursor and toolbar revert; the TextBox manages its own lifecycle.
         if (!_inTextMultiDropMode)
+        {
+            _inTextMode = false;
             _canvas.Cursor = Cursors.Arrow;
+            HideModeHint();
+            if (_addTextBtn != null) _addTextBtn.Content = MakeToolIcon("ImageEditorTextIcon");
+        }
     }
 
     /// <summary>
@@ -3493,8 +3499,14 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         tb.Focus();
         tb.SelectAll();
+        // Exit text mode immediately so cursor and toolbar revert; the TextBox manages its own lifecycle.
         if (!_inTextMultiDropMode)
+        {
+            _inTextMode = false;
             _canvas.Cursor = Cursors.Arrow;
+            HideModeHint();
+            if (_addTextBtn != null) _addTextBtn.Content = MakeToolIcon("ImageEditorTextIcon");
+        }
     }
 
     /// <summary>
@@ -3615,10 +3627,11 @@ internal sealed class ClipboardImageEditorWindow : Window
     {
         if (_activeTextBox == null || _editingText == null) return;
 
-        var text        = _activeTextBox.Text;
-        var editCopy    = _editingText;
-        var tbRef       = _activeTextBox;
-        bool autoExit   = _inTextMode && !_inTextMultiDropMode;
+        var text          = _activeTextBox.Text;
+        var editCopy      = _editingText;
+        var tbRef         = _activeTextBox;
+        bool autoExit     = _inTextMode && !_inTextMultiDropMode;
+        bool inMultiDrop  = _inTextMultiDropMode;
 
         _activeTextBox = null;
         _editingText   = null;
@@ -3637,11 +3650,10 @@ internal sealed class ClipboardImageEditorWindow : Window
             editCopy.FontSize = tbRef.FontSize;
             editCopy.Bounds   = new Rect(Canvas.GetLeft(tbRef), Canvas.GetTop(tbRef), double.IsNaN(tbRef.Width) ? 0 : tbRef.Width, 0);
             UpdateTextDisplay(editCopy);
-            if (autoExit)
-            {
-                ExitTextMode();
-                SelectText(editCopy);
-            }
+            if (autoExit) ExitTextMode();
+            // Always select the committed annotation (unless in multi-drop mode) so resize
+            // handles appear regardless of whether text mode was still active at commit time.
+            if (!inMultiDrop) SelectText(editCopy);
         }
     }
 
@@ -4403,7 +4415,7 @@ internal sealed class ClipboardImageEditorWindow : Window
     private void AddTextResizeHandles(AnnotationText annotation)
     {
         RemoveTextResizeHandles();
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 8; i++)
         {
             var handle = new Rectangle
             {
@@ -4423,23 +4435,29 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     private void PositionTextResizeHandles(AnnotationText annotation)
     {
-        if (_textResizeHandles.Count != 4 || annotation.Display == null) return;
+        if (_textResizeHandles.Count != 8 || annotation.Display == null) return;
         double hs = HandleSize / _zoom / 2;
         double l = annotation.Bounds.Left - 4;
         double t = annotation.Bounds.Top  - 2;
-        double w = annotation.Display.DesiredSize.Width  + 8;
-        double h = annotation.Display.DesiredSize.Height + 4;
-        Point[] corners =
+        // Use Bounds dimensions (reliably set by UpdateTextDisplay) with fallback to DesiredSize.
+        double w = (annotation.Bounds.Width  > 0 ? annotation.Bounds.Width  : annotation.Display.DesiredSize.Width)  + 8;
+        double h = (annotation.Bounds.Height > 0 ? annotation.Bounds.Height : annotation.Display.DesiredSize.Height) + 4;
+        // 8 handles: 4 corners (NW,NE,SW,SE) + 4 edge midpoints (N,E,S,W)
+        Point[] positions =
         {
-            new Point(l,     t),
-            new Point(l + w, t),
-            new Point(l,     t + h),
-            new Point(l + w, t + h),
+            new Point(l,          t),           // NW corner
+            new Point(l + w,      t),           // NE corner
+            new Point(l,          t + h),       // SW corner
+            new Point(l + w,      t + h),       // SE corner
+            new Point(l + w / 2,  t),           // N midpoint
+            new Point(l + w,      t + h / 2),   // E midpoint
+            new Point(l + w / 2,  t + h),       // S midpoint
+            new Point(l,          t + h / 2),   // W midpoint
         };
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 8; i++)
         {
-            Canvas.SetLeft(_textResizeHandles[i], corners[i].X - hs);
-            Canvas.SetTop (_textResizeHandles[i], corners[i].Y - hs);
+            Canvas.SetLeft(_textResizeHandles[i], positions[i].X - hs);
+            Canvas.SetTop (_textResizeHandles[i], positions[i].Y - hs);
         }
     }
 
