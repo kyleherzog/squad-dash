@@ -1952,6 +1952,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
 
         _promptQueue.Remove(id);
+        // Resuming via Send: clear any manual pause so the queue continues after dispatch.
+        if (_queueManuallyPaused || _queuePausePending)
+            SetQueuePaused(false);
         SyncQueuePanel();
 
         try
@@ -2129,6 +2132,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _rightmostTabHoldNotificationFired;
     private Paragraph? _queuePausedLine1;
     private Paragraph? _queuePausedLine2;
+    // Transcript paragraph injected when the user manually pauses the queue; removed on resume.
+    private Paragraph? _queueManualPauseParagraph;
 
     private void HandleQueuePausedForInput()
     {
@@ -2296,17 +2301,31 @@ public partial class MainWindow : Window, ILiveElementLocator
         _queueManuallyPaused = paused;
         if (paused && _isPromptRunning)
         {
+            // Case 2: Pause requested while a turn is in progress → pending.
             _queuePausePending = true;
-            QueueStatusLabel.Text = "Pausing queue when turn completes\u2026";
+            QueueStatusLabel.Text = "Pausing after turn completes\u2026";
+            QueuePlayPauseButton.ToolTip = "Click to cancel pause";
+            // Show play icon ▶ — clicking again will cancel the pending pause.
+            QueuePlayIcon.Visibility  = Visibility.Visible;
+            QueuePauseIcon.Visibility = Visibility.Collapsed;
         }
         else
         {
             _queuePausePending = false;
             QueueStatusLabel.Text = paused ? "Queue is paused" : "Queue is running";
+            QueuePlayPauseButton.ToolTip = paused ? "Click to resume" : "Click to pause";
+            // Icon shows what clicking will DO (inverted from current state):
+            //   Running → pause icon ⏸ (click will pause)
+            //   Paused  → play icon  ▶ (click will resume)
+            QueuePlayIcon.Visibility  = paused ? Visibility.Visible   : Visibility.Collapsed;
+            QueuePauseIcon.Visibility = paused ? Visibility.Collapsed : Visibility.Visible;
+
+            if (!paused && _queueManualPauseParagraph is not null)
+            {
+                CoordinatorThread.Document.Blocks.Remove(_queueManualPauseParagraph);
+                _queueManualPauseParagraph = null;
+            }
         }
-        QueuePlayPauseButton.ToolTip = paused ? "Click to resume" : "Click to pause";
-        QueuePlayIcon.Visibility = paused ? Visibility.Collapsed : Visibility.Visible;
-        QueuePauseIcon.Visibility = paused ? Visibility.Visible : Visibility.Collapsed;
         _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with { QueuePaused = paused ? true : null };
         _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
     }
@@ -2317,17 +2336,29 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             _queuePausePending = false;
             QueueStatusLabel.Text = "Queue is paused";
+            // Turn has completed so the pending pause is now fully in effect.
+            // Icon is already showing play ▶ (set during Case 2); update tooltip only.
+            QueuePlayPauseButton.ToolTip = "Click to resume";
+            // Case 4: append transcript message now that the turn has finished.
+            _queueManualPauseParagraph = AppendQueuePausedParagraph("\u23f8 Queue is paused. Click \u25b6 to resume.");
         }
     }
 
     private void QueuePlayPauseButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_queuePausePending)
+        {
+            // Case 3: Cancel the pending pause — turn is still running but we resume.
+            SetQueuePaused(false);
+            return;
+        }
+
         if (_queueManuallyPaused)
         {
-            SetQueuePaused(false);
+            // Case 5: Resume from fully-paused state.
+            SetQueuePaused(false);  // also removes _queueManualPauseParagraph
 
-            // If the rightmost tab is currently holding the queue (user is editing it),
-            // resume by immediately submitting it — same effect as clicking Send.
+            // If the rightmost tab is holding the queue, resume by submitting it directly.
             if (_rightmostTabHoldNotificationFired && _activeTabId is not null)
                 _ = DispatchQueuedTabAsync(_activeTabId);
             else
@@ -2335,7 +2366,12 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
         else
         {
+            // Case 1 or 2: Pause (or schedule pause if a turn is active).
             SetQueuePaused(true);
+
+            // Case 1: No turn running — queue is paused immediately, show transcript message.
+            if (!_queuePausePending)
+                _queueManualPauseParagraph = AppendQueuePausedParagraph("\u23f8 Queue is paused. Click \u25b6 to resume.");
         }
     }
 
@@ -3058,7 +3094,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             coordinatorBusy: _isPromptRunning || IsNativeLoopRunning,
             queuePausedAwaitingInput: _queuePausedNotificationFired,
             queueCount: _promptQueue.Count,
-            activeTabId: _activeTabId);
+            activeTabId: _activeTabId,
+            isRightmostTab: IsRightmostQueueTabActive());
     }
 
     private async void AbortButton_Click(object sender, RoutedEventArgs e)
@@ -21310,7 +21347,10 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         // Restore queue paused state.
         if (_docsPanelState.QueuePaused == true)
+        {
             SetQueuePaused(true);
+            _queueManualPauseParagraph = AppendQueuePausedParagraph("\u23f8 Queue is paused. Click \u25b6 to resume.");
+        }
 
         // Restore selected loop file and populate the file picker.
         _selectedLoopMdPath = _docsPanelState.SelectedLoopFile;

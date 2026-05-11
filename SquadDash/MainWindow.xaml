@@ -2000,20 +2000,22 @@
                                         BorderThickness="1"
                                         Padding="6"
                                         ToolTip="Click to pause"
-                                        Click="QueuePlayPauseButton_Click">
+                                         Click="QueuePlayPauseButton_Click">
                                     <Grid>
+                                        <!-- Play icon ▶: shown when queue is paused (click will resume) -->
                                         <Path x:Name="QueuePlayIcon"
                                               Data="M 0,0 L 10,5 L 0,10 Z"
                                               Fill="{DynamicResource QueueTabInactiveText}"
                                               Stretch="Uniform"
                                               Width="10"
                                               Height="10"
-                                              Visibility="Visible" />
+                                              Visibility="Collapsed" />
+                                        <!-- Pause icon ⏸: shown when queue is running (click will pause) -->
                                         <StackPanel x:Name="QueuePauseIcon"
                                                     Orientation="Horizontal"
                                                     Width="10"
                                                     Height="10"
-                                                    Visibility="Collapsed">
+                                                    Visibility="Visible">
                                             <Rectangle Width="3" Height="10"
                                                        Fill="{DynamicResource QueueTabInactiveText}"
                                                        RadiusX="1" RadiusY="1" />
