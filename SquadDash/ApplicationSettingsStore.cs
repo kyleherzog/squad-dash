@@ -636,6 +636,7 @@ internal sealed class ApplicationSettingsStore {
                 SelectedLoopFile = state.SelectedLoopFile ?? existing.SelectedLoopFile,
                 NotesSortOrder = state.NotesSortOrder ?? existing.NotesSortOrder,
                 PromptPanelOnTop = state.PromptPanelOnTop ?? existing.PromptPanelOnTop,
+                QueuePaused = state.QueuePaused ?? existing.QueuePaused,
             };
         }
         dict[key] = state;
@@ -710,6 +711,12 @@ internal sealed record WorkspaceDocsPanelState
     /// <c>null</c> / <c>false</c> = default (below). <c>true</c> = user moved it above.
     /// </summary>
     public bool? PromptPanelOnTop { get; init; }
+
+    /// <summary>
+    /// Whether the queue was manually paused by the user.
+    /// <c>null</c> / <c>false</c> = running (default). <c>true</c> = user paused it.
+    /// </summary>
+    public bool? QueuePaused { get; init; }
 
     /// <summary>
     /// Legacy single-item follow-up fields — kept for reading old settings files.

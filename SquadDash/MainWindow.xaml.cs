@@ -2296,6 +2296,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         QueuePlayPauseButton.ToolTip = paused ? "Click to resume" : "Click to pause";
         QueuePlayIcon.Visibility = paused ? Visibility.Collapsed : Visibility.Visible;
         QueuePauseIcon.Visibility = paused ? Visibility.Visible : Visibility.Collapsed;
+        _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with { QueuePaused = paused ? true : null };
+        _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
     }
 
     private void QueuePlayPauseButton_Click(object sender, RoutedEventArgs e)
@@ -21360,6 +21362,10 @@ public partial class MainWindow : Window, ILiveElementLocator
         // Restore prompt panel position (above/below transcript).
         if (_docsPanelState.PromptPanelOnTop == true)
             SetPromptPanelOnTop(true);
+
+        // Restore queue paused state.
+        if (_docsPanelState.QueuePaused == true)
+            SetQueuePaused(true);
 
         // Restore selected loop file and populate the file picker.
         _selectedLoopMdPath = _docsPanelState.SelectedLoopFile;
