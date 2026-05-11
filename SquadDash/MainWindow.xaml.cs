@@ -22602,6 +22602,10 @@ public partial class MainWindow : Window, ILiveElementLocator
                     quoteRun.SetResourceReference(Run.ForegroundProperty, "LabelText");
                     label.Inlines.Add(prefix);
                     label.Inlines.Add(quoteRun);
+                    label.Cursor = System.Windows.Input.Cursors.Hand;
+                    var capturedQuote = capturedAtt;
+                    label.MouseLeftButtonUp += (_, _) =>
+                        PromptAttachmentViewerWindow.Show(new[] { capturedQuote }, CanShowOwnedWindow() ? this : null);
                 }
                 else
                 {
