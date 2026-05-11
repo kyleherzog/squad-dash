@@ -1977,10 +1977,57 @@
                             Visibility="Collapsed"
                             Panel.ZIndex="0"
                             BorderThickness="0,0,0,1"
-                            BorderBrush="{DynamicResource LineColor}">
-                        <StackPanel x:Name="QueueTabStrip"
-                                    Orientation="Horizontal"
-                                    Background="{DynamicResource InputSurface}" />
+                            BorderBrush="{DynamicResource LineColor}"
+                            Background="{DynamicResource InputSurface}">
+                        <DockPanel LastChildFill="True">
+                            <StackPanel x:Name="QueuePlayPausePanel"
+                                        DockPanel.Dock="Right"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center"
+                                        Margin="4,2,6,2">
+                                <TextBlock x:Name="QueueStatusLabel"
+                                           Text="Queue is running"
+                                           FontSize="11"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,6,0"
+                                           Foreground="{DynamicResource SubtleText}" />
+                                <Button x:Name="QueuePlayPauseButton"
+                                        Width="24"
+                                        Height="24"
+                                        Style="{StaticResource ThemedChipButtonStyle}"
+                                        Background="Transparent"
+                                        BorderBrush="{DynamicResource LineColor}"
+                                        BorderThickness="1"
+                                        Padding="6"
+                                        ToolTip="Click to pause"
+                                        Click="QueuePlayPauseButton_Click">
+                                    <Grid>
+                                        <Path x:Name="QueuePlayIcon"
+                                              Data="M 0,0 L 10,5 L 0,10 Z"
+                                              Fill="{DynamicResource QueueTabInactiveText}"
+                                              Stretch="Uniform"
+                                              Width="10"
+                                              Height="10"
+                                              Visibility="Visible" />
+                                        <StackPanel x:Name="QueuePauseIcon"
+                                                    Orientation="Horizontal"
+                                                    Width="10"
+                                                    Height="10"
+                                                    Visibility="Collapsed">
+                                            <Rectangle Width="3" Height="10"
+                                                       Fill="{DynamicResource QueueTabInactiveText}"
+                                                       RadiusX="1" RadiusY="1" />
+                                            <Rectangle Width="3" Height="10"
+                                                       Fill="{DynamicResource QueueTabInactiveText}"
+                                                       RadiusX="1" RadiusY="1"
+                                                       Margin="4,0,0,0" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Button>
+                            </StackPanel>
+                            <StackPanel x:Name="QueueTabStrip"
+                                        Orientation="Horizontal" />
+                        </DockPanel>
                     </Border>
                     <TextBox x:Name="PromptTextBox"
                              Panel.ZIndex="1"

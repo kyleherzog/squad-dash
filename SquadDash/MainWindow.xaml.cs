@@ -169,6 +169,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _isClosing;
     private bool _isPromptRunning;
     private readonly PromptQueue _promptQueue = new();
+    private bool _queueManuallyPaused;
     private int _promptQueueSeq;
     private readonly HostCommandRegistry _hostCommandRegistry = new();
     private HostCommandExecutor? _hostCommandExecutor;
@@ -1964,6 +1965,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private PromptQueueItem? GetAutoDispatchCandidate()
     {
+        if (_queueManuallyPaused) return null;
         var items = _promptQueue.Items;
         // If the user is editing the rightmost (first-to-dispatch) tab, hold the entire
         // queue so they can finish editing before anything fires.
@@ -1997,6 +1999,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         var seqNum = item.SequenceNumber;
         SquadDashTrace.Write("Queue", $"DrainQueueAsync: dispatching #{seqNum} queueCount={_promptQueue.Count}");
         _promptQueue.Remove(item.Id);
+        if (_promptQueue.Count == 0)
+            SetQueuePaused(true);
         SyncQueuePanel();
 
         AppendLine("📤 Dispatching queued item…", (Brush)FindResource("SubtleText"));
@@ -2032,6 +2036,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             var seqNum = item.SequenceNumber;
             SquadDashTrace.Write("Queue", $"DrainQueueIfNeededAsync: dispatching #{seqNum} queueCount={_promptQueue.Count}");
             _promptQueue.Remove(item.Id);
+            if (_promptQueue.Count == 0)
+                SetQueuePaused(true);
             SyncQueuePanel();
 
             AppendLine("📤 Dispatching queued item…", (Brush)FindResource("SubtleText"));
@@ -2277,8 +2283,32 @@ public partial class MainWindow : Window, ILiveElementLocator
         _conversationManager.UpdateQueuedPromptsState(items, _followUpAttachments, queueRightmostHeld: IsRightmostQueueTabActive(), loopQueuedToDequeue: _loopQueued);
         SyncSendButton();
         BuildShortcutsHint();
+        // Keep play/pause button icon/label in sync with current paused state.
+        SetQueuePaused(_queueManuallyPaused);
         SquadDashTrace.Write(TraceCategory.Performance,
             $"SyncQueuePanel: full rebuild of {items.Count} queued tabs in {swFull.ElapsedMilliseconds}ms");
+    }
+
+    private void SetQueuePaused(bool paused)
+    {
+        _queueManuallyPaused = paused;
+        QueueStatusLabel.Text = paused ? "Queue is paused" : "Queue is running";
+        QueuePlayPauseButton.ToolTip = paused ? "Click to resume" : "Click to pause";
+        QueuePlayIcon.Visibility = paused ? Visibility.Collapsed : Visibility.Visible;
+        QueuePauseIcon.Visibility = paused ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void QueuePlayPauseButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_queueManuallyPaused)
+        {
+            SetQueuePaused(false);
+            _ = DrainQueueIfNeededAsync();
+        }
+        else
+        {
+            SetQueuePaused(true);
+        }
     }
 
     /// <summary>
