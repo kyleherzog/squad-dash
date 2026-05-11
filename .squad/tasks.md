@@ -186,6 +186,21 @@
 
 ## 🔵 Low Priority
 
+- [ ] **OpenAI Whisper speech provider — customer request** *(Owner: Orion Vale → Lyra Morn)*
+  Customer request: support OpenAI speech API as an alternative to Azure Cognitive Speech, for users
+  without an Azure subscription. Impact: ~5 modified files + 2 new files.
+  Required changes:
+  1. Extract `ISpeechRecognitionService` from `SpeechRecognitionService.cs` (events: `PhraseRecognized`, `VolumeChanged`, `RecognitionError`; methods: `StartAsync`, `StopAsync`, `WriteAudioData`)
+  2. New `WhisperSpeechRecognitionService.cs` implementing that interface via OpenAI REST API
+  3. `ApplicationSettingsSnapshot` + `ApplicationSettingsStore` — add `SpeechProvider` enum ("Azure" | "OpenAI")
+  4. `PreferencesWindow.cs` — provider dropdown; show Whisper key field when OpenAI selected; hide Region field (not needed for Whisper)
+  5. `MainWindow.xaml.cs` line 7641 — factory-create the right provider from settings
+  6. `RemoteSpeechSession.cs` — use the interface (for RC phone PTT)
+  Note: Whisper doesn't support phrase-list grammar hints — team name boosting silently becomes no-op for Whisper users.
+  Note: Whisper is batch-oriented; streaming requires audio buffering — may have higher latency than Azure.
+
+
+
 - [ ] **SubSquads — investigate and expose in UI** *(Owner: Orion Vale → Lyra Morn)*
 
 - [ ] **[Vesper audit] Test coverage — screenshot infrastructure** *(Owner: Vesper Knox)*
