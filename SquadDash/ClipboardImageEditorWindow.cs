@@ -3761,6 +3761,18 @@ internal sealed class ClipboardImageEditorWindow : Window
         SelectAnnotationRect(null);
         HideColorPicker();
         RefreshLayout();
+
+        // Re-fit zoom and snap the window around the newly cropped (smaller) image,
+        // mirroring the initial-open behaviour: never zoom in past 100%, shrink if needed.
+        var cropWork = GetMonitorWorkAreaRect(this);
+        const double CropToolbarH  = 110.0;
+        double fitW = (cropWork.Width  * 0.95 - 24)          / _canvas.Width;
+        double fitH = (cropWork.Height * 0.95 - CropToolbarH) / _canvas.Height;
+        _zoom = Math.Min(1.0, Math.Min(fitW, fitH));
+        _scaleTransform.ScaleX = _zoom;
+        _scaleTransform.ScaleY = _zoom;
+        if (_zoomLabel != null) _zoomLabel.Text = $"{_zoom * 100:F0}%";
+        UpdateWindowSizeForZoom();
     }
 
     // ── Insert Image ──────────────────────────────────────────────────────────
