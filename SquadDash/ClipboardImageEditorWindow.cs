@@ -1638,6 +1638,12 @@ internal sealed class ClipboardImageEditorWindow : Window
         }
 
         // Update cursor shape based on hover zone (not during arrow/cursor drag).
+        // Skip the override when the mouse is directly over a text resize handle — its own Cursor wins.
+        if (_textResizeHandles.Count > 0
+            && Mouse.DirectlyOver is Rectangle hoveredHandle
+            && _textResizeHandles.Contains(hoveredHandle))
+            return;
+
         if (!_draggingCursor && _draggingArrow == null && !_bodyDragging && _draggingAnnotRect == null)
         {
             // In a tool mode keep the tool cursor — don't override it with zone/cross cursors.
@@ -2434,6 +2440,52 @@ internal sealed class ClipboardImageEditorWindow : Window
         Color.FromRgb(255, 255, 255),
         Color.FromRgb(  0,   0,   0),
     };
+
+    /// <summary>
+    /// Returns the foreground color palette for text annotations, adapted to the background color.
+    /// White bg → dark colors (white hidden); black bg → bright colors (black hidden);
+    /// transparent bg → medium-brightness set with both white and black.
+    /// </summary>
+    private static Color[] GetTextFgPalette(Color bgColor)
+    {
+        if (bgColor.A == 0)
+        {
+            // Transparent background: medium-brightness set (current arrow palette).
+            return GetArrowPalette();
+        }
+        if (bgColor.R > 200 && bgColor.G > 200 && bgColor.B > 200)
+        {
+            // White (or near-white) background: dark/saturated colors only, no white.
+            return new[]
+            {
+                Color.FromRgb(0xCC, 0x00, 0x00), // dark red
+                Color.FromRgb(0xCC, 0x66, 0x00), // dark orange
+                Color.FromRgb(0x00, 0x66, 0x00), // dark green
+                Color.FromRgb(0x00, 0x00, 0xCC), // dark blue
+                Color.FromRgb(0x66, 0x00, 0xCC), // dark purple
+                Color.FromRgb(0x66, 0x66, 0x66), // gray
+                Color.FromRgb(0x00, 0x00, 0x00), // black
+            };
+        }
+        // Black (or near-black) background: bright/light colors only, no black.
+        return new[]
+        {
+            Color.FromRgb(0xFF, 0x44, 0x44), // bright red
+            Color.FromRgb(0x44, 0x88, 0xFF), // bright blue
+            Color.FromRgb(0x44, 0xFF, 0x44), // bright green
+            Color.FromRgb(0xFF, 0xFF, 0x44), // bright yellow
+            Color.FromRgb(0x44, 0xFF, 0xFF), // bright cyan
+            Color.FromRgb(0xFF, 0x44, 0xFF), // bright magenta
+            Color.FromRgb(0xFF, 0xFF, 0xFF), // white
+        };
+    }
+
+    /// <summary>
+    /// Returns true if <paramref name="color"/> is in the text foreground palette for
+    /// <paramref name="bgColor"/> (by exact RGB match).
+    /// </summary>
+    private static bool IsColorInTextFgPalette(Color color, Color bgColor)
+        => GetTextFgPalette(bgColor).Any(c => c.R == color.R && c.G == color.G && c.B == color.B);
 
     private void ShowColorPicker(AnnotationArrow arrow)
     {
@@ -4415,6 +4467,18 @@ internal sealed class ClipboardImageEditorWindow : Window
     private void AddTextResizeHandles(AnnotationText annotation)
     {
         RemoveTextResizeHandles();
+        // Handle order: 0=NW, 1=NE, 2=SW, 3=SE, 4=N, 5=E, 6=S, 7=W
+        Cursor[] handleCursors =
+        {
+            Cursors.SizeNWSE, // 0 NW
+            Cursors.SizeNESW, // 1 NE
+            Cursors.SizeNESW, // 2 SW
+            Cursors.SizeNWSE, // 3 SE
+            Cursors.SizeNS,   // 4 N
+            Cursors.SizeWE,   // 5 E
+            Cursors.SizeNS,   // 6 S
+            Cursors.SizeWE,   // 7 W
+        };
         for (int i = 0; i < 8; i++)
         {
             var handle = new Rectangle
@@ -4424,13 +4488,15 @@ internal sealed class ClipboardImageEditorWindow : Window
                 StrokeThickness  = 1,
                 Width            = HandleSize / _zoom,
                 Height           = HandleSize / _zoom,
-                IsHitTestVisible = true
+                IsHitTestVisible = true,
+                Cursor           = handleCursors[i],
             };
             Panel.SetZIndex(handle, 22);
             _canvas.Children.Add(handle);
             _textResizeHandles.Add(handle);
         }
-        PositionTextResizeHandles(annotation);
+        // Defer positioning until after layout so Bounds/DesiredSize are valid on first placement.
+        Dispatcher.BeginInvoke(DispatcherPriority.Render, () => PositionTextResizeHandles(annotation));
     }
 
     private void PositionTextResizeHandles(AnnotationText annotation)
@@ -4491,6 +4557,17 @@ internal sealed class ClipboardImageEditorWindow : Window
             {
                 annotation.BackgroundColor = picked;
                 _defaultTextBgColor = picked;
+
+                // Auto-adjust text color if it is invisible on the new background.
+                if (!IsColorInTextFgPalette(annotation.TextColor, picked))
+                {
+                    // White bg → default to black text; black bg → default to white text.
+                    annotation.TextColor = (picked.A > 0 && picked.R > 200 && picked.G > 200 && picked.B > 200)
+                        ? Colors.Black
+                        : Colors.White;
+                    _defaultTextFgColor = annotation.TextColor;
+                }
+
                 SaveTextDefaults();
                 UpdateTextDisplay(annotation);
                 UpdateTextSelectionBorder();
@@ -4500,10 +4577,12 @@ internal sealed class ClipboardImageEditorWindow : Window
         }
 
         var fgRow = new StackPanel { Orientation = Orientation.Horizontal };
-        foreach (var color in GetArrowPalette())
+        foreach (var color in GetTextFgPalette(annotation.BackgroundColor))
         {
             var c = color;
-            bool isSelected = c == annotation.TextColor;
+            bool isSelected = c.R == annotation.TextColor.R
+                           && c.G == annotation.TextColor.G
+                           && c.B == annotation.TextColor.B;
             var swatch = MakeColorSwatch(c, isSelected, picked =>
             {
                 annotation.TextColor = picked;
