@@ -5,7 +5,7 @@ parent: Concepts
 ---
 # Agents
 
-What agents are in the Squad context, how they work, and how SquadDash visualizes them.
+What agents are in the Squad context, how they work, and how SquadDash visualizes those agents. 
 
 ---
 
@@ -16,6 +16,8 @@ An **agent** is a specialized AI assistant with:
 - A **role** (e.g., "WPF & UI Specialist", "Backend Services Specialist")
 - A **charter** — a file defining its responsibilities and expertise
 - A **history** — a log of learnings and decisions from past sessions
+
+You can right-click any non-coordinator agent and choose Open Charter if you want to view that agent's charter or history file.
 
 ---
 
@@ -122,3 +124,9 @@ Every tool an agent uses appears in the transcript as a **Thinking** block with 
 
 | Tool | Icon | Label |
 |---|---|---|
+
+---
+
+## See Also
+
+- **[The Coordinator](coordinator.md)** — The primary agent that orchestrates all other agents in a session

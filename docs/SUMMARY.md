@@ -34,6 +34,7 @@
 
 * [Concepts](concepts/README.md)
   * [Agents](concepts/agents.md)
+  * [The Coordinator](concepts/coordinator.md)
   * [Transcripts](concepts/transcripts.md)
   * [Documentation Panel](concepts/documentation-panel.md)
 
