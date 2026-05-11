@@ -3673,10 +3673,10 @@ internal sealed class ClipboardImageEditorWindow : Window
         AddTextResizeHandles(annotation);
         tb.SizeChanged += (_, _) =>
             Dispatcher.BeginInvoke(DispatcherPriority.Render, () => PositionTextResizeHandles(annotation));
-    }
 
-    /// <summary>
-    /// Re-opens an existing committed text annotation for editing.
+        // Show the color picker immediately so the user can set bg/fg color as they type.
+        ShowColorPickerForText(annotation);
+    }
     /// Double-clicking a text label calls this.
     /// </summary>
     private void BeginEditText(AnnotationText existing)
@@ -3789,6 +3789,9 @@ internal sealed class ClipboardImageEditorWindow : Window
         AddTextResizeHandles(annotation);
         tb.SizeChanged += (_, _) =>
             Dispatcher.BeginInvoke(DispatcherPriority.Render, () => PositionTextResizeHandles(annotation));
+
+        // Show the color picker immediately so the user can set bg/fg color as they type.
+        ShowColorPickerForText(annotation);
     }
 
     /// <summary>
@@ -3841,6 +3844,20 @@ internal sealed class ClipboardImageEditorWindow : Window
     /// </summary>
     private void UpdateTextDisplay(AnnotationText annotation)
     {
+        // During active editing of a brand-new annotation (Display not yet created),
+        // update the live TextBox colors directly instead of creating Display/Shadow early.
+        if (annotation.Display == null && _editingText == annotation && _activeTextBox != null)
+        {
+            _activeTextBox.Foreground = new SolidColorBrush(annotation.TextColor);
+            _activeTextBox.Background = annotation.BackgroundColor.A == 0
+                ? new SolidColorBrush(Color.FromArgb(40, 0, 0, 0))
+                : new SolidColorBrush(annotation.BackgroundColor);
+            _activeTextBox.CaretBrush = annotation.BackgroundColor.A > 0 && annotation.BackgroundColor.R < 128
+                ? Brushes.White
+                : Brushes.Black;
+            return;
+        }
+
         if (annotation.Display == null)
         {
             var shadow = new TextBlock
