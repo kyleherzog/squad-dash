@@ -2000,7 +2000,7 @@
                                         BorderBrush="{DynamicResource LineColor}"
                                         BorderThickness="1"
                                         Padding="6"
-                                        ToolTip="Click to pause"
+                                        ToolTip="Click to pause automatic prompt queue processing."
                                          Click="QueuePlayPauseButton_Click">
                                     <Grid>
                                         <!-- Play icon ▶: shown when queue is paused (click will resume) -->

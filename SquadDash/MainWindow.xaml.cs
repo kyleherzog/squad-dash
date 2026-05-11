@@ -2263,7 +2263,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             // Case 2: Pause requested while a turn is in progress → pending.
             _queuePausePending = true;
             QueueStatusLabel.Text = "Pausing after turn completes\u2026";
-            QueuePlayPauseButton.ToolTip = "Click to cancel pause";
+            QueuePlayPauseButton.ToolTip = "Click to cancel pause and resume automatic prompt queue processing.";
             // Show play icon ▶ — clicking again will cancel the pending pause.
             QueuePlayIcon.Visibility  = Visibility.Visible;
             QueuePauseIcon.Visibility = Visibility.Collapsed;
@@ -2275,7 +2275,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             _queuePausePending = false;
             QueueStatusLabel.Text = paused ? "Queue is paused" : "Queue is running";
-            QueuePlayPauseButton.ToolTip = paused ? "Click to resume" : "Click to pause";
+            QueuePlayPauseButton.ToolTip = paused ? "Click to resume automatic prompt queue processing." : "Click to pause automatic prompt queue processing.";
             // Icon shows what clicking will DO (inverted from current state):
             //   Running → pause icon ⏸ (click will pause)
             //   Paused  → play icon  ▶ (click will resume)
@@ -2308,7 +2308,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             QueueStatusLabel.Text = "Queue is paused";
             // Turn has completed so the pending pause is now fully in effect.
             // Icon is already showing play ▶ (set during Case 2); update tooltip only.
-            QueuePlayPauseButton.ToolTip = "Click to resume";
+            QueuePlayPauseButton.ToolTip = "Click to resume automatic prompt queue processing.";
             // Apply high-contrast styling now that pause is fully active.
             QueueStatusLabel.Background = Brushes.Black;
             QueueStatusLabel.Foreground = Brushes.Yellow;
