@@ -3356,6 +3356,9 @@ internal sealed class ClipboardImageEditorWindow : Window
             {
                 if (_draggingAnnotRect != annotRect || _annotRectBodyDragging || _draggingAnnotRectHandleIdx != handleIdx) return;
                 CommitDragUndo();
+                // Remember the final size so the next click-without-drag uses it.
+                _lastDragRectWidth  = annotRect.Bounds.Width;
+                _lastDragRectHeight = annotRect.Bounds.Height;
                 _draggingAnnotRect = null;
                 _draggingAnnotRectHandleIdx = -1;
                 handle.ReleaseMouseCapture();
