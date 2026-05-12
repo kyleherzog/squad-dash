@@ -1823,6 +1823,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (LocalPromptSubmissionPolicy.IsImmediateLocalCommand(prompt))
             {
                 await _pec.ExecutePromptAsync(prompt, addToHistory: true, clearPromptBox: true);
+                SyncPromptTextBoxSimBorder();
                 return;
             }
 
@@ -2313,6 +2314,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         BuildShortcutsHint();
         // Keep play/pause button icon/label in sync with current paused state.
         SetQueuePaused(_queueManuallyPaused);
+        SyncPromptTextBoxSimBorder();
         SquadDashTrace.Write(TraceCategory.Performance,
             $"SyncQueuePanel: full rebuild of {items.Count} queued tabs in {swFull.ElapsedMilliseconds}ms");
     }
@@ -2362,6 +2364,24 @@ public partial class MainWindow : Window, ILiveElementLocator
         // merge logic in SaveDocsPanelState to preserve any stale "true" from a prior session.
         _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with { QueuePaused = paused ? (bool?)true : false };
         _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
+    }
+
+    private void SyncPromptTextBoxSimBorder()
+    {
+        bool isSim = _activeTabId is not null
+            ? _promptQueue.Items.FirstOrDefault(i => i.Id == _activeTabId)?.IsSimEntry == true
+            : _pec.ActiveDraftSimEntry.HasValue;
+
+        if (isSim)
+        {
+            PromptTextBox.BorderThickness = new Thickness(3);
+            PromptTextBox.BorderBrush = Brushes.MediumOrchid;
+        }
+        else
+        {
+            PromptTextBox.ClearValue(TextBox.BorderThicknessProperty);
+            PromptTextBox.ClearValue(TextBox.BorderBrushProperty);
+        }
     }
 
     private void SyncQueuePauseLabel()
@@ -2857,6 +2877,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         if (wasRightmostHold && !_isPromptRunning && !IsNativeLoopRunning)
             _ = DrainQueueIfNeededAsync();
+        SyncPromptTextBoxSimBorder();
     }
 
     private void OnQueueTabPrioritize(string id)

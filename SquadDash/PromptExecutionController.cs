@@ -283,6 +283,8 @@ internal sealed class PromptExecutionController {
     /// </summary>
     private (string SimResponse, int SimDelaySeconds)? _activeDraftSimEntry;
 
+    internal (string SimResponse, int SimDelaySeconds)? ActiveDraftSimEntry => _activeDraftSimEntry;
+
     /// <summary>
     /// Set when the user aborts a running prompt. Causes the next prompt to be prefixed
     /// with a retraction notice so the AI ignores the aborted turn.
