@@ -350,10 +350,12 @@ internal sealed class ClipboardImageEditorWindow : Window
         _canvasScaleX = effectiveScaleX;
         _canvasScaleY = effectiveScaleY;
 
-        SquadDashTrace.Write(TraceCategory.General,
-            $"[ClipboardImageEditor] DPI: bitmap={clipboardImage.DpiX:F0}x{clipboardImage.DpiY:F0} " +
-            $"monitor={monitorScaleX:F2}x{monitorScaleY:F2} effective={effectiveScaleX:F2}x{effectiveScaleY:F2} " +
-            $"pixels={imgW:F0}x{imgH:F0} display={dispW:F0}x{dispH:F0}");
+        SquadDashTrace.Write("UI",
+            $"[ClipboardImageEditor] DPI: bitmap={clipboardImage.DpiX:F1}x{clipboardImage.DpiY:F1} " +
+            $"monitor={monitorScaleX:F3}x{monitorScaleY:F3} bitmapDpiScale={bitmapDpiScaleX:F3}x{bitmapDpiScaleY:F3} " +
+            $"effective={effectiveScaleX:F3}x{effectiveScaleY:F3} " +
+            $"pixels={imgW:F0}x{imgH:F0} display={dispW:F1}x{dispH:F1} " +
+            $"canvasScale={_canvasScaleX:F3}x{_canvasScaleY:F3}");
 
         const double MinWindowWidth = 580;
         const double toolbarH = 110.0;
@@ -4599,6 +4601,9 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         var cropped = new CroppedBitmap(_workingImage, new Int32Rect(cropX, cropY, cropW, cropH));
         cropped.Freeze();
+        SquadDashTrace.Write("UI",
+            $"[ClipboardImageEditor] CropInPlace: before={pxW}x{pxH}px sel={sel.Left:F1},{sel.Top:F1},{sel.Width:F1}x{sel.Height:F1} " +
+            $"cropPx={cropX},{cropY},{cropW}x{cropH} canvasScale={_canvasScaleX:F3}x{_canvasScaleY:F3}");
         _workingImage  = cropped;
         _cachedPixels  = null;
 
@@ -4849,6 +4854,12 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         if (_roundCorners)
             bmp = ApplyRoundedCorners(bmp, CornerRadiusPx);
+
+        SquadDashTrace.Write("UI",
+            $"[ClipboardImageEditor] RenderFinal: workingImage={pxW}x{pxH}px " +
+            $"canvas={_canvas.ActualWidth:F1}x{_canvas.ActualHeight:F1} sel={(_sel.IsEmpty ? "none" : $"{cropSel.Width:F1}x{cropSel.Height:F1}@{cropSel.Left:F1},{cropSel.Top:F1}")} " +
+            $"cropPx={cropX},{cropY},{cropW}x{cropH} output={bmp.PixelWidth}x{bmp.PixelHeight}px " +
+            $"dpi={bmp.DpiX:F1}x{bmp.DpiY:F1} canvasScale={_canvasScaleX:F3}x{_canvasScaleY:F3}");
 
         return bmp;
     }

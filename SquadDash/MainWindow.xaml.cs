@@ -7125,6 +7125,12 @@ public partial class MainWindow : Window, ILiveElementLocator
                 {
                     e.Handled = true;
                     var bitmap = Clipboard.GetImage();
+                    if (bitmap is not null)
+                        SquadDashTrace.Write("UI",
+                            $"[ClipboardPaste] raw clipboard bitmap: " +
+                            $"pixels={bitmap.PixelWidth}x{bitmap.PixelHeight} " +
+                            $"dpi={bitmap.DpiX:F1}x{bitmap.DpiY:F1} " +
+                            $"format={bitmap.Format}");
                     if (bitmap is not null && _currentWorkspace is not null)
                     {
                         _clipboardEditorOpen = true;
