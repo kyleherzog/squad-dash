@@ -26,7 +26,7 @@ internal sealed class AnnotationRect
     /// Resize handles: [0]=NW, [1]=NE, [2]=SW, [3]=SE, [4]=N, [5]=S, [6]=W, [7]=E.
     /// Hidden unless the rect is selected.
     /// </summary>
-    public Ellipse[] Handles { get; set; } = null!;
+    public Rectangle[] Handles { get; set; } = null!;
 
     /// <summary>Transparent rectangle inflated 3 px on each side — widens the clickable area.</summary>
     public Rectangle HitZoneRect { get; set; } = null!;

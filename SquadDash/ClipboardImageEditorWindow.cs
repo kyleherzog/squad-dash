@@ -2664,9 +2664,9 @@ internal sealed class ClipboardImageEditorWindow : Window
         {
             Width = 8,
             Height = 8,
-            Fill = colorBrush,
-            Stroke = Brushes.White,
-            StrokeThickness = 1.5,
+            Fill = Brushes.White,
+            Stroke = Brushes.Black,
+            StrokeThickness = 1,
             Cursor = AnnotationCursors.RotateEndpoint,
             Visibility = Visibility.Hidden
         };
@@ -2674,9 +2674,9 @@ internal sealed class ClipboardImageEditorWindow : Window
         {
             Width = 8,
             Height = 8,
-            Fill = colorBrush,
-            Stroke = Brushes.White,
-            StrokeThickness = 1.5,
+            Fill = Brushes.White,
+            Stroke = Brushes.Black,
+            StrokeThickness = 1,
             Cursor = AnnotationCursors.RotateEndpoint,
             Visibility = Visibility.Hidden
         };
@@ -3037,6 +3037,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         if (arrow != null)
         {
             if (_selectedText != null) SelectText(null);
+            if (_selectedAnnotRect != null) SelectAnnotationRect(null);
             arrow.TipHandle.Visibility = Visibility.Visible;
             arrow.TailHandle.Visibility = Visibility.Visible;
             ShowColorPicker(arrow);
@@ -3300,7 +3301,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             // Cursor not set — inherits from canvas; Canvas_MouseMove controls it dynamically.
         };
 
-        var handles = new Ellipse[8];
+        var handles = new Rectangle[8];
         for (int i = 0; i < 8; i++)
         {
             var cursor = i switch
@@ -3311,13 +3312,13 @@ internal sealed class ClipboardImageEditorWindow : Window
                 6 or 7 => Cursors.SizeWE,    // W, E
                 _ => Cursors.SizeAll
             };
-            handles[i] = new Ellipse
+            handles[i] = new Rectangle
             {
                 Width = 8,
                 Height = 8,
-                Fill = brush,
-                Stroke = Brushes.White,
-                StrokeThickness = 1.5,
+                Fill = Brushes.White,
+                Stroke = Brushes.Black,
+                StrokeThickness = 1,
                 Cursor = cursor,
                 Visibility = Visibility.Hidden
             };
@@ -3513,7 +3514,6 @@ internal sealed class ClipboardImageEditorWindow : Window
         var b = rect.Bounds;
         var brush = new SolidColorBrush(rect.RectColor);
         rect.Border.Stroke = brush;
-        foreach (var h in rect.Handles) h.Fill = brush;
 
         Canvas.SetLeft(rect.Shadow, b.Left + 2);
         Canvas.SetTop(rect.Shadow, b.Top + 2);
@@ -3545,7 +3545,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         }
     }
 
-    private static void PlaceRectHandle(Ellipse h, double cx, double cy)
+    private static void PlaceRectHandle(Rectangle h, double cx, double cy)
     {
         Canvas.SetLeft(h, cx - 4);
         Canvas.SetTop(h, cy - 4);
