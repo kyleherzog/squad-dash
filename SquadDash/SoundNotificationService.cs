@@ -47,6 +47,9 @@ internal sealed class SoundNotificationService
     // 0 = idle, 1 = speaking; updated via Interlocked for TTS overlap guard.
     private int _ttsSpeaking;
 
+    // Holds active MediaPlayer instances to prevent GC collection mid-playback.
+    private readonly System.Collections.Generic.HashSet<MediaPlayer> _activePlayers = new();
+
     public SoundNotificationService(
         ApplicationSettingsStore settingsStore,
         Func<ITtsProvider?>      ttsProviderFactory)
@@ -176,11 +179,22 @@ internal sealed class SoundNotificationService
                     try
                     {
                         var player = new MediaPlayer();
-                        // Play only after media is fully opened/buffered.
-                        // The MediaOpened + MediaEnded handlers keep the player alive via
-                        // the event delegate chain until playback finishes, then release it.
+                        // Root the player in _activePlayers so the GC cannot collect it
+                        // mid-playback. The self-referencing event-handler cycle alone is
+                        // not enough — the GC can break it.
+                        lock (_activePlayers) { _activePlayers.Add(player); }
                         player.MediaOpened += (_, _) => player.Play();
-                        player.MediaEnded  += (_, _) => player.Close();
+                        player.MediaFailed += (_, args) =>
+                        {
+                            SquadDashTrace.Write("Sound", $"MediaPlayer failed for {evt}: {args.ErrorException?.Message}");
+                            lock (_activePlayers) { _activePlayers.Remove(player); }
+                            player.Close();
+                        };
+                        player.MediaEnded += (_, _) =>
+                        {
+                            lock (_activePlayers) { _activePlayers.Remove(player); }
+                            player.Close();
+                        };
                         player.Open(new Uri(capturedPath, UriKind.Absolute));
                     }
                     catch (Exception ex)
