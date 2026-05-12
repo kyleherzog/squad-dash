@@ -2041,6 +2041,8 @@
                              TextWrapping="Wrap"
                              VerticalScrollBarVisibility="Auto"
                              HorizontalScrollBarVisibility="Disabled"
+                             SpellCheck.IsEnabled="False"
+                             UndoLimit="256"
                              Foreground="{DynamicResource LabelText}"
                              Background="{DynamicResource TextBoxBackground}"
                              TextChanged="PromptTextBox_TextChanged"

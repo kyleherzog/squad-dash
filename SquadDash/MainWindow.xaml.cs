@@ -545,11 +545,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             getPromptText: () => PromptTextBox.Text,
             setPromptText: (text, caretIndex, selectionStart, selectionLength) =>
             {
-                PromptTextBox.Text = text;
-                if (selectionLength > 0)
-                    PromptTextBox.Select(selectionStart, selectionLength);
-                else
-                    PromptTextBox.CaretIndex = caretIndex;
+                SetPromptTextBoxLogicalBuffer(text, caretIndex, selectionStart, selectionLength, "conversation-apply");
             },
             getPromptCaretState: () => (PromptTextBox.CaretIndex, PromptTextBox.SelectionStart, PromptTextBox.SelectionLength),
             isClosing: () => _isClosing,
@@ -959,7 +955,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             getIsClosing: () => _isClosing,
             getRestartPending: () => _restartPending,
             close: () => Close(),
-            clearPromptTextBox: () => PromptTextBox.Clear(),
+            clearPromptTextBox: () => ClearPromptTextBoxLogicalBuffer("prompt-executed"),
             focusPromptTextBox: () => PromptTextBox.Focus(),
             isPromptTextBoxEnabled: () => PromptTextBox.IsEnabled,
             getPendingRoutingRepairRecheck: () => _pendingRoutingRepairRecheck,
@@ -1843,7 +1839,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             _followUpAttachments[_promptQueue.Items[^1].Id] = draftList;
         }
 
-        PromptTextBox.Clear();
+        ClearPromptTextBoxLogicalBuffer("enqueue-current");
         SyncQueuePanel();
         UpdateFollowUpStrip();
         PersistDraftFollowUp();
@@ -1884,7 +1880,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 _followUpAttachments[item.Id] = draftList;
             }
 
-            PromptTextBox.Clear();
+            ClearPromptTextBoxLogicalBuffer("prioritize-draft");
             UpdateFollowUpStrip();
             PersistDraftFollowUp();
             ShowPriorityFeedback(item.Id);
@@ -1907,11 +1903,12 @@ public partial class MainWindow : Window, ILiveElementLocator
             var activeItem = _promptQueue.Items.FirstOrDefault(i => i.Id == capturedId);
             if (activeItem is not null)
             {
-                PromptTextBox.Text = activeItem.Text;
-                PromptTextBox.SelectionStart = activeItem.SelectionStart;
-                PromptTextBox.SelectionLength = activeItem.SelectionLength;
-                if (activeItem.SelectionLength == 0)
-                    PromptTextBox.CaretIndex = activeItem.CaretIndex;
+                SetPromptTextBoxLogicalBuffer(
+                    activeItem.Text,
+                    activeItem.CaretIndex,
+                    activeItem.SelectionStart,
+                    activeItem.SelectionLength,
+                    "prioritize-restore-active-tab");
             }
         }
     }
@@ -1959,7 +1956,12 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         // Switch back to Active Draft.
         _activeTabId = null;
-        PromptTextBox.Text = _queuePreEditDraft ?? string.Empty;
+        SetPromptTextBoxLogicalBuffer(
+            _queuePreEditDraft ?? string.Empty,
+            _queuePreEditDraftCaretIndex,
+            _queuePreEditDraftSelectionStart,
+            _queuePreEditDraftSelectionLength,
+            "dispatch-queued-tab-restore-draft");
         _queuePreEditDraft = null;
 
         if (_isPromptRunning || IsNativeLoopRunning)
@@ -2760,11 +2762,12 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         if (id is null)
         {
-            PromptTextBox.Text = _queuePreEditDraft ?? string.Empty;
-            PromptTextBox.SelectionStart = _queuePreEditDraftSelectionStart;
-            PromptTextBox.SelectionLength = _queuePreEditDraftSelectionLength;
-            if (_queuePreEditDraftSelectionLength == 0)
-                PromptTextBox.CaretIndex = _queuePreEditDraftCaretIndex;
+            SetPromptTextBoxLogicalBuffer(
+                _queuePreEditDraft ?? string.Empty,
+                _queuePreEditDraftCaretIndex,
+                _queuePreEditDraftSelectionStart,
+                _queuePreEditDraftSelectionLength,
+                "queue-tab-draft");
             _queuePreEditDraft = null;
         }
         else
@@ -2772,11 +2775,12 @@ public partial class MainWindow : Window, ILiveElementLocator
             var target = _promptQueue.Items.FirstOrDefault(i => i.Id == id);
             if (target is not null)
             {
-                PromptTextBox.Text = target.Text;
-                PromptTextBox.SelectionStart = target.SelectionStart;
-                PromptTextBox.SelectionLength = target.SelectionLength;
-                if (target.SelectionLength == 0)
-                    PromptTextBox.CaretIndex = target.CaretIndex;
+                SetPromptTextBoxLogicalBuffer(
+                    target.Text,
+                    target.CaretIndex,
+                    target.SelectionStart,
+                    target.SelectionLength,
+                    "queue-tab-item");
             }
         }
 
@@ -2815,11 +2819,12 @@ public partial class MainWindow : Window, ILiveElementLocator
             : null;
         if (activeItem is not null)
         {
-            PromptTextBox.Text = activeItem.Text;
-            PromptTextBox.SelectionStart = activeItem.SelectionStart;
-            PromptTextBox.SelectionLength = activeItem.SelectionLength;
-            if (activeItem.SelectionLength == 0)
-                PromptTextBox.CaretIndex = activeItem.CaretIndex;
+            SetPromptTextBoxLogicalBuffer(
+                activeItem.Text,
+                activeItem.CaretIndex,
+                activeItem.SelectionStart,
+                activeItem.SelectionLength,
+                "queue-prioritize-restore");
         }
     }
 
@@ -2828,7 +2833,12 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (_activeTabId == id)
         {
             _activeTabId = null;
-            PromptTextBox.Text = _queuePreEditDraft ?? string.Empty;
+            SetPromptTextBoxLogicalBuffer(
+                _queuePreEditDraft ?? string.Empty,
+                _queuePreEditDraftCaretIndex,
+                _queuePreEditDraftSelectionStart,
+                _queuePreEditDraftSelectionLength,
+                "queue-remove-restore-draft");
             _queuePreEditDraft = null;
             UpdateFollowUpStrip();
         }
@@ -6833,6 +6843,38 @@ public partial class MainWindow : Window, ILiveElementLocator
         PromptTextBox.FontSize = _promptFontSize;
     }
 
+    private void ClearPromptTextBoxLogicalBuffer(string reason) =>
+        SetPromptTextBoxLogicalBuffer(string.Empty, 0, 0, 0, reason);
+
+    private void SetPromptTextBoxLogicalBuffer(
+        string text,
+        int caretIndex,
+        int selectionStart = 0,
+        int selectionLength = 0,
+        string reason = "load")
+    {
+        text ??= string.Empty;
+        var normalizedCaret = Math.Clamp(caretIndex, 0, text.Length);
+        var normalizedSelectionStart = Math.Clamp(selectionStart, 0, text.Length);
+        var normalizedSelectionLength = Math.Clamp(selectionLength, 0, text.Length - normalizedSelectionStart);
+
+        PromptTextBox.Text = text;
+        if (normalizedSelectionLength > 0)
+            PromptTextBox.Select(normalizedSelectionStart, normalizedSelectionLength);
+        else
+            PromptTextBox.CaretIndex = normalizedCaret;
+
+        var undoWasEnabled = PromptTextBox.IsUndoEnabled;
+        if (undoWasEnabled)
+        {
+            PromptTextBox.IsUndoEnabled = false;
+            PromptTextBox.IsUndoEnabled = true;
+        }
+        SquadDashTrace.Write(
+            TraceCategory.UI,
+            $"PROMPT_BUFFER_LOAD reason={reason} textLen={text.Length} caret={PromptTextBox.CaretIndex} selectionLen={PromptTextBox.SelectionLength} undoCleared={undoWasEnabled}");
+    }
+
     private void PromptTextBox_PreviewTextInput(object sender, System.Windows.Input.TextCompositionEventArgs e)
     {
         if (_suppressPromptNextTextInput)
@@ -8290,7 +8332,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
 
         SquadDashTrace.Write(
-            TraceCategory.Performance,
+            TraceCategory.UI,
             $"PROMPT_INPUT batchMs={_promptInputTraceStopwatch.ElapsedMilliseconds} " +
             $"textChangedCount={textChangedCount} textChangedAvgMs={FormatAverageMs(_promptTextChangedTraceElapsedMs, textChangedCount)} textChangedMaxMs={_promptTextChangedTraceMaxMs} " +
             $"keyDownCount={keyDownCount} keyDownAvgMs={FormatAverageMs(_promptKeyDownTraceElapsedMs, keyDownCount)} keyDownMaxMs={_promptKeyDownTraceMaxMs} " +
@@ -9603,7 +9645,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _fullScreenPromptVisible = false;
         if (PromptBorder is not null)
             PromptBorder.Visibility = Visibility.Collapsed;
-        PromptTextBox.Clear();
+        ClearPromptTextBoxLogicalBuffer("hide-fullscreen-prompt");
     }
 
     private void SetPromptPanelOnTop(bool onTop)
