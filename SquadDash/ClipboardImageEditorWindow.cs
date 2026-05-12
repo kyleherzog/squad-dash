@@ -965,6 +965,20 @@ internal sealed class ClipboardImageEditorWindow : Window
         insertBtn.Click += (_, _) => DoInsertImage();
         cancelBtn.Click += (_, _) => Close();
 
+        string copyTooltip = _sel.IsEmpty
+            ? "Copy annotated image to clipboard"
+            : "Copy cropped region to clipboard";
+        var copyBtn = new Button
+        {
+            Content = "Copy",
+            Width   = 60,
+            Height  = 28,
+            Margin  = new Thickness(0, 0, 4, 0),
+            ToolTip = copyTooltip
+        };
+        copyBtn.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
+        copyBtn.Click += (_, _) => DoCopyToClipboard();
+
         _zoomLabel = new TextBlock
         {
             Text = $"{_zoom * 100:F0}%",
@@ -998,6 +1012,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(4, 0, 0, 0)
         };
+        rightStack.Children.Add(copyBtn);
         rightStack.Children.Add(insertBtn);
         rightStack.Children.Add(cancelBtn);
         DockPanel.SetDock(rightStack, Dock.Right);
@@ -4703,58 +4718,105 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         try
         {
-            // Always render at original pixel dimensions regardless of monitor DPI or
-            // the display scaling applied in the constructor.
-            var pxW = _workingImage.PixelWidth;
-            var pxH = _workingImage.PixelHeight;
-            if (pxW < 1 || pxH < 1) return;
-
-            // Use a DrawingVisual so we can scale from canvas logical size to pixel size.
-            var rtb = new RenderTargetBitmap(pxW, pxH, 96, 96, PixelFormats.Pbgra32);
-            var dv = new DrawingVisual();
-            using (var ctx = dv.RenderOpen())
-            {
-                // VisualBrush with Stretch=Fill maps the full canvas to the target rect,
-                // preserving every original pixel even when canvas was DPI-downscaled.
-                var vb = new VisualBrush(_canvas) { Stretch = Stretch.Fill };
-                ctx.DrawRectangle(vb, null, new Rect(0, 0, pxW, pxH));
-            }
-            rtb.Render(dv);
-            rtb.Freeze();
-
-            // Crop: convert canvas logical selection coords back to pixel coords.
-            var cropSel = _sel.IsEmpty ? new Rect(0, 0, _canvas.ActualWidth, _canvas.ActualHeight) : _sel;
-            var cropX = (int)Math.Round(cropSel.Left * _canvasScaleX);
-            var cropY = (int)Math.Round(cropSel.Top * _canvasScaleY);
-            var cropW = (int)Math.Round(cropSel.Width * _canvasScaleX);
-            var cropH = (int)Math.Round(cropSel.Height * _canvasScaleY);
-
-            cropX = Math.Max(0, cropX);
-            cropY = Math.Max(0, cropY);
-            cropW = Math.Max(1, Math.Min(cropW, pxW - cropX));
-            cropH = Math.Max(1, Math.Min(cropH, pxH - cropY));
-
-            BitmapSource bmp;
-            if (cropX == 0 && cropY == 0 && cropW == pxW && cropH == pxH)
-            {
-                bmp = rtb;
-            }
-            else
-            {
-                var cropped = new CroppedBitmap(rtb, new Int32Rect(cropX, cropY, cropW, cropH));
-                cropped.Freeze();
-                bmp = cropped;
-            }
-
-            if (_roundCorners)
-                bmp = ApplyRoundedCorners(bmp, CornerRadiusPx);
-
-            Result = bmp;
+            Result = RenderFinalBitmap();
         }
         finally
         {
             Close();
         }
+    }
+
+    private void DoCopyToClipboard()
+    {
+        CommitActiveTextBox();
+
+        // Hide chrome so handles/picker don't appear in the rendered output.
+        foreach (var h in _handles) h.Visibility = Visibility.Collapsed;
+        _selBorderRect.Visibility  = Visibility.Collapsed;
+        _dimWidthBadge.Visibility  = Visibility.Collapsed;
+        _dimHeightBadge.Visibility = Visibility.Collapsed;
+        HideColorPicker();
+        HideModeHint();
+        HideEyedropperTooltip();
+
+        if (_selectedArrow != null)
+        {
+            _selectedArrow.TipHandle.Visibility = Visibility.Collapsed;
+            _selectedArrow.TailHandle.Visibility = Visibility.Collapsed;
+        }
+
+        foreach (var ar in _annotRects)
+            foreach (var h in ar.Handles) h.Visibility = Visibility.Collapsed;
+
+        try
+        {
+            var bmp = RenderFinalBitmap();
+            if (bmp != null)
+                Clipboard.SetImage(bmp);
+        }
+        finally
+        {
+            // Restore chrome visibility so the user can continue editing.
+            RefreshLayout();
+            if (_selectedArrow != null)
+            {
+                _selectedArrow.TipHandle.Visibility  = Visibility.Visible;
+                _selectedArrow.TailHandle.Visibility = Visibility.Visible;
+            }
+            foreach (var ar in _annotRects)
+                foreach (var h in ar.Handles) h.Visibility = Visibility.Visible;
+        }
+    }
+
+    private BitmapSource? RenderFinalBitmap()
+    {
+        // Always render at original pixel dimensions regardless of monitor DPI or
+        // the display scaling applied in the constructor.
+        var pxW = _workingImage.PixelWidth;
+        var pxH = _workingImage.PixelHeight;
+        if (pxW < 1 || pxH < 1) return null;
+
+        // Use a DrawingVisual so we can scale from canvas logical size to pixel size.
+        var rtb = new RenderTargetBitmap(pxW, pxH, 96, 96, PixelFormats.Pbgra32);
+        var dv = new DrawingVisual();
+        using (var ctx = dv.RenderOpen())
+        {
+            // VisualBrush with Stretch=Fill maps the full canvas to the target rect,
+            // preserving every original pixel even when canvas was DPI-downscaled.
+            var vb = new VisualBrush(_canvas) { Stretch = Stretch.Fill };
+            ctx.DrawRectangle(vb, null, new Rect(0, 0, pxW, pxH));
+        }
+        rtb.Render(dv);
+        rtb.Freeze();
+
+        // Crop: convert canvas logical selection coords back to pixel coords.
+        var cropSel = _sel.IsEmpty ? new Rect(0, 0, _canvas.ActualWidth, _canvas.ActualHeight) : _sel;
+        var cropX = (int)Math.Round(cropSel.Left * _canvasScaleX);
+        var cropY = (int)Math.Round(cropSel.Top * _canvasScaleY);
+        var cropW = (int)Math.Round(cropSel.Width * _canvasScaleX);
+        var cropH = (int)Math.Round(cropSel.Height * _canvasScaleY);
+
+        cropX = Math.Max(0, cropX);
+        cropY = Math.Max(0, cropY);
+        cropW = Math.Max(1, Math.Min(cropW, pxW - cropX));
+        cropH = Math.Max(1, Math.Min(cropH, pxH - cropY));
+
+        BitmapSource bmp;
+        if (cropX == 0 && cropY == 0 && cropW == pxW && cropH == pxH)
+        {
+            bmp = rtb;
+        }
+        else
+        {
+            var cropped = new CroppedBitmap(rtb, new Int32Rect(cropX, cropY, cropW, cropH));
+            cropped.Freeze();
+            bmp = cropped;
+        }
+
+        if (_roundCorners)
+            bmp = ApplyRoundedCorners(bmp, CornerRadiusPx);
+
+        return bmp;
     }
 
     /// <summary>
