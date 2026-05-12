@@ -317,6 +317,29 @@ internal sealed class ClipboardImageEditorWindow : Window
         // so we never misidentify the monitor (GetWindowRect on a maximized window returns
         // an inflated rect that can straddle the boundary between adjacent monitors).
         var ownerTopLeft = owner.PointToScreen(new Point(0, 0));
+
+        // For MonitorFromPoint we need true physical Win32 screen coordinates.
+        // PointToScreen in a System DPI-aware process may return DPI-virtualized
+        // coordinates; GetWindowRect always returns physical pixel coordinates.
+        var ownerHelper2 = new System.Windows.Interop.WindowInteropHelper(owner);
+        IntPtr ownerHwnd = ownerHelper2.EnsureHandle();
+        Point physOwnerCenter = ownerTopLeft; // fallback: use PointToScreen result
+        if (ownerHwnd != IntPtr.Zero && GetWindowRect(ownerHwnd, out Rect32 ownerWr))
+        {
+            physOwnerCenter = new Point(
+                (ownerWr.Left + ownerWr.Right) / 2,
+                (ownerWr.Top  + ownerWr.Bottom) / 2);
+            SquadDashTrace.Write("UI",
+                $"[ClipboardImageEditor] ownerHwnd={ownerHwnd:X} ownerWr=({ownerWr.Left},{ownerWr.Top},{ownerWr.Right},{ownerWr.Bottom}) " +
+                $"physCenter=({(int)physOwnerCenter.X},{(int)physOwnerCenter.Y}) " +
+                $"ptsOwnerTopLeft=({(int)ownerTopLeft.X},{(int)ownerTopLeft.Y})");
+        }
+        else
+        {
+            SquadDashTrace.Write("UI",
+                $"[ClipboardImageEditor] GetWindowRect failed hwnd={ownerHwnd:X}, using PointToScreen coords");
+        }
+
         var pSrc = PresentationSource.FromVisual(owner);
         var toLogical = pSrc?.CompositionTarget.TransformFromDevice ?? Matrix.Identity;
 
@@ -341,7 +364,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         // DPI virtualization and returns the actual per-monitor scale even when the process is
         // only System DPI aware (which makes TransformToDevice always return 1.0).
         var hMonOwner = MonitorFromPoint(
-            new POINT { X = (int)ownerTopLeft.X, Y = (int)ownerTopLeft.Y },
+            new POINT { X = (int)physOwnerCenter.X, Y = (int)physOwnerCenter.Y },
             MONITOR_DEFAULTTONEAREST);
         double rawMonitorScale = GetRawMonitorScale(hMonOwner);
         double monitorScaleX   = rawMonitorScale;
@@ -358,7 +381,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         _canvasScaleY = effectiveScaleY;
 
         SquadDashTrace.Write("UI",
-            $"[ClipboardImageEditor] DPI: bitmap={clipboardImage.DpiX:F1}x{clipboardImage.DpiY:F1} " +
+            $"[ClipboardImageEditor] DPI: hMonOwner={hMonOwner:X} bitmap={clipboardImage.DpiX:F1}x{clipboardImage.DpiY:F1} " +
             $"rawMonitor={rawMonitorScale:F3} bitmapDpiScale={bitmapDpiScaleX:F3}x{bitmapDpiScaleY:F3} " +
             $"effective={effectiveScaleX:F3}x{effectiveScaleY:F3} " +
             $"pixels={imgW:F0}x{imgH:F0} display={dispW:F1}x{dispH:F1} " +
@@ -1245,10 +1268,15 @@ internal sealed class ClipboardImageEditorWindow : Window
         if (hMon == IntPtr.Zero) return 1.0;
         try
         {
-            if (GetDpiForMonitor(hMon, MDT_EFFECTIVE_DPI, out uint dpiX, out _) == 0)
+            int hr = GetDpiForMonitor(hMon, MDT_EFFECTIVE_DPI, out uint dpiX, out _);
+            SquadDashTrace.Write("UI", $"[GetRawMonitorScale] hMon={hMon:X} hr={hr:X} dpiX={dpiX}");
+            if (hr == 0)
                 return dpiX / 96.0;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            SquadDashTrace.Write("UI", $"[GetRawMonitorScale] exception: {ex.GetType().Name}: {ex.Message}");
+        }
         return 1.0;
     }
 
