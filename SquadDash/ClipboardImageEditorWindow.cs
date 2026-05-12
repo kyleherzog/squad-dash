@@ -387,12 +387,11 @@ internal sealed class ClipboardImageEditorWindow : Window
         // 795×660 on a 150% monitor → 530×440 logical.
         if (effectiveScaleX > 1.05 || effectiveScaleY > 1.05)
         {
-            var tb = new TransformedBitmap(clipboardImage,
-                new ScaleTransform(1.0 / effectiveScaleX, 1.0 / effectiveScaleY));
-            tb.Freeze();
-            _workingImage = tb;
-            imgW = tb.PixelWidth;
-            imgH = tb.PixelHeight;
+            int outW = Math.Max(1, (int)Math.Round(imgW / effectiveScaleX));
+            int outH = Math.Max(1, (int)Math.Round(imgH / effectiveScaleY));
+            _workingImage = DownscaleHighQuality(clipboardImage, outW, outH);
+            imgW = outW;
+            imgH = outH;
         }
 
         double dispW = imgW;
@@ -1317,6 +1316,54 @@ internal sealed class ClipboardImageEditorWindow : Window
                 SetThreadDpiAwarenessContext(prevCtx);
         }
         return 1.0;
+    }
+
+    /// <summary>
+    /// Downscales a BitmapSource using GDI+ HighQualityBicubic interpolation, which
+    /// produces significantly sharper results than WPF's TransformedBitmap (bilinear).
+    /// </summary>
+    private static BitmapSource DownscaleHighQuality(BitmapSource source, int outW, int outH)
+    {
+        // Convert BitmapSource → System.Drawing.Bitmap in Bgra32
+        var fmt = System.Drawing.Imaging.PixelFormat.Format32bppPArgb;
+        int srcStride = source.PixelWidth * 4;
+        var srcPixels = new byte[srcStride * source.PixelHeight];
+        source.CopyPixels(srcPixels, srcStride, 0);
+
+        using var srcBmp = new System.Drawing.Bitmap(source.PixelWidth, source.PixelHeight, fmt);
+        {
+            var bd = srcBmp.LockBits(
+                new System.Drawing.Rectangle(0, 0, srcBmp.Width, srcBmp.Height),
+                System.Drawing.Imaging.ImageLockMode.WriteOnly, fmt);
+            System.Runtime.InteropServices.Marshal.Copy(srcPixels, 0, bd.Scan0, srcPixels.Length);
+            srcBmp.UnlockBits(bd);
+        }
+
+        using var dstBmp = new System.Drawing.Bitmap(outW, outH, fmt);
+        using (var g = System.Drawing.Graphics.FromImage(dstBmp))
+        {
+            g.InterpolationMode  = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            g.SmoothingMode      = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+            g.PixelOffsetMode    = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+            g.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+            g.DrawImage(srcBmp, 0, 0, outW, outH);
+        }
+
+        // Convert System.Drawing.Bitmap back to BitmapSource
+        var dstStride = outW * 4;
+        var dstPixels = new byte[dstStride * outH];
+        {
+            var bd = dstBmp.LockBits(
+                new System.Drawing.Rectangle(0, 0, outW, outH),
+                System.Drawing.Imaging.ImageLockMode.ReadOnly, fmt);
+            System.Runtime.InteropServices.Marshal.Copy(bd.Scan0, dstPixels, 0, dstPixels.Length);
+            dstBmp.UnlockBits(bd);
+        }
+
+        var result = BitmapSource.Create(outW, outH, 96, 96,
+            PixelFormats.Pbgra32, null, dstPixels, dstStride);
+        result.Freeze();
+        return result;
     }
 
     /// <summary>
