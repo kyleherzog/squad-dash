@@ -258,6 +258,11 @@ internal sealed class ClipboardImageEditorWindow : Window
     private double _textHandleDragOrigDisplayW;
     private double _textHandleDragOrigDisplayH;
     private Rect   _textHandleDragOrigBounds;
+
+    // DPI scale of the source image (monitor scale or bitmap-embedded DPI / 96).
+    // Used to downscale the output bitmap so it pastes at the correct apparent size.
+    private double _effectiveScaleX = 1.0;
+    private double _effectiveScaleY = 1.0;
     private AnnotationText? _textHandleDragAnnotation;
     // Set in CommitActiveTextBox when the commit is triggered by a LostFocus (i.e. a canvas click).
     // Canvas_MouseDown reads and clears this flag to prevent immediately deselecting the annotation
@@ -374,6 +379,9 @@ internal sealed class ClipboardImageEditorWindow : Window
         // Prefer bitmap-embedded DPI when it's non-trivial; otherwise use monitor scale.
         double effectiveScaleX  = bitmapDpiScaleX > 1.05 ? bitmapDpiScaleX : monitorScaleX;
         double effectiveScaleY  = bitmapDpiScaleY > 1.05 ? bitmapDpiScaleY : monitorScaleY;
+        _effectiveScaleX = effectiveScaleX;
+        _effectiveScaleY = effectiveScaleY;
+
         // Canvas operates in physical pixel space — no WPF-level downscaling.
         // Initial zoom compensates so the image displays at the correct screen size.
         double dispW = imgW;
@@ -4924,10 +4932,24 @@ internal sealed class ClipboardImageEditorWindow : Window
         if (_roundCorners)
             bmp = ApplyRoundedCorners(bmp, CornerRadiusPx);
 
+        // Downscale to logical pixel size so the image pastes at its correct apparent size.
+        // On a 150% monitor: 1500×900 physical → 1000×600 logical.
+        if (_effectiveScaleX > 1.05 || _effectiveScaleY > 1.05)
+        {
+            int outW = Math.Max(1, (int)Math.Round(bmp.PixelWidth  / _effectiveScaleX));
+            int outH = Math.Max(1, (int)Math.Round(bmp.PixelHeight / _effectiveScaleY));
+            var scaled = new TransformedBitmap(bmp,
+                new ScaleTransform(1.0 / _effectiveScaleX, 1.0 / _effectiveScaleY));
+            scaled.Freeze();
+            bmp = scaled;
+        }
+
         SquadDashTrace.Write("UI",
             $"[ClipboardImageEditor] RenderFinal: workingImage={pxW}x{pxH}px " +
             $"canvas={_canvas.ActualWidth:F1}x{_canvas.ActualHeight:F1} sel={(_sel.IsEmpty ? "none" : $"{cropSel.Width:F1}x{cropSel.Height:F1}@{cropSel.Left:F1},{cropSel.Top:F1}")} " +
-            $"cropPx={cropX},{cropY},{cropW}x{cropH} output={bmp.PixelWidth}x{bmp.PixelHeight}px " +
+            $"cropPx={cropX},{cropY},{cropW}x{cropH} " +
+            $"effectiveScale={_effectiveScaleX:F3}x{_effectiveScaleY:F3} " +
+            $"output={bmp.PixelWidth}x{bmp.PixelHeight}px " +
             $"dpi={bmp.DpiX:F1}x{bmp.DpiY:F1} canvasScale={_canvasScaleX:F3}x{_canvasScaleY:F3}");
 
         return bmp;
