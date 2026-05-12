@@ -176,6 +176,8 @@ internal sealed class SoundNotificationService
                     try
                     {
                         var player = new MediaPlayer();
+                        // Keep the player alive until playback finishes, then release it.
+                        player.MediaEnded += (_, _) => player.Close();
                         player.Open(new Uri(capturedPath, UriKind.Absolute));
                         player.Play();
                     }
