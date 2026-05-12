@@ -486,7 +486,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _squadCliAdapter = new SquadCliAdapter(_workspacePaths, (op, ex) => HandleUiCallbackException(op, ex));
         _workspaceOpenCoordinator = new WorkspaceOpenCoordinator(_instanceRegistry);
         _pushNotificationService = new PushNotificationService(_settingsStore);
-        SoundNotifications = new SoundNotificationService(_settingsStore);
+        SoundNotifications = new SoundNotificationService(_settingsStore, BuildTtsProvider(_settingsSnapshot));
         InitializeComponent();
         SquadDashTrace.Write(TraceCategory.Startup, $"Constructor: InitializeComponent {ctorSw.ElapsedMilliseconds}ms.");
         OutputTextBox.CacheMode = CreateTranscriptBitmapCache();
@@ -20283,6 +20283,25 @@ public partial class MainWindow : Window, ILiveElementLocator
             snapshot.ByokModel,
             snapshot.ByokProviderType,
             snapshot.ByokApiKey);
+    }
+
+    private ITtsProvider? BuildTtsProvider(ApplicationSettingsSnapshot s)
+    {
+        if (s.Tts_Provider == TtsProvider.Azure)
+        {
+            var key = Environment.GetEnvironmentVariable("SQUAD_SPEECH_KEY", EnvironmentVariableTarget.User);
+            if (!string.IsNullOrWhiteSpace(key) && !string.IsNullOrWhiteSpace(s.SpeechRegion))
+                return new AzureTtsProvider(key, s.SpeechRegion, s.Tts_Azure_Voice);
+        }
+        else if (s.Tts_Provider == TtsProvider.OpenAI)
+        {
+            if (!string.IsNullOrWhiteSpace(s.OpenAiSpeechApiKey))
+            {
+                var model = s.Tts_OpenAi_Model == OpenAiTtsModel.HD ? "tts-1-hd" : "tts-1";
+                return new OpenAiTtsProvider(s.OpenAiSpeechApiKey, s.Tts_OpenAi_Voice, model);
+            }
+        }
+        return null;
     }
 
     private void DocsWatcher_Changed(object sender, FileSystemEventArgs e)

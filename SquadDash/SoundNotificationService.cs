@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Diagnostics;
 using System.Media;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 
@@ -29,16 +31,25 @@ internal enum SoundEvent
 internal sealed class SoundNotificationService
 {
     private readonly ApplicationSettingsStore _settingsStore;
+    private readonly ITtsProvider?            _ttsProvider;
 
-    public SoundNotificationService(ApplicationSettingsStore settingsStore)
+    // 0 = idle, 1 = speaking; updated via Interlocked for overlap guard.
+    private int _ttsSpeaking;
+
+    public SoundNotificationService(
+        ApplicationSettingsStore settingsStore,
+        ITtsProvider?            ttsProvider = null)
     {
         _settingsStore = settingsStore;
+        _ttsProvider   = ttsProvider;
     }
 
     /// <summary>
     /// Plays the sound for the given event if the event is enabled in settings.
     /// Uses a custom audio file when configured and the file exists; falls back
     /// to <see cref="SystemSounds.Asterisk"/> otherwise.
+    /// If the custom path is a quoted phrase (e.g. <c>"Hello world"</c>) the text
+    /// is sent to the configured TTS provider instead.
     /// Never blocks the caller — exceptions are swallowed and debug-logged.
     /// </summary>
     public void Play(SoundEvent evt)
@@ -51,6 +62,25 @@ internal sealed class SoundNotificationService
             if (!enabled)
                 return;
 
+            // --- TTS path ---
+            if (!string.IsNullOrEmpty(customPath) && IsPhrase(customPath))
+            {
+                if (_ttsProvider == null) return;
+
+                // Skip-if-busy overlap guard: only one TTS utterance at a time.
+                if (Interlocked.CompareExchange(ref _ttsSpeaking, 1, 0) != 0) return;
+
+                var phrase = ExtractPhrase(customPath);
+                _ = Task.Run(async () =>
+                {
+                    try   { await _ttsProvider.SpeakAsync(phrase).ConfigureAwait(false); }
+                    catch (Exception ex) { Debug.WriteLine($"TTS error: {ex.Message}"); }
+                    finally { Interlocked.Exchange(ref _ttsSpeaking, 0); }
+                });
+                return;
+            }
+
+            // --- Audio file path ---
             if (!string.IsNullOrEmpty(customPath) && File.Exists(customPath))
             {
                 // MediaPlayer must run on a thread that has a Dispatcher.
@@ -86,6 +116,13 @@ internal sealed class SoundNotificationService
     // ---------------------------------------------------------------------------
     // Private helpers
     // ---------------------------------------------------------------------------
+
+    /// <summary>Returns true when <paramref name="s"/> is a double-quoted phrase.</summary>
+    private static bool IsPhrase(string s) =>
+        s.Length >= 2 && s[0] == '"' && s[^1] == '"';
+
+    /// <summary>Strips the surrounding double-quotes from a phrase string.</summary>
+    private static string ExtractPhrase(string s) => s[1..^1];
 
     private static (bool Enabled, string CustomPath) GetEventSettings(
         ApplicationSettingsSnapshot s, SoundEvent evt) =>
