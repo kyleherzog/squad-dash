@@ -2434,26 +2434,6 @@ internal sealed class ClipboardImageEditorWindow : Window
     }
 
     /// <summary>
-    /// Drops a new arrow with its pivot (target centre) at <paramref name="pt"/>.
-    /// Unlike <see cref="ScreenshotOverlayWindow"/>, there is no element-highlight
-    /// step — the click position is used directly.
-    /// </summary>
-    private void PlaceArrowAtPoint(Point pt)
-    {
-        var clamped = new Point(
-            Math.Max(0, Math.Min(pt.X, _canvas.Width)),
-            Math.Max(0, Math.Min(pt.Y, _canvas.Height)));
-
-        // Use a 2×2 rect centred on the click as the "target bounds".
-        var targetBounds = new Rect(clamped.X - 1, clamped.Y - 1, 2, 2);
-        CreateArrow(targetBounds);
-        if (!_inArrowMultiDropMode)
-            ExitArrowMode(returnToMove: true);
-        else
-            ShowModeHint("Multi-drop: drag to place arrows · ESC to exit");
-    }
-
-    /// <summary>
     /// Creates an arrow where <paramref name="tailPt"/> is the blunt tail end
     /// and <paramref name="headPt"/> is the arrowhead tip (pointy end).
     /// </summary>
@@ -2649,6 +2629,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         {
             if (_draggingArrow != arrow || _tailDragging) return;
             _defaultArrowAngleDeg = arrow.ArrowheadAngleDeg;
+            _lastDragArrowAngleDeg = arrow.ArrowheadAngleDeg;
             _defaultArrowLength = arrow.ArrowLength;
             SaveArrowDefaults();
             CommitDragUndo();
@@ -2695,7 +2676,9 @@ internal sealed class ClipboardImageEditorWindow : Window
             if (_draggingArrow != arrow || !_tailDragging) return;
             arrow.UserTailLength = arrow.TailLength;
             _defaultTailLength = arrow.TailLength;
+            _lastDragArrowTailLength = arrow.TailLength;
             _defaultArrowAngleDeg = arrow.ArrowheadAngleDeg;
+            _lastDragArrowAngleDeg = arrow.ArrowheadAngleDeg;
             SaveArrowDefaults();
             CommitDragUndo();
             _draggingArrow = null;
