@@ -5,8 +5,11 @@ using System.Net.Http;
 using System.Windows.Input;
 using System.Threading.Tasks;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using Microsoft.CognitiveServices.Speech;
 
 namespace SquadDash;
 
@@ -932,19 +935,18 @@ internal sealed class PreferencesWindow : Window {
         azureVoiceLabel.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
         Grid.SetColumn(azureVoiceLabel, 0);
 
-        var azureVoiceBox = new TextBox {
-            Text = currentSettings.Tts_Azure_Voice,
-            Padding = new Thickness(6, 4, 6, 4),
+        var azureVoiceCombo = new ComboBox {
+            IsEditable = true,
             Height = 28,
-            ToolTip = "Azure Neural voice name, e.g. en-US-JennyNeural or en-US-GuyNeural. See aka.ms/azurevoices for the full list."
+            ToolTip = "Azure Neural voice name, e.g. en-US-JennyNeural. Type manually or select from the list once loaded."
         };
-        azureVoiceBox.SetResourceReference(TextBox.BackgroundProperty, "TextBoxBackground");
-        azureVoiceBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
-        azureVoiceBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
-        Grid.SetColumn(azureVoiceBox, 1);
+        azureVoiceCombo.SetResourceReference(ComboBox.BackgroundProperty, "TextBoxBackground");
+        azureVoiceCombo.SetResourceReference(ComboBox.BorderBrushProperty, "InputBorder");
+        azureVoiceCombo.SetResourceReference(ComboBox.ForegroundProperty, "LabelText");
+        Grid.SetColumn(azureVoiceCombo, 1);
 
         azureVoiceRow.Children.Add(azureVoiceLabel);
-        azureVoiceRow.Children.Add(azureVoiceBox);
+        azureVoiceRow.Children.Add(azureVoiceCombo);
         form.Children.Add(azureVoiceRow);
 
         // ── Row: OpenAI Voice + Model ─────────────────────────────────────────────
@@ -1000,7 +1002,7 @@ internal sealed class PreferencesWindow : Window {
             var provider = ttsProviderCombo.SelectedIndex == 1 ? TtsProvider.OpenAI : TtsProvider.Azure;
             _settingsStore.SaveTtsSettings(
                 provider,
-                azureVoiceBox.Text.Trim(),
+                azureVoiceCombo.Text.Trim(),
                 openAiVoiceCombo.SelectedItem?.ToString() ?? "alloy",
                 openAiModelCombo.SelectedIndex == 1 ? OpenAiTtsModel.HD : OpenAiTtsModel.Standard);
         }
@@ -1011,9 +1013,22 @@ internal sealed class PreferencesWindow : Window {
             openAiRow.Visibility     = isAzure ? Visibility.Collapsed : Visibility.Visible;
             SaveTtsNow();
         };
-        azureVoiceBox.TextChanged         += (_, _) => SaveTtsNow();
+        azureVoiceCombo.SelectionChanged  += (_, _) => SaveTtsNow();
+        azureVoiceCombo.AddHandler(TextBoxBase.TextChangedEvent,
+            new TextChangedEventHandler((_, _) => SaveTtsNow()));
         openAiVoiceCombo.SelectionChanged += (_, _) => SaveTtsNow();
         openAiModelCombo.SelectionChanged += (_, _) => SaveTtsNow();
+
+        // ── Populate Azure voice list ─────────────────────────────────────────────
+        var speechKey = Environment.GetEnvironmentVariable("SQUAD_SPEECH_KEY", EnvironmentVariableTarget.User);
+        if (!string.IsNullOrWhiteSpace(speechKey) && !string.IsNullOrWhiteSpace(currentSettings.SpeechRegion))
+            _ = LoadAzureVoicesAsync(azureVoiceCombo, currentSettings.Tts_Azure_Voice, speechKey, currentSettings.SpeechRegion);
+        else
+        {
+            azureVoiceCombo.Items.Add(currentSettings.Tts_Azure_Voice);
+            azureVoiceCombo.SelectedIndex = 0;
+            azureVoiceCombo.ToolTip = "Configure Azure Speech key and region to load the full voice list.";
+        }
 
         return WrapInScrollViewer(form);
     }
@@ -1382,6 +1397,50 @@ internal sealed class PreferencesWindow : Window {
     private static bool GetToggle(ApplicationSettingsSnapshot s, string key, bool defaultValue) {
         if (s.NotificationEventToggles is null) return defaultValue;
         return s.NotificationEventToggles.TryGetValue(key, out var v) ? v : defaultValue;
+    }
+
+    private static async Task LoadAzureVoicesAsync(ComboBox combo, string currentVoice, string key, string region)
+    {
+        combo.Items.Clear();
+        combo.Items.Add("Loading voices…");
+        combo.SelectedIndex = 0;
+        combo.IsEnabled = false;
+
+        try
+        {
+            var config = SpeechConfig.FromSubscription(key, region);
+            using var synth = new SpeechSynthesizer(config, null);
+            var result = await synth.GetVoicesAsync().ConfigureAwait(false);
+
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                combo.Items.Clear();
+                var voices = result.Voices
+                    .OrderBy(v => v.Locale)
+                    .ThenBy(v => v.ShortName)
+                    .Select(v => v.ShortName)
+                    .ToList();
+
+                foreach (var v in voices)
+                    combo.Items.Add(v);
+
+                combo.IsEnabled = true;
+
+                var idx = voices.IndexOf(currentVoice);
+                combo.SelectedIndex = idx >= 0 ? idx : 0;
+            });
+        }
+        catch (Exception ex)
+        {
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                combo.Items.Clear();
+                combo.Items.Add(currentVoice);
+                combo.SelectedIndex = 0;
+                combo.IsEnabled = true;
+                Debug.WriteLine($"Azure voice load failed: {ex.Message}");
+            });
+        }
     }
 
     private sealed class VoiceReplacementRuleViewModel : System.ComponentModel.INotifyPropertyChanged {
