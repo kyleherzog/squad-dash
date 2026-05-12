@@ -5349,7 +5349,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             {
                 Width            = sw,
                 Height           = sh,
-                Stroke           = Brushes.White,
+                Stroke           = new SolidColorBrush(Color.FromRgb(0x1E, 0x6F, 0xCC)),
                 StrokeThickness  = 1.5 / _zoom,
                 StrokeDashArray  = new DoubleCollection { 4.0, 3.0 },
                 Fill             = Brushes.Transparent,
@@ -5358,7 +5358,7 @@ internal sealed class ClipboardImageEditorWindow : Window
                 {
                     BlurRadius  = 3,
                     ShadowDepth = 1,
-                    Color       = Colors.Black,
+                    Color       = Color.FromRgb(0x93, 0xC5, 0xFD),
                     Opacity     = 0.9,
                     Direction   = 315
                 }
