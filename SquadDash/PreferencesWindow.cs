@@ -1071,13 +1071,14 @@ internal sealed class PreferencesWindow : Window {
 
         testButton.Click += (_, _) => {
             testButton.IsEnabled = false;
+            // Capture all UI-owned values on the UI thread before handing off to Task.Run.
+            var provider    = ttsProviderCombo.SelectedIndex == 1 ? TtsProvider.OpenAI : TtsProvider.Azure;
+            var azureVoice  = azureVoiceCombo.Text.Trim();
+            var openAiVoice = openAiVoiceCombo.SelectedItem?.ToString() ?? "alloy";
+            var modelIndex  = openAiModelCombo.SelectedIndex;
+            var region      = _speechRegionBox.Text.Trim();
             _ = Task.Run(async () => {
                 try {
-                    var provider  = ttsProviderCombo.SelectedIndex == 1 ? TtsProvider.OpenAI : TtsProvider.Azure;
-                    var azureVoice  = await Dispatcher.InvokeAsync(() => azureVoiceCombo.Text.Trim());
-                    var openAiVoice = await Dispatcher.InvokeAsync(() => openAiVoiceCombo.SelectedItem?.ToString() ?? "alloy");
-                    var modelIndex  = await Dispatcher.InvokeAsync(() => openAiModelCombo.SelectedIndex);
-                    var region      = await Dispatcher.InvokeAsync(() => _speechRegionBox.Text.Trim());
                     var openAiKey   = currentSettings.OpenAiSpeechApiKey;
                     var azureKey    = Environment.GetEnvironmentVariable("SQUAD_SPEECH_KEY", EnvironmentVariableTarget.User);
                     var oaiModel    = modelIndex == 1 ? "tts-1-hd" : "tts-1";
