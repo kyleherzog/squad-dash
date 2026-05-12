@@ -547,8 +547,10 @@ internal sealed class PreferencesWindow : Window {
         replacementsGrid.SetResourceReference(DataGrid.BackgroundProperty, "AppSurface");
         replacementsGrid.SetResourceReference(DataGrid.ForegroundProperty, "LabelText");
         replacementsGrid.SetResourceReference(DataGrid.BorderBrushProperty, "SubtleBorder");
-        replacementsGrid.SetResourceReference(DataGrid.RowBackgroundProperty, "AppSurface");
-        replacementsGrid.SetResourceReference(DataGrid.AlternatingRowBackgroundProperty, "AppSurface");
+        replacementsGrid.SetResourceReference(DataGrid.RowBackgroundProperty, "TextBoxBackground");
+        replacementsGrid.SetResourceReference(DataGrid.AlternatingRowBackgroundProperty, "TextBoxBackground");
+        replacementsGrid.RowHeaderWidth = 0;
+        replacementsGrid.BorderThickness = new Thickness(1);
         replacementsGrid.SetResourceReference(DataGrid.HorizontalGridLinesBrushProperty, "SubtleBorder");
         replacementsGrid.SetResourceReference(DataGrid.VerticalGridLinesBrushProperty, "SubtleBorder");
 
@@ -560,9 +562,10 @@ internal sealed class PreferencesWindow : Window {
         replacementsGrid.ColumnHeaderStyle = headerStyle;
 
         var cellStyle = new Style(typeof(DataGridCell));
-        cellStyle.Setters.Add(new Setter(DataGridCell.BackgroundProperty, new DynamicResourceExtension("AppSurface")));
+        cellStyle.Setters.Add(new Setter(DataGridCell.BackgroundProperty, new DynamicResourceExtension("TextBoxBackground")));
         cellStyle.Setters.Add(new Setter(DataGridCell.ForegroundProperty, new DynamicResourceExtension("LabelText")));
         cellStyle.Setters.Add(new Setter(DataGridCell.BorderBrushProperty, new DynamicResourceExtension("SubtleBorder")));
+        cellStyle.Setters.Add(new Setter(DataGridCell.BorderThicknessProperty, new Thickness(0)));
         replacementsGrid.CellStyle = cellStyle;
 
         var patternCol = new DataGridTextColumn {
