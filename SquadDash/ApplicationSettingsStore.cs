@@ -579,6 +579,24 @@ internal sealed class ApplicationSettingsStore {
         return updated;
     }
 
+    public ApplicationSettingsSnapshot SaveTtsSettings(
+        TtsProvider provider,
+        string? azureVoice,
+        string? openAiVoice,
+        OpenAiTtsModel openAiModel)
+    {
+        using var mutex = AcquireMutex();
+        var current = LoadCore();
+        var updated = current with {
+            Tts_Provider     = provider,
+            Tts_Azure_Voice  = string.IsNullOrWhiteSpace(azureVoice)  ? "en-US-JennyNeural" : azureVoice.Trim(),
+            Tts_OpenAi_Voice = string.IsNullOrWhiteSpace(openAiVoice) ? "alloy"              : openAiVoice.Trim(),
+            Tts_OpenAi_Model = openAiModel,
+        };
+        SaveCore(updated);
+        return updated.Normalize();
+    }
+
     private ApplicationSettingsSnapshot LoadCore(){
         if (!File.Exists(_settingsPath))
             return ApplicationSettingsSnapshot.Empty.Normalize();
@@ -1016,6 +1034,27 @@ internal sealed record ApplicationSettingsSnapshot(
     /// <summary>Custom audio file for QuickRepliesShown. Empty = use system sound.</summary>
     public string Sound_QuickRepliesShown_CustomPath { get; init; } = "";
 
+    // ── TTS (Text-to-Speech spoken phrases) ──────────────────────────────────
+
+    /// <summary>Which TTS provider is used to speak quoted phrases in Sound event paths.</summary>
+    public TtsProvider Tts_Provider { get; init; } = TtsProvider.Azure;
+
+    /// <summary>
+    /// Azure Neural voice name, e.g. "en-US-JennyNeural".
+    /// Stored independently of <see cref="Tts_OpenAi_Voice"/> so switching providers
+    /// never clobbers the other provider's choice.
+    /// </summary>
+    public string Tts_Azure_Voice { get; init; } = "en-US-JennyNeural";
+
+    /// <summary>
+    /// OpenAI TTS voice: alloy, echo, fable, onyx, nova, or shimmer.
+    /// Stored independently of <see cref="Tts_Azure_Voice"/>.
+    /// </summary>
+    public string Tts_OpenAi_Voice { get; init; } = "alloy";
+
+    /// <summary>OpenAI TTS model quality: Standard (tts-1) or HD (tts-1-hd).</summary>
+    public OpenAiTtsModel Tts_OpenAi_Model { get; init; } = OpenAiTtsModel.Standard;
+
     public static ApplicationSettingsSnapshot Empty{ get; } =
         new(
             null,
@@ -1211,6 +1250,10 @@ internal sealed record ApplicationSettingsSnapshot(
             Sound_CommitMade_CustomPath             = Sound_CommitMade_CustomPath ?? "",
             Sound_QuickRepliesShown_Enabled         = Sound_QuickRepliesShown_Enabled,
             Sound_QuickRepliesShown_CustomPath      = Sound_QuickRepliesShown_CustomPath ?? "",
+            Tts_Provider     = Tts_Provider,
+            Tts_Azure_Voice  = string.IsNullOrWhiteSpace(Tts_Azure_Voice)  ? "en-US-JennyNeural" : Tts_Azure_Voice.Trim(),
+            Tts_OpenAi_Voice = string.IsNullOrWhiteSpace(Tts_OpenAi_Voice) ? "alloy"              : Tts_OpenAi_Voice.Trim(),
+            Tts_OpenAi_Model = Tts_OpenAi_Model,
         };
     }
 
@@ -1224,6 +1267,11 @@ internal sealed record ApplicationSettingsSnapshot(
 public enum LoopMode { NativeAgents, SquadCli }
 
 internal enum SpeechProvider { Azure, OpenAI }
+
+internal enum TtsProvider { Azure, OpenAI }
+
+/// <summary>Corresponds to OpenAI's <c>tts-1</c> (Standard) and <c>tts-1-hd</c> (HD) models.</summary>
+internal enum OpenAiTtsModel { Standard, HD }
 
 internal enum LoopConfigFlyoutMode { Configure, Edit }
 
