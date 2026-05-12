@@ -1682,13 +1682,25 @@ internal sealed class PromptExecutionController {
             _refreshAgentCards();
             _refreshSidebar();
         }
-        catch (OperationCanceledException) {
-            SquadDashTrace.Write("UI", "ExecutePromptAsync aborted by user.");
-            StopPromptHealthMonitoring("aborted");
-            MarkActiveToolsAsFailed("Aborted");
-            _appendLine("[aborted]", ThemeBrush("SystemInfoText"));
-            _backgroundTaskPresenter.RefreshLeadAgentBackgroundStatus();
-            _nextPromptShouldRetractAborted = true;
+        catch (OperationCanceledException ex) {
+            if (IsUserRequestedAbort(ex)) {
+                SquadDashTrace.Write("UI", $"ExecutePromptAsync aborted by user: {ex.GetType().Name}: {ex.Message}");
+                StopPromptHealthMonitoring("aborted");
+                MarkActiveToolsAsFailed("Aborted");
+                _appendLine("[aborted]", ThemeBrush("SystemInfoText"));
+                _backgroundTaskPresenter.RefreshLeadAgentBackgroundStatus();
+                _nextPromptShouldRetractAborted = true;
+            }
+            else {
+                var message = string.IsNullOrWhiteSpace(ex.Message)
+                    ? "The prompt was interrupted before it completed."
+                    : ex.Message;
+                SquadDashTrace.Write("UI", $"ExecutePromptAsync interrupted: {ex.GetType().Name}: {message}");
+                StopPromptHealthMonitoring("interrupted");
+                MarkActiveToolsAsFailed("Interrupted");
+                _appendLine("[interrupted] " + message, ThemeBrush("SystemInfoText"));
+                _backgroundTaskPresenter.RefreshLeadAgentBackgroundStatus();
+            }
         }
         catch (Exception ex) {
             SquadDashTrace.Write("UI", $"ExecutePromptAsync failed: {ex}");
@@ -1756,6 +1768,9 @@ internal sealed class PromptExecutionController {
         foreach (var entry in thread.CurrentTurn.ResponseEntries.Where(candidate => candidate.AllowQuickReplies))
             DisableQuickReplies(entry);
     }
+
+    private static bool IsUserRequestedAbort(OperationCanceledException ex) =>
+        string.Equals(ex.Message, "Prompt aborted by user.", StringComparison.Ordinal);
 
     /// <summary>
     /// Disables quick-reply buttons on a response entry and re-renders it.

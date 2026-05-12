@@ -26,6 +26,7 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
     private readonly Queue<string> _recentErrorLines = new();
     private readonly Dictionary<string, PendingBridgeRequest> _pendingRequests = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PendingBackgroundCancelRequest> _pendingBackgroundCancels = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _userAbortRequestIds = new(StringComparer.Ordinal);
     private readonly TimeSpan _promptInactivityTimeout;
     private readonly TimeSpan _promptTimeoutPollInterval;
     private readonly IWorkspacePaths? _workspacePaths;
@@ -40,6 +41,7 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
     private int _pendingBridgeThinkingDeltaChars;
     private int _pendingBridgeResponseDeltaCount;
     private int _pendingBridgeResponseDeltaChars;
+    private int _suppressedConptyAttachConsoleStderrLines;
 
     /// <summary>
     /// Optional BYOK provider settings. When set (and <see cref="ByokProviderSettings.ProviderUrl"/> is
@@ -257,8 +259,12 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
             await SendBridgeRequestWithRestartAsync(request, pendingRequest).ConfigureAwait(false);
             pendingRequest.MarkActivity();
             var outcome = await WaitForPromptOutcomeAsync(pendingRequest).ConfigureAwait(false);
-            if (outcome == BridgeRequestOutcome.Aborted)
-                throw new OperationCanceledException("Prompt aborted by user.");
+            if (outcome == BridgeRequestOutcome.Aborted) {
+                if (TryRemoveUserAbortRequestId(requestId))
+                    throw new OperationCanceledException("Prompt aborted by user.");
+
+                throw new OperationCanceledException("The Squad bridge reported the prompt was aborted without a local abort request.");
+            }
 
             SquadDashTrace.Write("Bridge", "Prompt completed.");
             await WaitForInjectedBridgeToSettleAsync().ConfigureAwait(false);
@@ -266,6 +272,7 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
         finally {
             lock (_stateLock) {
                 _pendingRequests.Remove(requestId);
+                _userAbortRequestIds.Remove(requestId);
                 if (string.Equals(_activePromptRequestId, requestId, StringComparison.Ordinal))
                     _activePromptRequestId = null;
             }
@@ -366,6 +373,12 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
         process.ErrorDataReceived += (_, e) => {
             if (string.IsNullOrWhiteSpace(e.Data))
                 return;
+
+            if (ShouldSuppressBridgeStderr(e.Data)) {
+                if (IsConptyAttachConsoleStart(e.Data))
+                    SquadDashTrace.Write("Bridge", "suppressed benign node-pty AttachConsole stderr block.");
+                return;
+            }
 
             if (!IsBenignBridgeStderr(e.Data))
                 EnqueueError(e.Data);
@@ -672,6 +685,9 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
         if (pendingRequests.Length == 0)
             return;
 
+        SquadDashTrace.Write(
+            "Bridge",
+            $"Bridge process exited with {pendingRequests.Length} pending request(s); waiting for stdout reader before failing them.");
         _ = CompleteExitedProcessRequestsAsync(pendingRequestIds, pendingRequests, outputReaderTask);
     }
 
@@ -724,9 +740,46 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
         return $"{fallbackMessage}{Environment.NewLine}{Environment.NewLine}{string.Join(Environment.NewLine, recentErrors)}";
     }
 
+    private bool ShouldSuppressBridgeStderr(string text) {
+        if (IsBenignBridgeStderr(text))
+            return true;
+
+        if (IsConptyAttachConsoleStart(text)) {
+            _suppressedConptyAttachConsoleStderrLines = 14;
+            return true;
+        }
+
+        if (_suppressedConptyAttachConsoleStderrLines <= 0)
+            return false;
+
+        if (!IsConptyAttachConsoleContinuation(text)) {
+            _suppressedConptyAttachConsoleStderrLines = 0;
+            return false;
+        }
+
+        _suppressedConptyAttachConsoleStderrLines--;
+        if (text.Contains("Node.js v", StringComparison.OrdinalIgnoreCase))
+            _suppressedConptyAttachConsoleStderrLines = 0;
+        return true;
+    }
+
     private static bool IsBenignBridgeStderr(string text) =>
         text.Contains("ExperimentalWarning: SQLite is an experimental feature", StringComparison.OrdinalIgnoreCase) ||
         text.Contains("Use `node --trace-warnings", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsConptyAttachConsoleStart(string text) =>
+        text.Contains("node-pty", StringComparison.OrdinalIgnoreCase) &&
+        text.Contains("conpty_console_list_agent.js", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsConptyAttachConsoleContinuation(string text) =>
+        text.Contains("getConsoleProcessList(shellPid)", StringComparison.OrdinalIgnoreCase) ||
+        text.Contains("Error: AttachConsole failed", StringComparison.OrdinalIgnoreCase) ||
+        text.Contains("node-pty", StringComparison.OrdinalIgnoreCase) ||
+        text.Contains("conpty_console_list_agent.js", StringComparison.OrdinalIgnoreCase) ||
+        text.Contains("node:internal/", StringComparison.OrdinalIgnoreCase) ||
+        text.Contains("Node.js v", StringComparison.OrdinalIgnoreCase) ||
+        text.TrimStart().StartsWith("[CLI subprocess]     at ", StringComparison.OrdinalIgnoreCase) ||
+        text.TrimStart().StartsWith("[CLI subprocess]                          ^", StringComparison.OrdinalIgnoreCase);
 
     private static bool ShouldResetSessionAndRetry(string? sessionId, string? message) {
         if (string.IsNullOrWhiteSpace(sessionId) || string.IsNullOrWhiteSpace(message))
@@ -780,6 +833,9 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
         lock (_stateLock) {
             processToKill = _activeProcess;
             if (pendingPromptException is not null) {
+                SquadDashTrace.Write(
+                    "Bridge",
+                    $"ResetProcess completing {_pendingRequests.Count} pending prompt request(s) with {pendingPromptException.GetType().Name}: {pendingPromptException.Message}");
                 pendingRequests = _pendingRequests.Values.ToArray();
                 _pendingRequests.Clear();
             }
@@ -836,17 +892,27 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
     }
 
     public void AbortPrompt() {
-        SquadDashTrace.Write("Bridge", "AbortPrompt requested.");
-
         string? requestId;
         lock (_stateLock) {
             requestId = _activePromptRequestId;
+            if (!string.IsNullOrWhiteSpace(requestId))
+                _userAbortRequestIds.Add(requestId);
         }
 
-        if (string.IsNullOrWhiteSpace(requestId))
+        if (string.IsNullOrWhiteSpace(requestId)) {
+            SquadDashTrace.Write("Bridge", "AbortPrompt requested, but no active prompt request was registered.");
             return;
+        }
+
+        SquadDashTrace.Write("Bridge", $"AbortPrompt requested requestId={requestId}.");
 
         _ = SendAbortRequestAsync(requestId);
+    }
+
+    private bool TryRemoveUserAbortRequestId(string requestId) {
+        lock (_stateLock) {
+            return _userAbortRequestIds.Remove(requestId);
+        }
     }
 
     public async Task RunLoopAsync(string loopMdPath, string cwd, string? sessionId = null) {

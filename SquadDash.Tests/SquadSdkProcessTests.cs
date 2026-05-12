@@ -566,6 +566,34 @@ internal sealed class SquadSdkProcessTests {
         Assert.That(errors, Has.Count.GreaterThan(0));
     }
 
+    [Test]
+    public async Task RunPromptAsync_NodePtyAttachConsoleStderr_IsSuppressed() {
+        var errors = new List<string>();
+
+        await using var sut = new SquadSdkProcess(() => BuildPowerShellScriptStartInfo("""
+            [Console]::Error.WriteLine('[CLI subprocess] D:\Drive\Source\SquadDash-public\node_modules\node-pty\lib\conpty_console_list_agent.js:13')
+            [Console]::Error.WriteLine('[CLI subprocess] var consoleProcessList = getConsoleProcessList(shellPid);')
+            [Console]::Error.WriteLine('[CLI subprocess]                          ^')
+            [Console]::Error.WriteLine('[CLI subprocess] Error: AttachConsole failed')
+            [Console]::Error.WriteLine('[CLI subprocess]     at Object.<anonymous> (D:\Drive\Source\SquadDash-public\node_modules\node-pty\lib\conpty_console_list_agent.js:13:26)')
+            [Console]::Error.WriteLine('[CLI subprocess]     at Module._compile (node:internal/modules/cjs/loader:1705:14)')
+            [Console]::Error.WriteLine('[CLI subprocess]     at Object..js (node:internal/modules/cjs/loader:1838:10)')
+            [Console]::Error.WriteLine('[CLI subprocess]     at Module.load (node:internal/modules/cjs/loader:1441:32)')
+            [Console]::Error.WriteLine('[CLI subprocess]     at Function._load (node:internal/modules/cjs/loader:1263:12)')
+            [Console]::Error.WriteLine('[CLI subprocess]     at TracingChannel.traceSync (node:diagnostics_channel:328:14)')
+            [Console]::Error.WriteLine('[CLI subprocess]     at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)')
+            [Console]::Error.WriteLine('[CLI subprocess]     at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)')
+            [Console]::Error.WriteLine('[CLI subprocess]     at node:internal/main/run_main_module:36:49')
+            [Console]::Error.WriteLine('[CLI subprocess] Node.js v22.22.1')
+            [Console]::Out.WriteLine('{"type":"done","message":""}')
+            """));
+        sut.ErrorReceived += (_, msg) => errors.Add(msg);
+
+        await sut.RunPromptAsync("hello", _tempDir);
+
+        Assert.That(errors, Is.Empty);
+    }
+
     // ------------------------------------------------------------------
     // Concurrent calls are serialized
     // ------------------------------------------------------------------
