@@ -2248,7 +2248,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         _conversationManager.UpdateQueuedPromptsState(
             _promptQueue.Items, _followUpAttachments,
             queueRightmostHeld: IsRightmostQueueTabActive(),
-            loopQueuedToDequeue: false);
+            loopQueuedToDequeue: false,
+            activeDraftSimEntry: _pec.ActiveDraftSimEntry);
         SyncLoopPanel();
         try
         {
@@ -2309,7 +2310,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             }
         }
 
-        _conversationManager.UpdateQueuedPromptsState(items, _followUpAttachments, queueRightmostHeld: IsRightmostQueueTabActive(), loopQueuedToDequeue: _loopQueued);
+        _conversationManager.UpdateQueuedPromptsState(items, _followUpAttachments, queueRightmostHeld: IsRightmostQueueTabActive(), loopQueuedToDequeue: _loopQueued, activeDraftSimEntry: _pec.ActiveDraftSimEntry);
         SyncSendButton();
         BuildShortcutsHint();
         // Keep play/pause button icon/label in sync with current paused state.
@@ -2458,7 +2459,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         UpdateQueueTabHint(hintBlock, newId);
 
         _conversationManager.UpdateQueuedPromptsState(
-            _promptQueue.Items, _followUpAttachments, queueRightmostHeld: IsRightmostQueueTabActive(), loopQueuedToDequeue: _loopQueued);
+            _promptQueue.Items, _followUpAttachments, queueRightmostHeld: IsRightmostQueueTabActive(), loopQueuedToDequeue: _loopQueued, activeDraftSimEntry: _pec.ActiveDraftSimEntry);
         SyncSendButton();
 
         SquadDashTrace.Write(TraceCategory.Performance,
@@ -4010,7 +4011,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         _conversationManager.UpdateQueuedPromptsState(
             _promptQueue.Items, _followUpAttachments,
             queueRightmostHeld: IsRightmostQueueTabActive(),
-            loopQueuedToDequeue: false);
+            loopQueuedToDequeue: false,
+            activeDraftSimEntry: _pec.ActiveDraftSimEntry);
         var label = string.IsNullOrWhiteSpace(evt.LoopMdPath)
             ? "🔁 Loop started"
             : $"🔁 Loop started: {evt.LoopMdPath.Replace('\\', '/')}";
@@ -4092,7 +4094,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             _conversationManager.UpdateQueuedPromptsState(
                 _promptQueue.Items, _followUpAttachments,
                 queueRightmostHeld: IsRightmostQueueTabActive(),
-                loopQueuedToDequeue: true);
+                loopQueuedToDequeue: true,
+                activeDraftSimEntry: _pec.ActiveDraftSimEntry);
             AppendLoopOutputLine("🔁 Queue items pending — loop will resume after queue drains.", LoopLifecycleBrush);
         }
 
@@ -4195,7 +4198,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             _conversationManager.UpdateQueuedPromptsState(
                 _promptQueue.Items, _followUpAttachments,
                 queueRightmostHeld: IsRightmostQueueTabActive(),
-                loopQueuedToDequeue: false);
+                loopQueuedToDequeue: false,
+                activeDraftSimEntry: _pec.ActiveDraftSimEntry);
             AppendLoopOutputLine($"⏹ Loop dequeued — {LoopTimestamp()} — will not resume after queue drains.", LoopLifecycleBrush);
             SyncLoopPanel();
         }
@@ -5229,7 +5233,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                 _conversationManager.UpdateQueuedPromptsState(
                     _promptQueue.Items, _followUpAttachments,
                     queueRightmostHeld: IsRightmostQueueTabActive(),
-                    loopQueuedToDequeue: true);
+                    loopQueuedToDequeue: true,
+                    activeDraftSimEntry: _pec.ActiveDraftSimEntry);
                 AppendLoopOutputLine($"⏳ Loop queued — {LoopTimestamp()} — will start after queue drains.", LoopLifecycleBrush);
                 SyncLoopPanel();
                 return;
@@ -5698,7 +5703,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                 _conversationManager.UpdateQueuedPromptsState(
                     _promptQueue.Items, _followUpAttachments,
                     queueRightmostHeld: IsRightmostQueueTabActive(),
-                    loopQueuedToDequeue: false);
+                    loopQueuedToDequeue: false,
+                    activeDraftSimEntry: _pec.ActiveDraftSimEntry);
                 AppendLoopOutputLine($"⏹ Loop dequeued — {LoopTimestamp()} — will not resume after queue drains.", LoopLifecycleBrush);
                 SyncLoopPanel();
                 return;
@@ -12974,6 +12980,15 @@ public partial class MainWindow : Window, ILiveElementLocator
             SyncLoopPanel();
         }
 
+        // Restore active-draft sim entry if one was saved.
+        var savedDraftSimResponse = _conversationManager.ConversationState.ActiveDraftSimResponse;
+        if (!string.IsNullOrEmpty(savedDraftSimResponse))
+        {
+            int delay = _conversationManager.ConversationState.ActiveDraftSimDelaySeconds ?? 0;
+            _pec.ActiveDraftSimEntry = (savedDraftSimResponse, delay);
+            SquadDashTrace.Write("Queue", $"Restore: active-draft sim entry restored (delay={delay}s)");
+        }
+
         // Restore per-workspace loop settings (override global app settings).
         var savedState = _conversationManager.ConversationState;
         if (savedState.LoopMode is { } savedLoopMode)
@@ -19402,7 +19417,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             // call always writes queueRightmostHeld=false (because _activeTabId is now null),
             // so we must re-persist the true value after the switch completes.
             if (queueWasRightmostHeld)
-                _conversationManager.UpdateQueuedPromptsState(_promptQueue.Items, _followUpAttachments, queueRightmostHeld: true);
+                _conversationManager.UpdateQueuedPromptsState(_promptQueue.Items, _followUpAttachments, queueRightmostHeld: true, activeDraftSimEntry: _pec.ActiveDraftSimEntry);
             SquadDashTrace.Write("Queue", $"Shutdown save: count={_promptQueue.Count} wasHeld={queueWasRightmostHeld} restartPending={_restartPending}");
             _conversationManager.CaptureWorkspaceInputState();
             CaptureWindowPlacement();

@@ -277,13 +277,15 @@ internal sealed class PromptExecutionController {
     /// <summary>
     /// Sim metadata for the active-draft tab created by a <c>$ActiveDraft$</c> directive.
     /// Set by <c>/test-queue</c>, consumed on the next direct (non-queued) dispatch.
-    /// TODO: Persist across restart — add ActiveDraftSimEntry property, store in WorkspaceConversationState,
-    /// and restore in MainWindow InitializeWorkspace. Deferred because UpdateQueuedPromptsState has many call
-    /// sites; adding a new optional parameter requires updating all of them.
+    /// Persisted via <see cref="WorkspaceConversationState.ActiveDraftSimResponse"/> and restored on startup.
     /// </summary>
     private (string SimResponse, int SimDelaySeconds)? _activeDraftSimEntry;
 
-    internal (string SimResponse, int SimDelaySeconds)? ActiveDraftSimEntry => _activeDraftSimEntry;
+    internal (string SimResponse, int SimDelaySeconds)? ActiveDraftSimEntry
+    {
+        get => _activeDraftSimEntry;
+        set => _activeDraftSimEntry = value;
+    }
 
     /// <summary>
     /// Set when the user aborts a running prompt. Causes the next prompt to be prefixed

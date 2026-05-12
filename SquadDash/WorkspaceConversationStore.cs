@@ -582,6 +582,10 @@ internal sealed record WorkspaceConversationState(
     public bool? LoopQueuedToDequeue { get; init; }
     public LoopMode? LoopMode { get; init; }
     public bool? LoopContinuousContext { get; init; }
+    /// <summary>Sim response for the active-draft tab set by /test-queue $ActiveDraft$. Null when not in sim mode.</summary>
+    public string? ActiveDraftSimResponse { get; init; }
+    /// <summary>Delay in seconds for the active-draft sim entry. Only meaningful when ActiveDraftSimResponse is non-null.</summary>
+    public int? ActiveDraftSimDelaySeconds { get; init; }
 
     public static WorkspaceConversationState Empty { get; } =
         new(
