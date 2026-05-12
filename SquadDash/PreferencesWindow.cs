@@ -867,6 +867,154 @@ internal sealed class PreferencesWindow : Window {
         AddSoundEventRow(evtGrid, 7, SoundEvent.QuickRepliesShown,     "Quick replies shown",     _soundQuickRepliesShownCheckBox,     _soundQuickRepliesShownPathBox);
 
         form.Children.Add(evtGrid);
+
+        // ── Update path-box tooltips to mention TTS ───────────────────────────────
+        const string ttsPathTip = "Enter a file path, or a quoted phrase like \"Hello!\" to speak it aloud using TTS.";
+        _soundPromptCompletePathBox.ToolTip        = ttsPathTip;
+        _soundPromptErrorPathBox.ToolTip           = ttsPathTip;
+        _soundApprovalNeededPathBox.ToolTip        = ttsPathTip;
+        _soundQueueEmptyPathBox.ToolTip            = ttsPathTip;
+        _soundLoopIterationCompletePathBox.ToolTip = ttsPathTip;
+        _soundLoopStoppedPathBox.ToolTip           = ttsPathTip;
+        _soundCommitMadePathBox.ToolTip            = ttsPathTip;
+        _soundQuickRepliesShownPathBox.ToolTip     = ttsPathTip;
+
+        // ── TTS Configuration ─────────────────────────────────────────────────────
+        AddSectionHeader(form, "Text-to-Speech", topMargin: 24);
+
+        var ttsHint = new TextBlock {
+            Text = "When a sound-event path is a quoted phrase like \"Done!\", SquadDash speaks it aloud using the TTS provider below.",
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 11,
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        ttsHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+        form.Children.Add(ttsHint);
+
+        // ── Row: Provider ─────────────────────────────────────────────────────────
+        var ttsProviderRow = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+        ttsProviderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+        ttsProviderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var ttsProviderLabel = new TextBlock {
+            Text = "TTS Provider",
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        ttsProviderLabel.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
+        Grid.SetColumn(ttsProviderLabel, 0);
+
+        var ttsProviderCombo = new ComboBox {
+            Height = 28,
+            ToolTip = "Which service to use when a sound event path is a quoted phrase like \"Done!\"."
+        };
+        ttsProviderCombo.Items.Add("Azure Speech");
+        ttsProviderCombo.Items.Add("OpenAI TTS");
+        ttsProviderCombo.SelectedIndex = currentSettings.Tts_Provider == TtsProvider.OpenAI ? 1 : 0;
+        Grid.SetColumn(ttsProviderCombo, 1);
+
+        ttsProviderRow.Children.Add(ttsProviderLabel);
+        ttsProviderRow.Children.Add(ttsProviderCombo);
+        form.Children.Add(ttsProviderRow);
+
+        // ── Row: Azure Voice ──────────────────────────────────────────────────────
+        var azureVoiceRow = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+        azureVoiceRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+        azureVoiceRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        azureVoiceRow.Visibility = currentSettings.Tts_Provider == TtsProvider.Azure
+            ? Visibility.Visible : Visibility.Collapsed;
+
+        var azureVoiceLabel = new TextBlock {
+            Text = "Azure Voice",
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        azureVoiceLabel.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
+        Grid.SetColumn(azureVoiceLabel, 0);
+
+        var azureVoiceBox = new TextBox {
+            Text = currentSettings.Tts_Azure_Voice,
+            Padding = new Thickness(6, 4, 6, 4),
+            Height = 28,
+            ToolTip = "Azure Neural voice name, e.g. en-US-JennyNeural or en-US-GuyNeural. See aka.ms/azurevoices for the full list."
+        };
+        azureVoiceBox.SetResourceReference(TextBox.BackgroundProperty, "TextBoxBackground");
+        azureVoiceBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
+        azureVoiceBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
+        Grid.SetColumn(azureVoiceBox, 1);
+
+        azureVoiceRow.Children.Add(azureVoiceLabel);
+        azureVoiceRow.Children.Add(azureVoiceBox);
+        form.Children.Add(azureVoiceRow);
+
+        // ── Row: OpenAI Voice + Model ─────────────────────────────────────────────
+        var openAiRow = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+        openAiRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+        openAiRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        openAiRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        openAiRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+        openAiRow.Visibility = currentSettings.Tts_Provider == TtsProvider.OpenAI
+            ? Visibility.Visible : Visibility.Collapsed;
+
+        var openAiVoiceLabel = new TextBlock {
+            Text = "OpenAI Voice",
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        openAiVoiceLabel.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
+        Grid.SetColumn(openAiVoiceLabel, 0);
+
+        var openAiVoiceCombo = new ComboBox {
+            Height = 28,
+            Margin = new Thickness(0, 0, 16, 0),
+            ToolTip = "OpenAI TTS voice."
+        };
+        foreach (var v in new[] { "alloy", "echo", "fable", "onyx", "nova", "shimmer" })
+            openAiVoiceCombo.Items.Add(v);
+        openAiVoiceCombo.SelectedItem = currentSettings.Tts_OpenAi_Voice ?? "alloy";
+        if (openAiVoiceCombo.SelectedIndex < 0) openAiVoiceCombo.SelectedIndex = 0;
+        Grid.SetColumn(openAiVoiceCombo, 1);
+
+        var openAiModelLabel = new TextBlock {
+            Text = "Model",
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        openAiModelLabel.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
+        Grid.SetColumn(openAiModelLabel, 2);
+
+        var openAiModelCombo = new ComboBox { Height = 28 };
+        openAiModelCombo.Items.Add("tts-1 (fast)");
+        openAiModelCombo.Items.Add("tts-1-hd (quality)");
+        openAiModelCombo.SelectedIndex = currentSettings.Tts_OpenAi_Model == OpenAiTtsModel.HD ? 1 : 0;
+        Grid.SetColumn(openAiModelCombo, 3);
+
+        openAiRow.Children.Add(openAiVoiceLabel);
+        openAiRow.Children.Add(openAiVoiceCombo);
+        openAiRow.Children.Add(openAiModelLabel);
+        openAiRow.Children.Add(openAiModelCombo);
+        form.Children.Add(openAiRow);
+
+        // ── Wire save handlers ────────────────────────────────────────────────────
+        void SaveTtsNow() {
+            var provider = ttsProviderCombo.SelectedIndex == 1 ? TtsProvider.OpenAI : TtsProvider.Azure;
+            _settingsStore.SaveTtsSettings(
+                provider,
+                azureVoiceBox.Text.Trim(),
+                openAiVoiceCombo.SelectedItem?.ToString() ?? "alloy",
+                openAiModelCombo.SelectedIndex == 1 ? OpenAiTtsModel.HD : OpenAiTtsModel.Standard);
+        }
+
+        ttsProviderCombo.SelectionChanged += (_, _) => {
+            bool isAzure = ttsProviderCombo.SelectedIndex == 0;
+            azureVoiceRow.Visibility = isAzure ? Visibility.Visible  : Visibility.Collapsed;
+            openAiRow.Visibility     = isAzure ? Visibility.Collapsed : Visibility.Visible;
+            SaveTtsNow();
+        };
+        azureVoiceBox.TextChanged         += (_, _) => SaveTtsNow();
+        openAiVoiceCombo.SelectionChanged += (_, _) => SaveTtsNow();
+        openAiModelCombo.SelectionChanged += (_, _) => SaveTtsNow();
+
         return WrapInScrollViewer(form);
     }
 
