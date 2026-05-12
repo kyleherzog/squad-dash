@@ -87,6 +87,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private readonly InstanceActivationChannel _instanceActivationChannel;
     private PreferencesWindow? _preferencesWindow;
     private readonly PushNotificationService _pushNotificationService;
+    internal SoundNotificationService SoundNotifications { get; private set; } = null!;
     private readonly ObservableCollection<AgentStatusCard> _agents = [];
     private readonly ObservableCollection<AgentStatusCard> _activeAgentCards = [];
     private readonly ObservableCollection<AgentStatusCard> _inactiveAgentCards = [];
@@ -477,6 +478,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _squadCliAdapter = new SquadCliAdapter(_workspacePaths, (op, ex) => HandleUiCallbackException(op, ex));
         _workspaceOpenCoordinator = new WorkspaceOpenCoordinator(_instanceRegistry);
         _pushNotificationService = new PushNotificationService(_settingsStore);
+        SoundNotifications = new SoundNotificationService(_settingsStore);
         InitializeComponent();
         SquadDashTrace.Write(TraceCategory.Startup, $"Constructor: InitializeComponent {ctorSw.ElapsedMilliseconds}ms.");
         OutputTextBox.CacheMode = CreateTranscriptBitmapCache();

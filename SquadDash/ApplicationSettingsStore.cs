@@ -555,6 +555,29 @@ internal sealed class ApplicationSettingsStore {
         return updated;
     }
 
+    public ApplicationSettingsSnapshot SaveSoundNotificationSettings(
+        SoundEvent evt,
+        bool enabled,
+        string? customPath)
+    {
+        using var mutex = AcquireMutex();
+        var current = LoadCore();
+        var path = customPath?.Trim() ?? "";
+        var updated = evt switch
+        {
+            SoundEvent.PromptComplete        => current with { Sound_PromptComplete_Enabled        = enabled, Sound_PromptComplete_CustomPath        = path },
+            SoundEvent.PromptError           => current with { Sound_PromptError_Enabled           = enabled, Sound_PromptError_CustomPath           = path },
+            SoundEvent.ApprovalNeeded        => current with { Sound_ApprovalNeeded_Enabled        = enabled, Sound_ApprovalNeeded_CustomPath        = path },
+            SoundEvent.QueueEmpty            => current with { Sound_QueueEmpty_Enabled            = enabled, Sound_QueueEmpty_CustomPath            = path },
+            SoundEvent.LoopIterationComplete => current with { Sound_LoopIterationComplete_Enabled = enabled, Sound_LoopIterationComplete_CustomPath = path },
+            SoundEvent.LoopStopped           => current with { Sound_LoopStopped_Enabled           = enabled, Sound_LoopStopped_CustomPath           = path },
+            SoundEvent.CommitMade            => current with { Sound_CommitMade_Enabled            = enabled, Sound_CommitMade_CustomPath            = path },
+            _                               => current
+        };
+        SaveCore(updated);
+        return updated;
+    }
+
     private ApplicationSettingsSnapshot LoadCore(){
         if (!File.Exists(_settingsPath))
             return ApplicationSettingsSnapshot.Empty.Normalize();
@@ -950,6 +973,43 @@ internal sealed record ApplicationSettingsSnapshot(
     [System.Text.Json.Serialization.JsonPropertyName("rcPersistentPort")]
     public int RcPersistentPort { get; init; }
 
+    // ── Sound notifications ───────────────────────────────────────────────────
+
+    /// <summary>Whether a sound plays when a prompt completes. Default: true.</summary>
+    public bool Sound_PromptComplete_Enabled { get; init; } = true;
+    /// <summary>Custom audio file for PromptComplete. Empty = use system sound.</summary>
+    public string Sound_PromptComplete_CustomPath { get; init; } = "";
+
+    /// <summary>Whether a sound plays when a prompt errors. Default: false.</summary>
+    public bool Sound_PromptError_Enabled { get; init; } = false;
+    /// <summary>Custom audio file for PromptError. Empty = use system sound.</summary>
+    public string Sound_PromptError_CustomPath { get; init; } = "";
+
+    /// <summary>Whether a sound plays when approval is needed. Default: false.</summary>
+    public bool Sound_ApprovalNeeded_Enabled { get; init; } = false;
+    /// <summary>Custom audio file for ApprovalNeeded. Empty = use system sound.</summary>
+    public string Sound_ApprovalNeeded_CustomPath { get; init; } = "";
+
+    /// <summary>Whether a sound plays when the queue becomes empty. Default: false.</summary>
+    public bool Sound_QueueEmpty_Enabled { get; init; } = false;
+    /// <summary>Custom audio file for QueueEmpty. Empty = use system sound.</summary>
+    public string Sound_QueueEmpty_CustomPath { get; init; } = "";
+
+    /// <summary>Whether a sound plays on each loop iteration completion. Default: false.</summary>
+    public bool Sound_LoopIterationComplete_Enabled { get; init; } = false;
+    /// <summary>Custom audio file for LoopIterationComplete. Empty = use system sound.</summary>
+    public string Sound_LoopIterationComplete_CustomPath { get; init; } = "";
+
+    /// <summary>Whether a sound plays when the loop stops. Default: false.</summary>
+    public bool Sound_LoopStopped_Enabled { get; init; } = false;
+    /// <summary>Custom audio file for LoopStopped. Empty = use system sound.</summary>
+    public string Sound_LoopStopped_CustomPath { get; init; } = "";
+
+    /// <summary>Whether a sound plays when a git commit is made. Default: false.</summary>
+    public bool Sound_CommitMade_Enabled { get; init; } = false;
+    /// <summary>Custom audio file for CommitMade. Empty = use system sound.</summary>
+    public string Sound_CommitMade_CustomPath { get; init; } = "";
+
     public static ApplicationSettingsSnapshot Empty{ get; } =
         new(
             null,
@@ -1129,6 +1189,20 @@ internal sealed record ApplicationSettingsSnapshot(
             VoiceReplacementRules = VoiceReplacementRules
                 .Where(r => !string.IsNullOrWhiteSpace(r?.Pattern))
                 .ToArray(),
+            Sound_PromptComplete_Enabled            = Sound_PromptComplete_Enabled,
+            Sound_PromptComplete_CustomPath         = Sound_PromptComplete_CustomPath ?? "",
+            Sound_PromptError_Enabled               = Sound_PromptError_Enabled,
+            Sound_PromptError_CustomPath            = Sound_PromptError_CustomPath ?? "",
+            Sound_ApprovalNeeded_Enabled            = Sound_ApprovalNeeded_Enabled,
+            Sound_ApprovalNeeded_CustomPath         = Sound_ApprovalNeeded_CustomPath ?? "",
+            Sound_QueueEmpty_Enabled                = Sound_QueueEmpty_Enabled,
+            Sound_QueueEmpty_CustomPath             = Sound_QueueEmpty_CustomPath ?? "",
+            Sound_LoopIterationComplete_Enabled     = Sound_LoopIterationComplete_Enabled,
+            Sound_LoopIterationComplete_CustomPath  = Sound_LoopIterationComplete_CustomPath ?? "",
+            Sound_LoopStopped_Enabled               = Sound_LoopStopped_Enabled,
+            Sound_LoopStopped_CustomPath            = Sound_LoopStopped_CustomPath ?? "",
+            Sound_CommitMade_Enabled                = Sound_CommitMade_Enabled,
+            Sound_CommitMade_CustomPath             = Sound_CommitMade_CustomPath ?? "",
         };
     }
 
