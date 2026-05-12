@@ -49,6 +49,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private const double PromptFontSizeMin = 12;
     private const double PromptFontSizeMax = 30;
     private const double PromptFontSizeStep = 1;
+    private const int PromptInputTraceIntervalMs = 1000;
     private const double DocSourceFontSizeMin = 8;
     private const double DocSourceFontSizeMax = 28;
     private const double DocSourceFontSizeStep = 1;
@@ -132,6 +133,14 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _isApplyingIntelliSenseAccept;
     private IntelliSenseState? _intelliSenseState;
     private TextBox? _intelliSenseOwnerBox; // null = PromptTextBox; set when another box owns IntelliSense
+    private bool _promptDraftStateRefreshPending;
+    private readonly Stopwatch _promptInputTraceStopwatch = Stopwatch.StartNew();
+    private int _promptTextChangedTraceCount;
+    private long _promptTextChangedTraceElapsedMs;
+    private long _promptTextChangedTraceMaxMs;
+    private int _promptKeyDownTraceCount;
+    private long _promptKeyDownTraceElapsedMs;
+    private long _promptKeyDownTraceMaxMs;
     private Dictionary<string, string> _agentHandleByDisplayName = new(StringComparer.OrdinalIgnoreCase);
     private string[] _agentDisplayNames = [];
     private string[] _tasksAgentSuggestions = [];
@@ -2270,7 +2279,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             QueuePlayIcon.Visibility  = Visibility.Visible;
             QueuePauseIcon.Visibility = Visibility.Collapsed;
             // Pending is not fully-paused — ensure no stale styling.
-            QueueStatusLabel.ClearValue(BackgroundProperty);
+            QueueStatusLabel.ClearValue(TextBlock.BackgroundProperty);
             QueueStatusLabel.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
         }
         else
@@ -2292,7 +2301,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             }
             else
             {
-                QueueStatusLabel.ClearValue(BackgroundProperty);
+                QueueStatusLabel.ClearValue(TextBlock.BackgroundProperty);
                 QueueStatusLabel.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
             }
         }
@@ -2318,7 +2327,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         else
         {
             // Turn completed with no pending pause — ensure no stale styling remains.
-            QueueStatusLabel.ClearValue(BackgroundProperty);
+            QueueStatusLabel.ClearValue(TextBlock.BackgroundProperty);
             QueueStatusLabel.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
         }
     }
@@ -7010,9 +7019,18 @@ public partial class MainWindow : Window, ILiveElementLocator
         var sw = Stopwatch.StartNew();
         try
         {
+            var modifiers = Keyboard.Modifiers;
+
+            if (modifiers == ModifierKeys.None
+                && IsPrintableKey(e.Key)
+                && !(e.Key == Key.OemTilde && PromptTextBox.SelectionLength > 0))
+            {
+                return;
+            }
+
             // ── Ctrl+V / Shift+Insert clipboard-image intercept ───────────────────
-            var isCtrlV = e.Key == Key.V && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
-            var isShiftIns = e.Key == Key.Insert && (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+            var isCtrlV = e.Key == Key.V && (modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+            var isShiftIns = e.Key == Key.Insert && (modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
             if (isCtrlV || isShiftIns)
             {
                 if (Clipboard.ContainsImage())
@@ -7055,8 +7073,6 @@ public partial class MainWindow : Window, ILiveElementLocator
                     return;
                 }
             }
-
-            var modifiers = Keyboard.Modifiers;
 
             // ── Smooth Dictation: Shift+Space on selection ────────────────────────
             if (e.Key == Key.Space && modifiers == ModifierKeys.Shift && PromptTextBox.SelectionLength > 0)
@@ -7164,6 +7180,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         finally
         {
             sw.Stop();
+            RecordPromptInputTiming(isTextChanged: false, sw.ElapsedMilliseconds);
             if (sw.ElapsedMilliseconds >= 20)
             {
                 SquadDashTrace.Write(TraceCategory.Performance,
@@ -7312,6 +7329,14 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (SearchBox?.IsFocused == true) return;
             if (_docSourceFindTextBox?.IsFocused == true) return;
 
+            if (_pttState == PttState.Idle
+                && PromptTextBox?.IsKeyboardFocusWithin == true
+                && Keyboard.Modifiers == ModifierKeys.None
+                && IsPrintableKey(e.Key))
+            {
+                return;
+            }
+
             // ── Fullscreen transcript: any printable key (no Ctrl/Alt) peeks prompt without exiting fullscreen ──
             // Only intercept on the FIRST key (when prompt is hidden); once visible let the TextBox handle input normally.
             if (_transcriptFullScreenEnabled
@@ -7321,10 +7346,12 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 ShowFullScreenPrompt();
                 var ch = KeyToChar(e.Key, (Keyboard.Modifiers & ModifierKeys.Shift) != 0);
+                if (PromptTextBox is not { } promptBox)
+                    return;
                 if (ch.HasValue)
-                    PromptTextBox.AppendText(ch.Value.ToString());
-                PromptTextBox.CaretIndex = PromptTextBox.Text.Length;
-                PromptTextBox.Focus();
+                    promptBox.AppendText(ch.Value.ToString());
+                promptBox.CaretIndex = promptBox.Text.Length;
+                promptBox.Focus();
                 e.Handled = true;
                 return;
             }
@@ -7392,9 +7419,11 @@ public partial class MainWindow : Window, ILiveElementLocator
                 var text = Clipboard.GetText();
                 if (!_fullScreenPromptVisible)
                     ShowFullScreenPrompt();
-                PromptTextBox.AppendText(text);
-                PromptTextBox.CaretIndex = PromptTextBox.Text.Length;
-                PromptTextBox.Focus();
+                if (PromptTextBox is not { } promptBox)
+                    return;
+                promptBox.AppendText(text);
+                promptBox.CaretIndex = promptBox.Text.Length;
+                promptBox.Focus();
                 e.Handled = true;
                 return;
             }
@@ -8180,7 +8209,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (_conversationManager.IsApplyingHistoryEntry)
                 return;
 
-            if (string.IsNullOrEmpty(PromptTextBox.Text))
+            var text = PromptTextBox.Text;
+            if (string.IsNullOrEmpty(text))
             {
                 _promptHasVoiceInput = false;
                 // In fullscreen, hide the peeked prompt when text is cleared
@@ -8189,10 +8219,11 @@ public partial class MainWindow : Window, ILiveElementLocator
             }
 
             _conversationManager.HistoryIndex = null;
-            _conversationManager.HistoryDraft = PromptTextBox.Text;
-            _conversationManager.UpdatePromptDraftState();
-            UpdateInteractiveControlState(promptTextOnly: true);
-            TryUpdateIntelliSense();
+            _conversationManager.HistoryDraft = text;
+            QueuePromptDraftStateRefresh();
+            if (_isPromptRunning)
+                UpdateInteractiveControlState(promptTextOnly: true);
+            TryUpdateIntelliSense(text, PromptTextBox.CaretIndex);
         }
         catch (Exception ex)
         {
@@ -8201,6 +8232,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         finally
         {
             sw.Stop();
+            RecordPromptInputTiming(isTextChanged: true, sw.ElapsedMilliseconds);
             if (sw.ElapsedMilliseconds >= 20)
             {
                 SquadDashTrace.Write(TraceCategory.Performance,
@@ -8209,6 +8241,72 @@ public partial class MainWindow : Window, ILiveElementLocator
             }
         }
     }
+
+    private void QueuePromptDraftStateRefresh()
+    {
+        if (_promptDraftStateRefreshPending)
+            return;
+
+        _promptDraftStateRefreshPending = true;
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        {
+            try
+            {
+                _promptDraftStateRefreshPending = false;
+                if (!_isClosing)
+                    _conversationManager.UpdatePromptDraftState();
+            }
+            catch (Exception ex)
+            {
+                HandleUiCallbackException(nameof(QueuePromptDraftStateRefresh), ex);
+            }
+        });
+    }
+
+    private void RecordPromptInputTiming(bool isTextChanged, long elapsedMs)
+    {
+        if (isTextChanged)
+        {
+            _promptTextChangedTraceCount++;
+            _promptTextChangedTraceElapsedMs += elapsedMs;
+            _promptTextChangedTraceMaxMs = Math.Max(_promptTextChangedTraceMaxMs, elapsedMs);
+        }
+        else
+        {
+            _promptKeyDownTraceCount++;
+            _promptKeyDownTraceElapsedMs += elapsedMs;
+            _promptKeyDownTraceMaxMs = Math.Max(_promptKeyDownTraceMaxMs, elapsedMs);
+        }
+
+        if (_promptInputTraceStopwatch.ElapsedMilliseconds < PromptInputTraceIntervalMs)
+            return;
+
+        var textChangedCount = _promptTextChangedTraceCount;
+        var keyDownCount = _promptKeyDownTraceCount;
+        if (textChangedCount == 0 && keyDownCount == 0)
+        {
+            _promptInputTraceStopwatch.Restart();
+            return;
+        }
+
+        SquadDashTrace.Write(
+            TraceCategory.Performance,
+            $"PROMPT_INPUT batchMs={_promptInputTraceStopwatch.ElapsedMilliseconds} " +
+            $"textChangedCount={textChangedCount} textChangedAvgMs={FormatAverageMs(_promptTextChangedTraceElapsedMs, textChangedCount)} textChangedMaxMs={_promptTextChangedTraceMaxMs} " +
+            $"keyDownCount={keyDownCount} keyDownAvgMs={FormatAverageMs(_promptKeyDownTraceElapsedMs, keyDownCount)} keyDownMaxMs={_promptKeyDownTraceMaxMs} " +
+            $"textLen={PromptTextBox.Text.Length} caret={PromptTextBox.CaretIndex} selectionLen={PromptTextBox.SelectionLength}");
+
+        _promptInputTraceStopwatch.Restart();
+        _promptTextChangedTraceCount = 0;
+        _promptTextChangedTraceElapsedMs = 0;
+        _promptTextChangedTraceMaxMs = 0;
+        _promptKeyDownTraceCount = 0;
+        _promptKeyDownTraceElapsedMs = 0;
+        _promptKeyDownTraceMaxMs = 0;
+    }
+
+    private static string FormatAverageMs(long elapsedMs, int count) =>
+        count <= 0 ? "n/a" : ((double)elapsedMs / count).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
 
     private void BuildAgentSuggestions()
     {
@@ -8318,13 +8416,13 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
     }
 
-    private void TryUpdateIntelliSense()
+    private void TryUpdateIntelliSense() =>
+        TryUpdateIntelliSense(PromptTextBox.Text, PromptTextBox.CaretIndex);
+
+    private void TryUpdateIntelliSense(string text, int caret)
     {
         if (_conversationManager.IsApplyingHistoryEntry || _isApplyingIntelliSenseAccept)
             return;
-
-        var text = PromptTextBox.Text;
-        var caret = PromptTextBox.CaretIndex;
 
         if (_intelliSenseState is not null)
         {
@@ -24879,5 +24977,3 @@ public sealed class DocViewerScriptingBridge
         _window.Dispatcher.BeginInvoke(() => _window.ScrollDocSourceToLine(lineHint));
     }
 }
-
-
