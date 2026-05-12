@@ -15532,10 +15532,11 @@ public partial class MainWindow : Window, ILiveElementLocator
             return;
         }
 
-        // Snapshot how many blocks exist before the batch render.
-        var blocksBefore = thread.Document.Blocks.Count;
+        // Snapshot how many blocks and prompt paragraphs exist before the batch render.
+        var blocksBefore   = thread.Document.Blocks.Count;
+        var promptsBefore  = thread.PromptParagraphs.Count;
 
-        // Render each turn — they append to the END of the document.
+        // Render each turn — they append to the END of the document and PromptParagraphs.
         for (var i = 0; i < turns.Count; i++)
             RenderPersistedTurn(thread, turns[i], isLastTurn: false);
 
@@ -15552,6 +15553,21 @@ public partial class MainWindow : Window, ILiveElementLocator
         // so inserting a, b, c in sequence gives [a, b, c, anchor, …].
         foreach (var b in newBlocks)
             thread.Document.Blocks.InsertBefore(anchor, b);
+
+        // Fix PromptParagraphs ordering: RenderPersistedTurn appended the new entries to
+        // the end of the list, but their paragraphs are now at the beginning of the document.
+        // Move them to the front so PromptParagraphs stays in document (chronological) order.
+        var newPromptCount = thread.PromptParagraphs.Count - promptsBefore;
+        if (newPromptCount > 0)
+        {
+            var prepended = thread.PromptParagraphs.GetRange(promptsBefore, newPromptCount);
+            thread.PromptParagraphs.RemoveRange(promptsBefore, newPromptCount);
+            thread.PromptParagraphs.InsertRange(0, prepended);
+
+            // Shift PromptNavIndex to account for the inserted items.
+            if (thread.PromptNavIndex >= 0)
+                thread.PromptNavIndex += newPromptCount;
+        }
     }
 
     private void RenderPersistedTurn(TranscriptThreadState thread, TranscriptTurnRecord turn, bool isLastTurn = false)
