@@ -21844,6 +21844,22 @@ public partial class MainWindow : Window, ILiveElementLocator
             UpdateFollowUpStrip();
         }
 
+        // Restore panel filter text boxes (always, regardless of whether the docs panel is open).
+        if (_docsPanelState.ApprovalsPanelFilter is { Length: > 0 } approvalsFilter)
+            Dispatcher.BeginInvoke(() => {
+                if (ApprovalFilterBox is not null) ApprovalFilterBox.Text = approvalsFilter;
+            }, System.Windows.Threading.DispatcherPriority.Loaded);
+
+        if (_docsPanelState.TasksPanelFilter is { Length: > 0 } tasksFilter)
+            Dispatcher.BeginInvoke(() => {
+                if (TasksFilterBox is not null) TasksFilterBox.Text = tasksFilter;
+            }, System.Windows.Threading.DispatcherPriority.Loaded);
+
+        if (_docsPanelState.NotesPanelFilter is { Length: > 0 } notesFilter)
+            Dispatcher.BeginInvoke(() => {
+                if (NotesFilterBox is not null) NotesFilterBox.Text = notesFilter;
+            }, System.Windows.Threading.DispatcherPriority.Loaded);
+
         // Open: true = explicitly opened by user. null (absent) or false = closed (default for new installs).
         if (_docsPanelState.Open != true)
             return;
@@ -21859,22 +21875,6 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             ApplyDocsPanelProportionalWidths();
         });
-
-        // Restore panel filter text boxes.
-        if (_docsPanelState.ApprovalsPanelFilter is { Length: > 0 } approvalsFilter)
-            Dispatcher.BeginInvoke(() => {
-                if (ApprovalFilterBox is not null) ApprovalFilterBox.Text = approvalsFilter;
-            }, System.Windows.Threading.DispatcherPriority.Loaded);
-
-        if (_docsPanelState.TasksPanelFilter is { Length: > 0 } tasksFilter)
-            Dispatcher.BeginInvoke(() => {
-                if (TasksFilterBox is not null) TasksFilterBox.Text = tasksFilter;
-            }, System.Windows.Threading.DispatcherPriority.Loaded);
-
-        if (_docsPanelState.NotesPanelFilter is { Length: > 0 } notesFilter)
-            Dispatcher.BeginInvoke(() => {
-                if (NotesFilterBox is not null) NotesFilterBox.Text = notesFilter;
-            }, System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     private void ApplyDocsPanelProportionalWidths()
