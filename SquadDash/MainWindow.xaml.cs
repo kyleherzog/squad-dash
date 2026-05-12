@@ -23992,6 +23992,10 @@ public partial class MainWindow : Window, ILiveElementLocator
             foreach (var entry in _primaryAgentTranscriptHosts.Values)
                 entry.ScrollController.TraceTarget = _traceWindow;
             SquadDashTrace.TraceTarget = _traceWindow;
+
+            // Position after the first layout pass — IsLoaded is false until then,
+            // so calling PositionTraceWindow() before Loaded would be a no-op.
+            _traceWindow.Loaded += (_, _) => PositionTraceWindow();
             _traceWindow.Show();
         }
         else
