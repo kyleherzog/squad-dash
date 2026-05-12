@@ -46,7 +46,10 @@ You can specify a workspace folder via command line (in quotes) or you can open 
 
 ### 3. Squad Initialization
 
-If the workspace is not yet Squad-enabled, SquadDash runs:
+If the workspace is not yet Squad-enabled, you'll see a message at the top with an option to **Install Squad**.
+
+![Screenshot: Squad is not installed](images/need-to-install-squad-4c4637cd.png)
+If you choose to install Squad, SquadDash runs:
 
 ```bash
 squad init
@@ -56,6 +59,13 @@ This creates:
 - `.squad/team.md` — Your AI team roster
 - `.squad/routing.md` — Routing rules for work assignment
 - `.squad/config.json` — Squad configuration
+
+When basic configuration is complete, you'll be able to select the universe from which your team will be created. 
+
+![Team Universe](images/select-your-team-universe-2afb1eb8.png)
+
+The blue quick-reply buttons at the bottom of the transcript let you choose the universe your team will originate from. If you select the **SquadDash Universe**, SquadDash will automatically use the built in artwork for each of the characters within that universe.
+
 ![first-run screenshot](images/first-run-20260427143754.png)
 ---
 

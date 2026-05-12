@@ -8,7 +8,9 @@
   * [Installation](getting-started/installation.md)
   * [First Run](getting-started/first-run.md)
   * [Squad Team](concepts/squad-team.md)
+  * [Hiring Agents](features/hiring-agents.md)
   * [VS Tooling](getting-started/VS Tooling.md)
+  * [Windows Taskbar](getting-started/Windows Taskbar.md)
 * [Installer](getting-started/Installer.md)
 
 ## Features
@@ -19,7 +21,6 @@
   * [Voice Input](features/voice-input.md)
   * [Fullscreen Transcript](features/fullscreen-transcript.md)
   * [Prompt Queue](features/prompt-queue.md)
-  * [Hiring Agents](features/hiring-agents.md)
   * [Text Formatting Shortcuts](features/text-formatting.md)
 
 ## Panels
