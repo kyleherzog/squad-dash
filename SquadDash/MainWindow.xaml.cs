@@ -8093,7 +8093,13 @@ public partial class MainWindow : Window, ILiveElementLocator
             await Task.Delay(220).ConfigureAwait(false);
             Dispatcher.Invoke(() =>
             {
-                if (!string.IsNullOrWhiteSpace(PromptTextBox.Text))
+                if (_activeTabId is not null)
+                {
+                    // PTT completed while the user was editing a queued tab — dispatch
+                    // that tab directly rather than enqueuing a duplicate new item.
+                    _ = DispatchQueuedTabAsync(_activeTabId);
+                }
+                else if (!string.IsNullOrWhiteSpace(PromptTextBox.Text))
                 {
                     EnqueueCurrentPrompt();
                     _ = DrainQueueIfNeededAsync();
