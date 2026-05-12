@@ -16,5 +16,6 @@ internal enum TraceCategory
     TranscriptPanels,
     Unhandled,
     Workspace,
+    Sound,
     General,      // catch-all for unknown sources
 }

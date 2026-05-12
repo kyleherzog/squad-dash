@@ -59,22 +59,40 @@ internal sealed class SoundNotificationService
             var settings = _settingsStore.Load();
             var (enabled, customPath) = GetEventSettings(settings, evt);
 
+            SquadDashTrace.Write("Sound", $"Play attempt: {evt} enabled={enabled}");
+
             if (!enabled)
+            {
+                SquadDashTrace.Write("Sound", $"Play skipped: {evt} is disabled");
                 return;
+            }
 
             // --- TTS path ---
             if (!string.IsNullOrEmpty(customPath) && IsPhrase(customPath))
             {
-                if (_ttsProvider == null) return;
+                if (_ttsProvider == null)
+                {
+                    SquadDashTrace.Write("Sound", $"Play skipped: {evt} TTS phrase configured but no TTS provider");
+                    return;
+                }
 
                 // Skip-if-busy overlap guard: only one TTS utterance at a time.
-                if (Interlocked.CompareExchange(ref _ttsSpeaking, 1, 0) != 0) return;
+                if (Interlocked.CompareExchange(ref _ttsSpeaking, 1, 0) != 0)
+                {
+                    SquadDashTrace.Write("Sound", $"Play skipped: {evt} TTS already speaking");
+                    return;
+                }
 
                 var phrase = ExtractPhrase(customPath);
+                SquadDashTrace.Write("Sound", $"Playing {evt} via TTS: \"{phrase}\"");
                 _ = Task.Run(async () =>
                 {
                     try   { await _ttsProvider.SpeakAsync(phrase).ConfigureAwait(false); }
-                    catch (Exception ex) { Debug.WriteLine($"TTS error: {ex.Message}"); }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"TTS error: {ex.Message}");
+                        SquadDashTrace.Write("Sound", $"TTS failed for {evt}: {ex.Message}");
+                    }
                     finally { Interlocked.Exchange(ref _ttsSpeaking, 0); }
                 });
                 return;
@@ -86,6 +104,7 @@ internal sealed class SoundNotificationService
                 // MediaPlayer must run on a thread that has a Dispatcher.
                 // BeginInvoke is fire-and-forget — never blocks the caller.
                 var capturedPath = customPath;
+                SquadDashTrace.Write("Sound", $"Playing {evt} via file: {capturedPath}");
                 Application.Current.Dispatcher.BeginInvoke(() =>
                 {
                     try
@@ -98,11 +117,13 @@ internal sealed class SoundNotificationService
                     {
                         Debug.WriteLine(
                             $"SoundNotificationService: MediaPlayer error for {evt}: {ex.Message}");
+                        SquadDashTrace.Write("Sound", $"File playback failed for {evt}: {ex.Message}");
                     }
                 });
             }
             else
             {
+                SquadDashTrace.Write("Sound", $"Playing {evt} via system sound (Asterisk)");
                 // System sound: plays synchronously but is nearly instantaneous.
                 SystemSounds.Asterisk.Play();
             }
@@ -110,6 +131,7 @@ internal sealed class SoundNotificationService
         catch (Exception ex)
         {
             Debug.WriteLine($"SoundNotificationService: Play error for {evt}: {ex.Message}");
+            SquadDashTrace.Write("Sound", $"Play error for {evt}: {ex.Message}");
         }
     }
 

@@ -68,6 +68,7 @@ internal static class SquadDashTrace {
         "Threads"           => TraceCategory.Threads,
         "TranscriptPanels"  => TraceCategory.TranscriptPanels,
         "Unhandled"         => TraceCategory.Unhandled,
+        "Sound"             => TraceCategory.Sound,
         _              => TraceCategory.General,
     };
 

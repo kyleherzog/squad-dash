@@ -3485,6 +3485,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                             ? $"{_workspaceGitHubUrl}/commit/{commitInfo.CommitSha}"
                             : null;
                         _ = _bridge.BroadcastRcCommitAsync(commitInfo.CommitSha, commitUrl);
+                        SoundNotifications.Play(SoundEvent.CommitMade);
 
                         // ── Approval tracking ─────────────────────────────────────────────
                         // Prefer git's commit message when available; fallback to notifSummary or prompt hint
@@ -3503,7 +3504,6 @@ public partial class MainWindow : Window, ILiveElementLocator
                             _approvalItems.Add(item);
                             _approvalStore?.Save(_approvalItems);
                             _approvalPanel?.AddItem(item);
-                            SoundNotifications.Play(SoundEvent.CommitMade);
                             SoundNotifications.Play(SoundEvent.ApprovalNeeded);
                         }
                         // ─────────────────────────────────────────────────────────────────
