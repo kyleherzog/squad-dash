@@ -395,14 +395,13 @@ internal sealed class ClipboardImageEditorWindow : Window
             $"rawMonitor={rawMonitorScale:F3} bitmapDpiScale={bitmapDpiScaleX:F3}x{bitmapDpiScaleY:F3} " +
             $"effective={effectiveScaleX:F3}x{effectiveScaleY:F3} " +
             $"pixels={imgW:F0}x{imgH:F0} display={dispW / effectiveScaleX:F1}x{dispH / effectiveScaleY:F1} " +
-            $"canvasScale={_canvasScaleX:F3}x{_canvasScaleY:F3} baseZoom={1.0 / effectiveScaleX:F3}");
+            $"canvasScale={_canvasScaleX:F3}x{_canvasScaleY:F3} baseZoom=1.0");
 
         const double MinWindowWidth = 580;
         const double toolbarH = 110.0;
 
-        // Base zoom: 1/dpiScale displays the image at its true physical size on screen.
-        // Then further scale down if it doesn't fit in the window.
-        double baseZoom = 1.0 / effectiveScaleX;  // e.g. 0.667 for 150% monitor
+        // Base zoom: show at native pixel size (1:1). Scale down only if needed to fit on screen.
+        double baseZoom = 1.0;
         double fitZoomW = (maxWinW - 24) / dispW;
         double fitZoomH = (maxWinH - toolbarH) / dispH;
         _zoom = Math.Min(baseZoom, Math.Min(fitZoomW, fitZoomH));
