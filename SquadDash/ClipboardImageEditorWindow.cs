@@ -288,6 +288,20 @@ internal sealed class ClipboardImageEditorWindow : Window
     internal ClipboardImageEditorWindow(Window owner, BitmapSource clipboardImage, bool isPromptMode = false)
     {
         _clipboardImage = clipboardImage ?? throw new ArgumentNullException(nameof(clipboardImage));
+
+        // Normalize DPI to 96 so WPF treats each physical pixel as one logical pixel.
+        // Screenshots from a 150%-scaled monitor have DpiX/Y=144; without normalization
+        // the canvas would appear 1.5× too large in WPF layout.
+        if (Math.Abs(clipboardImage.DpiX - 96) > 1 || Math.Abs(clipboardImage.DpiY - 96) > 1)
+        {
+            var stride96 = clipboardImage.PixelWidth * ((clipboardImage.Format.BitsPerPixel + 7) / 8);
+            var pixels96 = new byte[clipboardImage.PixelHeight * stride96];
+            clipboardImage.CopyPixels(pixels96, stride96, 0);
+            clipboardImage = BitmapSource.Create(clipboardImage.PixelWidth, clipboardImage.PixelHeight,
+                96, 96, clipboardImage.Format, clipboardImage.Palette, pixels96, stride96);
+            clipboardImage.Freeze();
+        }
+
         _workingImage   = clipboardImage;
         _isPromptMode = isPromptMode;
         _themeName = AgentStatusCard.IsDarkTheme ? "dark" : "light";
@@ -1702,8 +1716,8 @@ internal sealed class ClipboardImageEditorWindow : Window
                     new Point(baseX + px * HeadHalf, baseY + py * HeadHalf),
                     new Point(baseX - px * HeadHalf, baseY - py * HeadHalf)
                 };
-                // Show crosshair at the future pivot center (ArrowLength past the tip).
-                ShowCrosshair(headPt.X + ux2 * _defaultArrowLength * 1.5, headPt.Y + uy2 * _defaultArrowLength * 1.5);
+                // Show crosshair at the future pivot center (ArrowLength × 0.9 past the tip).
+                ShowCrosshair(headPt.X + ux2 * _defaultArrowLength * 0.9, headPt.Y + uy2 * _defaultArrowLength * 0.9);
             }
             else
             {
