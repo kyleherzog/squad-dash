@@ -111,6 +111,8 @@ internal sealed class ClipboardImageEditorWindow : Window
     private AnnotationArrow? _selectedArrow;
     private bool _inArrowMode;
     private Button? _addArrowBtn;
+    private Button? _moveSelectBtn;
+    private Button? _cropBtn;
 
     // Arrow drag sub-state
     private bool _tailDragging;
@@ -228,6 +230,8 @@ internal sealed class ClipboardImageEditorWindow : Window
     /// </summary>
     private bool _inArrowMultiDropMode;
     private bool _inRectMultiDropMode;
+    private bool _inMoveMode;
+    private bool _inCropMode;
 
     // ── Annotation — text labels ───────────────────────────────────────────────
 
@@ -677,6 +681,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         {
             RefreshLayout();
             UpdateWindowSizeForZoom(); // center on first paint
+            EnterCropMode();
         };
     }
 
@@ -684,6 +689,22 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     private Border BuildToolbar()
     {
+        _moveSelectBtn = new Button
+        {
+            Content  = MakeToolIcon("ImageEditorMoveIcon"),
+            Width    = 32, Height = 28,
+            Padding  = new Thickness(4, 3, 4, 3),
+            Margin   = new Thickness(0, 0, 4, 0),
+            ToolTip  = "Move/Select (M or V) — select and move existing annotations"
+        };
+        _cropBtn = new Button
+        {
+            Content  = MakeToolIcon("ImageEditorCropIcon"),
+            Width    = 32, Height = 28,
+            Padding  = new Thickness(4, 3, 4, 3),
+            Margin   = new Thickness(0, 0, 4, 0),
+            ToolTip  = "Crop (C) — drag to define a crop region, Enter or double-click to apply"
+        };
         _addArrowBtn = new Button
         {
             Content  = MakeToolIcon("ImageEditorArrowIcon"),
@@ -795,15 +816,27 @@ internal sealed class ClipboardImageEditorWindow : Window
             roundCornersBtn.Visibility = Visibility.Collapsed;
 
         var styleButtons = _isPromptMode
-            ? new[] { _addArrowBtn, _addRectBtn, _addTextBtn, cursorBtn, _eyedropperBtn, insertBtn, cancelBtn }
-            : new[] { _addArrowBtn, _addRectBtn, _addTextBtn, cursorBtn, _eyedropperBtn, roundCornersBtn, insertBtn, cancelBtn };
+            ? new[] { _moveSelectBtn, _cropBtn, _addArrowBtn, _addRectBtn, _addTextBtn, cursorBtn, _eyedropperBtn, insertBtn, cancelBtn }
+            : new[] { _moveSelectBtn, _cropBtn, _addArrowBtn, _addRectBtn, _addTextBtn, cursorBtn, _eyedropperBtn, roundCornersBtn, insertBtn, cancelBtn };
         foreach (var btn in styleButtons)
             btn.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
+
+        _moveSelectBtn.Click += (_, _) =>
+        {
+            ExitAllToolModes();
+            EnterMoveMode();
+        };
+
+        _cropBtn.Click += (_, _) =>
+        {
+            ExitAllToolModes();
+            EnterCropMode();
+        };
 
         _addArrowBtn.Click += (_, _) =>
         {
             bool isShift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
-            if (_inArrowMode && !isShift) { ExitArrowMode(); return; }
+            if (_inArrowMode && !isShift) { ExitArrowMode(returnToMove: true); return; }
             ExitAllToolModes();
             EnterArrowMode();
             if (isShift)
@@ -817,7 +850,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         _addRectBtn.Click += (_, _) =>
         {
             bool isShift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
-            if (_inRectMode && !isShift) { ExitRectMode(); return; }
+            if (_inRectMode && !isShift) { ExitRectMode(returnToMove: true); return; }
             ExitAllToolModes();
             EnterRectMode();
             if (isShift)
@@ -831,7 +864,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         _addTextBtn.Click += (_, _) =>
         {
             bool isShift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
-            if (_inTextMode && !isShift) { ExitTextMode(); return; }
+            if (_inTextMode && !isShift) { ExitTextMode(returnToMove: true); return; }
             ExitAllToolModes();
             EnterTextMode();
             if (isShift)
@@ -849,6 +882,8 @@ internal sealed class ClipboardImageEditorWindow : Window
             if (_cursorEnabled && !_inCursorPlacementMode)
             {
                 ExitAllToolModes();
+                _inMoveMode = false;
+                _inCropMode = false;
                 _cursorEnabled = true;
                 _inCursorPlacementMode = true;
                 cursorBtn.Content = MakeToolIcon("ImageEditorCursorIcon", active: true);
@@ -860,6 +895,8 @@ internal sealed class ClipboardImageEditorWindow : Window
             _cursorEnabled = !_cursorEnabled;
             if (_cursorEnabled)
             {
+                _inMoveMode = false;
+                _inCropMode = false;
                 _inCursorPlacementMode = true;
                 cursorBtn.Content = MakeToolIcon("ImageEditorCursorIcon", active: true);
                 _canvas.Cursor = AnnotationCursors.DropCursorTool;
@@ -872,12 +909,13 @@ internal sealed class ClipboardImageEditorWindow : Window
                 _canvas.Cursor = Cursors.Arrow;
                 ToggleCursorOverlay(false);
                 HideModeHint();
+                EnterMoveMode();
             }
         };
 
         _eyedropperBtn.Click += (_, _) =>
         {
-            if (_inEyedropperMode) { ExitEyedropperMode(); return; }
+            if (_inEyedropperMode) { ExitEyedropperMode(); EnterMoveMode(); return; }
             ExitAllToolModes();
             EnterEyedropperMode();
             _eyedropperBtn.Content = MakeToolIcon("ImageEditorEyedropperIcon", active: true);
@@ -935,6 +973,8 @@ internal sealed class ClipboardImageEditorWindow : Window
             Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center
         };
+        leftStack.Children.Add(_moveSelectBtn);
+        leftStack.Children.Add(_cropBtn);
         leftStack.Children.Add(_addArrowBtn);
         leftStack.Children.Add(_addRectBtn);
         leftStack.Children.Add(_addTextBtn);
@@ -1342,6 +1382,8 @@ internal sealed class ClipboardImageEditorWindow : Window
         if (_inRectMode)        return AnnotationCursors.RectTool;
         if (_inTextMode)        return AnnotationCursors.TextTool;
         if (_inCursorPlacementMode) return AnnotationCursors.DropCursorTool;
+        if (_inCropMode)        return AnnotationCursors.CropTool;
+        if (_inMoveMode)        return Cursors.Arrow;
         return _canvas.Cursor ?? Cursors.Arrow;
     }
 
@@ -1469,6 +1511,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             var ec = SamplePixelAtCanvasPoint(ept);
             UpdateEyedropperResult(ec);
             ExitEyedropperMode();
+            EnterMoveMode();
             e.Handled = true;
             return;
         }
@@ -1600,7 +1643,7 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         // Draw a new crop region from scratch — works whether or not a selection already exists.
         // Clicking outside the current selection (zone == None) replaces it; undo restores the old one.
-        if (!_inArrowMode && !_inCursorPlacementMode && !_inRectMode && !_inTextMode)
+        if (!_inArrowMode && !_inCursorPlacementMode && !_inRectMode && !_inTextMode && !_inMoveMode)
         {
             _creatingNewSel = true;
             _newSelAnchor = pt;
@@ -1879,14 +1922,16 @@ internal sealed class ClipboardImageEditorWindow : Window
                 _canvas.Cursor = AnnotationCursors.TextTool;
             else if (_inCursorPlacementMode)
                 _canvas.Cursor = AnnotationCursors.DropCursorTool;
-            else if (_sel.IsEmpty)
+            else if (_sel.IsEmpty && _inCropMode)
                 _canvas.Cursor = AnnotationCursors.CropTool;
-            else
+            else if (_sel.IsEmpty && _inMoveMode)
+                _canvas.Cursor = Cursors.Arrow;
+            else if (!_sel.IsEmpty)
             {
                 var hoverZone = HitTest(e.GetPosition(_canvas));
-                // Outside the crop rect: show crop cursor so user knows they can redraw it.
+                // Outside the crop rect: show crop cursor when in crop mode; arrow in move mode.
                 _canvas.Cursor = hoverZone == HitZone.None
-                    ? AnnotationCursors.CropTool
+                    ? (_inCropMode ? AnnotationCursors.CropTool : Cursors.Arrow)
                     : ZoneCursor(hoverZone);
             }
 
@@ -1995,7 +2040,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             }
             else
             {
-                ExitRectMode();
+                ExitRectMode(returnToMove: true);
             }
             e.Handled = true;
             return;
@@ -2065,14 +2110,14 @@ internal sealed class ClipboardImageEditorWindow : Window
                     HideCrosshair();
                     _preDragSnapshot = null;
                 }
-                ExitArrowMode(); e.Handled = true; return;
+                ExitArrowMode(returnToMove: true); e.Handled = true; return;
             }
-            if (_inRectMode) { ExitRectMode(); e.Handled = true; return; }
+            if (_inRectMode) { ExitRectMode(returnToMove: true); e.Handled = true; return; }
             if (_inTextMode)
             {
                 // TextBox ESC is already handled in CreateTextBoxOverlay's KeyDown (e.Handled=true there),
                 // so this branch handles text mode with no active textbox — just exit the mode.
-                if (_activeTextBox == null) ExitTextMode();
+                if (_activeTextBox == null) ExitTextMode(returnToMove: true);
                 e.Handled = true;
                 return;
             }
@@ -2082,6 +2127,7 @@ internal sealed class ClipboardImageEditorWindow : Window
                 _cursorEnabled = false;
                 _canvas.Cursor = Cursors.Arrow;
                 HideModeHint();
+                EnterMoveMode();
                 e.Handled = true;
                 return;
             }
@@ -2090,23 +2136,26 @@ internal sealed class ClipboardImageEditorWindow : Window
             if (_selectedAnnotRect != null) { SelectAnnotationRect(null); e.Handled = true; return; }
             if (_selectedText != null) { SelectText(null); e.Handled = true; return; }
 
-            // Priority 3 — no active selection: behave exactly as the X/Cancel button.
-            if (HasChanges())
+            // Priority 3 — no active selection: close only when NOT in the neutral move mode.
+            if (!_inMoveMode)
             {
-                var answer = MessageBox.Show(
-                    this,
-                    "You have unsaved annotations. Discard changes and close?",
-                    "Discard Changes?",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Question,
-                    MessageBoxResult.No);
-                if (answer == MessageBoxResult.Yes)
+                if (HasChanges())
+                {
+                    var answer = MessageBox.Show(
+                        this,
+                        "You have unsaved annotations. Discard changes and close?",
+                        "Discard Changes?",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Question,
+                        MessageBoxResult.No);
+                    if (answer == MessageBoxResult.Yes)
+                        Close();
+                    // MessageBoxResult.No → return to editor, do nothing
+                }
+                else
+                {
                     Close();
-                // MessageBoxResult.No → return to editor, do nothing
-            }
-            else
-            {
-                Close();
+                }
             }
             e.Handled = true;
         }
@@ -2151,16 +2200,114 @@ internal sealed class ClipboardImageEditorWindow : Window
                 DoInsertImage();
             e.Handled = true;
         }
+
+        // Tool keyboard shortcuts — ignored when a TextBox has keyboard focus.
+        if (!e.Handled && Keyboard.FocusedElement is not TextBox)
+        {
+            bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+            if (e.Key == Key.M || e.Key == Key.V)
+            {
+                ExitAllToolModes();
+                EnterMoveMode();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.A && !shift)
+            {
+                ExitAllToolModes();
+                EnterArrowMode();
+                if (_addArrowBtn != null) _addArrowBtn.Content = MakeToolIcon("ImageEditorArrowIcon", active: true);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.A && shift)
+            {
+                ExitAllToolModes();
+                EnterArrowMode();
+                _inArrowMultiDropMode = true;
+                ShowModeHint("Multi-drop: drag to place arrows · ESC to exit");
+                if (_addArrowBtn != null) _addArrowBtn.Content = MakeToolIcon("ImageEditorArrowIcon", active: true, multiDrop: true);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.R && !shift)
+            {
+                ExitAllToolModes();
+                EnterRectMode();
+                if (_addRectBtn != null) _addRectBtn.Content = MakeToolIcon("ImageEditorRectIcon", active: true);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.R && shift)
+            {
+                ExitAllToolModes();
+                EnterRectMode();
+                _inRectMultiDropMode = true;
+                ShowModeHint("Multi-drop: drag to place rectangles · ESC to exit");
+                if (_addRectBtn != null) _addRectBtn.Content = MakeToolIcon("ImageEditorRectIcon", active: true, multiDrop: true);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.T)
+            {
+                ExitAllToolModes();
+                EnterTextMode();
+                if (_addTextBtn != null) _addTextBtn.Content = MakeToolIcon("ImageEditorTextIcon", active: true);
+                e.Handled = true;
+            }
+        }
     }
 
     // ── Arrow mode ────────────────────────────────────────────────────────────
 
     private void EnterArrowMode()
     {
+        _inMoveMode = false;
+        _inCropMode = false;
         _inArrowMode = true;
         Cursor = AnnotationCursors.ArrowTool;
         _canvas.Cursor = AnnotationCursors.ArrowTool;
         ShowModeHint("Drag to draw an arrow");
+    }
+
+    private void EnterMoveMode()
+    {
+        _inMoveMode = true;
+        _inCropMode = false;
+        _canvas.Cursor = Cursors.Arrow;
+        Cursor = Cursors.Arrow;
+        HideModeHint();
+        if (_moveSelectBtn != null) _moveSelectBtn.Content = MakeToolIcon("ImageEditorMoveIcon", active: true);
+        if (_cropBtn != null)       _cropBtn.Content       = MakeToolIcon("ImageEditorCropIcon");
+    }
+
+    private void ExitMoveMode()
+    {
+        _inMoveMode = false;
+        if (_moveSelectBtn != null) _moveSelectBtn.Content = MakeToolIcon("ImageEditorMoveIcon");
+    }
+
+    private void EnterCropMode()
+    {
+        _inCropMode = true;
+        _inMoveMode = false;
+        _canvas.Cursor = AnnotationCursors.CropTool;
+        Cursor = Cursors.Arrow;
+        HideModeHint();
+        if (_cropBtn != null)       _cropBtn.Content       = MakeToolIcon("ImageEditorCropIcon", active: true);
+        if (_moveSelectBtn != null) _moveSelectBtn.Content = MakeToolIcon("ImageEditorMoveIcon");
+    }
+
+    private void ExitCropMode()
+    {
+        _inCropMode = false;
+        if (_cropBtn != null) _cropBtn.Content = MakeToolIcon("ImageEditorCropIcon");
+    }
+
+    private void ExitArrowMode(bool returnToMove = false)
+    {
+        _inArrowMode = false;
+        _inArrowMultiDropMode = false;
+        Cursor = Cursors.Arrow;
+        _canvas.Cursor = Cursors.Arrow;
+        HideModeHint();
+        if (_addArrowBtn != null) _addArrowBtn.Content = MakeToolIcon("ImageEditorArrowIcon");
+        if (returnToMove) EnterMoveMode();
     }
 
     private void ExitAllToolModes()
@@ -2171,16 +2318,6 @@ internal sealed class ClipboardImageEditorWindow : Window
         if (_activeTextBox != null) CommitActiveTextBox(); // commit in-progress edit even if text mode was already exited
         if (_inEyedropperMode) ExitEyedropperMode();
         SelectText(null);
-    }
-
-    private void ExitArrowMode()
-    {
-        _inArrowMode = false;
-        _inArrowMultiDropMode = false;
-        Cursor = Cursors.Arrow;
-        _canvas.Cursor = Cursors.Arrow;
-        HideModeHint();
-        if (_addArrowBtn != null) _addArrowBtn.Content = MakeToolIcon("ImageEditorArrowIcon");
     }
 
     /// <summary>
@@ -2198,7 +2335,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         var targetBounds = new Rect(clamped.X - 1, clamped.Y - 1, 2, 2);
         CreateArrow(targetBounds);
         if (!_inArrowMultiDropMode)
-            ExitArrowMode();
+            ExitArrowMode(returnToMove: true);
         else
             ShowModeHint("Multi-drop: drag to place arrows · ESC to exit");
     }
@@ -2254,7 +2391,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         }
         else
         {
-            ExitArrowMode();
+            ExitArrowMode(returnToMove: true);
         }
     }
 
@@ -2865,13 +3002,15 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     private void EnterRectMode()
     {
+        _inMoveMode = false;
+        _inCropMode = false;
         _inRectMode = true;
         Cursor = AnnotationCursors.RectTool;
         _canvas.Cursor = AnnotationCursors.RectTool;
         ShowModeHint("Drag to draw a rectangle");
     }
 
-    private void ExitRectMode()
+    private void ExitRectMode(bool returnToMove = false)
     {
         _inRectMode = false;
         _inRectMultiDropMode = false;
@@ -2879,6 +3018,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         _canvas.Cursor = Cursors.Arrow;
         HideModeHint();
         if (_addRectBtn != null) _addRectBtn.Content = MakeToolIcon("ImageEditorRectIcon");
+        if (returnToMove) EnterMoveMode();
     }
 
     private Rectangle EnsureAnnotRectPreview()
@@ -3441,6 +3581,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         _cursorImage!.Visibility = Visibility.Visible;
         _inCursorPlacementMode = false;
         HideModeHint();
+        EnterMoveMode();
     }
 
     /// <summary>
@@ -3558,6 +3699,8 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     private void EnterEyedropperMode()
     {
+        _inMoveMode = false;
+        _inCropMode = false;
         _inEyedropperMode = true;
         _canvas.Cursor = AnnotationCursors.EyedropperTool;
         ShowModeHint("Hover to preview color — click to capture");
@@ -3686,12 +3829,14 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     private void EnterTextMode()
     {
+        _inMoveMode = false;
+        _inCropMode = false;
         _inTextMode = true;
         _canvas.Cursor = AnnotationCursors.TextTool;
         ShowModeHint("Click to place text · ESC to exit");
     }
 
-    private void ExitTextMode()
+    private void ExitTextMode(bool returnToMove = false)
     {
         CommitActiveTextBox();
         _inTextMultiDropMode = false;
@@ -3699,6 +3844,7 @@ internal sealed class ClipboardImageEditorWindow : Window
         _canvas.Cursor = Cursors.Arrow;
         HideModeHint();
         if (_addTextBtn != null) _addTextBtn.Content = MakeToolIcon("ImageEditorTextIcon");
+        if (returnToMove) EnterMoveMode();
     }
 
     /// <summary>
@@ -3726,11 +3872,12 @@ internal sealed class ClipboardImageEditorWindow : Window
             _canvas.Cursor = Cursors.Arrow;
             HideModeHint();
             if (_addTextBtn != null) _addTextBtn.Content = MakeToolIcon("ImageEditorTextIcon");
+            EnterMoveMode();
         }
     }
 
     /// <summary>
-    /// Creates a width-constrained text annotation. The drag width defines the text box width;
+    /// Creates a width-constrained text annotation.The drag width defines the text box width;
     /// text wraps within that fixed width.
     /// </summary>
     private void BeginEditTextWithWidth(Point topLeft, double width)
@@ -3818,6 +3965,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             _canvas.Cursor = Cursors.Arrow;
             HideModeHint();
             if (_addTextBtn != null) _addTextBtn.Content = MakeToolIcon("ImageEditorTextIcon");
+            EnterMoveMode();
         }
 
         // Show resize handles around the active TextBox immediately (same as CreateTextBoxOverlay).
@@ -4094,7 +4242,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             _suppressUndo = true;
             try   { _texts.Remove(editCopy); }
             finally { _suppressUndo = false; }
-            if (autoExit) ExitTextMode();
+            if (autoExit) ExitTextMode(returnToMove: true);
         }
         else
         {
@@ -4102,7 +4250,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             editCopy.FontSize = tbRef.FontSize;
             editCopy.Bounds   = new Rect(Canvas.GetLeft(tbRef), Canvas.GetTop(tbRef), double.IsNaN(tbRef.Width) ? 0 : tbRef.Width, 0);
             UpdateTextDisplay(editCopy);
-            if (autoExit) ExitTextMode();
+            if (autoExit) ExitTextMode(returnToMove: true);
             // Always select the committed annotation (unless in multi-drop mode) so resize
             // handles appear regardless of whether text mode was still active at commit time.
             // Set the suppress flag so the canvas MouseDown that triggered this LostFocus-commit
@@ -4467,6 +4615,13 @@ internal sealed class ClipboardImageEditorWindow : Window
         _scaleTransform.ScaleY = _zoom;
         if (_zoomLabel != null) _zoomLabel.Text = $"{_zoom * 100:F0}%";
         UpdateWindowSizeForZoom();
+
+        // Center the scroll view so the freshly-cropped image is visible and not clipped.
+        Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
+        {
+            _scrollViewer.ScrollToHorizontalOffset(_scrollViewer.ScrollableWidth  / 2);
+            _scrollViewer.ScrollToVerticalOffset  (_scrollViewer.ScrollableHeight / 2);
+        });
     }
 
     // ── Insert Image ──────────────────────────────────────────────────────────

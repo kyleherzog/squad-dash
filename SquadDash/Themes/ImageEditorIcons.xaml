@@ -105,6 +105,38 @@
         </Canvas>
     </Viewbox>
 
+    <!-- Move/Select tool icon — 4-directional arrow (SizeAll style) -->
+    <Viewbox x:Key="ImageEditorMoveIcon" Width="18" Height="18" Stretch="Uniform">
+        <Canvas Width="100" Height="100">
+            <!-- North arrow -->
+            <Polygon Points="50,5 44,22 56,22" Fill="{DynamicResource LabelText}"/>
+            <Rectangle Canvas.Left="47" Canvas.Top="22" Width="6" Height="28" Fill="{DynamicResource LabelText}"/>
+            <!-- South arrow -->
+            <Polygon Points="50,95 44,78 56,78" Fill="{DynamicResource LabelText}"/>
+            <Rectangle Canvas.Left="47" Canvas.Top="50" Width="6" Height="28" Fill="{DynamicResource LabelText}"/>
+            <!-- West arrow -->
+            <Polygon Points="5,50 22,44 22,56" Fill="{DynamicResource LabelText}"/>
+            <Rectangle Canvas.Left="22" Canvas.Top="47" Width="28" Height="6" Fill="{DynamicResource LabelText}"/>
+            <!-- East arrow -->
+            <Polygon Points="95,50 78,44 78,56" Fill="{DynamicResource LabelText}"/>
+            <Rectangle Canvas.Left="50" Canvas.Top="47" Width="28" Height="6" Fill="{DynamicResource LabelText}"/>
+        </Canvas>
+    </Viewbox>
+
+    <!-- Crop tool icon — overlapping L-shaped corner brackets -->
+    <Viewbox x:Key="ImageEditorCropIcon" Width="18" Height="18" Stretch="Uniform">
+        <Canvas Width="100" Height="100">
+            <!-- Top-left L bracket -->
+            <Rectangle Canvas.Left="10" Canvas.Top="10" Width="8" Height="35" Fill="{DynamicResource LabelText}" RadiusX="2" RadiusY="2"/>
+            <Rectangle Canvas.Left="10" Canvas.Top="10" Width="35" Height="8" Fill="{DynamicResource LabelText}" RadiusX="2" RadiusY="2"/>
+            <!-- Bottom-right L bracket -->
+            <Rectangle Canvas.Left="82" Canvas.Top="55" Width="8" Height="35" Fill="{DynamicResource LabelText}" RadiusX="2" RadiusY="2"/>
+            <Rectangle Canvas.Left="55" Canvas.Top="82" Width="35" Height="8" Fill="{DynamicResource LabelText}" RadiusX="2" RadiusY="2"/>
+            <!-- Diagonal crop line from TL to BR -->
+            <Line X1="18" Y1="82" X2="82" Y2="18" Stroke="{DynamicResource LabelText}" StrokeThickness="5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+        </Canvas>
+    </Viewbox>
+
     <!-- Round corners mask icon -->
     <Viewbox x:Key="ImageEditorRoundCornersIcon" Width="18" Height="18" Stretch="Uniform">
         <!-- Replace with your design -->
