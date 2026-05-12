@@ -1030,6 +1030,74 @@ internal sealed class PreferencesWindow : Window {
             azureVoiceCombo.ToolTip = "Configure Azure Speech key and region to load the full voice list.";
         }
 
+        // ── Test TTS Button ───────────────────────────────────────────────────────
+        var testButtonPanel = new StackPanel {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+
+        var testButton = new Button {
+            Content = "🔊 Test TTS",
+            Padding = new Thickness(12, 4, 12, 4),
+            MinWidth = 120
+        };
+        testButton.SetResourceReference(Button.StyleProperty, "ThemedButton");
+
+        testButton.Click += (_, _) => {
+            testButton.IsEnabled = false;
+            _ = Task.Run(async () => {
+                try {
+                    var provider  = ttsProviderCombo.SelectedIndex == 1 ? TtsProvider.OpenAI : TtsProvider.Azure;
+                    var azureVoice  = await Dispatcher.InvokeAsync(() => azureVoiceCombo.Text.Trim());
+                    var openAiVoice = await Dispatcher.InvokeAsync(() => openAiVoiceCombo.SelectedItem?.ToString() ?? "alloy");
+                    var modelIndex  = await Dispatcher.InvokeAsync(() => openAiModelCombo.SelectedIndex);
+                    var region      = currentSettings.SpeechRegion;
+                    var openAiKey   = currentSettings.OpenAiSpeechApiKey;
+                    var azureKey    = Environment.GetEnvironmentVariable("SQUAD_SPEECH_KEY", EnvironmentVariableTarget.User);
+                    var oaiModel    = modelIndex == 1 ? "tts-1-hd" : "tts-1";
+
+                    ITtsProvider? tts = null;
+                    string phrase;
+                    if (provider == TtsProvider.Azure) {
+                        phrase = $"This is a test of Azure Speech text to speech with the {azureVoice} voice.";
+                        if (!string.IsNullOrWhiteSpace(azureKey) && !string.IsNullOrWhiteSpace(region))
+                            tts = new AzureTtsProvider(azureKey, region, azureVoice);
+                    }
+                    else {
+                        phrase = $"This is a test of OpenAI text to speech with the {openAiVoice} voice.";
+                        if (!string.IsNullOrWhiteSpace(openAiKey))
+                            tts = new OpenAiTtsProvider(openAiKey!, openAiVoice, oaiModel);
+                    }
+
+                    if (tts is null) {
+                        await Dispatcher.InvokeAsync(() => {
+                            testButton.Content = "⚠ Not configured";
+                        });
+                        await Task.Delay(2000);
+                    }
+                    else {
+                        await tts.SpeakAsync(phrase);
+                    }
+                }
+                catch {
+                    await Dispatcher.InvokeAsync(() => {
+                        testButton.Content = "Error — check keys";
+                    });
+                    await Task.Delay(2000);
+                }
+                finally {
+                    await Dispatcher.InvokeAsync(() => {
+                        testButton.Content = "🔊 Test TTS";
+                        testButton.IsEnabled = true;
+                    });
+                }
+            });
+        };
+
+        testButtonPanel.Children.Add(testButton);
+        form.Children.Add(testButtonPanel);
+
         return WrapInScrollViewer(form);
     }
 
