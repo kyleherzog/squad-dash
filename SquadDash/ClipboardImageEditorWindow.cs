@@ -167,6 +167,12 @@ internal sealed class ClipboardImageEditorWindow : Window
     // Rect annotation defaults
     private Color _defaultRectColor = Color.FromRgb(255, 80, 80);
 
+    // Last-used arrow angle/tail and rect size — used for click-without-drag placement.
+    private double _lastDragArrowAngleDeg  = 225.0;  // same as _defaultArrowAngleDeg default
+    private double _lastDragArrowTailLength = 80.0;
+    private double _lastDragRectWidth  = 120.0;
+    private double _lastDragRectHeight =  80.0;
+
     // ── Annotation — cursor overlay ───────────────────────────────────────────
 
     private Image? _cursorImage;
@@ -2061,6 +2067,17 @@ internal sealed class ClipboardImageEditorWindow : Window
                 _preDragSnapshot = null; // let CreateArrow handle its own undo push
                 PlaceArrowFromDrag(tailPt, headPt, dist);
             }
+            else if (dist < 5.0)
+            {
+                // Click without drag: drop an arrow at the click point using the last-used angle/length.
+                _preDragSnapshot = null;
+                var rad = _lastDragArrowAngleDeg * Math.PI / 180.0;
+                var ux = Math.Sin(rad);
+                var uy = -Math.Cos(rad);
+                var synTailPt = new Point(headPt.X + ux * _lastDragArrowTailLength,
+                                          headPt.Y + uy * _lastDragArrowTailLength);
+                PlaceArrowFromDrag(synTailPt, headPt, _lastDragArrowTailLength);
+            }
             else
             {
                 _preDragSnapshot = null;
@@ -2084,7 +2101,19 @@ internal sealed class ClipboardImageEditorWindow : Window
                         _annotRectPreview.Width,
                         _annotRectPreview.Height);
                     _preDragSnapshot = null; // let CreateAnnotationRect handle its own undo push
+                    _lastDragRectWidth  = bounds.Width;
+                    _lastDragRectHeight = bounds.Height;
                     CreateAnnotationRect(bounds);
+                }
+                else if (_annotRectPreview.Width < 5 && _annotRectPreview.Height < 5)
+                {
+                    // Click without drag: drop a rectangle centered on the click point at last-used size.
+                    _preDragSnapshot = null;
+                    var rw = _lastDragRectWidth;
+                    var rh = _lastDragRectHeight;
+                    var rx = Math.Max(0, Math.Min(_canvas.Width - rw, _annotRectAnchor.X - rw / 2));
+                    var ry = Math.Max(0, Math.Min(_canvas.Height - rh, _annotRectAnchor.Y - rh / 2));
+                    CreateAnnotationRect(new Rect(rx, ry, rw, rh));
                 }
             }
             CommitDragUndo();
@@ -2434,6 +2463,10 @@ internal sealed class ClipboardImageEditorWindow : Window
         _defaultTailLength = tailLen;
 
         var arrow = CreateArrow(targetBounds);
+
+        // Remember this drag's angle and tail length for subsequent click-without-drag placement.
+        _lastDragArrowAngleDeg   = angleDeg;
+        _lastDragArrowTailLength = tailLen;
 
         _defaultArrowAngleDeg = savedAngle;
         _defaultTailLength = savedTailLen;
