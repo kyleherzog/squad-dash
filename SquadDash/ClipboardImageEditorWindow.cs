@@ -460,18 +460,34 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         // ── Resize handles ───────────────────────────────────────────────────
 
+        // Handle order (matches RefreshLayout comment): NW(0) N(1) NE(2) E(3) SE(4) S(5) SW(6) W(7)
+        static Cursor HandleResizeCursor(int idx) => idx switch
+        {
+            0 or 4 => Cursors.SizeNWSE,   // NW, SE
+            2 or 6 => Cursors.SizeNESW,   // NE, SW
+            1 or 5 => Cursors.SizeNS,     // N, S
+            3 or 7 => Cursors.SizeWE,     // E, W
+            _ => Cursors.Arrow
+        };
+
         for (int i = 0; i < 8; i++)
         {
+            var hIdx = i;
+            var hCursor = HandleResizeCursor(i);
             var h = new Rectangle
             {
                 Width = HandleSize,
                 Height = HandleSize,
                 StrokeThickness = 1,
                 RadiusX = 1.5,
-                RadiusY = 1.5
+                RadiusY = 1.5,
+                Cursor = hCursor
             };
             h.SetResourceReference(Shape.FillProperty, "DocumentLinkText");
             h.SetResourceReference(Shape.StrokeProperty, "AppSurface");
+            // Set the canvas cursor on MouseEnter so it matches regardless of tool mode.
+            h.MouseEnter += (_, _) => _canvas.Cursor = hCursor;
+            h.MouseLeave += (_, _) => _canvas.Cursor = ActiveToolCursor();
             _handles[i] = h;
             _canvas.Children.Add(h);
             Panel.SetZIndex(h, 10); // above dim strips (2) and sel border (5)
