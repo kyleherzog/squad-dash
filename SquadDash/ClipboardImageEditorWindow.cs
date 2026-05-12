@@ -374,27 +374,30 @@ internal sealed class ClipboardImageEditorWindow : Window
         // Prefer bitmap-embedded DPI when it's non-trivial; otherwise use monitor scale.
         double effectiveScaleX  = bitmapDpiScaleX > 1.05 ? bitmapDpiScaleX : monitorScaleX;
         double effectiveScaleY  = bitmapDpiScaleY > 1.05 ? bitmapDpiScaleY : monitorScaleY;
-        double dispW = imgW / effectiveScaleX;
-        double dispH = imgH / effectiveScaleY;
-        // Pixels per canvas logical unit — used for pixel sampling, cropping, and export.
-        _canvasScaleX = effectiveScaleX;
-        _canvasScaleY = effectiveScaleY;
+        // Canvas operates in physical pixel space — no WPF-level downscaling.
+        // Initial zoom compensates so the image displays at the correct screen size.
+        double dispW = imgW;
+        double dispH = imgH;
+        // Canvas coords ARE physical pixels, so scale factor is 1:1.
+        _canvasScaleX = 1.0;
+        _canvasScaleY = 1.0;
 
         SquadDashTrace.Write("UI",
             $"[ClipboardImageEditor] DPI: hMonOwner={hMonOwner:X} bitmap={clipboardImage.DpiX:F1}x{clipboardImage.DpiY:F1} " +
             $"rawMonitor={rawMonitorScale:F3} bitmapDpiScale={bitmapDpiScaleX:F3}x{bitmapDpiScaleY:F3} " +
             $"effective={effectiveScaleX:F3}x{effectiveScaleY:F3} " +
-            $"pixels={imgW:F0}x{imgH:F0} display={dispW:F1}x{dispH:F1} " +
-            $"canvasScale={_canvasScaleX:F3}x{_canvasScaleY:F3}");
+            $"pixels={imgW:F0}x{imgH:F0} display={dispW / effectiveScaleX:F1}x{dispH / effectiveScaleY:F1} " +
+            $"canvasScale={_canvasScaleX:F3}x{_canvasScaleY:F3} baseZoom={1.0 / effectiveScaleX:F3}");
 
         const double MinWindowWidth = 580;
         const double toolbarH = 110.0;
 
-        // Compute initial zoom so the image fits inside the capped window on first open.
-        // Never zoom in (max 1.0), only zoom out if the image is too large.
+        // Base zoom: 1/dpiScale displays the image at its true physical size on screen.
+        // Then further scale down if it doesn't fit in the window.
+        double baseZoom = 1.0 / effectiveScaleX;  // e.g. 0.667 for 150% monitor
         double fitZoomW = (maxWinW - 24) / dispW;
         double fitZoomH = (maxWinH - toolbarH) / dispH;
-        _zoom = Math.Min(1.0, Math.Min(fitZoomW, fitZoomH));
+        _zoom = Math.Min(baseZoom, Math.Min(fitZoomW, fitZoomH));
         _scaleTransform.ScaleX = _zoom;
         _scaleTransform.ScaleY = _zoom;
 
@@ -449,7 +452,9 @@ internal sealed class ClipboardImageEditorWindow : Window
             Height = dispH,
             ClipToBounds = true,
             Cursor = Cursors.Arrow,
-            Background = Brushes.Transparent   // must be non-null for canvas to receive mouse events
+            Background = Brushes.Transparent,   // must be non-null for canvas to receive mouse events
+            UseLayoutRounding = true,
+            SnapsToDevicePixels = true
         };
 
         // Image fills the entire canvas (background layer).
@@ -459,7 +464,9 @@ internal sealed class ClipboardImageEditorWindow : Window
             Width = dispW,
             Height = dispH,
             Stretch = Stretch.Fill,
-            IsHitTestVisible = false
+            IsHitTestVisible = false,
+            UseLayoutRounding = true,
+            SnapsToDevicePixels = true
         };
         RenderOptions.SetBitmapScalingMode(_imageCtrl, BitmapScalingMode.HighQuality);
         _canvas.Children.Add(_imageCtrl);
