@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Media;
 using System.Threading;
@@ -27,13 +28,23 @@ internal enum SoundEvent
 /// <summary>
 /// Plays per-event notification sounds according to the current settings.
 /// Safe to call from any thread. Play is fire-and-forget.
+///
+/// Multiple events fired within <see cref="CoalesceWindowMs"/> of each other
+/// are coalesced: only the highest-priority enabled event is played.
+/// Priority order (1 = highest): QuickRepliesShown, ApprovalNeeded, CommitMade,
+/// PromptComplete, PromptError, LoopStopped, LoopIterationComplete, QueueEmpty.
 /// </summary>
 internal sealed class SoundNotificationService
 {
-    private readonly ApplicationSettingsStore _settingsStore;
-    private readonly Func<ITtsProvider?>      _ttsProviderFactory;
+    private const int CoalesceWindowMs = 50;
 
-    // 0 = idle, 1 = speaking; updated via Interlocked for overlap guard.
+    private readonly ApplicationSettingsStore    _settingsStore;
+    private readonly Func<ITtsProvider?>         _ttsProviderFactory;
+    private readonly ConcurrentQueue<SoundEvent> _pending = new();
+
+    // 0 = idle, 1 = drain scheduled; updated via Interlocked.
+    private int _drainScheduled;
+    // 0 = idle, 1 = speaking; updated via Interlocked for TTS overlap guard.
     private int _ttsSpeaking;
 
     public SoundNotificationService(
@@ -45,18 +56,74 @@ internal sealed class SoundNotificationService
     }
 
     /// <summary>
-    /// Plays the sound for the given event if the event is enabled in settings.
-    /// Uses a custom audio file when configured and the file exists; falls back
-    /// to <see cref="SystemSounds.Asterisk"/> otherwise.
-    /// If the custom path is a quoted phrase (e.g. <c>"Hello world"</c>) the text
-    /// is sent to the configured TTS provider instead.
+    /// Queues the sound for the given event. If no drain is already scheduled,
+    /// schedules one after <see cref="CoalesceWindowMs"/> ms. The drain picks
+    /// the highest-priority enabled event from all queued events and plays it.
     /// Never blocks the caller — exceptions are swallowed and debug-logged.
     /// </summary>
     public void Play(SoundEvent evt)
     {
+        _pending.Enqueue(evt);
+        if (Interlocked.CompareExchange(ref _drainScheduled, 1, 0) == 0)
+        {
+            _ = Task.Delay(CoalesceWindowMs).ContinueWith(
+                _ => DrainAndPlay(),
+                TaskScheduler.Default);
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Private — coalescing drain
+    // ---------------------------------------------------------------------------
+
+    private void DrainAndPlay()
+    {
+        Interlocked.Exchange(ref _drainScheduled, 0);
+
+        var settings = _settingsStore.Load();
+
+        // Collect all pending events (deduplicated).
+        var seen = new System.Collections.Generic.HashSet<SoundEvent>();
+        while (_pending.TryDequeue(out var e)) seen.Add(e);
+        if (seen.Count == 0) return;
+
+        if (seen.Count > 1)
+        {
+            var names = string.Join(", ", seen);
+            SquadDashTrace.Write("Sound", $"Coalescing {seen.Count} simultaneous events: [{names}]");
+        }
+
+        // Pick the highest-priority event that is actually enabled.
+        SoundEvent? best = null;
+        int         bestPri = int.MaxValue;
+        foreach (var evt in seen)
+        {
+            var (enabled, _) = GetEventSettings(settings, evt);
+            if (!enabled) continue;
+            var pri = GetPriority(evt);
+            if (pri < bestPri) { bestPri = pri; best = evt; }
+        }
+
+        if (best is null)
+        {
+            SquadDashTrace.Write("Sound", "All coalesced events disabled — nothing to play");
+            return;
+        }
+
+        if (seen.Count > 1)
+            SquadDashTrace.Write("Sound", $"Coalesced winner: {best}");
+
+        PlayImmediate(best.Value, settings);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Private — immediate playback (called after coalescing)
+    // ---------------------------------------------------------------------------
+
+    private void PlayImmediate(SoundEvent evt, ApplicationSettingsSnapshot settings)
+    {
         try
         {
-            var settings = _settingsStore.Load();
             var (enabled, customPath) = GetEventSettings(settings, evt);
 
             SquadDashTrace.Write("Sound", $"Play attempt: {evt} enabled={enabled}");
@@ -102,8 +169,6 @@ internal sealed class SoundNotificationService
             // --- Audio file path ---
             if (!string.IsNullOrEmpty(customPath) && File.Exists(customPath))
             {
-                // MediaPlayer must run on a thread that has a Dispatcher.
-                // BeginInvoke is fire-and-forget — never blocks the caller.
                 var capturedPath = customPath;
                 SquadDashTrace.Write("Sound", $"Playing {evt} via file: {capturedPath}");
                 Application.Current.Dispatcher.BeginInvoke(() =>
@@ -125,7 +190,6 @@ internal sealed class SoundNotificationService
             else
             {
                 SquadDashTrace.Write("Sound", $"Playing {evt} via system sound (Asterisk)");
-                // System sound: plays synchronously but is nearly instantaneous.
                 SystemSounds.Asterisk.Play();
             }
         }
@@ -139,6 +203,22 @@ internal sealed class SoundNotificationService
     // ---------------------------------------------------------------------------
     // Private helpers
     // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Priority order for coalescing. Lower number = higher priority.
+    /// </summary>
+    private static int GetPriority(SoundEvent evt) => evt switch
+    {
+        SoundEvent.QuickRepliesShown     => 1,
+        SoundEvent.ApprovalNeeded        => 2,
+        SoundEvent.CommitMade            => 3,
+        SoundEvent.PromptComplete        => 4,
+        SoundEvent.PromptError           => 5,
+        SoundEvent.LoopStopped           => 6,
+        SoundEvent.LoopIterationComplete => 7,
+        SoundEvent.QueueEmpty            => 8,
+        _                                => 99
+    };
 
     /// <summary>Returns true when <paramref name="s"/> is a double-quoted phrase.</summary>
     private static bool IsPhrase(string s) =>
@@ -162,3 +242,4 @@ internal sealed class SoundNotificationService
             _                                => (false, "")
         };
 }
+
