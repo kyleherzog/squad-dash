@@ -1154,16 +1154,26 @@ internal sealed class PreferencesWindow : Window {
         Grid.SetRow(pathBox, rowIndex);
         Grid.SetColumn(pathBox, 1);
 
-        // Right-click context menu: play a preview of the current path (or system sound).
+        // Right-click context menu: play a preview of the current path (or TTS phrase, or system sound).
         var testMenuItem = new MenuItem { Header = "▶  Test sound" };
         testMenuItem.Click += (_, _) => {
-            var path = pathBox.Text.Trim();
-            if (!string.IsNullOrEmpty(path) && System.IO.File.Exists(path)) {
+            var raw = pathBox.Text.Trim();
+            // Quoted phrase → speak via TTS if configured.
+            if (raw.StartsWith("\"") && raw.EndsWith("\"") && raw.Length >= 2) {
+                var phrase = raw[1..^1];
+                _ = Task.Run(async () => {
+                    var tts = TryBuildTtsProviderFromStore();
+                    if (tts != null)
+                        await tts.SpeakAsync(phrase);
+                    else
+                        await Dispatcher.InvokeAsync(() => System.Media.SystemSounds.Asterisk.Play());
+                });
+            } else if (!string.IsNullOrEmpty(raw) && System.IO.File.Exists(raw)) {
                 try {
                     var player = new MediaPlayer();
                     player.MediaOpened += (_, _) => player.Play();
                     player.MediaEnded  += (_, _) => player.Close();
-                    player.Open(new Uri(path, UriKind.Absolute));
+                    player.Open(new Uri(raw, UriKind.Absolute));
                 } catch { System.Media.SystemSounds.Asterisk.Play(); }
             } else {
                 System.Media.SystemSounds.Asterisk.Play();
@@ -1210,6 +1220,21 @@ internal sealed class PreferencesWindow : Window {
 
     private void SaveSoundSettingNow(SoundEvent evt, CheckBox checkBox, TextBox pathBox) {
         _settingsStore.SaveSoundNotificationSettings(evt, checkBox.IsChecked == true, pathBox.Text.Trim());
+    }
+
+    private ITtsProvider? TryBuildTtsProviderFromStore() {
+        var s = _settingsStore.Load();
+        if (s.Tts_Provider == TtsProvider.Azure) {
+            var key = Environment.GetEnvironmentVariable("SQUAD_SPEECH_KEY", EnvironmentVariableTarget.User);
+            if (!string.IsNullOrWhiteSpace(key) && !string.IsNullOrWhiteSpace(s.SpeechRegion))
+                return new AzureTtsProvider(key, s.SpeechRegion, s.Tts_Azure_Voice);
+        } else if (s.Tts_Provider == TtsProvider.OpenAI) {
+            if (!string.IsNullOrWhiteSpace(s.OpenAiSpeechApiKey)) {
+                var model = s.Tts_OpenAi_Model == OpenAiTtsModel.HD ? "tts-1-hd" : "tts-1";
+                return new OpenAiTtsProvider(s.OpenAiSpeechApiKey, s.Tts_OpenAi_Voice, model);
+            }
+        }
+        return null;
     }
 
     private static (CheckBox cb, TextBox tb) MakeSoundRow(bool enabled, string customPath) {
