@@ -295,19 +295,6 @@ internal sealed class ClipboardImageEditorWindow : Window
     {
         _clipboardImage = clipboardImage ?? throw new ArgumentNullException(nameof(clipboardImage));
 
-        // Normalize DPI to 96 so WPF treats each physical pixel as one logical pixel.
-        // Screenshots from a 150%-scaled monitor have DpiX/Y=144; without normalization
-        // the canvas would appear 1.5× too large in WPF layout.
-        if (Math.Abs(clipboardImage.DpiX - 96) > 1 || Math.Abs(clipboardImage.DpiY - 96) > 1)
-        {
-            var stride96 = clipboardImage.PixelWidth * ((clipboardImage.Format.BitsPerPixel + 7) / 8);
-            var pixels96 = new byte[clipboardImage.PixelHeight * stride96];
-            clipboardImage.CopyPixels(pixels96, stride96, 0);
-            clipboardImage = BitmapSource.Create(clipboardImage.PixelWidth, clipboardImage.PixelHeight,
-                96, 96, clipboardImage.Format, clipboardImage.Palette, pixels96, stride96);
-            clipboardImage.Freeze();
-        }
-
         _workingImage   = clipboardImage;
         _isPromptMode = isPromptMode;
         _themeName = AgentStatusCard.IsDarkTheme ? "dark" : "light";
@@ -334,12 +321,14 @@ internal sealed class ClipboardImageEditorWindow : Window
         var toLogical = pSrc?.CompositionTarget.TransformFromDevice ?? Matrix.Identity;
 
         // ── Compute display size ─────────────────────────────────────────────
-        // Canvas shows image at its intended logical size, correcting for source DPI.
-        // Screenshots taken on a 150%-scaled monitor arrive with DpiX/Y=144; without
-        // correction the canvas would be 1.5× too large.  We normalise to 96 dpi so
-        // the image appears at the intended physical size on any monitor.
-        // Ctrl+scroll zoom is applied via ScaleTransform on the wrapper so
-        // DoInsertImage always renders at the original pixel dimensions.
+        // We need to convert physical pixel counts to logical (WPF) display units.
+        // Two complementary sources of information:
+        //   1. Bitmap DpiX — PrintScreen on a scaled monitor embeds the actual DPI
+        //      (e.g. DpiX=144 on a 150% monitor). Use this when available.
+        //   2. Current monitor scale — Snipping Tool and many clipboard sources strip
+        //      DPI metadata and store 96 regardless. Fall back to the monitor the
+        //      owner window is on, which gives the correct result when pasting on
+        //      the same monitor as the screenshot was taken.
         var monitorArea = pSrc != null
             ? GetMonitorWorkAreaRect(ownerTopLeft, toLogical)
             : GetMonitorWorkAreaRect(owner);
@@ -348,19 +337,23 @@ internal sealed class ClipboardImageEditorWindow : Window
         double maxWinW = monitorArea.Width  * 0.95;
         double maxWinH = monitorArea.Height * 0.95;
 
-        // Use the current monitor's DPI scale to recover the intended logical display size.
-        // Windows clipboard DIBs always store physical pixel counts with DpiX=96 metadata
-        // regardless of the source monitor's scaling. Dividing by the monitor scale factor
-        // gives the logical size that matches what the user saw on screen when they took
-        // the screenshot (e.g. a 1500-pixel-wide window on a 150%-scaled monitor shows
-        // as 1000 logical units — exactly matching the original window's apparent size).
-        double monitorScaleX = pSrc?.CompositionTarget.TransformToDevice.M11 ?? 1.0;
-        double monitorScaleY = pSrc?.CompositionTarget.TransformToDevice.M22 ?? 1.0;
-        double dispW = imgW / monitorScaleX;
-        double dispH = imgH / monitorScaleY;
+        double monitorScaleX    = pSrc?.CompositionTarget.TransformToDevice.M11 ?? 1.0;
+        double monitorScaleY    = pSrc?.CompositionTarget.TransformToDevice.M22 ?? 1.0;
+        double bitmapDpiScaleX  = clipboardImage.DpiX / 96.0;
+        double bitmapDpiScaleY  = clipboardImage.DpiY / 96.0;
+        // Prefer bitmap-embedded DPI when it's non-trivial; otherwise use monitor scale.
+        double effectiveScaleX  = bitmapDpiScaleX > 1.05 ? bitmapDpiScaleX : monitorScaleX;
+        double effectiveScaleY  = bitmapDpiScaleY > 1.05 ? bitmapDpiScaleY : monitorScaleY;
+        double dispW = imgW / effectiveScaleX;
+        double dispH = imgH / effectiveScaleY;
         // Pixels per canvas logical unit — used for pixel sampling, cropping, and export.
-        _canvasScaleX = monitorScaleX;
-        _canvasScaleY = monitorScaleY;
+        _canvasScaleX = effectiveScaleX;
+        _canvasScaleY = effectiveScaleY;
+
+        SquadDashTrace.Write(TraceCategory.General,
+            $"[ClipboardImageEditor] DPI: bitmap={clipboardImage.DpiX:F0}x{clipboardImage.DpiY:F0} " +
+            $"monitor={monitorScaleX:F2}x{monitorScaleY:F2} effective={effectiveScaleX:F2}x{effectiveScaleY:F2} " +
+            $"pixels={imgW:F0}x{imgH:F0} display={dispW:F0}x{dispH:F0}");
 
         const double MinWindowWidth = 580;
         const double toolbarH = 110.0;
