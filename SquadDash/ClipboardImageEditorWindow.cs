@@ -337,8 +337,15 @@ internal sealed class ClipboardImageEditorWindow : Window
         double maxWinW = monitorArea.Width  * 0.95;
         double maxWinH = monitorArea.Height * 0.95;
 
-        double monitorScaleX    = pSrc?.CompositionTarget.TransformToDevice.M11 ?? 1.0;
-        double monitorScaleY    = pSrc?.CompositionTarget.TransformToDevice.M22 ?? 1.0;
+        // Use GetDpiForMonitor (shcore.dll) instead of TransformToDevice — this bypasses WPF's
+        // DPI virtualization and returns the actual per-monitor scale even when the process is
+        // only System DPI aware (which makes TransformToDevice always return 1.0).
+        var hMonOwner = MonitorFromPoint(
+            new POINT { X = (int)ownerTopLeft.X, Y = (int)ownerTopLeft.Y },
+            MONITOR_DEFAULTTONEAREST);
+        double rawMonitorScale = GetRawMonitorScale(hMonOwner);
+        double monitorScaleX   = rawMonitorScale;
+        double monitorScaleY   = rawMonitorScale;
         double bitmapDpiScaleX  = clipboardImage.DpiX / 96.0;
         double bitmapDpiScaleY  = clipboardImage.DpiY / 96.0;
         // Prefer bitmap-embedded DPI when it's non-trivial; otherwise use monitor scale.
@@ -352,7 +359,7 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         SquadDashTrace.Write("UI",
             $"[ClipboardImageEditor] DPI: bitmap={clipboardImage.DpiX:F1}x{clipboardImage.DpiY:F1} " +
-            $"monitor={monitorScaleX:F3}x{monitorScaleY:F3} bitmapDpiScale={bitmapDpiScaleX:F3}x{bitmapDpiScaleY:F3} " +
+            $"rawMonitor={rawMonitorScale:F3} bitmapDpiScale={bitmapDpiScaleX:F3}x{bitmapDpiScaleY:F3} " +
             $"effective={effectiveScaleX:F3}x{effectiveScaleY:F3} " +
             $"pixels={imgW:F0}x{imgH:F0} display={dispW:F1}x{dispH:F1} " +
             $"canvasScale={_canvasScaleX:F3}x{_canvasScaleY:F3}");
@@ -1113,6 +1120,9 @@ internal sealed class ClipboardImageEditorWindow : Window
     private static extern bool GetWindowRect(IntPtr hWnd, out Rect32 lpRect);
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern IntPtr MonitorFromPoint(POINT pt, uint dwFlags);
+    [System.Runtime.InteropServices.DllImport("shcore.dll")]
+    private static extern int GetDpiForMonitor(IntPtr hmonitor, uint dpiType, out uint dpiX, out uint dpiY);
+    private const uint MDT_EFFECTIVE_DPI = 0;
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
     private struct Rect32 { public int Left, Top, Right, Bottom; }
@@ -1156,41 +1166,41 @@ internal sealed class ClipboardImageEditorWindow : Window
                     var mi = new MonitorInfo { cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<MonitorInfo>() };
                     if (GetMonitorInfo(hMon, ref mi))
                     {
-                        var source = System.Windows.Interop.HwndSource.FromHwnd(hwnd);
-                        double sx = source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
-                        double sy = source?.CompositionTarget?.TransformToDevice.M22 ?? 1.0;
+                        // Use GetDpiForMonitor for accurate scale — TransformToDevice returns 1.0 for System DPI aware apps.
+                        double s = GetRawMonitorScale(hMon);
                         return new Rect(
-                            mi.rcWork.Left   / sx,
-                            mi.rcWork.Top    / sy,
-                            (mi.rcWork.Right  - mi.rcWork.Left) / sx,
-                            (mi.rcWork.Bottom - mi.rcWork.Top)  / sy);
+                            mi.rcWork.Left   / s,
+                            mi.rcWork.Top    / s,
+                            (mi.rcWork.Right  - mi.rcWork.Left) / s,
+                            (mi.rcWork.Bottom - mi.rcWork.Top)  / s);
                     }
                 }
             }
 
-            // Strategy 2: HWND not yet available — use WPF Left/Top to estimate screen center.
-            // For maximized windows this is the restore position, but still beats falling back
-            // all the way to the primary monitor.
-            double dpiX = 1.0, dpiY = 1.0;
+            // Strategy 2: HWND not yet available — estimate screen center from WPF logical coords.
+            // WPF Left/Top are in logical units; for System DPI aware apps these are already at
+            // scale 1.0, so we use physical coords from GetWindowRect center when available.
+            // Fallback: use the primary monitor scale as an approximation.
+            double fallbackScale = 1.0;
             if (hwnd != IntPtr.Zero)
             {
-                var src = System.Windows.Interop.HwndSource.FromHwnd(hwnd);
-                dpiX = src?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
-                dpiY = src?.CompositionTarget?.TransformToDevice.M22 ?? 1.0;
+                var hMonFallback = MonitorFromPoint(new POINT { X = (int)w.Left, Y = (int)w.Top }, MONITOR_DEFAULTTONEAREST);
+                fallbackScale = GetRawMonitorScale(hMonFallback);
             }
-            int wpfCx = (int)((w.Left + w.Width  / 2) * dpiX);
-            int wpfCy = (int)((w.Top  + w.Height / 2) * dpiY);
+            int wpfCx = (int)((w.Left + w.Width  / 2) * fallbackScale);
+            int wpfCy = (int)((w.Top  + w.Height / 2) * fallbackScale);
             var hMon2 = MonitorFromPoint(new POINT { X = wpfCx, Y = wpfCy }, MONITOR_DEFAULTTONEAREST);
             if (hMon2 != IntPtr.Zero)
             {
+                double s2 = GetRawMonitorScale(hMon2);
                 var mi2 = new MonitorInfo { cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<MonitorInfo>() };
                 if (GetMonitorInfo(hMon2, ref mi2))
                 {
                     return new Rect(
-                        mi2.rcWork.Left   / dpiX,
-                        mi2.rcWork.Top    / dpiY,
-                        (mi2.rcWork.Right  - mi2.rcWork.Left) / dpiX,
-                        (mi2.rcWork.Bottom - mi2.rcWork.Top)  / dpiY);
+                        mi2.rcWork.Left   / s2,
+                        mi2.rcWork.Top    / s2,
+                        (mi2.rcWork.Right  - mi2.rcWork.Left) / s2,
+                        (mi2.rcWork.Bottom - mi2.rcWork.Top)  / s2);
                 }
             }
         }
@@ -1222,6 +1232,24 @@ internal sealed class ClipboardImageEditorWindow : Window
         }
         catch { }
         return SystemParameters.WorkArea;
+    }
+
+    /// <summary>
+    /// Returns the raw effective scale factor for the monitor identified by <paramref name="hMon"/>
+    /// using <c>GetDpiForMonitor(MDT_EFFECTIVE_DPI)</c>, which bypasses WPF DPI virtualization
+    /// and works correctly regardless of whether the process is System or Per-Monitor DPI aware.
+    /// Returns 1.0 on failure.
+    /// </summary>
+    private static double GetRawMonitorScale(IntPtr hMon)
+    {
+        if (hMon == IntPtr.Zero) return 1.0;
+        try
+        {
+            if (GetDpiForMonitor(hMon, MDT_EFFECTIVE_DPI, out uint dpiX, out _) == 0)
+                return dpiX / 96.0;
+        }
+        catch { }
+        return 1.0;
     }
 
     /// <summary>
