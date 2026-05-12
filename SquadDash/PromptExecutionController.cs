@@ -261,6 +261,13 @@ internal sealed class PromptExecutionController {
     private bool             _promptNoActivityWarningShown;
     private bool             _promptStallWarningShown;
     /// <summary>
+    /// When true, queue items are processed as simulated turns (no AI call, 1.5 s delay each).
+    /// Set by <c>/queue-sim</c> and cleared automatically when all sim items are consumed.
+    /// </summary>
+    internal bool QueueSimMode { get; private set; }
+    private int _queueSimItemsRemaining;
+
+    /// <summary>
     /// Set when the user aborts a running prompt. Causes the next prompt to be prefixed
     /// with a retraction notice so the AI ignores the aborted turn.
     /// </summary>
@@ -860,6 +867,10 @@ internal sealed class PromptExecutionController {
         if (string.Equals(trimmed, "/clear", StringComparison.OrdinalIgnoreCase))
             return HandleLocalClearCommand(prompt, addToHistory, clearPromptBox);
 
+        if (string.Equals(trimmed, "/queue-sim", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(trimmed, "/test-queue", StringComparison.OrdinalIgnoreCase))
+            return HandleLocalQueueSimCommand(prompt, addToHistory, clearPromptBox);
+
         return false;
     }
 
@@ -1134,6 +1145,8 @@ internal sealed class PromptExecutionController {
                 _appendLine("- `/help` — Show this command reference", null);
                 _appendLine("- `/hire` — Open the visual hire-agent workflow", null);
                 _appendLine("- `/model` — Show the active AI model", null);
+                _appendLine("- `/queue-sim` — Enqueue 5 fake items to exercise queue mechanics without a real AI call", null);
+                _appendLine("- `/queue-sim` alias: `/test-queue`", null);
                 _appendLine("- `/retire <name>` — Archive an agent and remove them from the active roster", null);
                 _appendLine("- `/session` — Manage SDK sessions (type `/session` for details)", null);
                 _appendLine("- `/sessions` — List saved sessions", null);
@@ -1141,6 +1154,36 @@ internal sealed class PromptExecutionController {
                 _appendLine("- `/tasks` — Show or refresh the live tasks popup", null);
                 _appendLine("- `/trace` — Open the live trace window", null);
                 _appendLine("- `/version` — Show Squad and SquadDash version", null);
+            });
+    }
+
+    private bool HandleLocalQueueSimCommand(string prompt, bool addToHistory, bool clearPromptBox) {
+        SquadDashTrace.Write("UI", "Local command intercepted prompt=/queue-sim");
+
+        const int SimItemCount = 5;
+
+        if (QueueSimMode) {
+            return ExecuteLocalCoordinatorCommand(
+                prompt,
+                addToHistory,
+                clearPromptBox,
+                () => _appendLine("⚠️ A queue simulation is already running. Wait for it to finish before starting another.", null));
+        }
+
+        QueueSimMode = true;
+        _queueSimItemsRemaining = SimItemCount;
+
+        for (int i = 1; i <= SimItemCount; i++)
+            _enqueuePrompt($"Queue test item {i} of {SimItemCount}");
+
+        return ExecuteLocalCoordinatorCommand(
+            prompt,
+            addToHistory,
+            clearPromptBox,
+            () => {
+                _appendLine("## Queue Simulation Started", null);
+                _appendLine($"Enqueued **{SimItemCount}** test items. Each simulates an AI response with a ~1.5 s delay — no real AI calls are made.", null);
+                _appendLine("Try the queue mechanics: **pause/resume** with the play/pause button, or prioritize items with **Ctrl+Enter**.", null);
             });
     }
 
@@ -1676,11 +1719,20 @@ internal sealed class PromptExecutionController {
                         settings.RuntimeIssueSimulation));
             }
 
-            await runBridgeTurnAsync(workspace, configDirectory);
-            _clearRuntimeIssue();
+            if (QueueSimMode) {
+                await Task.Delay(1500);
+                _appendLine($"[Queue simulation: processed \"{visiblePrompt}\"]", null);
+                _finalizeCurrentTurnResponse();
+                if (--_queueSimItemsRemaining <= 0)
+                    QueueSimMode = false;
+            }
+            else {
+                await runBridgeTurnAsync(workspace, configDirectory);
+                _clearRuntimeIssue();
+                _refreshAgentCards();
+                _refreshSidebar();
+            }
             SquadDashTrace.Write("UI", "ExecutePromptAsync completed successfully.");
-            _refreshAgentCards();
-            _refreshSidebar();
         }
         catch (OperationCanceledException ex) {
             if (IsUserRequestedAbort(ex)) {

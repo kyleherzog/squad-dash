@@ -5724,9 +5724,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         "/activate", "/add-dir", "/agents", "/allow-all", "/approval", "/changelog", "/clear",
         "/context", "/copy", "/delegate", "/deactivate", "/diff", "/doctor", "/experimental", "/feedback",
         "/fleet", "/dropTasks", "/help", "/hire", "/ide", "/init", "/instructions", "/login", "/logout",
-        "/lsp", "/mcp", "/model", "/new", "/plan", "/pr", "/research", "/restart",
+        "/lsp", "/mcp", "/model", "/new", "/plan", "/pr", "/queue-sim", "/research", "/restart",
         "/resume", "/review", "/rewind", "/rename", "/retire", "/session", "/sessions", "/share", "/skills",
-        "/status", "/tasks", "/trace", "/update", "/usage", "/version"
+        "/status", "/tasks", "/test-queue", "/trace", "/update", "/usage", "/version"
     ];
 
     private void SyncAgentCardsWithThreads()

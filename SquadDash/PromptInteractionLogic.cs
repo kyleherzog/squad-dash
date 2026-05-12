@@ -226,9 +226,11 @@ internal static class LocalPromptSubmissionPolicy {
         "/help",
         "/hire",
         "/model",
+        "/queue-sim",
         "/sessions",
         "/status",
         "/tasks",
+        "/test-queue",
         "/trace",
         "/version"
     };
