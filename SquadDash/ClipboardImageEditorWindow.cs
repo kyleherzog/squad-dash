@@ -1564,6 +1564,11 @@ internal sealed class ClipboardImageEditorWindow : Window
     // body drags before child handlers can interfere — the same pattern the resize handles use.
     private void Canvas_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        // When actively editing a text annotation and clicking canvas background, flag for deselect
+        // BEFORE LostFocus fires. The early-return guard below would skip this otherwise.
+        if (_inTextMode && e.ClickCount == 1 && (_activeTextBox != null || _editingText != null))
+            _pendingTextCommitDeselect = true;
+
         if (e.ClickCount != 1 || _inTextMode || _inArrowMode || _inRectMode
             || _inCursorPlacementMode || _inEyedropperMode || _suppressNextTextDeselect)
             return;
@@ -2419,6 +2424,8 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     private void EnterArrowMode()
     {
+        if (_selectedAnnotRect != null) SelectAnnotationRect(null);
+        if (_selectedText != null) SelectText(null);
         _inMoveMode = false;
         _inCropMode = false;
         _inArrowMode = true;
@@ -3152,6 +3159,8 @@ internal sealed class ClipboardImageEditorWindow : Window
 
     private void EnterRectMode()
     {
+        SelectArrow(null);
+        if (_selectedText != null) SelectText(null);
         _inMoveMode = false;
         _inCropMode = false;
         _inRectMode = true;
