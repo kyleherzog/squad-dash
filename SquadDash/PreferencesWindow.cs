@@ -838,64 +838,60 @@ internal sealed class PreferencesWindow : Window {
         headerHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
         form.Children.Add(headerHint);
 
-        AddSoundEventRow(form, SoundEvent.PromptComplete,        "Prompt complete",         _soundPromptCompleteCheckBox,        _soundPromptCompletePathBox);
-        AddSoundEventRow(form, SoundEvent.PromptError,           "Prompt error / failed",   _soundPromptErrorCheckBox,           _soundPromptErrorPathBox);
-        AddSoundEventRow(form, SoundEvent.ApprovalNeeded,        "Approval needed",         _soundApprovalNeededCheckBox,        _soundApprovalNeededPathBox);
-        AddSoundEventRow(form, SoundEvent.QueueEmpty,            "Queue empty",             _soundQueueEmptyCheckBox,            _soundQueueEmptyPathBox);
-        AddSoundEventRow(form, SoundEvent.LoopIterationComplete, "Loop iteration complete", _soundLoopIterationCompleteCheckBox, _soundLoopIterationCompletePathBox);
-        AddSoundEventRow(form, SoundEvent.LoopStopped,           "Loop stopped",            _soundLoopStoppedCheckBox,           _soundLoopStoppedPathBox);
-        AddSoundEventRow(form, SoundEvent.CommitMade,            "Commit made",             _soundCommitMadeCheckBox,            _soundCommitMadePathBox);
+        var evtGrid = new Grid();
+        evtGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
+        evtGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        evtGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
+        AddSoundEventRow(evtGrid, 0, SoundEvent.PromptComplete,        "Prompt complete",         _soundPromptCompleteCheckBox,        _soundPromptCompletePathBox);
+        AddSoundEventRow(evtGrid, 1, SoundEvent.PromptError,           "Prompt error / failed",   _soundPromptErrorCheckBox,           _soundPromptErrorPathBox);
+        AddSoundEventRow(evtGrid, 2, SoundEvent.ApprovalNeeded,        "Approval needed",         _soundApprovalNeededCheckBox,        _soundApprovalNeededPathBox);
+        AddSoundEventRow(evtGrid, 3, SoundEvent.QueueEmpty,            "Queue empty",             _soundQueueEmptyCheckBox,            _soundQueueEmptyPathBox);
+        AddSoundEventRow(evtGrid, 4, SoundEvent.LoopIterationComplete, "Loop iteration complete", _soundLoopIterationCompleteCheckBox, _soundLoopIterationCompletePathBox);
+        AddSoundEventRow(evtGrid, 5, SoundEvent.LoopStopped,           "Loop stopped",            _soundLoopStoppedCheckBox,           _soundLoopStoppedPathBox);
+        AddSoundEventRow(evtGrid, 6, SoundEvent.CommitMade,            "Commit made",             _soundCommitMadeCheckBox,            _soundCommitMadePathBox);
+
+        form.Children.Add(evtGrid);
         return WrapInScrollViewer(form);
     }
 
-    private void AddSoundEventRow(StackPanel parent, SoundEvent evt, string label, CheckBox checkBox, TextBox pathBox) {
-        var border = new Border {
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(12, 10, 12, 10),
-            Margin = new Thickness(0, 0, 0, 8)
-        };
-        border.SetResourceReference(Border.BorderBrushProperty, "SubtleBorder");
-        border.SetResourceReference(Border.BackgroundProperty, "InputSurface");
+    private void AddSoundEventRow(Grid grid, int rowIndex, SoundEvent evt, string label, CheckBox checkBox, TextBox pathBox) {
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        var stack = new StackPanel();
-        border.Child = stack;
+        bool isEnabled = checkBox.IsChecked == true;
 
+        // Col 0: CheckBox with event label
         checkBox.Content = label;
-        stack.Children.Add(checkBox);
+        checkBox.Margin = new Thickness(0, 3, 8, 3);
+        checkBox.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetRow(checkBox, rowIndex);
+        Grid.SetColumn(checkBox, 0);
+        grid.Children.Add(checkBox);
 
-        // Path row: textbox + Browse button
-        var pathRow = new Grid { Margin = new Thickness(0, 6, 0, 0), IsEnabled = checkBox.IsChecked == true };
-        pathRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        pathRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        pathBox.Margin = new Thickness(0, 0, 6, 0);
-        Grid.SetColumn(pathBox, 0);
-        pathRow.Children.Add(pathBox);
+        // Col 1: TextBox — star width, tooltip replaces inline hint
+        pathBox.Margin = new Thickness(0, 3, 6, 3);
+        pathBox.ToolTip = "Leave blank to use the default Windows sound";
+        Grid.SetRow(pathBox, rowIndex);
+        Grid.SetColumn(pathBox, 1);
+        grid.Children.Add(pathBox);
 
+        // Col 2: Browse button — auto width
         var browseBtn = new Button {
             Content = "Browse…",
             Padding = new Thickness(10, 4, 10, 4),
-            Height = 28
+            Height = 28,
+            Margin = new Thickness(0, 3, 0, 3),
+            IsEnabled = isEnabled,
+            VerticalAlignment = VerticalAlignment.Center
         };
         browseBtn.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
-        Grid.SetColumn(browseBtn, 1);
-        pathRow.Children.Add(browseBtn);
-        stack.Children.Add(pathRow);
-
-        var hint = new TextBlock {
-            Text = "Leave blank for default Windows sound",
-            FontSize = 11,
-            Margin = new Thickness(0, 4, 0, 0)
-        };
-        hint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
-        stack.Children.Add(hint);
-
-        parent.Children.Add(border);
+        Grid.SetRow(browseBtn, rowIndex);
+        Grid.SetColumn(browseBtn, 2);
+        grid.Children.Add(browseBtn);
 
         // Wire events — save immediately on every change
-        checkBox.Checked   += (_, _) => { pathRow.IsEnabled = true;  SaveSoundSettingNow(evt, checkBox, pathBox); };
-        checkBox.Unchecked += (_, _) => { pathRow.IsEnabled = false; SaveSoundSettingNow(evt, checkBox, pathBox); };
+        checkBox.Checked   += (_, _) => { pathBox.IsEnabled = true;  browseBtn.IsEnabled = true;  SaveSoundSettingNow(evt, checkBox, pathBox); };
+        checkBox.Unchecked += (_, _) => { pathBox.IsEnabled = false; browseBtn.IsEnabled = false; SaveSoundSettingNow(evt, checkBox, pathBox); };
         pathBox.LostFocus  += (_, _) => SaveSoundSettingNow(evt, checkBox, pathBox);
         browseBtn.Click    += (_, _) => {
             var dlg = new Microsoft.Win32.OpenFileDialog {
