@@ -2080,11 +2080,28 @@ internal sealed class ClipboardImageEditorWindow : Window
                 if (ann.Display != null) ann.Display.Width = newW;
                 // Also resize the live TextBox if this annotation is being edited.
                 if (_activeTextBox != null && ann == _editingText) _activeTextBox.Width = newW;
+
+                // Re-measure at the new width: wrapped text may need more height when the
+                // box is made narrower, so never let height be less than the content requires.
+                if (ann.Display != null)
+                {
+                    ann.Display.Measure(new Size(newW, double.PositiveInfinity));
+                    expectedH = Math.Max(expectedH, ann.Display.DesiredSize.Height);
+                }
+
                 ann.Bounds = new Rect(_textHandleDragOrigBounds.Left, _textHandleDragOrigBounds.Top, newW, expectedH);
                 expectedW  = newW;
             }
             else
             {
+                // NoWrap text: clamp to natural text dimensions so the box can never be made
+                // smaller than its content (prevents overflow outside the background rect).
+                if (ann.Display != null)
+                {
+                    ann.Display.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    expectedW = Math.Max(expectedW, ann.Display.DesiredSize.Width);
+                    expectedH = Math.Max(expectedH, ann.Display.DesiredSize.Height);
+                }
                 ann.Bounds = new Rect(_textHandleDragOrigBounds.Left, _textHandleDragOrigBounds.Top, expectedW, expectedH);
             }
 
