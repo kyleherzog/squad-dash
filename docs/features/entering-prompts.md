@@ -90,6 +90,12 @@ Accepting a suggestion inserts `@handle ` into your prompt — the agent's kebab
 
 ---
 
+## Attaching Clipboard Text
+
+Press **Ctrl+Shift+V** to attach the clipboard's text content as a follow-up attachment instead of pasting it inline. This keeps large outputs, logs, and code blocks out of the transcript while still making them available to the agent. See [Attaching Clipboard Text](attach-clipboard-text.md) for full details.
+
+---
+
 ## See Also
 
 - **[Prompt Queue](prompt-queue.md)** — What happens when you send a prompt while an agent is already running

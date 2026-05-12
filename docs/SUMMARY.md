@@ -13,14 +13,19 @@
   * [Windows Taskbar](getting-started/Windows Taskbar.md)
 * [Installer](getting-started/Installer.md)
 
+## Prompts
+
+* [Prompts](features/prompts.md)
+  * [Entering Prompts](features/entering-prompts.md)
+  * [Attaching Clipboard Text](features/attach-clipboard-text.md)
+  * [Paste Image](features/paste-image.md)
+  * [Voice Input](features/voice-input.md)
+  * [Prompt Queue](features/prompt-queue.md)
+
 ## Features
 
 * [Features](features/README.md)
-  * [Entering Prompts](features/entering-prompts.md)
-  * [Paste Image](features/paste-image.md)
-  * [Voice Input](features/voice-input.md)
   * [Fullscreen Transcript](features/fullscreen-transcript.md)
-  * [Prompt Queue](features/prompt-queue.md)
   * [Text Formatting Shortcuts](features/text-formatting.md)
 
 ## Panels
