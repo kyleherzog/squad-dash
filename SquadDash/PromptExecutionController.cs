@@ -168,6 +168,10 @@ internal sealed class PromptExecutionController {
     private readonly Action      _clearPromptTextBox;
     private readonly Action      _focusPromptTextBox;
     private readonly Func<bool>  _isPromptTextBoxEnabled;
+    private readonly Func<int>   _getQueueCount;
+    private readonly Func<string> _getPromptBoxText;
+    private readonly Action<string> _setPromptBoxText;
+    private readonly Action<PromptQueueItem> _enqueueSimItem;
 
     // ── Injected — Routing Flags ──────────────────────────────────────────
     private readonly Func<bool>   _getPendingRoutingRepairRecheck;
@@ -260,12 +264,21 @@ internal sealed class PromptExecutionController {
     private int              _toolCompleteCount;
     private bool             _promptNoActivityWarningShown;
     private bool             _promptStallWarningShown;
+
+    // ── Per-item sim state (set by /test-queue; consumed as items execute) ─
     /// <summary>
-    /// When true, queue items are processed as simulated turns (no AI call, 1.5 s delay each).
-    /// Set by <c>/queue-sim</c> and cleared automatically when all sim items are consumed.
+    /// The queue item currently being dispatched by MainWindow.
+    /// Set by MainWindow before each <c>ExecutePromptAsync</c> call that originates
+    /// from a queue drain, and cleared immediately after. Null for direct (non-queued)
+    /// dispatches. Used to detect sim items at execution time.
     /// </summary>
-    internal bool QueueSimMode { get; private set; }
-    private int _queueSimItemsRemaining;
+    internal PromptQueueItem? CurrentDispatchedItem { get; set; }
+
+    /// <summary>
+    /// Sim metadata for the active-draft tab created by a <c>$ActiveDraft$</c> directive.
+    /// Set by <c>/test-queue</c>, consumed on the next direct (non-queued) dispatch.
+    /// </summary>
+    private (string SimResponse, int SimDelaySeconds)? _activeDraftSimEntry;
 
     /// <summary>
     /// Set when the user aborts a running prompt. Causes the next prompt to be prefixed
@@ -353,6 +366,10 @@ internal sealed class PromptExecutionController {
         Action clearPromptTextBox,
         Action focusPromptTextBox,
         Func<bool> isPromptTextBoxEnabled,
+        Func<int> getQueueCount,
+        Func<string> getPromptBoxText,
+        Action<string> setPromptBoxText,
+        Action<PromptQueueItem> enqueueSimItem,
         // Routing Flags
         Func<bool> getPendingRoutingRepairRecheck,
         Action<bool> setPendingRoutingRepairRecheck,
@@ -423,6 +440,10 @@ internal sealed class PromptExecutionController {
         _clearPromptTextBox                    = clearPromptTextBox;
         _focusPromptTextBox                    = focusPromptTextBox;
         _isPromptTextBoxEnabled                = isPromptTextBoxEnabled;
+        _getQueueCount                         = getQueueCount;
+        _getPromptBoxText                      = getPromptBoxText;
+        _setPromptBoxText                      = setPromptBoxText;
+        _enqueueSimItem                        = enqueueSimItem;
         _getPendingRoutingRepairRecheck        = getPendingRoutingRepairRecheck;
         _setPendingRoutingRepairRecheck        = setPendingRoutingRepairRecheck;
         _getPendingSupplementalInstruction     = getPendingSupplementalInstruction;
@@ -867,9 +888,10 @@ internal sealed class PromptExecutionController {
         if (string.Equals(trimmed, "/clear", StringComparison.OrdinalIgnoreCase))
             return HandleLocalClearCommand(prompt, addToHistory, clearPromptBox);
 
-        if (string.Equals(trimmed, "/queue-sim", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, "/test-queue", StringComparison.OrdinalIgnoreCase))
-            return HandleLocalQueueSimCommand(prompt, addToHistory, clearPromptBox);
+        if (TryMatchCommandWithBody(trimmed, "/test-queue", out var testQueueBody))
+            return HandleLocalTestQueueCommand(prompt, testQueueBody, addToHistory, clearPromptBox);
+        if (TryMatchCommandWithBody(trimmed, "/queue-sim", out var queueSimBody))
+            return HandleLocalTestQueueCommand(prompt, queueSimBody, addToHistory, clearPromptBox);
 
         return false;
     }
@@ -1145,8 +1167,9 @@ internal sealed class PromptExecutionController {
                 _appendLine("- `/help` — Show this command reference", null);
                 _appendLine("- `/hire` — Open the visual hire-agent workflow", null);
                 _appendLine("- `/model` — Show the active AI model", null);
-                _appendLine("- `/queue-sim` — Enqueue 5 fake items to exercise queue mechanics without a real AI call", null);
-                _appendLine("- `/queue-sim` alias: `/test-queue`", null);
+                _appendLine("- `/queue-sim` — Alias for `/test-queue` with the default scenario", null);
+                _appendLine("- `/test-queue` — Enqueue sim items to exercise queue mechanics without a real AI call", null);
+                _appendLine("- `/test-queue` DSL: `$QueuePrompt$(\"prompt\", \"response\", delaySecs)` and `$ActiveDraft$(\"prompt\", \"response\", delaySecs)`", null);
                 _appendLine("- `/retire <name>` — Archive an agent and remove them from the active roster", null);
                 _appendLine("- `/session` — Manage SDK sessions (type `/session` for details)", null);
                 _appendLine("- `/sessions` — List saved sessions", null);
@@ -1157,34 +1180,176 @@ internal sealed class PromptExecutionController {
             });
     }
 
-    private bool HandleLocalQueueSimCommand(string prompt, bool addToHistory, bool clearPromptBox) {
-        SquadDashTrace.Write("UI", "Local command intercepted prompt=/queue-sim");
+    private bool HandleLocalTestQueueCommand(string prompt, string body, bool addToHistory, bool clearPromptBox) {
+        SquadDashTrace.Write("UI", "Local command intercepted prompt=/test-queue");
 
-        const int SimItemCount = 5;
+        // ── Precondition guard ────────────────────────────────────────────
+        var queueCount  = _getQueueCount();
+        var boxText     = _getPromptBoxText().Trim();
+        var hasOtherDraftContent =
+            !string.IsNullOrWhiteSpace(boxText) &&
+            !boxText.StartsWith("/test-queue", StringComparison.OrdinalIgnoreCase) &&
+            !boxText.StartsWith("/queue-sim",  StringComparison.OrdinalIgnoreCase);
 
-        if (QueueSimMode) {
+        if (queueCount > 0 || hasOtherDraftContent) {
             return ExecuteLocalCoordinatorCommand(
                 prompt,
                 addToHistory,
                 clearPromptBox,
-                () => _appendLine("⚠️ A queue simulation is already running. Wait for it to finish before starting another.", null));
+                () => _appendLine("[Queue test] Cannot start: queue must be empty and prompt box must be blank.", null));
         }
 
-        QueueSimMode = true;
-        _queueSimItemsRemaining = SimItemCount;
+        // ── Parse DSL (or use default scenario) ───────────────────────────
+        var entries = string.IsNullOrWhiteSpace(body)
+            ? BuildDefaultTestQueueScenario()
+            : ParseTestQueueDsl(body);
 
-        for (int i = 1; i <= SimItemCount; i++)
-            _enqueuePrompt($"Queue test item {i} of {SimItemCount}");
+        if (entries.Count == 0) {
+            return ExecuteLocalCoordinatorCommand(
+                prompt,
+                addToHistory,
+                clearPromptBox,
+                () => _appendLine("[Queue test] No valid `$QueuePrompt$` or `$ActiveDraft$` directives found in the body.", null));
+        }
 
+        var queueEntries    = entries.Where(e => !e.IsActiveDraft).ToList();
+        var activeDraftEntry = entries.FirstOrDefault(e => e.IsActiveDraft);
+
+        // Enqueue $QueuePrompt$ items in DSL order (first = rightmost = drains first).
+        int seqBase = 1;
+        foreach (var entry in queueEntries) {
+            var item = new PromptQueueItem {
+                Text            = entry.PromptText,
+                SequenceNumber  = seqBase++,
+                IsSimEntry      = true,
+                SimResponse     = entry.FakeResponse,
+                SimDelaySeconds = entry.DelaySeconds,
+            };
+            _enqueueSimItem(item);
+        }
+
+        // Set the active-draft box text and stash sim metadata for when it is submitted.
+        if (activeDraftEntry is not null) {
+            _setPromptBoxText(activeDraftEntry.PromptText);
+            _activeDraftSimEntry = (activeDraftEntry.FakeResponse, activeDraftEntry.DelaySeconds);
+        }
+
+        int totalItems = queueEntries.Count + (activeDraftEntry is not null ? 1 : 0);
         return ExecuteLocalCoordinatorCommand(
             prompt,
             addToHistory,
-            clearPromptBox,
+            clearPromptBox: activeDraftEntry is null && clearPromptBox,
             () => {
-                _appendLine("## Queue Simulation Started", null);
-                _appendLine($"Enqueued **{SimItemCount}** test items. Each simulates an AI response with a ~1.5 s delay — no real AI calls are made.", null);
-                _appendLine("Try the queue mechanics: **pause/resume** with the play/pause button, or prioritize items with **Ctrl+Enter**.", null);
+                _appendLine("## Queue Test Started", null);
+                _appendLine($"Enqueued **{queueEntries.Count}** sim item(s){(activeDraftEntry is not null ? " and set the active draft" : "")} — no real AI calls will be made.", null);
+                _appendLine("Each item uses its configured delay and fake response. Try **pause/resume** or **Ctrl+Enter** to prioritize.", null);
             });
+    }
+
+    // ── DSL types and parsing ─────────────────────────────────────────────
+
+    private record TestQueueEntry(string PromptText, string FakeResponse, int DelaySeconds, bool IsActiveDraft);
+
+    private static IReadOnlyList<TestQueueEntry> ParseTestQueueDsl(string body) {
+        var results = new List<TestQueueEntry>();
+        foreach (var rawLine in body.Split('\n')) {
+            var line = rawLine.Trim().TrimEnd(';').Trim();
+            if (line.Length == 0) continue;
+
+            bool isActiveDraft;
+            if (line.StartsWith("$QueuePrompt$", StringComparison.OrdinalIgnoreCase))
+                isActiveDraft = false;
+            else if (line.StartsWith("$ActiveDraft$", StringComparison.OrdinalIgnoreCase))
+                isActiveDraft = true;
+            else
+                continue;
+
+            var parenStart = line.IndexOf('(');
+            var parenEnd   = line.LastIndexOf(')');
+            if (parenStart < 0 || parenEnd <= parenStart) continue;
+
+            var argSpan = line[(parenStart + 1)..parenEnd];
+            if (!TryParseSimDslArgs(argSpan, out var promptText, out var fakeResponse, out var delaySecs))
+                continue;
+
+            results.Add(new TestQueueEntry(promptText, fakeResponse, delaySecs, isActiveDraft));
+        }
+        return results;
+    }
+
+    private static bool TryParseSimDslArgs(
+        string argSpan,
+        out string promptText,
+        out string fakeResponse,
+        out int    delaySecs) {
+        promptText   = string.Empty;
+        fakeResponse = string.Empty;
+        delaySecs    = 1;
+
+        int pos = 0;
+        if (!TryReadQuotedString(argSpan, ref pos, out promptText))  return false;
+        SkipCommaAndWhitespace(argSpan, ref pos);
+        if (!TryReadQuotedString(argSpan, ref pos, out fakeResponse)) return false;
+        SkipCommaAndWhitespace(argSpan, ref pos);
+        if (!TryReadInt(argSpan, ref pos, out delaySecs))             return false;
+        return true;
+    }
+
+    private static bool TryReadQuotedString(string src, ref int pos, out string value) {
+        value = string.Empty;
+        while (pos < src.Length && char.IsWhiteSpace(src[pos])) pos++;
+        if (pos >= src.Length || src[pos] != '"') return false;
+        pos++; // consume opening quote
+        var sb = new System.Text.StringBuilder();
+        while (pos < src.Length && src[pos] != '"')
+            sb.Append(src[pos++]);
+        if (pos < src.Length) pos++; // consume closing quote
+        value = sb.ToString();
+        return true;
+    }
+
+    private static bool TryReadInt(string src, ref int pos, out int value) {
+        value = 1;
+        while (pos < src.Length && char.IsWhiteSpace(src[pos])) pos++;
+        int start = pos;
+        while (pos < src.Length && char.IsDigit(src[pos])) pos++;
+        return pos > start && int.TryParse(src[start..pos], out value);
+    }
+
+    private static void SkipCommaAndWhitespace(string src, ref int pos) {
+        while (pos < src.Length && char.IsWhiteSpace(src[pos])) pos++;
+        if (pos < src.Length && src[pos] == ',') pos++;
+        while (pos < src.Length && char.IsWhiteSpace(src[pos])) pos++;
+    }
+
+    private static IReadOnlyList<TestQueueEntry> BuildDefaultTestQueueScenario() =>
+        new[] {
+            new TestQueueEntry("Queue test item 1 of 5", "✅ [Queue sim] Item 1 — fake response.",  1, IsActiveDraft: false),
+            new TestQueueEntry("Queue test item 2 of 5", "✅ [Queue sim] Item 2 — fake response.",  2, IsActiveDraft: false),
+            new TestQueueEntry("Queue test item 3 of 5", "✅ [Queue sim] Item 3 — fake response.",  2, IsActiveDraft: false),
+            new TestQueueEntry("Queue test item 4 of 5", "✅ [Queue sim] Item 4 — fake response.",  1, IsActiveDraft: false),
+            new TestQueueEntry("Queue test item 5 of 5 (draft)", "✅ [Queue sim] Draft item — fake response.", 1, IsActiveDraft: true),
+        };
+
+    /// <summary>
+    /// Like <see cref="TryMatchCommandWithArguments"/> but also accepts a newline as the
+    /// separator between the command name and its body, enabling multi-line DSL bodies.
+    /// </summary>
+    private static bool TryMatchCommandWithBody(string trimmedPrompt, string command, out string body) {
+        if (string.Equals(trimmedPrompt, command, StringComparison.OrdinalIgnoreCase)) {
+            body = string.Empty;
+            return true;
+        }
+        if (trimmedPrompt.StartsWith(command, StringComparison.OrdinalIgnoreCase) &&
+            trimmedPrompt.Length > command.Length) {
+            var ch = trimmedPrompt[command.Length];
+            if (ch == ' ' || ch == '\n' || ch == '\r') {
+                body = trimmedPrompt[command.Length..].TrimStart();
+                return true;
+            }
+        }
+        body = string.Empty;
+        return false;
     }
 
     private bool HandleLocalStatusCommand(string prompt, bool addToHistory, bool clearPromptBox) {
@@ -1719,12 +1884,21 @@ internal sealed class PromptExecutionController {
                         settings.RuntimeIssueSimulation));
             }
 
-            if (QueueSimMode) {
-                await Task.Delay(1500);
-                _appendLine($"[Queue simulation: processed \"{visiblePrompt}\"]", null);
+            if (CurrentDispatchedItem?.IsSimEntry == true) {
+                var simItem = CurrentDispatchedItem;
+                _updateLeadAgent("Thinking", string.Empty, "Simulating AI response…");
+                await Task.Delay(TimeSpan.FromSeconds(Math.Max(0, simItem.SimDelaySeconds)));
+                _appendLine(simItem.SimResponse ?? $"[Queue sim] Processed \"{visiblePrompt}\"", null);
                 _finalizeCurrentTurnResponse();
-                if (--_queueSimItemsRemaining <= 0)
-                    QueueSimMode = false;
+                _clearRuntimeIssue();
+            }
+            else if (_activeDraftSimEntry is { } draftSim) {
+                _activeDraftSimEntry = null;
+                _updateLeadAgent("Thinking", string.Empty, "Simulating AI response…");
+                await Task.Delay(TimeSpan.FromSeconds(Math.Max(0, draftSim.SimDelaySeconds)));
+                _appendLine(draftSim.SimResponse, null);
+                _finalizeCurrentTurnResponse();
+                _clearRuntimeIssue();
             }
             else {
                 await runBridgeTurnAsync(workspace, configDirectory);

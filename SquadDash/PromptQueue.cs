@@ -14,6 +14,10 @@ internal sealed class PromptQueueItem {
     public int    CaretIndex     { get; set; }
     public int    SelectionStart { get; set; }
     public int    SelectionLength { get; set; }
+    // ── Sim fields (set by /test-queue; ignored by non-sim code paths) ────
+    public bool    IsSimEntry       { get; set; }
+    public string? SimResponse      { get; set; }
+    public int     SimDelaySeconds  { get; set; }
 }
 
 internal sealed class PromptQueue {
@@ -23,6 +27,9 @@ internal sealed class PromptQueue {
 
     public void Enqueue(string text, int seqNum, bool isDictated = false, bool isFromRemote = false) =>
         _items.Add(new PromptQueueItem { Text = text, SequenceNumber = seqNum, IsDictated = isDictated, IsFromRemote = isFromRemote });
+
+    /// <summary>Adds a fully-constructed item (e.g. a sim item) to the back of the queue.</summary>
+    public void EnqueueItem(PromptQueueItem item) => _items.Add(item);
 
     /// <summary>Removes and returns the first non-editing item, or null if none exists.</summary>
     public PromptQueueItem? DequeueFirstReady() {

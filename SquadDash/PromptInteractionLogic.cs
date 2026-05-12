@@ -266,7 +266,7 @@ internal static class LocalPromptSubmissionPolicy {
         if (trimmed.Length == 0)
             return string.Empty;
 
-        var spaceIndex = trimmed.IndexOf(' ');
+        var spaceIndex = trimmed.IndexOfAny(new[] { ' ', '\n', '\r' });
         return spaceIndex >= 0
             ? trimmed[..spaceIndex]
             : trimmed;

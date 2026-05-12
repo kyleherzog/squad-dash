@@ -992,6 +992,15 @@ public partial class MainWindow : Window, ILiveElementLocator
             clearPromptTextBox: () => ClearPromptTextBoxLogicalBuffer("prompt-executed"),
             focusPromptTextBox: () => PromptTextBox.Focus(),
             isPromptTextBoxEnabled: () => PromptTextBox.IsEnabled,
+            getQueueCount: () => _promptQueue.Count,
+            getPromptBoxText: () => PromptTextBox.Text,
+            setPromptBoxText: text => SetPromptTextBoxLogicalBuffer(text, text.Length, reason: "test-queue-draft"),
+            enqueueSimItem: item => {
+                item.SequenceNumber = ++_promptQueueSeq;
+                _promptQueue.EnqueueItem(item);
+                SyncQueuePanel();
+                _ = DrainQueueIfNeededAsync();
+            },
             getPendingRoutingRepairRecheck: () => _pendingRoutingRepairRecheck,
             setPendingRoutingRepairRecheck: v => _pendingRoutingRepairRecheck = v,
             getPendingSupplementalInstruction: () => _pendingSupplementalPromptInstruction,
@@ -2067,6 +2076,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (_remoteAccessActive && !item.IsFromRemote)
                 _ = _bridge.BroadcastRcPromptAsync(item.Text);
             _pec.PendingQueueItemCount = _promptQueue.Count;
+            _pec.CurrentDispatchedItem = item;
             await _pec.ExecutePromptAsync(ApplyFollowUpHeader(ApplyDictationAnnotation(item), item.Id), addToHistory: true, clearPromptBox: false);
         }
         catch (Exception ex)
@@ -2076,6 +2086,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         finally
         {
             _pec.PendingQueueItemCount = 0;
+            _pec.CurrentDispatchedItem = null;
         }
         // Further drain is triggered by setIsPromptRunning(false) callback.
     }
@@ -2102,6 +2113,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 if (_remoteAccessActive && !item.IsFromRemote)
                     _ = _bridge.BroadcastRcPromptAsync(item.Text);
                 _pec.PendingQueueItemCount = _promptQueue.Count;
+                _pec.CurrentDispatchedItem = item;
                 await _pec.ExecutePromptAsync(ApplyFollowUpHeader(ApplyDictationAnnotation(item), item.Id), addToHistory: true, clearPromptBox: false);
             }
             catch (Exception ex)
@@ -2112,6 +2124,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             finally
             {
                 _pec.PendingQueueItemCount = 0;
+                _pec.CurrentDispatchedItem = null;
             }
         }
 
@@ -2152,6 +2165,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 if (_remoteAccessActive && !item.IsFromRemote)
                     _ = _bridge.BroadcastRcPromptAsync(item.Text);
                 _pec.PendingQueueItemCount = _promptQueue.Count;
+                _pec.CurrentDispatchedItem = item;
                 await _pec.ExecutePromptAsync(ApplyFollowUpHeader(ApplyDictationAnnotation(item), item.Id), addToHistory: true, clearPromptBox: false);
             }
             catch (Exception ex)
@@ -2162,6 +2176,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             finally
             {
                 _pec.PendingQueueItemCount = 0;
+                _pec.CurrentDispatchedItem = null;
             }
         }
     }
