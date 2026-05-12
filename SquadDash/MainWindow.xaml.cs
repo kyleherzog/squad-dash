@@ -12815,12 +12815,20 @@ public partial class MainWindow : Window, ILiveElementLocator
         // Restore queued prompts saved before last shutdown.
         var savedEntries = _conversationManager.ConversationState.QueuedPromptEntries;
         var savedLegacy = _conversationManager.ConversationState.QueuedPrompts;
+        var savedQueuePaused = _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath).QueuePaused == true;
         if (savedEntries is { Count: > 0 })
         {
             _promptQueueSeq = 0;
             foreach (var entry in savedEntries)
             {
                 _promptQueue.Enqueue(entry.Text, ++_promptQueueSeq, entry.IsDictated);
+                var restoredItem = _promptQueue.Items[^1];
+                if (entry.IsSimEntry)
+                {
+                    restoredItem.IsSimEntry      = true;
+                    restoredItem.SimResponse     = entry.SimResponse;
+                    restoredItem.SimDelaySeconds = entry.SimDelaySeconds;
+                }
                 if (entry.Attachments is { Count: > 0 })
                 {
                     var newId = _promptQueue.Items[^1].Id;
@@ -12850,8 +12858,11 @@ public partial class MainWindow : Window, ILiveElementLocator
             }
             else
             {
-                _ = Dispatcher.InvokeAsync(() => _ = DrainQueueIfNeededAsync(),
-                    System.Windows.Threading.DispatcherPriority.Background);
+                if (savedQueuePaused)
+                    SquadDashTrace.Write("Queue", $"Restore: skipping drain — queue was paused at shutdown");
+                else
+                    _ = Dispatcher.InvokeAsync(() => _ = DrainQueueIfNeededAsync(),
+                        System.Windows.Threading.DispatcherPriority.Background);
             }
 
             // If the loop was paused to dequeue at last shutdown, auto-resume once the queue drains.
@@ -12896,8 +12907,11 @@ public partial class MainWindow : Window, ILiveElementLocator
             else
             {
                 // Auto-dispatch restored queue items once the UI is fully initialised.
-                _ = Dispatcher.InvokeAsync(() => _ = DrainQueueIfNeededAsync(),
-                    System.Windows.Threading.DispatcherPriority.Background);
+                if (savedQueuePaused)
+                    SquadDashTrace.Write("Queue", $"Restore: skipping drain — queue was paused at shutdown");
+                else
+                    _ = Dispatcher.InvokeAsync(() => _ = DrainQueueIfNeededAsync(),
+                        System.Windows.Threading.DispatcherPriority.Background);
             }
 
             // If the loop was paused to dequeue at last shutdown, auto-resume once the queue drains.

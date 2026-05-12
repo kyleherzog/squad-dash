@@ -601,7 +601,10 @@ internal sealed record WorkspaceConversationState(
 internal sealed record QueuedPromptEntry(
     string Text,
     bool IsDictated,
-    IReadOnlyList<FollowUpAttachmentDto>? Attachments = null);
+    IReadOnlyList<FollowUpAttachmentDto>? Attachments = null,
+    bool IsSimEntry = false,
+    string? SimResponse = null,
+    int SimDelaySeconds = 0);
 
 internal enum TranscriptThoughtPlacement {
     BeforeTools,

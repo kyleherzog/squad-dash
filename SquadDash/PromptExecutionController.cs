@@ -277,6 +277,9 @@ internal sealed class PromptExecutionController {
     /// <summary>
     /// Sim metadata for the active-draft tab created by a <c>$ActiveDraft$</c> directive.
     /// Set by <c>/test-queue</c>, consumed on the next direct (non-queued) dispatch.
+    /// TODO: Persist across restart — add ActiveDraftSimEntry property, store in WorkspaceConversationState,
+    /// and restore in MainWindow InitializeWorkspace. Deferred because UpdateQueuedPromptsState has many call
+    /// sites; adding a new optional parameter requires updating all of them.
     /// </summary>
     private (string SimResponse, int SimDelaySeconds)? _activeDraftSimEntry;
 
