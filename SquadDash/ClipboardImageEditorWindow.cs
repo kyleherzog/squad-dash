@@ -382,11 +382,22 @@ internal sealed class ClipboardImageEditorWindow : Window
         _effectiveScaleX = effectiveScaleX;
         _effectiveScaleY = effectiveScaleY;
 
-        // Canvas operates in physical pixel space — no WPF-level downscaling.
-        // Initial zoom compensates so the image displays at the correct screen size.
+        // Downscale the working image to logical pixel size so the canvas always operates in
+        // logical pixels and the output bitmap is naturally the right size for pasting.
+        // 795×660 on a 150% monitor → 530×440 logical.
+        if (effectiveScaleX > 1.05 || effectiveScaleY > 1.05)
+        {
+            var tb = new TransformedBitmap(clipboardImage,
+                new ScaleTransform(1.0 / effectiveScaleX, 1.0 / effectiveScaleY));
+            tb.Freeze();
+            _workingImage = tb;
+            imgW = tb.PixelWidth;
+            imgH = tb.PixelHeight;
+        }
+
         double dispW = imgW;
         double dispH = imgH;
-        // Canvas coords ARE physical pixels, so scale factor is 1:1.
+        // Canvas coords == logical pixels, scale factor is 1:1.
         _canvasScaleX = 1.0;
         _canvasScaleY = 1.0;
 
@@ -394,7 +405,7 @@ internal sealed class ClipboardImageEditorWindow : Window
             $"[ClipboardImageEditor] DPI: hMonOwner={hMonOwner:X} bitmap={clipboardImage.DpiX:F1}x{clipboardImage.DpiY:F1} " +
             $"rawMonitor={rawMonitorScale:F3} bitmapDpiScale={bitmapDpiScaleX:F3}x{bitmapDpiScaleY:F3} " +
             $"effective={effectiveScaleX:F3}x{effectiveScaleY:F3} " +
-            $"pixels={imgW:F0}x{imgH:F0} display={dispW / effectiveScaleX:F1}x{dispH / effectiveScaleY:F1} " +
+            $"pixels={clipboardImage.PixelWidth}x{clipboardImage.PixelHeight} logical={imgW:F0}x{imgH:F0} " +
             $"canvasScale={_canvasScaleX:F3}x{_canvasScaleY:F3} baseZoom=1.0");
 
         const double MinWindowWidth = 580;
@@ -4930,18 +4941,6 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         if (_roundCorners)
             bmp = ApplyRoundedCorners(bmp, CornerRadiusPx);
-
-        // Downscale to logical pixel size so the image pastes at its correct apparent size.
-        // On a 150% monitor: 1500×900 physical → 1000×600 logical.
-        if (_effectiveScaleX > 1.05 || _effectiveScaleY > 1.05)
-        {
-            int outW = Math.Max(1, (int)Math.Round(bmp.PixelWidth  / _effectiveScaleX));
-            int outH = Math.Max(1, (int)Math.Round(bmp.PixelHeight / _effectiveScaleY));
-            var scaled = new TransformedBitmap(bmp,
-                new ScaleTransform(1.0 / _effectiveScaleX, 1.0 / _effectiveScaleY));
-            scaled.Freeze();
-            bmp = scaled;
-        }
 
         SquadDashTrace.Write("UI",
             $"[ClipboardImageEditor] RenderFinal: workingImage={pxW}x{pxH}px " +
