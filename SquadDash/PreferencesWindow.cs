@@ -428,7 +428,7 @@ internal sealed class PreferencesWindow : Window {
             _navButtons[i] = btn;
         }
 
-        NavigateTo(0);
+        NavigateTo(Math.Min(currentSettings.Preferences_LastPage, _pages.Length - 1));
         UpdateQrCode();
     }
 
@@ -437,6 +437,7 @@ internal sealed class PreferencesWindow : Window {
         _pageHost.Content = _pages[index];
         for (int i = 0; i < _navButtons.Length; i++)
             _navButtons[i].Tag = i == index ? "selected" : null;
+        _settingsStore.SavePreferencesLastPage(index);
     }
 
     private UIElement BuildGeneralPage() {

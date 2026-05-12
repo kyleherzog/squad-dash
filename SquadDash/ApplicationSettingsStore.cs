@@ -271,6 +271,14 @@ internal sealed class ApplicationSettingsStore {
         return updated.Normalize();
     }
 
+    public ApplicationSettingsSnapshot SavePreferencesLastPage(int page) {
+        using var mutex = AcquireMutex();
+        var current = LoadCore();
+        var updated = current with { Preferences_LastPage = Math.Max(0, page) };
+        SaveCore(updated);
+        return updated.Normalize();
+    }
+
     public ApplicationSettingsSnapshot SaveNotificationSettings(
         string? provider,
         IReadOnlyDictionary<string, string>? endpoint,
@@ -1055,6 +1063,9 @@ internal sealed record ApplicationSettingsSnapshot(
     /// <summary>OpenAI TTS model quality: Standard (tts-1) or HD (tts-1-hd).</summary>
     public OpenAiTtsModel Tts_OpenAi_Model { get; init; } = OpenAiTtsModel.Standard;
 
+    /// <summary>Index of the last-visited page in the Preferences dialog (0 = General).</summary>
+    public int Preferences_LastPage { get; init; } = 0;
+
     public static ApplicationSettingsSnapshot Empty{ get; } =
         new(
             null,
@@ -1254,6 +1265,7 @@ internal sealed record ApplicationSettingsSnapshot(
             Tts_Azure_Voice  = string.IsNullOrWhiteSpace(Tts_Azure_Voice)  ? "en-US-JennyNeural" : Tts_Azure_Voice.Trim(),
             Tts_OpenAi_Voice = string.IsNullOrWhiteSpace(Tts_OpenAi_Voice) ? "alloy"              : Tts_OpenAi_Voice.Trim(),
             Tts_OpenAi_Model = Tts_OpenAi_Model,
+            Preferences_LastPage = Math.Max(0, Preferences_LastPage),
         };
     }
 
