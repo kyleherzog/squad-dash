@@ -9,6 +9,7 @@ using System.Windows.Controls.Primitives;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Windows.Media;
 using Microsoft.CognitiveServices.Speech;
 
 namespace SquadDash;
@@ -1149,9 +1150,29 @@ internal sealed class PreferencesWindow : Window {
 
         // Col 1: TextBox — star width, tooltip replaces inline hint
         pathBox.Margin = new Thickness(0, 3, 6, 3);
-        pathBox.ToolTip = "Leave blank to use the default Windows sound";
+        pathBox.ToolTip = "Leave blank to use the default Windows sound. Right-click to test.";
         Grid.SetRow(pathBox, rowIndex);
         Grid.SetColumn(pathBox, 1);
+
+        // Right-click context menu: play a preview of the current path (or system sound).
+        var testMenuItem = new MenuItem { Header = "▶  Test sound" };
+        testMenuItem.Click += (_, _) => {
+            var path = pathBox.Text.Trim();
+            if (!string.IsNullOrEmpty(path) && System.IO.File.Exists(path)) {
+                try {
+                    var player = new MediaPlayer();
+                    player.MediaOpened += (_, _) => player.Play();
+                    player.MediaEnded  += (_, _) => player.Close();
+                    player.Open(new Uri(path, UriKind.Absolute));
+                } catch { System.Media.SystemSounds.Asterisk.Play(); }
+            } else {
+                System.Media.SystemSounds.Asterisk.Play();
+            }
+        };
+        var ctxMenu = new ContextMenu();
+        ctxMenu.Items.Add(testMenuItem);
+        pathBox.ContextMenu = ctxMenu;
+
         grid.Children.Add(pathBox);
 
         // Col 2: Browse button — auto width

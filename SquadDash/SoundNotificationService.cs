@@ -176,10 +176,12 @@ internal sealed class SoundNotificationService
                     try
                     {
                         var player = new MediaPlayer();
-                        // Keep the player alive until playback finishes, then release it.
-                        player.MediaEnded += (_, _) => player.Close();
+                        // Play only after media is fully opened/buffered.
+                        // The MediaOpened + MediaEnded handlers keep the player alive via
+                        // the event delegate chain until playback finishes, then release it.
+                        player.MediaOpened += (_, _) => player.Play();
+                        player.MediaEnded  += (_, _) => player.Close();
                         player.Open(new Uri(capturedPath, UriKind.Absolute));
-                        player.Play();
                     }
                     catch (Exception ex)
                     {
