@@ -32,6 +32,13 @@ internal sealed class PostedUiActionTracker {
         completion?.TrySetResult(true);
     }
 
+    public long PendingCount {
+        get {
+            lock (_gate)
+                return _postedCount - _completedCount;
+        }
+    }
+
     public Task WaitForDrainAsync() {
         lock (_gate) {
             if (_completedCount >= _postedCount)

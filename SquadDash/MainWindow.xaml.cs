@@ -54,6 +54,10 @@ public partial class MainWindow : Window, ILiveElementLocator
     private const double DocSourceFontSizeMax = 28;
     private const double DocSourceFontSizeStep = 1;
     private const DispatcherPriority PostVisualUpdatePriority = DispatcherPriority.Loaded;
+    private const int UiDispatchQueueLagTraceMs = 250;
+    private const int UiDispatchWorkTraceMs = 50;
+    private const int UiResponsivenessLagTraceMs = 1000;
+    private const int PromptEditProbeTraceMs = 250;
     private static readonly TimeSpan MultiLineHintCooldown = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan AgentActiveDisplayLinger = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan DynamicAgentHistoryRetention = TimeSpan.FromDays(2);
@@ -96,7 +100,11 @@ public partial class MainWindow : Window, ILiveElementLocator
     private readonly DispatcherTimer _promptHealthTimer;
     private readonly DispatcherTimer _statusPresentationTimer;
     private readonly DispatcherTimer _responseRenderTimer;
+    private readonly DispatcherTimer _uiResponsivenessTimer;
     private readonly Stopwatch _sdkDeltaTraceStopwatch = Stopwatch.StartNew();
+    private DateTimeOffset _lastUiResponsivenessTick = DateTimeOffset.Now;
+    private int _promptEditProbeVersion;
+    private bool _promptEditProbeLayoutPending;
     private PromptExecutionController _pec = null!; // initialized in constructor after all services
     private LoopController _loopController = null!; // initialized in constructor after _pec
     private FileSystemWatcher? _inboxWatcher;
@@ -731,8 +739,26 @@ public partial class MainWindow : Window, ILiveElementLocator
         };
         _teamRefreshDebounceTimer.Tick += TeamRefreshDebounceTimer_Tick;
 
-        _bridge.EventReceived += (_, evt) => TryPostToUi(() => HandleEvent(evt), "Bridge.EventReceived");
+        _bridge.EventReceived += (_, evt) => TryPostToUi(() => HandleEvent(evt), $"Bridge.EventReceived:{evt.Type}");
         _bridge.ErrorReceived += (_, text) => TryPostToUi(() => HandleBridgeError(text), "Bridge.ErrorReceived");
+
+        _uiResponsivenessTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(500)
+        };
+        _uiResponsivenessTimer.Tick += (_, _) =>
+        {
+            var now = DateTimeOffset.Now;
+            var elapsedMs = (now - _lastUiResponsivenessTick).TotalMilliseconds;
+            _lastUiResponsivenessTick = now;
+            if (elapsedMs >= UiResponsivenessLagTraceMs)
+            {
+                SquadDashTrace.Write(
+                    TraceCategory.UI,
+                    $"UI_THREAD_LAG elapsedMs={elapsedMs:0} promptFocused={PromptTextBox?.IsKeyboardFocusWithin == true} textLen={PromptTextBox?.Text.Length ?? 0} postedPending={_postedUiActionTracker.PendingCount}");
+            }
+        };
+        _uiResponsivenessTimer.Start();
 
         UpdateStatusTitle();
         UpdateLeadAgent("Ready", string.Empty, string.Empty);
@@ -7845,9 +7871,16 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (string.IsNullOrWhiteSpace(key) ||
             (_settingsSnapshot.SpeechProvider == SpeechProvider.Azure && string.IsNullOrWhiteSpace(region)))
         {
+            SquadDashTrace.Write(
+                TraceCategory.UI,
+                $"PTT_START skipped missingConfig provider={_settingsSnapshot.SpeechProvider} hasKey={!string.IsNullOrWhiteSpace(key)} hasRegion={!string.IsNullOrWhiteSpace(region)}");
             _pttState = PttState.Idle;
             return;
         }
+
+        SquadDashTrace.Write(
+            TraceCategory.UI,
+            $"PTT_START provider={_settingsSnapshot.SpeechProvider} targetIsPrompt={targetIsPrompt} targetHadText={_pttHadPreexistingText}");
 
         // Only show the "release to send" hint when targeting the prompt and it's empty.
         _pttWindow = new PushToTalkWindow(this, showHint: targetIsPrompt && !_pttHadPreexistingText);
@@ -7860,17 +7893,17 @@ public partial class MainWindow : Window, ILiveElementLocator
             : new AzureSpeechRecognitionService();
 
         _speechService.PhraseRecognized += (_, text) =>
-            Dispatcher.BeginInvoke(() => AppendSpeechToPrompt(text));
+            Dispatcher.BeginInvoke(DispatcherPriority.Input, () => AppendSpeechToPrompt(text));
 
         _speechService.VolumeChanged += (_, level) =>
-            Dispatcher.BeginInvoke(() =>
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
             {
                 if (_pttWindow is not null)
                     _pttWindow.VolumeBar.Height = Math.Max(2, level * 36);
             });
 
         _speechService.RecognitionError += (_, msg) =>
-            Dispatcher.BeginInvoke(() =>
+            Dispatcher.BeginInvoke(DispatcherPriority.Input, () =>
             {
                 _ = StopPushToTalkAsync(send: false);
                 AppendLine("[voice error] " + msg, System.Windows.Media.Brushes.Red);
@@ -7889,6 +7922,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 ClosePttWindow();
                 _speechService?.Dispose();
                 _speechService = null;
+                SquadDashTrace.Write(TraceCategory.UI, $"PTT_START failed provider={_settingsSnapshot.SpeechProvider}: {ex.Message}");
                 AppendLine("[voice error] " + ex.Message, System.Windows.Media.Brushes.Red);
             });
         }
@@ -8280,6 +8314,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (_isPromptRunning)
                 UpdateInteractiveControlState(promptTextOnly: true);
             TryUpdateIntelliSense(text, PromptTextBox.CaretIndex);
+            SchedulePromptEditProbe("TextChanged");
         }
         catch (Exception ex)
         {
@@ -8363,6 +8398,66 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private static string FormatAverageMs(long elapsedMs, int count) =>
         count <= 0 ? "n/a" : ((double)elapsedMs / count).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+
+    private void SchedulePromptEditProbe(string reason)
+    {
+        var version = ++_promptEditProbeVersion;
+        var queuedAt = Stopwatch.GetTimestamp();
+        var textLen = PromptTextBox.Text.Length;
+        var caret = PromptTextBox.CaretIndex;
+        var lineCount = PromptTextBox.LineCount;
+        var wrapping = PromptTextBox.TextWrapping;
+
+        QueuePromptEditProbeCheckpoint(version, queuedAt, reason, "Input", DispatcherPriority.Input, textLen, caret, lineCount, wrapping);
+        QueuePromptEditProbeCheckpoint(version, queuedAt, reason, "Loaded", DispatcherPriority.Loaded, textLen, caret, lineCount, wrapping);
+        QueuePromptEditProbeCheckpoint(version, queuedAt, reason, "Render", DispatcherPriority.Render, textLen, caret, lineCount, wrapping);
+        QueuePromptEditProbeCheckpoint(version, queuedAt, reason, "Background", DispatcherPriority.Background, textLen, caret, lineCount, wrapping);
+
+        if (_promptEditProbeLayoutPending)
+            return;
+
+        _promptEditProbeLayoutPending = true;
+        EventHandler? layoutHandler = null;
+        layoutHandler = (_, _) =>
+        {
+            PromptTextBox.LayoutUpdated -= layoutHandler;
+            _promptEditProbeLayoutPending = false;
+            var elapsedMs = ElapsedMillisecondsSince(queuedAt);
+            if (elapsedMs >= PromptEditProbeTraceMs)
+            {
+                SquadDashTrace.Write(
+                    TraceCategory.UI,
+                    $"PROMPT_EDIT_LAYOUT reason={reason} elapsedMs={elapsedMs} textLen={textLen} currentTextLen={PromptTextBox.Text.Length} lineCount={lineCount} actualLineCount={PromptTextBox.LineCount} wrapping={wrapping}");
+            }
+        };
+        PromptTextBox.LayoutUpdated += layoutHandler;
+    }
+
+    private void QueuePromptEditProbeCheckpoint(
+        int version,
+        long queuedAt,
+        string reason,
+        string label,
+        DispatcherPriority priority,
+        int textLen,
+        int caret,
+        int lineCount,
+        TextWrapping wrapping)
+    {
+        _ = Dispatcher.BeginInvoke(priority, () =>
+        {
+            if (version != _promptEditProbeVersion)
+                return;
+
+            var elapsedMs = ElapsedMillisecondsSince(queuedAt);
+            if (elapsedMs < PromptEditProbeTraceMs)
+                return;
+
+            SquadDashTrace.Write(
+                TraceCategory.UI,
+                $"PROMPT_EDIT_PROBE reason={reason} checkpoint={label} elapsedMs={elapsedMs} textLen={textLen} currentTextLen={PromptTextBox.Text.Length} caret={caret} currentCaret={PromptTextBox.CaretIndex} lineCount={lineCount} actualLineCount={PromptTextBox.LineCount} wrapping={wrapping}");
+        });
+    }
 
     private void BuildAgentSuggestions()
     {
@@ -20390,8 +20485,11 @@ public partial class MainWindow : Window, ILiveElementLocator
             }
 
             var sequence = _postedUiActionTracker.RegisterPostedAction();
-            Dispatcher.BeginInvoke(new Action(() =>
+            var queuedAt = Stopwatch.GetTimestamp();
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
             {
+                var queueMs = ElapsedMillisecondsSince(queuedAt);
+                var sw = Stopwatch.StartNew();
                 try
                 {
                     try
@@ -20405,7 +20503,14 @@ public partial class MainWindow : Window, ILiveElementLocator
                 }
                 finally
                 {
+                    sw.Stop();
                     _postedUiActionTracker.MarkCompleted(sequence);
+                    if (queueMs >= UiDispatchQueueLagTraceMs || sw.ElapsedMilliseconds >= UiDispatchWorkTraceMs)
+                    {
+                        SquadDashTrace.Write(
+                            TraceCategory.UI,
+                            $"UI_DISPATCH source={source} queueMs={queueMs} workMs={sw.ElapsedMilliseconds} pending={_postedUiActionTracker.PendingCount}");
+                    }
                 }
             }));
         }
@@ -20418,6 +20523,9 @@ public partial class MainWindow : Window, ILiveElementLocator
             SquadDashTrace.Write("Shutdown", $"{source} ignored during dispatcher shutdown: {ex.Message}");
         }
     }
+
+    private static long ElapsedMillisecondsSince(long stopwatchTimestamp) =>
+        (long)((Stopwatch.GetTimestamp() - stopwatchTimestamp) * 1000.0 / Stopwatch.Frequency);
 
     private static int CountFiles(string folderPath)
     {

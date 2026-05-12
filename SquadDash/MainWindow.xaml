@@ -2043,6 +2043,7 @@
                              HorizontalScrollBarVisibility="Disabled"
                              SpellCheck.IsEnabled="False"
                              UndoLimit="256"
+                             TextOptions.TextFormattingMode="Display"
                              Foreground="{DynamicResource LabelText}"
                              Background="{DynamicResource TextBoxBackground}"
                              TextChanged="PromptTextBox_TextChanged"

@@ -285,7 +285,7 @@ internal sealed class TraceWindow : Window, ILiveTraceTarget
         var timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
         if (!Dispatcher.CheckAccess())
         {
-            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => EnqueueEntry(category, timestamp, detail));
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, () => EnqueueEntry(category, timestamp, detail));
             return;
         }
 
@@ -301,7 +301,7 @@ internal sealed class TraceWindow : Window, ILiveTraceTarget
             return;
 
         _flushPending = true;
-        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, FlushPendingEntries);
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, FlushPendingEntries);
     }
 
     private void FlushPendingEntries()
@@ -331,7 +331,7 @@ internal sealed class TraceWindow : Window, ILiveTraceTarget
         if (_pendingEntries.Count > 0)
         {
             _flushPending = true;
-            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, FlushPendingEntries);
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, FlushPendingEntries);
         }
     }
 
