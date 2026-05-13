@@ -116,50 +116,67 @@ namespace SquadDash {
         }
 
         private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e) {
-            SquadDashTrace.Write("Unhandled", $"Dispatcher exception: {e.Exception}");
+            try {
+                SquadDashTrace.Write("Unhandled", $"Dispatcher exception: {e.Exception}");
 
-            TryEmergencySave();
+                TryEmergencySave();
 
-            if (MainWindow is MainWindow window)
-                window.ReportUnhandledUiException("Dispatcher", e.Exception);
+                if (MainWindow is MainWindow window)
+                    window.ReportUnhandledUiException("Dispatcher", e.Exception);
 
-            if (ShouldSuppressDuringShutdown(e.Exception)) {
+                if (ShouldSuppressDuringShutdown(e.Exception)) {
+                    e.Handled = true;
+                    return;
+                }
+
+                // Keep the UI alive for recoverable dispatcher-thread failures. The
+                // failing callback is still logged and surfaced in MainWindow.
                 e.Handled = true;
-                return;
             }
-
-            // Keep the UI alive for recoverable dispatcher-thread failures. The
-            // failing callback is still logged and surfaced in MainWindow.
-            e.Handled = true;
+            catch (Exception handlerEx) {
+                SquadDashTrace.Write("Unhandled", $"App_DispatcherUnhandledException handler failed: {handlerEx.Message}");
+                e.Handled = true;
+            }
         }
 
         private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e) {
-            SquadDashTrace.Write("Unhandled", $"AppDomain exception: {e.ExceptionObject}");
-            TryEmergencySave();
+            try {
+                SquadDashTrace.Write("Unhandled", $"AppDomain exception: {e.ExceptionObject}");
+                TryEmergencySave();
 
-            if (MainWindow is MainWindow window && e.ExceptionObject is Exception exception)
-                window.ReportUnhandledUiException("AppDomain", exception);
+                if (MainWindow is MainWindow window && e.ExceptionObject is Exception exception)
+                    window.ReportUnhandledUiException("AppDomain", exception);
+            }
+            catch (Exception handlerEx) {
+                SquadDashTrace.Write("Unhandled", $"CurrentDomain_UnhandledException handler failed: {handlerEx.Message}");
+            }
         }
 
         private void TaskScheduler_UnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e) {
-            SquadDashTrace.Write("Unhandled", $"TaskScheduler exception: {e.Exception}");
+            try {
+                SquadDashTrace.Write("Unhandled", $"TaskScheduler exception: {e.Exception}");
 
-            // Swallow benign ObjectDisposedException from CancellationTokenSources that were
-            // disposed while a background task still held a reference (common during doc reloads).
-            var inner = e.Exception.InnerException ?? e.Exception;
-            if (inner is ObjectDisposedException) {
-                e.SetObserved();
-                return;
-            }
+                // Swallow benign ObjectDisposedException from CancellationTokenSources that were
+                // disposed while a background task still held a reference (common during doc reloads).
+                var inner = e.Exception.InnerException ?? e.Exception;
+                if (inner is ObjectDisposedException) {
+                    e.SetObserved();
+                    return;
+                }
 
-            // This handler fires on the finalizer thread — marshal to the UI thread before
-            // touching any WPF objects.
-            if (MainWindow is MainWindow window) {
+                // This handler fires on the finalizer thread — use Application.Current.Dispatcher
+                // (not MainWindow) to avoid a cross-thread access that would itself crash.
                 var ex = e.Exception;
-                window.Dispatcher.BeginInvoke(() => window.ReportUnhandledUiException("TaskScheduler", ex));
-            }
+                Application.Current?.Dispatcher?.BeginInvoke(() => {
+                    if (Application.Current?.MainWindow is MainWindow window)
+                        window.ReportUnhandledUiException("TaskScheduler", ex);
+                });
 
-            e.SetObserved();
+                e.SetObserved();
+            }
+            catch (Exception handlerEx) {
+                SquadDashTrace.Write("Unhandled", $"TaskScheduler_UnobservedTaskException handler failed: {handlerEx.Message}");
+            }
         }
 
         private bool TryHandleStartupWorkspaceRouting(
