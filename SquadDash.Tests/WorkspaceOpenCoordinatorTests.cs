@@ -279,6 +279,88 @@ internal sealed class WorkspaceOpenCoordinatorTests {
     // ── Activation failure ────────────────────────────────────────────────────
 
     [Test]
+    public void ReserveOrActivate_WhenOwnerHasWhitespaceActiveWorkspaceFolder_IsNotConsideredOwner() {
+        // An instance whose ActiveWorkspaceFolder is whitespace-only must be
+        // treated as having no active workspace and must not block a fresh open.
+        using var workspace = new TestWorkspace();
+        var registry = new RunningInstanceRegistry(workspace.RootPath);
+        using var process = Process.GetCurrentProcess();
+        var appRoot = workspace.GetPath("app-root");
+        var repo    = workspace.GetPath("repo");
+        Directory.CreateDirectory(appRoot);
+        Directory.CreateDirectory(repo);
+
+        registry.Upsert(new RunningInstanceRecord(
+            appRoot, repo,
+            process.Id,
+            process.StartTime.ToUniversalTime().Ticks,
+            DateTimeOffset.UtcNow.Ticks) {
+            ActiveWorkspaceFolder = "   "   // ← whitespace only
+        });
+
+        var activationRequests = 0;
+        var coordinator = new WorkspaceOpenCoordinator(
+            registry,
+            (_, _, _) => { activationRequests++; return true; });
+
+        var decision = coordinator.ReserveOrActivate(
+            appRoot, repo,
+            currentProcessId: -1,
+            currentProcessStartedAtUtcTicks: -1);
+
+        Assert.Multiple(() => {
+            Assert.That(decision.Disposition, Is.EqualTo(WorkspaceOpenDisposition.OpenHere));
+            Assert.That(decision.Lease, Is.Not.Null);
+            Assert.That(activationRequests, Is.Zero,
+                "Activation must not be attempted for an instance with a whitespace-only workspace folder.");
+        });
+
+        decision.Lease?.Dispose();
+    }
+
+    [Test]
+    public void ReserveOrActivate_WhenLeaseIsHeldElsewhereAndNoOwnerRegistered_ReturnsBlockedWithNullOwner() {
+        // Regression path: a process lost the lease race (TryAcquire fails) but
+        // no other instance is registered in the running-instance registry — the
+        // coordinator has no one to activate and must return Blocked with a null
+        // ExistingOwner rather than crashing or opening a duplicate workspace.
+        //
+        // NOTE: This test takes ~2.4 s because it must exhaust both the initial
+        // activation timeout (400 ms) and the lease-contention timeout (2 s).
+        using var workspace = new TestWorkspace();
+        var registry = new RunningInstanceRegistry(workspace.RootPath);
+        var appRoot  = workspace.GetPath("app-root");
+        var repo     = workspace.GetPath("repo");
+        Directory.CreateDirectory(appRoot);
+        Directory.CreateDirectory(repo);
+
+        // Acquire the lease so TryAcquire fails inside the coordinator.
+        Assert.That(WorkspaceOwnershipLease.TryAcquire(appRoot, repo, out var blockingLease), Is.True);
+        using (blockingLease) {
+            // No owner is registered — both activation scans find nothing.
+            var activationRequests = 0;
+            var coordinator = new WorkspaceOpenCoordinator(
+                registry,
+                (_, _, _) => { activationRequests++; return false; });
+
+            var decision = coordinator.ReserveOrActivate(
+                appRoot, repo,
+                currentProcessId: -1,
+                currentProcessStartedAtUtcTicks: -1);
+
+            Assert.Multiple(() => {
+                Assert.That(decision.Disposition, Is.EqualTo(WorkspaceOpenDisposition.Blocked),
+                    "When the lease is held but no owner is registered, the coordinator must return Blocked.");
+                Assert.That(decision.ExistingOwner, Is.Null,
+                    "ExistingOwner must be null when no instance could be found in either activation scan.");
+                Assert.That(decision.Lease, Is.Null);
+                Assert.That(activationRequests, Is.Zero,
+                    "No activation should be attempted when the registry is empty.");
+            });
+        }
+    }
+
+    [Test]
     public void ReserveOrActivate_WhenExistingOwnerCannotBeActivated_DoesNotOpenDuplicate() {
         using var workspace = new TestWorkspace();
         var registry = new RunningInstanceRegistry(workspace.RootPath);

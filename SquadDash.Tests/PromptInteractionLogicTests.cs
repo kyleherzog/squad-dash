@@ -652,6 +652,100 @@ internal sealed class PromptInteractionLogicTests {
             LocalPromptSubmissionPolicy.ShouldRetainPromptAfterLocalSubmit("/clear", isPromptRunning: true),
             Is.False);
     }
+
+    // ── LocalPromptSubmissionPolicy — GetSlashCommand extraction ─────────────
+
+    [Test]
+    public void CanSubmitWhilePromptRunning_ReturnsTrueForBusySafeCommandWithTrailingArguments() {
+        // GetSlashCommand must extract only the slash token before the first space,
+        // so "/tasks some argument" is still treated as the busy-safe "/tasks" command.
+        Assert.That(
+            LocalPromptSubmissionPolicy.CanSubmitWhilePromptRunning("/tasks some argument"),
+            Is.True);
+    }
+
+    [Test]
+    public void CanSubmitWhilePromptRunning_ExtractsCommandBeforeNewline() {
+        // GetSlashCommand splits on '\n' as well as space, matching the IndexOfAny
+        // that includes '\n' and '\r'.
+        Assert.That(
+            LocalPromptSubmissionPolicy.CanSubmitWhilePromptRunning("/tasks\nsome text"),
+            Is.True);
+    }
+
+    [Test]
+    public void ShouldRetainPromptAfterLocalSubmit_ReturnsFalseForCommandWithTrailingWhitespaceOnly() {
+        // "/tasks  " trims to "/tasks" — the trimmed length equals the command length,
+        // so there are no real arguments and the prompt must NOT be retained.
+        Assert.That(
+            LocalPromptSubmissionPolicy.ShouldRetainPromptAfterLocalSubmit("/tasks  ", isPromptRunning: true),
+            Is.False);
+    }
+
+    // ── LocalPromptSubmissionPolicy — IsImmediateLocalCommand extras ─────────
+
+    [TestCase("/queue-sim")]
+    [TestCase("/test-queue")]
+    public void IsImmediateLocalCommand_ReturnsTrueForInternalDevCommands(string command) {
+        // /queue-sim and /test-queue are in ImmediateLocalCommands for development
+        // testing but are not in the BusySafeCommands set.
+        Assert.That(LocalPromptSubmissionPolicy.IsImmediateLocalCommand(command), Is.True);
+    }
+
+    [TestCase("/queue-sim")]
+    [TestCase("/test-queue")]
+    public void CanSubmitWhilePromptRunning_ReturnsFalseForInternalDevCommands(string command) {
+        // /queue-sim and /test-queue are NOT in BusySafeCommands — they are
+        // immediate-local-only and must not be submitted while a prompt is running.
+        Assert.That(LocalPromptSubmissionPolicy.CanSubmitWhilePromptRunning(command), Is.False);
+    }
+
+    // ── PromptHistoryNavigator — single-item history round-trip ──────────────
+
+    [Test]
+    public void Navigate_SingleItemHistory_CanGoBackAndRestoreDraft() {
+        // With exactly one history entry, navigate back to it and then forward
+        // to verify the live draft is correctly restored.
+        var history = new[] { "only entry" };
+
+        var atEntry = PromptHistoryNavigator.Navigate(
+            history, historyIndex: null, historyDraft: null,
+            currentText: "live draft", direction: -1);
+
+        Assert.Multiple(() => {
+            Assert.That(atEntry.Changed, Is.True);
+            Assert.That(atEntry.Text, Is.EqualTo("only entry"));
+            Assert.That(atEntry.HistoryIndex, Is.EqualTo(0));
+            Assert.That(atEntry.HistoryDraft, Is.EqualTo("live draft"));
+        });
+
+        var restored = PromptHistoryNavigator.Navigate(
+            history, atEntry.HistoryIndex, atEntry.HistoryDraft,
+            currentText: atEntry.Text, direction: +1);
+
+        Assert.Multiple(() => {
+            Assert.That(restored.Changed, Is.True);
+            Assert.That(restored.Text, Is.EqualTo("live draft"),
+                "The original live-draft text must be restored when navigating forward past the single history entry.");
+            Assert.That(restored.HistoryIndex, Is.Null);
+        });
+    }
+
+    [Test]
+    public void Navigate_SingleItemHistory_CannotGoBackBeyondFirstEntry() {
+        // At index 0, further backward navigation must clamp and report no change.
+        var history = new[] { "only entry" };
+
+        var atEntry = PromptHistoryNavigator.Navigate(
+            history, historyIndex: 0, historyDraft: "draft",
+            currentText: "only entry", direction: -1);
+
+        Assert.Multiple(() => {
+            Assert.That(atEntry.Changed, Is.False,
+                "Cannot navigate before index 0 in a single-item history.");
+            Assert.That(atEntry.HistoryIndex, Is.EqualTo(0));
+        });
+    }
 }
 
 // ── RunButtonLabelPolicy tests ────────────────────────────────────────────────
