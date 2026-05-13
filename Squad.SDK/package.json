@@ -22,7 +22,7 @@
         "typescript": "^6.0.2"
     },
     "dependencies": {
-        "@bradygaster/squad-sdk": "^0.9.4",
+        "@bradygaster/squad-sdk": "0.9.5-insider.1",
         "acorn": "^8.16.0",
         "acorn-jsx": "^5.3.2",
         "ajv": "^6.14.0",
