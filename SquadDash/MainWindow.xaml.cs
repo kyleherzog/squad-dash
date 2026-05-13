@@ -8247,8 +8247,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             TraceCategory.UI,
             $"PTT_START provider={_settingsSnapshot.SpeechProvider} targetIsPrompt={targetIsPrompt} targetHadText={_pttHadPreexistingText}");
 
-        // Only show the "release to send" hint when targeting the prompt and it's empty.
-        _pttWindow = new PushToTalkWindow(this, showHint: targetIsPrompt && !_pttHadPreexistingText);
+        // Only show the "release to send" hint when targeting an empty prompt AND auto-send is enabled.
+        _pttWindow = new PushToTalkWindow(this, showHint: targetIsPrompt && !_pttHadPreexistingText && _voiceStartedWithSendEnabled);
         PositionPttWindow();
         _pttWindow.Show();
         _pttWindow.VolumeBar.Height = 0;
