@@ -5,9 +5,9 @@ using System.Threading;
 namespace SquadDash;
 
 internal sealed class MutexLease : IDisposable {
-    // Tracks mutex names currently held in this process to prevent re-entrant acquisition.
-    private static readonly ConcurrentDictionary<string, byte> s_heldNames =
-        new(StringComparer.OrdinalIgnoreCase);
+    // Tracks (name, threadId) keys for mutexes currently held to prevent same-thread
+    // re-entrant acquisition without blocking different threads acquiring the same mutex.
+    private static readonly ConcurrentDictionary<string, byte> s_heldNames = new();
 
     private Mutex? _mutex;
     private readonly string _name;
@@ -36,9 +36,11 @@ internal sealed class MutexLease : IDisposable {
             throw new ArgumentOutOfRangeException(nameof(timeout));
 
         var normalizedName = name.ToLowerInvariant();
+        var threadKey = $"{normalizedName}:{Environment.CurrentManagedThreadId}";
 
-        // Reject re-entrant acquisition within the same process.
-        if (!s_heldNames.TryAdd(normalizedName, 0)) {
+        // Reject re-entrant acquisition on the same thread; different threads get a unique key
+        // and will block normally on WaitOne rather than failing immediately.
+        if (!s_heldNames.TryAdd(threadKey, 0)) {
             lease = null;
             return false;
         }
@@ -55,13 +57,13 @@ internal sealed class MutexLease : IDisposable {
         }
 
         if (!acquired) {
-            s_heldNames.TryRemove(normalizedName, out _);
+            s_heldNames.TryRemove(threadKey, out _);
             mutex.Dispose();
             lease = null;
             return false;
         }
 
-        lease = new MutexLease(mutex, normalizedName);
+        lease = new MutexLease(mutex, threadKey);
         return true;
     }
 

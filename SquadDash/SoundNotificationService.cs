@@ -70,7 +70,10 @@ internal sealed class SoundNotificationService
         if (Interlocked.CompareExchange(ref _drainScheduled, 1, 0) == 0)
         {
             _ = Task.Delay(CoalesceWindowMs).ContinueWith(
-                _ => DrainAndPlay(),
+                _ => {
+                    try { DrainAndPlay(); }
+                    catch (Exception ex) { SquadDashTrace.Write("Sound", $"DrainAndPlay error: {ex.Message}"); }
+                },
                 TaskScheduler.Default);
         }
     }
