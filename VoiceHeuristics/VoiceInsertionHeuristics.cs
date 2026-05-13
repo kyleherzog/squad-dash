@@ -475,25 +475,6 @@ public static class VoiceInsertionHeuristics
     }
 
     /// <summary>
-    /// Checks whether <paramref name="text"/> ends with <paramref name="targetWord"/>
-    /// (case-insensitive) optionally followed by a single period, and that the
-    /// match is at a word boundary.
-    ///
-    /// If matched, <paramref name="stemLength"/> is the index at which
-    /// <paramref name="targetWord"/> begins in <paramref name="text"/> so the
-    /// caller can reconstruct the corrected string.
-    /// </summary>
-    /// <summary>
-    /// Returns <c>true</c> when the insertion caret is inside a markdown path
-    /// context — specifically inside the URL/path parentheses of a markdown link
-    /// or image: <c>![alt](|)</c>, <c>[text](|)</c>, or any <c>](|</c> followed
-    /// by <c>)</c> on the same line.
-    ///
-    /// Detection looks at the nearest unmatched <c>(</c> to the left that is
-    /// preceded by <c>]</c>, and confirms the right context contains the closing
-    /// <c>)</c> before any newline.
-    /// </summary>
-    /// <summary>
     /// Returns the leading space string to prepend before inserting voice-dictated
     /// text at a document caret position. Returns <c>" "</c> when the character
     /// immediately to the left of the caret is not a natural word boundary (space,
@@ -511,6 +492,16 @@ public static class VoiceInsertionHeuristics
         return ch != ' ' && ch != '(' && ch != '\n' && ch != '\r' ? " " : string.Empty;
     }
 
+    /// <summary>
+    /// Returns <c>true</c> when the insertion caret is inside a markdown path
+    /// context — specifically inside the URL/path parentheses of a markdown link
+    /// or image: <c>![alt](|)</c>, <c>[text](|)</c>, or any <c>](|</c> followed
+    /// by <c>)</c> on the same line.
+    ///
+    /// Detection looks at the nearest unmatched <c>(</c> to the left that is
+    /// preceded by <c>]</c>, and confirms the right context contains the closing
+    /// <c>)</c> before any newline.
+    /// </summary>
     public static bool IsMarkdownPathContext(string leftContext, string rightContext)
     {
         if (string.IsNullOrEmpty(leftContext)) return false;
