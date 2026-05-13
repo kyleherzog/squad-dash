@@ -1653,6 +1653,7 @@ internal sealed class PromptExecutionController {
         _finalizeCurrentTurnResponse();
         _conversationManager.SaveCurrentTurnToConversation(DateTimeOffset.Now);
         _getCoordinatorThread().CurrentTurn = null;
+        _scrollToEndIfAtBottom();
         return true;
     }
 
