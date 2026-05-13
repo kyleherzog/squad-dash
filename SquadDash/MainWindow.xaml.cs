@@ -186,6 +186,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _movingFloatingWindow;
     private bool _isInstallingSquad;
     private bool _isClosing;
+    private bool _mainWindowClosingInProgress; // set at the very start of Closing, before ShowDialog
     private bool _isPromptRunning;
     private bool _bridgeRestartForSettingsPending;
     private readonly PromptQueue _promptQueue = new();
@@ -19326,6 +19327,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try
         {
+            _mainWindowClosingInProgress = true;
+
             // If a deferred shutdown was already scheduled and has now fired, honour it — skip dialog.
             // Also skip dialog for rebuild-triggered restarts: the launcher wants to reload the new
             // binary immediately; queue items will resume in the reloaded instance.
@@ -20581,6 +20584,8 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void HandleRestartRequestChanged()
     {
+        if (_isClosing || _mainWindowClosingInProgress) return;
+
         var request = _restartCoordinatorStateStore.LoadRequest(_workspacePaths.ApplicationRoot);
         if (request is null || string.Equals(request.RequestId, _lastHandledRestartRequestId, StringComparison.Ordinal))
             return;
@@ -20637,6 +20642,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     /// </summary>
     private void OnDocRevisionCompleted()
     {
+        if (_isClosing || _mainWindowClosingInProgress) return;
         if (!_restartPending) return;
         if (_isPromptRunning) return;
         if (_pttState == PttState.Active || _pttDraining) return;
@@ -20654,6 +20660,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     /// </summary>
     private void OnClipboardEditorClosed()
     {
+        if (_isClosing || _mainWindowClosingInProgress) return;
+
         // If the user tried to close the main window while the editor was open, honour
         // that deferred close now that the editor has been dismissed (Insert or Cancel).
         if (_pendingShutdown)
@@ -20675,7 +20683,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void TryPostToUi(Action action, string source)
     {
-        if (_isClosing || Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+        if (_isClosing || _mainWindowClosingInProgress || Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
             return;
 
         try

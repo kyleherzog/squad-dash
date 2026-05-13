@@ -1,7 +1,7 @@
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Controls;
 
 namespace SquadDash;
 
@@ -16,13 +16,13 @@ internal sealed class ShutdownProtectionWindow : Window {
     public ShutdownChoice Choice { get; private set; } = ShutdownChoice.None;
 
     public ShutdownProtectionWindow(bool isRunning, bool hasQueue, bool isLoopRunning) {
-        Title                 = "Close SquadDash?";
-        Width                 = 440;
-        SizeToContent         = SizeToContent.Height;
-        MinWidth              = 380;
-        ResizeMode            = ResizeMode.NoResize;
-        ShowInTaskbar         = false;
-        WindowStyle           = WindowStyle.ToolWindow;
+        Title = "Close SquadDash?";
+        Width = 440;
+        SizeToContent = SizeToContent.Height;
+        MinWidth = 380;
+        ResizeMode = ResizeMode.NoResize;
+        ShowInTaskbar = false;
+        WindowStyle = WindowStyle.ToolWindow;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         this.SetResourceReference(BackgroundProperty, "AppSurface");
         // Cascade the themed foreground to all TextBlock descendants that don't
@@ -33,12 +33,11 @@ internal sealed class ShutdownProtectionWindow : Window {
         Content = root;
 
         // Header
-        root.Children.Add(new TextBlock
-        {
-            Text       = "SquadDash is busy",
-            FontSize   = 18,
+        root.Children.Add(new TextBlock {
+            Text = "SquadDash is busy",
+            FontSize = 18,
             FontWeight = FontWeights.SemiBold,
-            Margin     = new Thickness(0, 0, 0, 10),
+            Margin = new Thickness(0, 0, 0, 10),
         });
 
         // Status lines
@@ -53,44 +52,38 @@ internal sealed class ShutdownProtectionWindow : Window {
 
         // "Wait and close automatically" section (only when relevant)
         bool canDefer = isRunning || isLoopRunning || hasQueue;
-        RadioButton? afterTurnRadio   = null;
+        RadioButton? afterTurnRadio = null;
         RadioButton? afterQueuedRadio = null;
 
-        if (canDefer)
-        {
-            root.Children.Add(new TextBlock
-            {
-                Text       = "Or close automatically after:",
-                FontSize   = 13,
+        if (canDefer) {
+            root.Children.Add(new TextBlock {
+                Text = "Or schedule shutdown after:",
+                FontSize = 13,
                 FontWeight = FontWeights.SemiBold,
-                Margin     = new Thickness(0, 0, 0, 8),
+                Margin = new Thickness(0, 0, 0, 8),
             });
 
-            if (isRunning || isLoopRunning)
-            {
+            if (isRunning || isLoopRunning) {
                 string afterTurnText = isLoopRunning
                     ? "This loop iteration finishes"
                     : "This turn completes";
-                afterTurnRadio = new RadioButton
-                {
-                    Content   = afterTurnText,
+                afterTurnRadio = new RadioButton {
+                    Content = afterTurnText,
                     GroupName = "DeferredMode",
-                    FontSize  = 13,
-                    Margin    = new Thickness(4, 0, 0, 6),
+                    FontSize = 13,
+                    Margin = new Thickness(4, 0, 0, 6),
                     IsChecked = true,
                 };
                 afterTurnRadio.SetResourceReference(Control.StyleProperty, "ThemedRadioButtonStyle");
                 root.Children.Add(afterTurnRadio);
             }
 
-            if (hasQueue)
-            {
-                afterQueuedRadio = new RadioButton
-                {
-                    Content   = "All queued items complete",
+            if (hasQueue) {
+                afterQueuedRadio = new RadioButton {
+                    Content = "All queued items complete",
                     GroupName = "DeferredMode",
-                    FontSize  = 13,
-                    Margin    = new Thickness(4, 0, 0, 6),
+                    FontSize = 13,
+                    Margin = new Thickness(4, 0, 0, 6),
                     IsChecked = afterTurnRadio is null, // default if no turn option
                 };
                 afterQueuedRadio.SetResourceReference(Control.StyleProperty, "ThemedRadioButtonStyle");
@@ -117,18 +110,15 @@ internal sealed class ShutdownProtectionWindow : Window {
         buttonRow.Children.Add(cancelBtn);
 
         // Schedule Shutdown (only when deferred options exist)
-        if (canDefer)
-        {
-            var scheduleBtn = new Button
-            {
+        if (canDefer) {
+            var scheduleBtn = new Button {
                 Content = "Schedule Shutdown",
-                Height  = 30,
+                Height = 30,
                 Padding = new Thickness(12, 0, 12, 0),
-                Margin  = new Thickness(0, 0, 8, 0),
+                Margin = new Thickness(0, 0, 8, 0),
             };
             scheduleBtn.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
-            scheduleBtn.Click += (_, _) =>
-            {
+            scheduleBtn.Click += (_, _) => {
                 Choice = (afterQueuedRadio?.IsChecked == true)
                     ? ShutdownChoice.AfterAllQueued
                     : ShutdownChoice.AfterCurrentTurn;
@@ -139,10 +129,9 @@ internal sealed class ShutdownProtectionWindow : Window {
         }
 
         // ⚠ Close Now (danger)
-        var closeNowBtn = new Button
-        {
+        var closeNowBtn = new Button {
             Content = BuildCloseNowContent(),
-            Height  = 30,
+            Height = 30,
             Padding = new Thickness(10, 0, 12, 0),
         };
         closeNowBtn.SetResourceReference(Control.StyleProperty, "DangerButtonStyle");
@@ -151,10 +140,8 @@ internal sealed class ShutdownProtectionWindow : Window {
         buttonRow.Children.Add(closeNowBtn);
 
         // Escape = cancel
-        PreviewKeyDown += (_, e) =>
-        {
-            if (e.Key == System.Windows.Input.Key.Escape)
-            {
+        PreviewKeyDown += (_, e) => {
+            if (e.Key == System.Windows.Input.Key.Escape) {
                 Choice = ShutdownChoice.None;
                 DialogResult = false;
                 e.Handled = true;
@@ -162,43 +149,37 @@ internal sealed class ShutdownProtectionWindow : Window {
         };
     }
 
-    private static void AddStatus(StackPanel root, string text)
-    {
-        root.Children.Add(new TextBlock
-        {
-            Text       = "• " + text,
-            FontSize   = 13,
-            Margin     = new Thickness(0, 0, 0, 4),
+    private static void AddStatus(StackPanel root, string text) {
+        root.Children.Add(new TextBlock {
+            Text = "• " + text,
+            FontSize = 13,
+            Margin = new Thickness(0, 0, 0, 4),
         });
     }
 
     /// <summary>Builds the content panel for the Close Now button: red circle with white ! + label.</summary>
-    private static StackPanel BuildCloseNowContent()
-    {
+    private static StackPanel BuildCloseNowContent() {
         var panel = new StackPanel { Orientation = Orientation.Horizontal };
 
         // Red circle with white exclamation mark
         var canvas = new Canvas { Width = 16, Height = 16, Margin = new Thickness(0, 0, 6, 0) };
-        canvas.Children.Add(new Ellipse
-        {
-            Width  = 16,
+        canvas.Children.Add(new Ellipse {
+            Width = 16,
             Height = 16,
-            Fill   = Brushes.White,
+            Fill = Brushes.White,
         });
-        canvas.Children.Add(new TextBlock
-        {
-            Text       = "!",
-            FontSize   = 11,
+        canvas.Children.Add(new TextBlock {
+            Text = "!",
+            FontSize = 11,
             FontWeight = FontWeights.Bold,
             Foreground = new SolidColorBrush(Color.FromRgb(0xC6, 0x28, 0x28)),
-            Width      = 16,
+            Width = 16,
             TextAlignment = TextAlignment.Center,
         });
         panel.Children.Add(canvas);
 
-        panel.Children.Add(new TextBlock
-        {
-            Text              = "Close Now",
+        panel.Children.Add(new TextBlock {
+            Text = "Close Now",
             VerticalAlignment = VerticalAlignment.Center,
         });
 
