@@ -6588,8 +6588,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
         else
         {
-            darkBand  = new SolidColorBrush(Color.FromArgb(50,  255, 255, 255)); // ~20% white — clearly above transcript bg
-            lightBand = new SolidColorBrush(Color.FromArgb(130, 255, 255, 255)); // ~51% white — strong, visible stripe
+            darkBand  = new SolidColorBrush(Color.FromArgb(50,  255, 255, 255)); // ~20% white — slightly above transcript bg
+            lightBand = new SolidColorBrush(Color.FromArgb(88,  255, 255, 255)); // ~35% white — midway between bg band and previous peak
         }
         lightBand.Freeze();
         darkBand.Freeze();
