@@ -164,12 +164,14 @@ internal sealed class PreferencesWindow : Window {
             IsChecked = currentSettings.PttAutoSend,
             Margin = new Thickness(0, 0, 0, 2)
         };
+        _pttAutoSendRadio.SetResourceReference(Control.StyleProperty, "ThemedRadioButtonStyle");
         _pttDoNothingRadio = new RadioButton {
             Content = "Do nothing",
             GroupName = "PttBehavior",
             IsChecked = !currentSettings.PttAutoSend,
             Margin = new Thickness(0, 0, 0, 2)
         };
+        _pttDoNothingRadio.SetResourceReference(Control.StyleProperty, "ThemedRadioButtonStyle");
 
         var currentOpenAiKey = currentSettings.OpenAiSpeechApiKey ?? string.Empty;
         _openAiSpeechKeyPasswordBox = new PasswordBox {
