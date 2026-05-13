@@ -6505,8 +6505,13 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
     }
 
-    private static void FocusTranscriptForInactiveSelectionScroll(RichTextBox rtb)
+    private void FocusTranscriptForInactiveSelectionScroll(RichTextBox rtb)
     {
+        // Never steal focus away from the search box — doing so interrupts active searches
+        // and causes subsequent keystrokes to land in the RTB instead of SearchBox.
+        if (SearchBox?.IsKeyboardFocusWithin == true)
+            return;
+
         if (rtb.IsKeyboardFocusWithin || rtb.Selection.IsEmpty)
             return;
 
@@ -13908,7 +13913,22 @@ public partial class MainWindow : Window, ILiveElementLocator
             var queueMs = (long)((Stopwatch.GetTimestamp() - queuedAt) * 1000.0 / Stopwatch.Frequency);
             SquadDashTrace.Write(TraceCategory.Performance,
                 $"SNAPSHOT_SELECTION_COMPLETE_START thread={thread.ThreadId} queue={queueMs}ms");
-            SelectTranscriptThreadCore(thread, scrollToStart, allowSnapshotFastPath: false, previousThreadOverride: previousThread);
+
+            // Preserve any in-progress search across the snapshot completion.  The
+            // completion is a deferred rendering step, not a user-initiated thread
+            // switch, so clearing _searchMatches (and SearchBox.Text) here would
+            // silently discard results the user just requested.
+            var savedNavigating = _searchNavigating;
+            _searchNavigating = true;
+            try
+            {
+                SelectTranscriptThreadCore(thread, scrollToStart, allowSnapshotFastPath: false, previousThreadOverride: previousThread);
+            }
+            finally
+            {
+                _searchNavigating = savedNavigating;
+            }
+
             if (ReferenceEquals(_selectedTranscriptThread, thread))
                 HideTranscriptSnapshot(thread);
         });
@@ -24696,7 +24716,20 @@ public partial class MainWindow : Window, ILiveElementLocator
             // Invalidate the cache before prepending so stale pointers aren't used.
             if (!_conversationManager.IsTurnRendered(match.TurnIndex))
                 _cachedSearchPointers = null;
-            await _conversationManager.EnsureTurnRenderedAsync(match.TurnIndex);
+
+            // Guard search state during the async prepend: any SelectTranscriptThread
+            // call that fires in this gap (e.g. a pending deferred callback) must not
+            // wipe _searchMatches or SearchBox.Text.
+            var savedNavigating = _searchNavigating;
+            _searchNavigating = true;
+            try
+            {
+                await _conversationManager.EnsureTurnRenderedAsync(match.TurnIndex);
+            }
+            finally
+            {
+                _searchNavigating = savedNavigating;
+            }
         }
 
         // Schedule a full adorner rebuild once layout has settled.
