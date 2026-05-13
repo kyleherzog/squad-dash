@@ -449,8 +449,10 @@ internal sealed class CommitApprovalPanel {
         tooltip.SetResourceReference(ToolTip.BackgroundProperty, "PopupSurface");
         tooltip.SetResourceReference(ToolTip.BorderBrushProperty, "ActivePanelBorder");
         tooltip.BorderThickness = new Thickness(1);
-        tooltip.Opened += (_, _) =>
+        tooltip.Opened += (_, _) => {
             container.MaxWidth = Math.Max(300, _needsApprovalPanel.ActualWidth * 1.5);
+            relBlock.Text = StatusTimingPresentation.FormatRelativeTimestamp(item.TurnStartedAt);
+        };
         return tooltip;
     }
 
