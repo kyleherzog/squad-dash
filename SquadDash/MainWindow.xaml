@@ -209,6 +209,8 @@
                                    Text="{Binding StatusText}"
                                    Visibility="{Binding StatusVisibility}"
                                    FontWeight="SemiBold"
+                                   TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis"
                                    Foreground="{DynamicResource AgentStatusText}" />
 
                         <TextBlock x:Name="DetailTextBlock"
