@@ -9,6 +9,7 @@ using System.Windows.Controls.Primitives;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Windows.Documents;
 using System.Windows.Media;
 using Microsoft.CognitiveServices.Speech;
 
@@ -23,6 +24,8 @@ internal sealed class PreferencesWindow : Window {
     private readonly TextBox _speechRegionBox;
     private readonly RadioButton _azureSpeechRadio;
     private readonly RadioButton _openAiSpeechRadio;
+    private readonly RadioButton _pttAutoSendRadio;
+    private readonly RadioButton _pttDoNothingRadio;
     private readonly PasswordBox _openAiSpeechKeyPasswordBox;
     private readonly TextBox _openAiSpeechKeyRevealBox;
     private readonly ComboBox? _startupIssueSimulationComboBox;
@@ -154,6 +157,19 @@ internal sealed class PreferencesWindow : Window {
             IsChecked = isOpenAi
         };
         _openAiSpeechRadio.SetResourceReference(Control.StyleProperty, "ThemedRadioButtonStyle");
+
+        _pttAutoSendRadio = new RadioButton {
+            Content = "Send/queue my spoken prompt immediately",
+            GroupName = "PttBehavior",
+            IsChecked = currentSettings.PttAutoSend,
+            Margin = new Thickness(0, 0, 0, 2)
+        };
+        _pttDoNothingRadio = new RadioButton {
+            Content = "Do nothing",
+            GroupName = "PttBehavior",
+            IsChecked = !currentSettings.PttAutoSend,
+            Margin = new Thickness(0, 0, 0, 2)
+        };
 
         var currentOpenAiKey = currentSettings.OpenAiSpeechApiKey ?? string.Empty;
         _openAiSpeechKeyPasswordBox = new PasswordBox {
@@ -522,6 +538,45 @@ internal sealed class PreferencesWindow : Window {
         };
 
         _openAiSpeechKeyPasswordBox.PasswordChanged += (_, _) => SaveSpeechProviderNow();
+
+        // ── Push-to-talk ──────────────────────────────────────────────────
+        AddSectionHeader(form, "Push-to-talk", topMargin: 24);
+
+        var pttHint = new TextBlock { FontSize = 11, Margin = new Thickness(0, 4, 0, 12), TextWrapping = TextWrapping.Wrap };
+        pttHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+        pttHint.Inlines.Add(new Run("Double-tap and hold the "));
+        pttHint.Inlines.Add(new Bold(new Run("Ctrl")));
+        pttHint.Inlines.Add(new Run(" key to use PTT."));
+        form.Children.Add(pttHint);
+
+        AddLabel(form, "When I release the Ctrl key (after I'm done speaking):");
+
+        var pttStack = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
+
+        pttStack.Children.Add(_pttAutoSendRadio);
+
+        var autoSendSubHint = new TextBlock { FontSize = 11, Margin = new Thickness(20, 2, 0, 8), TextWrapping = TextWrapping.Wrap };
+        autoSendSubHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+        autoSendSubHint.Inlines.Add(new Run("(unless I'm using voice to modify "));
+        autoSendSubHint.Inlines.Add(new Bold(new Run("existing")));
+        autoSendSubHint.Inlines.Add(new Run(" text or I tap the "));
+        autoSendSubHint.Inlines.Add(new Bold(new Run("Shift")));
+        autoSendSubHint.Inlines.Add(new Run(" key while speaking)"));
+        pttStack.Children.Add(autoSendSubHint);
+
+        pttStack.Children.Add(_pttDoNothingRadio);
+
+        var doNothingSubHint = new TextBlock { FontSize = 11, Margin = new Thickness(20, 2, 0, 8), TextWrapping = TextWrapping.Wrap };
+        doNothingSubHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+        doNothingSubHint.Inlines.Add(new Run("(I'll press "));
+        doNothingSubHint.Inlines.Add(new Bold(new Run("Enter")));
+        doNothingSubHint.Inlines.Add(new Run(" to send/queue the prompt when I'm ready)"));
+        pttStack.Children.Add(doNothingSubHint);
+
+        form.Children.Add(pttStack);
+
+        _pttAutoSendRadio.Checked += (_, _) => _settingsStore.SavePttAutoSend(true);
+        _pttDoNothingRadio.Checked += (_, _) => _settingsStore.SavePttAutoSend(false);
 
         // ── Voice Text Replacements ───────────────────────────────────────
         AddSectionHeader(form, "Voice Text Replacements", topMargin: 24);

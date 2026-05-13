@@ -97,7 +97,9 @@ internal sealed class PushToTalkController : IDisposable {
                     var gapMs = (DateTime.UtcNow - _ctrlFirstReleaseTime).TotalMilliseconds;
                     if (gapMs <= PttDoubleClickTime) {
                         // Capture whether Send is enabled at the moment PTT starts
-                        _voiceStartedWithSendEnabled = !_isPromptRunning();
+                        var pttAutoSend = _settingsSnapshotProvider().PttAutoSend;
+                        var hasExistingText = _promptTextBox.Text.Length > 0;
+                        _voiceStartedWithSendEnabled = pttAutoSend && !_isPromptRunning() && !hasExistingText;
                         _pttState = PttState.Active;
                         _ = StartPushToTalkAsync();
                     }

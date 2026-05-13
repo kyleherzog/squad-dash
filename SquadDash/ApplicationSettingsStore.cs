@@ -251,6 +251,14 @@ internal sealed class ApplicationSettingsStore {
         return updated;
     }
 
+    public ApplicationSettingsSnapshot SavePttAutoSend(bool value) {
+        using var mutex = AcquireMutex();
+        var current = LoadCore();
+        var updated = current with { PttAutoSend = value };
+        SaveCore(updated);
+        return updated;
+    }
+
     public ApplicationSettingsSnapshot SaveVoiceReplacementRules(IEnumerable<VoiceReplacementRule> rules) {
         using var mutex = AcquireMutex();
         var list = rules.Where(r => !string.IsNullOrWhiteSpace(r.Pattern)).ToList();
@@ -828,6 +836,7 @@ internal sealed record ApplicationSettingsSnapshot(
     public string? SpeechRegion { get; init; }
     public SpeechProvider SpeechProvider { get; init; } = SpeechProvider.Azure;
     public string? OpenAiSpeechApiKey { get; init; }
+    public bool PttAutoSend { get; init; } = true;
 
     /// <summary>
     /// Prompt sent to AI when the user triggers the Quick Cleanup (Ctrl+Shift+C) command.
