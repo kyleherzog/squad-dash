@@ -2298,7 +2298,6 @@ public partial class MainWindow : Window, ILiveElementLocator
             // not necessarily the one with SequenceNumber==1 (items may have been dequeued
             // leaving gaps, so we identify the candidate by Id rather than by sequence number).
             var nextReadyId = items.FirstOrDefault(i => !i.IsEditing)?.Id;
-            string? activeTabLabel = null;
             foreach (var item in items.Reverse())
             {
                 bool isNext = item.Id == nextReadyId;
@@ -2306,8 +2305,6 @@ public partial class MainWindow : Window, ILiveElementLocator
                 var tooltip = isNext ? "This prompt is next in the Squad queue."
                                      : "This item is in the Squad queue.";
                 QueueTabStrip.Children.Add(CreateQueueTab(item.Id, label, tooltip));
-                if (item.Id == _activeTabId)
-                    activeTabLabel = label;
                 if (item.Id == _priorityFeedbackId)
                     QueueTabStrip.Children.Add(CreatePriorityFeedbackLabel());
             }
@@ -2903,7 +2900,6 @@ public partial class MainWindow : Window, ILiveElementLocator
         // Fast path: only update the two tabs whose visual state changed rather than
         // tearing down and rebuilding the entire tab strip on every Ctrl+Tab cycle.
         FastSyncQueueTabActiveState(previousId, id);
-        SyncQueueTabHint();
         SetQueuePaused(_queueManuallyPaused);
         long msAfterTabSync = sw.ElapsedMilliseconds;
 

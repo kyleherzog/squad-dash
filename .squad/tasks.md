@@ -86,6 +86,17 @@
 
 ## 🔴 High Priority
 
+- [ ] **[Orion audit] Bridge stall — surface "No bridge activity" warning in UI** *(Owner: Orion Vale)*
+  PromptHealth already logs `No bridge activity for Xs since prompt start` to the trace file, but this
+  is completely invisible to the user. When the warning fires (currently at 96s), show a visible indicator
+  in the UI — e.g. a status bar message, a subtle pulsing warning on the spinner, or a tooltip on the
+  activity indicator — so the user knows the bridge is stalled rather than just seeing a silent spinner.
+  Root cause traced to a test-flood bridge cascade (2026-05-13): bridge was overwhelmed by unit test
+  requests flooding the shared process, entered inactivity-timeout loop, left main coordinator prompt
+  stuck for 204 seconds with no UI feedback. The `No bridge activity for 96s` log entry existed but
+  user had to manually abort after 3+ minutes. Consider also adding an auto-recovery suggestion after
+  the threshold (e.g. "Retry" button).
+
 - [ ] **WinGet — smoke-test installer on clean VM** *(Owner: you — manual step)*
   Run `.\installer\build-installer.ps1 -Version 1.0.0` (requires Inno Setup 6 installed locally),
   then install on a clean Windows VM with only Node.js pre-installed. Verify: launcher starts,
