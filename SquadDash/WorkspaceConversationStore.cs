@@ -578,6 +578,8 @@ internal sealed record WorkspaceConversationState(
     public IReadOnlyList<QueuedPromptEntry>? QueuedPromptEntries { get; init; }
     /// <summary>When true, the queue was shut down with the rightmost (first-to-dispatch) tab held for editing. Restore that hold on next launch.</summary>
     public bool? QueueRightmostHeld { get; init; }
+    /// <summary>Zero-based index of the active queued-tab at last shutdown. Null when the main draft tab was active.</summary>
+    public int? QueueActiveTabIndex { get; init; }
     /// <summary>When true, the loop was paused waiting to dequeue prompts at last shutdown. Auto-resumes after queue drains on next launch.</summary>
     public bool? LoopQueuedToDequeue { get; init; }
     public LoopMode? LoopMode { get; init; }

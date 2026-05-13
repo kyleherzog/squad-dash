@@ -970,7 +970,8 @@ internal sealed class TranscriptConversationManager {
         Dictionary<string, List<FollowUpAttachment>>? attachments = null,
         bool queueRightmostHeld = false,
         bool loopQueuedToDequeue = false,
-        (string SimResponse, int SimDelaySeconds)? activeDraftSimEntry = null) {
+        (string SimResponse, int SimDelaySeconds)? activeDraftSimEntry = null,
+        int? activeTabIndex = null) {
         IReadOnlyList<QueuedPromptEntry>? entries = null;
         if (items.Count > 0)
         {
@@ -989,6 +990,7 @@ internal sealed class TranscriptConversationManager {
         _conversationState = _conversationState with {
             QueuedPromptEntries        = entries,
             QueueRightmostHeld         = queueRightmostHeld ? true : null,
+            QueueActiveTabIndex        = activeTabIndex,
             LoopQueuedToDequeue        = loopQueuedToDequeue ? true : null,
             ActiveDraftSimResponse     = activeDraftSimEntry?.SimResponse,
             ActiveDraftSimDelaySeconds = activeDraftSimEntry?.SimDelaySeconds,
