@@ -6568,15 +6568,16 @@ public partial class MainWindow : Window, ILiveElementLocator
         tooltip.SetResourceReference(Control.BorderBrushProperty, "ActivePanelBorder");
         tooltip.BorderThickness = new Thickness(1);
 
-        // Build diagonal-stripe DrawingBrush: alternating semi-transparent bands
-        var lightBand = new SolidColorBrush(Color.FromArgb(55, 210, 210, 210));
-        var darkBand  = new SolidColorBrush(Color.FromArgb(35, 70, 70, 70));
+        // Build diagonal-stripe DrawingBrush: alternating bands with strong enough contrast
+        // to be visible on both dark and light themes.
+        var lightBand = new SolidColorBrush(Color.FromArgb(180, 200, 200, 200));
+        var darkBand  = new SolidColorBrush(Color.FromArgb(180, 50, 50, 50));
         lightBand.Freeze();
         darkBand.Freeze();
 
-        const double tileW = 14.0, tileH = 8.0;
+        const double tileW = 16.0, tileH = 10.0;
         var drawingGroup = new DrawingGroup();
-        // Dark background tile
+        // Dark background fill
         drawingGroup.Children.Add(new GeometryDrawing(
             darkBand, null,
             new RectangleGeometry(new Rect(0, 0, tileW, tileH))));
@@ -6604,7 +6605,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         var border = new Border
         {
-            Height              = 8,
+            Height              = 10,
             Margin              = new Thickness(0, 10, 0, 10),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             Background          = stripeBrush,
@@ -6614,6 +6615,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         var container = new BlockUIContainer(border) { Margin = new Thickness(0) };
         CoordinatorThread.Document.Blocks.Add(container);
+        ScrollToEndIfAtBottom(CoordinatorThread);
     }
 
     private void AppendQrCode(string url)
