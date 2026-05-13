@@ -1809,9 +1809,16 @@ public partial class MainWindow : Window, ILiveElementLocator
                 return;
             }
 
-            // Editing a queued tab → dispatch that specific item directly.
+            // Editing a queued tab while the queue is running or paused → return
+            // keyboard focus to the main draft instead of dispatching the item.
+            // When the queue is idle the original direct-dispatch path is correct.
             if (_activeTabId is not null)
             {
+                if (_isPromptRunning || IsNativeLoopRunning || _queueManuallyPaused)
+                {
+                    OnQueueTabClicked(null);
+                    return;
+                }
                 await DispatchQueuedTabAsync(_activeTabId);
                 return;
             }
@@ -1833,7 +1840,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 return;
             }
 
-            if (_isPromptRunning || IsNativeLoopRunning)
+            if (_isPromptRunning || IsNativeLoopRunning || _queueManuallyPaused)
             {
                 if (IsNativeLoopRunning)
                     _loopInterruptedByQueue = true;
@@ -1849,13 +1856,6 @@ public partial class MainWindow : Window, ILiveElementLocator
 
             _markdownRenderer.DismissKeyboardHint();
             ResetQueuePausedState();
-            // Sending from the draft tab while the queue is manually paused resumes
-            // normal drain after this turn completes.
-            if (_queueManuallyPaused)
-            {
-                SetQueuePaused(false);
-                SyncQueuePanel();
-            }
             if (_remoteAccessActive)
                 _ = _bridge.BroadcastRcPromptAsync(prompt);
             await _pec.ExecutePromptAsync(ApplyFollowUpHeader(prompt, ""), addToHistory: true, clearPromptBox: true);

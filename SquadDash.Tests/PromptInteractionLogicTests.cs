@@ -859,6 +859,99 @@ internal sealed class RunButtonLabelPolicyTests {
     }
 }
 
+// ── RunButtonClickPolicy tests ────────────────────────────────────────────────
+
+[TestFixture]
+internal sealed class RunButtonClickPolicyTests {
+
+    // ── Draft tab (activeTabId = null) ────────────────────────────────────────
+
+    [Test]
+    public void Resolve_QueueIdle_DraftTab_ReturnsSend() {
+        var action = RunButtonClickPolicy.Resolve(
+            isPromptRunning: false, isNativeLoopRunning: false,
+            isManuallyPaused: false, activeTabId: null);
+        Assert.That(action, Is.EqualTo(RunButtonClickAction.SendPrompt));
+    }
+
+    [Test]
+    public void Resolve_PromptRunning_DraftTab_ReturnsEnqueue() {
+        var action = RunButtonClickPolicy.Resolve(
+            isPromptRunning: true, isNativeLoopRunning: false,
+            isManuallyPaused: false, activeTabId: null);
+        Assert.That(action, Is.EqualTo(RunButtonClickAction.EnqueuePrompt));
+    }
+
+    [Test]
+    public void Resolve_NativeLoopRunning_DraftTab_ReturnsEnqueue() {
+        var action = RunButtonClickPolicy.Resolve(
+            isPromptRunning: false, isNativeLoopRunning: true,
+            isManuallyPaused: false, activeTabId: null);
+        Assert.That(action, Is.EqualTo(RunButtonClickAction.EnqueuePrompt));
+    }
+
+    [Test]
+    public void Resolve_ManuallyPaused_DraftTab_ReturnsEnqueue() {
+        // Queue paused + draft focused → enqueue (do not send, do not unpause).
+        var action = RunButtonClickPolicy.Resolve(
+            isPromptRunning: false, isNativeLoopRunning: false,
+            isManuallyPaused: true, activeTabId: null);
+        Assert.That(action, Is.EqualTo(RunButtonClickAction.EnqueuePrompt));
+    }
+
+    [Test]
+    public void Resolve_ManuallyPaused_PromptAlsoRunning_DraftTab_ReturnsEnqueue() {
+        var action = RunButtonClickPolicy.Resolve(
+            isPromptRunning: true, isNativeLoopRunning: false,
+            isManuallyPaused: true, activeTabId: null);
+        Assert.That(action, Is.EqualTo(RunButtonClickAction.EnqueuePrompt));
+    }
+
+    // ── Queued tab (activeTabId != null) ──────────────────────────────────────
+
+    [Test]
+    public void Resolve_QueueIdle_QueuedTab_ReturnsDispatch() {
+        var action = RunButtonClickPolicy.Resolve(
+            isPromptRunning: false, isNativeLoopRunning: false,
+            isManuallyPaused: false, activeTabId: "tab-1");
+        Assert.That(action, Is.EqualTo(RunButtonClickAction.DispatchTab));
+    }
+
+    [Test]
+    public void Resolve_PromptRunning_QueuedTab_ReturnsFocusDraft() {
+        // Queue running + queued tab selected → return focus to main draft.
+        var action = RunButtonClickPolicy.Resolve(
+            isPromptRunning: true, isNativeLoopRunning: false,
+            isManuallyPaused: false, activeTabId: "tab-1");
+        Assert.That(action, Is.EqualTo(RunButtonClickAction.FocusDraft));
+    }
+
+    [Test]
+    public void Resolve_NativeLoopRunning_QueuedTab_ReturnsFocusDraft() {
+        var action = RunButtonClickPolicy.Resolve(
+            isPromptRunning: false, isNativeLoopRunning: true,
+            isManuallyPaused: false, activeTabId: "tab-1");
+        Assert.That(action, Is.EqualTo(RunButtonClickAction.FocusDraft));
+    }
+
+    [Test]
+    public void Resolve_ManuallyPaused_QueuedTab_ReturnsFocusDraft() {
+        // Queue paused + queued tab selected → return focus to main draft.
+        var action = RunButtonClickPolicy.Resolve(
+            isPromptRunning: false, isNativeLoopRunning: false,
+            isManuallyPaused: true, activeTabId: "tab-99");
+        Assert.That(action, Is.EqualTo(RunButtonClickAction.FocusDraft));
+    }
+
+    [Test]
+    public void Resolve_ManuallyPaused_PromptAlsoRunning_QueuedTab_ReturnsFocusDraft() {
+        var action = RunButtonClickPolicy.Resolve(
+            isPromptRunning: true, isNativeLoopRunning: false,
+            isManuallyPaused: true, activeTabId: "tab-2");
+        Assert.That(action, Is.EqualTo(RunButtonClickAction.FocusDraft));
+    }
+}
+
 // ── SlashCommandParameterPolicy tests ─────────────────────────────────────────
 
 [TestFixture]

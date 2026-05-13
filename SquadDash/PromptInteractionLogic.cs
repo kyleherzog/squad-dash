@@ -329,3 +329,42 @@ internal static class RunButtonLabelPolicy {
         return queueMode ? LabelQueue : LabelSend;
     }
 }
+
+internal enum RunButtonClickAction {
+    /// <summary>Send the draft immediately (queue idle, draft tab active).</summary>
+    SendPrompt,
+    /// <summary>Add the draft to the back of the queue (queue running or paused, draft tab active).</summary>
+    EnqueuePrompt,
+    /// <summary>Dispatch the currently-selected queued tab directly (queue idle, queued tab active).</summary>
+    DispatchTab,
+    /// <summary>Switch back to the main draft tab and return keyboard focus to the textbox.</summary>
+    FocusDraft,
+}
+
+/// <summary>
+/// Pure logic for deciding what the Run/Queue button click should do given the
+/// current queue state and active tab. Local slash-commands bypass this policy
+/// entirely and are handled before it is consulted.
+/// </summary>
+internal static class RunButtonClickPolicy {
+    /// <summary>
+    /// Returns the action the Run button click handler should take.
+    /// </summary>
+    /// <param name="isPromptRunning">True when the coordinator is actively executing a prompt.</param>
+    /// <param name="isNativeLoopRunning">True when a native loop is running.</param>
+    /// <param name="isManuallyPaused">True when the queue is manually paused via the play/pause button.</param>
+    /// <param name="activeTabId">The selected queued-tab ID, or null when the main draft tab is active.</param>
+    public static RunButtonClickAction Resolve(
+        bool isPromptRunning,
+        bool isNativeLoopRunning,
+        bool isManuallyPaused,
+        string? activeTabId) {
+
+        bool queueBusy = isPromptRunning || isNativeLoopRunning || isManuallyPaused;
+
+        if (activeTabId is not null)
+            return queueBusy ? RunButtonClickAction.FocusDraft : RunButtonClickAction.DispatchTab;
+
+        return queueBusy ? RunButtonClickAction.EnqueuePrompt : RunButtonClickAction.SendPrompt;
+    }
+}
