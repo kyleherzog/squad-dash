@@ -23582,7 +23582,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (ApprovalFilterClearButton is not null)
                 ApprovalFilterClearButton.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _approvalPanel?.SetFilter(text);
-            _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with { ApprovalsPanelFilter = text.Length > 0 ? text : null };
+            _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with { ApprovalsPanelFilter = text.Length > 0 ? text : string.Empty };
             _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(ApprovalFilterBox_TextChanged), ex); }
@@ -23620,7 +23620,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             string filterText = text;
             _tasksPanelController?.SetFilter(filterText);
             ScheduleLoopPreviewRefreshFromFilter();
-            _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with { TasksPanelFilter = text.Length > 0 ? text : null };
+            _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with { TasksPanelFilter = text.Length > 0 ? text : string.Empty };
             _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(TasksFilterBox_TextChanged), ex); }
@@ -23713,7 +23713,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (NotesFilterClearButton is not null)
                 NotesFilterClearButton.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _notesPanel?.SetFilter(text);
-            _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with { NotesPanelFilter = text.Length > 0 ? text : null };
+            _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with { NotesPanelFilter = text.Length > 0 ? text : string.Empty };
             _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(NotesFilterBox_TextChanged), ex); }
