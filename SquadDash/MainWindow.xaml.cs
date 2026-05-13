@@ -6573,10 +6573,20 @@ public partial class MainWindow : Window, ILiveElementLocator
         tooltip.SetResourceReference(Control.BorderBrushProperty, "ActivePanelBorder");
         tooltip.BorderThickness = new Thickness(1);
 
-        // Build diagonal-stripe DrawingBrush: alternating bands with strong enough contrast
-        // to be visible on both dark and light themes.
-        var lightBand = new SolidColorBrush(Color.FromArgb(180, 200, 200, 200));
-        var darkBand  = new SolidColorBrush(Color.FromArgb(180, 50, 50, 50));
+        // Low-contrast diagonal-stripe DrawingBrush: theme-aware subtle bands.
+        // Dark theme: two close dark grays — barely perceptible but still readable.
+        // Light theme: two close light grays — same idea on a white/light background.
+        SolidColorBrush lightBand, darkBand;
+        if (string.Equals(_activeThemeName, "Light", StringComparison.OrdinalIgnoreCase))
+        {
+            lightBand = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0));    // very light dark tint
+            darkBand  = new SolidColorBrush(Color.FromArgb(18, 0, 0, 0));    // even lighter
+        }
+        else
+        {
+            lightBand = new SolidColorBrush(Color.FromArgb(55, 255, 255, 255)); // subtle light on dark
+            darkBand  = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)); // nearly transparent
+        }
         lightBand.Freeze();
         darkBand.Freeze();
 
