@@ -627,6 +627,41 @@ internal sealed class ApplicationSettingsStore {
         }
     }
 
+    /// <summary>
+    /// Records the shutdown timestamp for the given workspace.
+    /// Called on clean shutdown so the next startup can display a session gap indicator.
+    /// </summary>
+    public ApplicationSettingsSnapshot SaveWorkspaceShutdownTime(string workspaceFolder, DateTimeOffset time) {
+        using var mutex = AcquireMutex();
+        var normalizedWorkspace = NormalizeFolder(workspaceFolder);
+        var current = LoadCore();
+        var times = current.WorkspaceShutdownTimes is not null
+            ? new Dictionary<string, DateTimeOffset>(current.WorkspaceShutdownTimes, StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, DateTimeOffset>(StringComparer.OrdinalIgnoreCase);
+        times[normalizedWorkspace] = time;
+        var updated = current with { WorkspaceShutdownTimes = times };
+        SaveCore(updated);
+        return updated;
+    }
+
+    /// <summary>
+    /// Removes the shutdown timestamp for the given workspace after the session gap
+    /// indicator has been displayed, preventing it from appearing again.
+    /// </summary>
+    public ApplicationSettingsSnapshot ClearWorkspaceShutdownTime(string workspaceFolder) {
+        using var mutex = AcquireMutex();
+        var normalizedWorkspace = NormalizeFolder(workspaceFolder);
+        var current = LoadCore();
+        if (current.WorkspaceShutdownTimes is null ||
+            !current.WorkspaceShutdownTimes.ContainsKey(normalizedWorkspace))
+            return current;
+        var times = new Dictionary<string, DateTimeOffset>(current.WorkspaceShutdownTimes, StringComparer.OrdinalIgnoreCase);
+        times.Remove(normalizedWorkspace);
+        var updated = current with { WorkspaceShutdownTimes = times.Count > 0 ? times : null };
+        SaveCore(updated);
+        return updated;
+    }
+
     private void SaveCore(ApplicationSettingsSnapshot snapshot) {
         var normalized = snapshot.Normalize();
         JsonFileStorage.AtomicWrite(_settingsPath, normalized);
@@ -1093,6 +1128,13 @@ internal sealed record ApplicationSettingsSnapshot(
     /// <summary>Index of the last-visited page in the Preferences dialog (0 = General).</summary>
     public int Preferences_LastPage { get; init; } = 0;
 
+    /// <summary>
+    /// Per-workspace shutdown timestamps.  Keyed by normalised workspace folder path.
+    /// Saved on clean shutdown; consumed once on the next startup to display a session
+    /// gap indicator in the transcript; then cleared.
+    /// </summary>
+    public IReadOnlyDictionary<string, DateTimeOffset>? WorkspaceShutdownTimes { get; init; }
+
     public static ApplicationSettingsSnapshot Empty{ get; } =
         new(
             null,
@@ -1209,6 +1251,19 @@ internal sealed record ApplicationSettingsSnapshot(
             }
         }
 
+        IReadOnlyDictionary<string, DateTimeOffset>? normalizedShutdownTimes = null;
+        if (WorkspaceShutdownTimes is not null) {
+            var dict = new Dictionary<string, DateTimeOffset>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in WorkspaceShutdownTimes) {
+                if (string.IsNullOrWhiteSpace(entry.Key))
+                    continue;
+                var normalizedWorkspace = Path.GetFullPath(entry.Key)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                dict[normalizedWorkspace] = entry.Value;
+            }
+            normalizedShutdownTimes = dict.Count > 0 ? dict : null;
+        }
+
         return new ApplicationSettingsSnapshot(
             lastOpenedFolder,
             normalizedFolders,
@@ -1294,6 +1349,7 @@ internal sealed record ApplicationSettingsSnapshot(
             Tts_OpenAi_Voice = string.IsNullOrWhiteSpace(Tts_OpenAi_Voice) ? "alloy"              : Tts_OpenAi_Voice.Trim(),
             Tts_OpenAi_Model = Tts_OpenAi_Model,
             Preferences_LastPage = Math.Max(0, Preferences_LastPage),
+            WorkspaceShutdownTimes = normalizedShutdownTimes,
         };
     }
 

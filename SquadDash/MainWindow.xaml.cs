@@ -6538,6 +6538,31 @@ public partial class MainWindow : Window, ILiveElementLocator
         ScrollToEndIfAtBottom(thread);
     }
 
+    /// <summary>
+    /// Appends a low-contrast horizontal rule to the coordinator transcript with a tooltip
+    /// showing the shutdown time, offline duration, and startup time.  Called once on
+    /// workspace load when a previous shutdown timestamp is found in settings.
+    /// </summary>
+    private void AppendSessionGapIndicator(DateTimeOffset shutdownTime, TimeSpan offlineDuration)
+    {
+        var tooltipText =
+            $"Shutdown: {StatusTimingPresentation.FormatRelativeTimestamp(shutdownTime)}\n" +
+            $"Offline: {StatusTimingPresentation.FormatOfflineDuration(offlineDuration)}\n" +
+            $"Startup: {StatusTimingPresentation.FormatRelativeTimestamp(DateTimeOffset.Now)}";
+
+        var border = new Border
+        {
+            Height = 1,
+            Margin = new Thickness(0, 8, 0, 8),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            ToolTip = new ToolTip { Content = tooltipText }
+        };
+        border.SetResourceReference(Border.BackgroundProperty, "SubtleText");
+
+        var container = new BlockUIContainer(border) { Margin = new Thickness(0) };
+        CoordinatorThread.Document.Blocks.Add(container);
+    }
+
     private void AppendQrCode(string url)
     {
         try
@@ -13040,6 +13065,17 @@ public partial class MainWindow : Window, ILiveElementLocator
         await _conversationManager.LoadWorkspaceConversationAsync();
         loadConvSw.Stop();
         SquadDashTrace.Write(TraceCategory.Performance, $"LOAD_CONVERSATION_END: {loadConvSw.ElapsedMilliseconds}ms");
+
+        // Show a session gap indicator if a shutdown timestamp was recorded for this workspace.
+        if (_currentWorkspace is not null &&
+            _settingsSnapshot.WorkspaceShutdownTimes is { } shutdownTimes &&
+            shutdownTimes.TryGetValue(_currentWorkspace.FolderPath, out var shutdownTime))
+        {
+            var offlineDuration = DateTimeOffset.UtcNow - shutdownTime;
+            if (offlineDuration.TotalSeconds > 5)
+                AppendSessionGapIndicator(shutdownTime, offlineDuration);
+            _settingsSnapshot = _settingsStore.ClearWorkspaceShutdownTime(_currentWorkspace.FolderPath);
+        }
 
         // Prune agent reports older than 2 weeks on each workspace load.
         var reportStateDir = _conversationManager.ConversationStore.GetWorkspaceStateDirectory(_currentWorkspace.FolderPath);
@@ -19750,6 +19786,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                 SquadDashTrace.Write(TraceCategory.Shutdown, $"MainWindow_Closing: SaveDocsPanelState(pending) {pendingDocsSaveSw.ElapsedMilliseconds}ms elapsed={closingSw.ElapsedMilliseconds}ms.");
             }
             var emergencySaveSw = Stopwatch.StartNew();
+            if (_currentWorkspace is not null)
+                _settingsStore.SaveWorkspaceShutdownTime(_currentWorkspace.FolderPath, DateTimeOffset.UtcNow);
             _conversationManager.EmergencySave();
             SquadDashTrace.Write(TraceCategory.Shutdown, $"MainWindow_Closing: EmergencySave {emergencySaveSw.ElapsedMilliseconds}ms elapsed={closingSw.ElapsedMilliseconds}ms.");
             SquadDashTrace.Write(TraceCategory.Shutdown, $"MainWindow_Closing: complete {closingSw.ElapsedMilliseconds}ms.");

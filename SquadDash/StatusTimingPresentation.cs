@@ -69,6 +69,21 @@ internal static class StatusTimingPresentation {
 
     public static string FormatAgo(TimeSpan elapsed) => $"{FormatCompletedDuration(elapsed)} ago";
 
+    /// <summary>
+    /// Formats an offline duration with ~2 significant figures for display in the
+    /// session gap tooltip (e.g. "12 seconds", "3 minutes", "1.2 hours", "1.5 days").
+    /// </summary>
+    public static string FormatOfflineDuration(TimeSpan duration) {
+        var clamped = Clamp(duration);
+        if (clamped.TotalDays >= 1)
+            return $"{clamped.TotalDays:0.0} days";
+        if (clamped.TotalHours >= 1)
+            return $"{clamped.TotalHours:0.0} hours";
+        if (clamped.TotalMinutes >= 1)
+            return $"{(int)clamped.TotalMinutes} minutes";
+        return $"{Math.Max(0, (int)clamped.TotalSeconds)} seconds";
+    }
+
     public static string FormatElapsed(TimeSpan elapsed) => FormatDuration(elapsed);
 
     public static string FormatDuration(TimeSpan elapsed) {
