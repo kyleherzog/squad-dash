@@ -985,6 +985,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                             // avoid firing the sound when the user clicked Pause.
                             if (_promptQueue.Count == 0)
                                 SoundNotifications.Play(SoundEvent.QueueEmpty);
+                            // Resume a queued loop now that there are no more items to drain.
+                            _ = MaybeFireQueuedLoopAsync();
                         }
                     }
                 }
