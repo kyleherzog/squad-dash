@@ -16896,6 +16896,15 @@ public partial class MainWindow : Window, ILiveElementLocator
                 }
             }
 
+            // Sim quick replies (routeMode="sim") exercise the quick reply UI without
+            // dispatching a real prompt to the AI — used by /test-queue.
+            if (string.Equals(payload.RouteMode, "sim", StringComparison.OrdinalIgnoreCase))
+            {
+                _pec.DisableQuickReplies(payload.Entry);
+                SquadDashTrace.Write("UI", $"Quick reply sim button clicked: '{payload.Option.Trim()}' — no AI dispatch.");
+                return;
+            }
+
             _pec.DisableQuickReplies(payload.Entry);
             ResetQueuePausedState();
             var pendingLaunch = CreatePendingQuickReplyLaunch(payload);
