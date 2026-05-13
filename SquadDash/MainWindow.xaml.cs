@@ -192,6 +192,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private readonly PromptQueue _promptQueue = new();
     private bool _queueManuallyPaused;
     private bool _queuePausePending;
+    private bool _bridgeStallShowing;
     private int _promptQueueSeq;
     private readonly HostCommandRegistry _hostCommandRegistry = new();
     private HostCommandExecutor? _hostCommandExecutor;
@@ -22044,6 +22045,42 @@ public partial class MainWindow : Window, ILiveElementLocator
             SyncCardThreads(card, now);
 
         RefreshTasksStatusWindow(now);
+        RefreshBridgeStallWarning(now);
+    }
+
+    private void RefreshBridgeStallWarning(DateTimeOffset now)
+    {
+        var stallActive = _isPromptRunning
+            && (_pec.PromptNoActivityWarningShown || _pec.PromptStallWarningShown)
+            && _pec.LastPromptActivityAt is not null;
+
+        if (stallActive)
+        {
+            var idleFor = now - _pec.LastPromptActivityAt!.Value;
+            var msg = $"⚠ Bridge not responding ({idleFor.TotalSeconds:0}s)";
+
+            BridgeStallTextBlock.Text = msg;
+            if (!_bridgeStallShowing)
+            {
+                _bridgeStallShowing = true;
+                BridgeStallBanner.Visibility = Visibility.Visible;
+            }
+
+            if (QueueTabBorder.Visibility == Visibility.Visible)
+            {
+                QueueStatusLabel.Text = msg;
+                QueueStatusLabel.Background = Brushes.DarkRed;
+                QueueStatusLabel.Foreground = Brushes.White;
+            }
+        }
+        else if (_bridgeStallShowing)
+        {
+            _bridgeStallShowing = false;
+            BridgeStallBanner.Visibility = Visibility.Collapsed;
+
+            if (QueueTabBorder.Visibility == Visibility.Visible)
+                SetQueuePaused(_queueManuallyPaused);
+        }
     }
 
     private void RestoreUtilityWindowVisibility()
