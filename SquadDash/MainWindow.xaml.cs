@@ -13047,6 +13047,10 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (savedEntries is { Count: > 0 })
         {
             _promptQueueSeq = 0;
+            // Read held/active state BEFORE SyncQueuePanel(), which calls UpdateQueuedPromptsState
+            // and overwrites QueueRightmostHeld/QueueActiveTabIndex with the current (null) tab state.
+            bool wasHeld = _conversationManager.ConversationState.QueueRightmostHeld == true;
+            var savedActiveTabIndex = _conversationManager.ConversationState.QueueActiveTabIndex;
             foreach (var entry in savedEntries)
             {
                 _promptQueue.Enqueue(entry.Text, ++_promptQueueSeq, entry.IsDictated);
@@ -13076,7 +13080,6 @@ public partial class MainWindow : Window, ILiveElementLocator
             SyncQueuePanel();
 
             // Restore active tab selection before held/drain decision so label logic sees correct state.
-            var savedActiveTabIndex = _conversationManager.ConversationState.QueueActiveTabIndex;
             if (savedActiveTabIndex.HasValue && savedActiveTabIndex.Value < _promptQueue.Items.Count)
             {
                 var restoredTabId = _promptQueue.Items[savedActiveTabIndex.Value].Id;
@@ -13084,7 +13087,6 @@ public partial class MainWindow : Window, ILiveElementLocator
                     System.Windows.Threading.DispatcherPriority.Background);
             }
 
-            bool wasHeld = _conversationManager.ConversationState.QueueRightmostHeld == true;
             SquadDashTrace.Write("Queue", $"Restore(entries): count={_promptQueue.Count} wasHeld={wasHeld} shiftHeld={_startupShiftHeld}");
             if ((wasHeld || _startupShiftHeld) && _promptQueue.Count > 0)
             {
@@ -13128,12 +13130,14 @@ public partial class MainWindow : Window, ILiveElementLocator
         else if (savedLegacy is { Count: > 0 })
         {
             _promptQueueSeq = 0;
+            // Read held/active state BEFORE SyncQueuePanel() overwrites them.
+            bool wasHeld = _conversationManager.ConversationState.QueueRightmostHeld == true;
+            var savedActiveTabIndex = _conversationManager.ConversationState.QueueActiveTabIndex;
             foreach (var text in savedLegacy)
                 _promptQueue.Enqueue(text, ++_promptQueueSeq);
             SyncQueuePanel();
 
             // Restore active tab selection before held/drain decision so label logic sees correct state.
-            var savedActiveTabIndex = _conversationManager.ConversationState.QueueActiveTabIndex;
             if (savedActiveTabIndex.HasValue && savedActiveTabIndex.Value < _promptQueue.Items.Count)
             {
                 var restoredTabId = _promptQueue.Items[savedActiveTabIndex.Value].Id;
@@ -13141,7 +13145,6 @@ public partial class MainWindow : Window, ILiveElementLocator
                     System.Windows.Threading.DispatcherPriority.Background);
             }
 
-            bool wasHeld = _conversationManager.ConversationState.QueueRightmostHeld == true;
             SquadDashTrace.Write("Queue", $"Restore(legacy): count={_promptQueue.Count} wasHeld={wasHeld} shiftHeld={_startupShiftHeld}");
             if ((wasHeld || _startupShiftHeld) && _promptQueue.Count > 0)
             {
