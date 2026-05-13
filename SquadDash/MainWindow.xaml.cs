@@ -13136,8 +13136,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             var offlineDuration = DateTimeOffset.UtcNow - shutdownTime;
             SquadDashTrace.Write(TraceCategory.UI, $"SessionGap: MATCH found shutdownTime={shutdownTime:O} offlineDuration={offlineDuration.TotalSeconds:F1}s");
-            if (offlineDuration.TotalSeconds > 5)
-                AppendSessionGapIndicator(shutdownTime, offlineDuration);
+            AppendSessionGapIndicator(shutdownTime, offlineDuration);
             _settingsSnapshot = _settingsStore.ClearWorkspaceShutdownTime(_currentWorkspace.FolderPath);
         }
         else
