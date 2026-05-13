@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -106,6 +107,8 @@ internal static class MarkdownEditorCommands
 
     /// <summary>
     /// Duplicates the current line and moves the caret to the start of the new copy.
+    /// Uses <c>SelectedText</c> insertion so the operation participates in the undo stack
+    /// as a single step.
     /// </summary>
     internal static void DuplicateLine(TextBox box)
     {
@@ -116,28 +119,43 @@ internal static class MarkdownEditorCommands
         var lineEnd   = text.IndexOf('\n', caret);
         if (lineEnd < 0) lineEnd = text.Length;
 
-        var line      = text[lineStart..lineEnd];
-        var insertion = "\n" + line;
-        box.Text       = text[..lineEnd] + insertion + text[lineEnd..];
-        box.CaretIndex = lineEnd + 1; // start of the new duplicate line
+        var line = text[lineStart..lineEnd];
+
+        // Insert via SelectedText so the action joins the undo stack as one step
+        // rather than replacing box.Text wholesale (which clears undo history).
+        box.SelectionStart  = lineEnd;
+        box.SelectionLength = 0;
+        box.SelectedText    = "\n" + line;
+        box.CaretIndex      = lineEnd + 1; // start of the new duplicate line
     }
 
     /// <summary>
     /// RichTextBox overload of <see cref="DuplicateLine(TextBox)"/>.
+    /// Inserts a new <see cref="Paragraph"/> after the current one inside a
+    /// <c>BeginChange</c>/<c>EndChange</c> block so the whole operation is a
+    /// single undo step (avoids the full-document replace that <c>SetPlainText</c>
+    /// would cause, which wipes undo history).
     /// </summary>
     internal static void DuplicateLine(RichTextBox box)
     {
-        var text  = box.GetPlainText().Replace("\r\n", "\n").Replace("\r", "\n");
-        var caret = box.GetCaretOffset();
+        var currentPara = box.CaretPosition?.Paragraph;
+        if (currentPara is null) return;
 
-        var lineStart = caret == 0 ? 0 : (text.LastIndexOf('\n', caret - 1) + 1);
-        var lineEnd   = text.IndexOf('\n', caret);
-        if (lineEnd < 0) lineEnd = text.Length;
+        // Collect the line text from all Run inlines (skips InlineUIContainer nodes).
+        var lineText = string.Concat(
+            currentPara.Inlines.OfType<Run>().Select(r => r.Text));
 
-        var line      = text[lineStart..lineEnd];
-        var insertion = "\n" + line;
-        box.SetPlainText(text[..lineEnd] + insertion + text[lineEnd..]);
-        box.SetCaretOffset(lineEnd + 1); // start of the new duplicate line
+        box.BeginChange();
+        try
+        {
+            var newPara = new System.Windows.Documents.Paragraph(
+                new System.Windows.Documents.Run(lineText))
+            { Margin = new System.Windows.Thickness(0) };
+
+            box.Document.Blocks.InsertAfter(currentPara, newPara);
+            box.CaretPosition = newPara.ContentStart;
+        }
+        finally { box.EndChange(); }
     }
 
     // ── Shared helpers ────────────────────────────────────────────────────────
