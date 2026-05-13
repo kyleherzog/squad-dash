@@ -86,6 +86,12 @@
 
 ## 🔴 High Priority
 
+- [ ] **WinGet — smoke-test installer on clean VM** *(Owner: you — manual step)*
+  Run `.\installer\build-installer.ps1 -Version 1.0.0` (requires Inno Setup 6 installed locally),
+  then install on a clean Windows VM with only Node.js pre-installed. Verify: launcher starts,
+  SDK bridge connects, workspaces resolve correctly from `%LocalAppData%\SquadDash\app\`.
+  **Blocks:** GitHub Release, WinGet submission.
+
 - [x] **[Orion audit] AgentThreadRegistry — lock down mutable backing collections** *(Owner: Arjun Sen)*
   Already implemented: all four collections (`ThreadsByKey`, `ThreadsByToolCallId`, `LaunchesByToolCallId`,
   `ThreadOrder`) expose `IReadOnlyDictionary`/`IReadOnlyList` interfaces. Backing fields are
@@ -96,12 +102,6 @@
   `CommitApprovalStore` (JSON persistence, 200-item cap), `DocStatusStore` (approval tracking,
   case-insensitive key lookup), `DocTopicsLoader` (SUMMARY.md parsing, folder scanning),
   `LoopOutputStore` (sequential log numbering). Write unit tests for each.
-
-- [ ] **WinGet — smoke-test installer on clean VM** *(Owner: you — manual step)*
-  Run `.\installer\build-installer.ps1 -Version 1.0.0` (requires Inno Setup 6 installed locally),
-  then install on a clean Windows VM with only Node.js pre-installed. Verify: launcher starts,
-  SDK bridge connects, workspaces resolve correctly from `%LocalAppData%\SquadDash\app\`.
-  **Blocks:** GitHub Release, WinGet submission.
 
 ---
 
@@ -229,6 +229,7 @@
 - [x] Loop panel — enum options with ≤5 choices render as radio buttons — ✅ Implemented (commit 751179a; `CreateEnumOptionControl` branches on choice count; GroupName mutual exclusion; 12px indent; ≥6 choices keep ComboBox)
 - [x] [Vesper audit] Test coverage — BuiltInPromptInjections, PromptContextDiagnostics — ✅ Implemented (commit 6601175; 63 new NUnit tests; fake regex evaluator for injections; all risk bands + trace summary fields covered)
 - [x] Command system — unified HostCommandRegistry/Parser/Executor — ✅ Verified complete (HostCommandRegistry builds catalog injected globally into every prompt; structured JSON multi-command parser; 6 built-in handlers; extensible via `.squad/commands.json`)
+- [x] Shutdown race — "cannot change window visibility while shutting down" — ✅ Fixed (commit ace7dbd; `_mainWindowClosingInProgress` flag set at top of `MainWindow_Closing` before `ShowDialog`; guards added to `HandleRestartRequestChanged`, `OnDocRevisionCompleted`, `OnClipboardEditorClosed`, and `TryPostToUi`)
 
 - [x] Loop output log pane — ✅ Implemented (collapsible log pane in Loop panel wired to loop_output_line events)
 - [x] RC — LAN access (bind to PC IP, not localhost) — ✅ Implemented (0.0.0.0 binding via patch-package; LAN URL shown in transcript)
