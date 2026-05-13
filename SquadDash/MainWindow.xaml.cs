@@ -7415,7 +7415,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 var clipText = Clipboard.GetText();
                 if (!string.IsNullOrEmpty(clipText))
-                    AttachContextFollowUp("Clipboard text", clipText);
+                    AttachContextFollowUp(BuildClipboardAttachDescription(clipText), clipText);
                 e.Handled = true;
                 return;
             }
@@ -23026,6 +23026,16 @@ public partial class MainWindow : Window, ILiveElementLocator
             sb.AppendLine(item.OriginalPrompt!.Trim());
         }
         return sb.ToString().TrimEnd();
+    }
+
+    private static string BuildClipboardAttachDescription(string text)
+    {
+        const int PreviewLength = 60;
+        var normalized = System.Text.RegularExpressions.Regex.Replace(text.Trim(), @"\s+", " ");
+        var preview = normalized.Length > PreviewLength
+            ? normalized[..PreviewLength] + "…"
+            : normalized;
+        return $"Clipboard: {preview} ({text.Length:N0} chars)";
     }
 
     private void AttachContextFollowUp(string description, string contentBlock)
