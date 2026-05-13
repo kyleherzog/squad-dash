@@ -821,10 +821,19 @@ internal sealed class RunButtonLabelPolicyTests {
 
     [Test]
     public void Compute_ActiveTab_QueuePaused_RightmostTab_CoordinatorIdle_ReturnsSend() {
-        // Active-tab path ignores queuePausedAwaitingInput entirely.
+        // QRB state always shows "Send" on any non-busy active tab.
         var label = RunButtonLabelPolicy.Compute(
             coordinatorBusy: false, queuePausedAwaitingInput: true,
             queueCount: 1, activeTabId: "tab-99", isRightmostTab: true);
+        Assert.That(label, Is.EqualTo(RunButtonLabelPolicy.LabelSend));
+    }
+
+    [Test]
+    public void Compute_ActiveTab_QRBState_NonRightmostTab_CoordinatorIdle_ReturnsSend() {
+        // QRB state overrides "Submit" on non-rightmost tabs — user can dispatch any tab immediately.
+        var label = RunButtonLabelPolicy.Compute(
+            coordinatorBusy: false, queuePausedAwaitingInput: true,
+            queueCount: 2, activeTabId: "tab-99", isRightmostTab: false);
         Assert.That(label, Is.EqualTo(RunButtonLabelPolicy.LabelSend));
     }
 

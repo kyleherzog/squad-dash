@@ -307,9 +307,9 @@ internal static class RunButtonLabelPolicy {
         if (activeTabId is not null)
         {
             if (coordinatorBusy) return LabelQueue;
-            // While the queue is manually paused, any tab shows "Send" — clicking it
-            // dispatches that item immediately and clears the pause.
-            if (queueManuallyPaused) return LabelSend;
+            // QRB state or manual pause: any tab shows "Send" so the item can be
+            // dispatched immediately (QRB) or the pause can be cleared (manual).
+            if (queuePausedAwaitingInput || queueManuallyPaused) return LabelSend;
             // "Send" only on the rightmost tab (the one about to be dispatched).
             // Non-rightmost tabs show "Submit" to indicate they are queued behind others.
             return isRightmostTab ? LabelSend : LabelSubmit;

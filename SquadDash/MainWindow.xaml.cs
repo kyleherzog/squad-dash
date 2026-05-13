@@ -2210,6 +2210,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         _queuePausedNotificationFired = true;
 
         SyncSendButton();
+        BuildShortcutsHint();
+        SetQueuePaused(_queueManuallyPaused);
 
         _ = _pushNotificationService.NotifyEventAsync(
             "quick_reply_needed",
@@ -2222,6 +2224,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _queuePausedNotificationFired = false;
         _rightmostTabHoldNotificationFired = false;
         SyncSendButton();
+        BuildShortcutsHint();
     }
 
     /// <summary>
@@ -2345,9 +2348,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         else
         {
             _queuePausePending = false;
-            QueueStatusLabel.Text = paused ? "Queue is paused"
-                : IsRightmostQueueTabActive() ? "Queue is running (but paused due to active prompt tab)"
-                : "Queue is running";
+            var qrbSuffix = _queuePausedNotificationFired ? " (AI waiting for your response)" : string.Empty;
+            QueueStatusLabel.Text = paused
+                ? $"Queue is paused{qrbSuffix}"
+                : IsRightmostQueueTabActive() ? "Queue is draining (active tab pausing dispatch)"
+                : $"Queue is draining{qrbSuffix}";
             QueuePlayPauseButton.ToolTip = paused ? "Click to resume automatic prompt queue processing." : "Click to pause automatic prompt queue processing.";
             // Icon shows what clicking will DO (inverted from current state):
             //   Running → pause icon ⏸ (click will pause)
@@ -8296,14 +8301,30 @@ public partial class MainWindow : Window, ILiveElementLocator
     /// Rebuilds the shortcuts hint line below the prompt box. Each sentence is only included
     /// when its feature has not been used in the last <see cref="HintCooldown"/>. The
     /// Ctrl+Enter hint is additionally gated on there being queued items that precede the
-    /// active prompt in the dispatch order.
+    /// active prompt in the dispatch order. In QRB blocking state the hint area is taken
+    /// over entirely to guide the user through responding to AI input.
     /// </summary>
     private void BuildShortcutsHint()
     {
-        var includePtt = IsSpeechConfigured();
-
         var inlines = PromptShortcutsHintTextBlock.Inlines;
         inlines.Clear();
+
+        // QRB blocking state: replace all normal hints with the QRB guidance message.
+        if (_queuePausedNotificationFired)
+        {
+            inlines.Add(Normal("AI needs your input. Press "));
+            inlines.Add(Bold("Enter"));
+            inlines.Add(Normal(" or click "));
+            inlines.Add(Bold("Send"));
+            inlines.Add(Normal(" to send the active prompt immediately (or click one of the Quick Reply Buttons above). To create a new response draft, press "));
+            inlines.Add(Bold("Ctrl"));
+            inlines.Add(Normal("+"));
+            inlines.Add(Bold("Q"));
+            inlines.Add(Normal("."));
+            return;
+        }
+
+        var includePtt = IsSpeechConfigured();
 
         bool any = false;
         void AddGap() { if (any) inlines.Add(Gap()); }
