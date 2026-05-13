@@ -1331,11 +1331,18 @@ internal sealed class PromptExecutionController {
 
     private static IReadOnlyList<TestQueueEntry> BuildDefaultTestQueueScenario() =>
         new[] {
-            new TestQueueEntry("Queue test item 1 of 5", "✅ [Queue sim] Item 1 — fake response.",  1, IsActiveDraft: false),
-            new TestQueueEntry("Queue test item 2 of 5", "✅ [Queue sim] Item 2 — fake response.",  2, IsActiveDraft: false),
-            new TestQueueEntry("Queue test item 3 of 5", "✅ [Queue sim] Item 3 — fake response.",  2, IsActiveDraft: false),
-            new TestQueueEntry("Queue test item 4 of 5", "✅ [Queue sim] Item 4 — fake response.",  1, IsActiveDraft: false),
-            new TestQueueEntry("Queue test item 5 of 5 (draft)", "✅ [Queue sim] Draft item — fake response.", 1, IsActiveDraft: true),
+            new TestQueueEntry("Queue test item 1 of 8 — pause window",
+                "✅ [Queue sim] Item 1 — fake response. (4-second delay gives time to test the pause button)",
+                4, IsActiveDraft: false),
+            new TestQueueEntry("Queue test item 2 of 8", "✅ [Queue sim] Item 2 — fake response.",  2, IsActiveDraft: false),
+            new TestQueueEntry("Queue test item 3 of 8", "✅ [Queue sim] Item 3 — fake response.",  2, IsActiveDraft: false),
+            new TestQueueEntry("Queue test item 4 of 8 — quick replies",
+                "✅ [Queue sim] Item 4 — this response includes quick reply buttons.\n\nQUICK_REPLIES_JSON:\n[\n  { \"label\": \"Continue queue\", \"routeMode\": \"continue_current_agent\", \"reason\": \"Queue sim test button.\" },\n  { \"label\": \"Stop here\", \"routeMode\": \"done\", \"reason\": \"Queue sim test button.\" }\n]",
+                2, IsActiveDraft: false),
+            new TestQueueEntry("Queue test item 5 of 8", "✅ [Queue sim] Item 5 — fake response.",  1, IsActiveDraft: false),
+            new TestQueueEntry("Queue test item 6 of 8", "✅ [Queue sim] Item 6 — fake response.",  1, IsActiveDraft: false),
+            new TestQueueEntry("Queue test item 7 of 8", "✅ [Queue sim] Item 7 — fake response.",  1, IsActiveDraft: false),
+            new TestQueueEntry("Queue test item 8 of 8 (draft)", "✅ [Queue sim] Draft item — fake response.", 1, IsActiveDraft: true),
         };
 
     /// <summary>
