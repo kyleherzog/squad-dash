@@ -4063,6 +4063,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         SquadDashTrace.Write("UI", $"Subagent completed {summary}");
 
         var promoted = _backgroundTaskPresenter.PromoteBackgroundAgentReportNow(thread, "subagent_completed");
+        if (promoted && _isPromptRunning)
+            _pec.NotifySubagentCompletedDuringTurn(thread.Title ?? evt.AgentDisplayName ?? evt.AgentName ?? "Unknown agent");
         _backgroundTaskPresenter.SkipNextBackgroundCompletionFallback = true;
         _backgroundTaskPresenter.RecordBackgroundCompletion(summary, BackgroundTaskPresenter.BuildThreadAnnouncementKey(thread), appendNotice: !promoted);
         SyncAgentCardsWithThreads();

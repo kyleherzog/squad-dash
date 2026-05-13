@@ -265,6 +265,10 @@ internal sealed class PromptExecutionController {
     private bool             _promptNoActivityWarningShown;
     private bool             _promptStallWarningShown;
 
+    // ── Silent-completion watchdog ────────────────────────────────────────
+    private record SilentCompletionCandidate(string AgentDisplayName, int ResponseCharsAtArrival);
+    private readonly List<SilentCompletionCandidate> _silentCompletionCandidates = new();
+
     // ── Per-item sim state (set by /test-queue; consumed as items execute) ─
     /// <summary>
     /// The queue item currently being dispatched by MainWindow.
@@ -552,6 +556,7 @@ internal sealed class PromptExecutionController {
         _promptNoActivityWarningShown = false;
         _promptStallWarningShown      = false;
         _lastSessionReadyEvent        = null;
+        _silentCompletionCandidates.Clear();
         _promptHealthTimer.Start();
         SquadDashTrace.Write("PromptHealth", $"Prompt started at {now:O}");
     }
@@ -745,6 +750,11 @@ internal sealed class PromptExecutionController {
                 $"{FormatPromptContextDiagnostics(finishedAt)}");
         }
 
+        // Check for silent completions before response counters are cleared.
+        if ((outcome == "completed" || outcome == "interrupted") && _silentCompletionCandidates.Count > 0)
+            MaybeInjectSilentCompletionFollowUp();
+        _silentCompletionCandidates.Clear();
+
         _promptHealthTimer.Stop();
         _currentPromptStartedAt       = null;
         _lastPromptActivityAt         = null;
@@ -783,6 +793,58 @@ internal sealed class PromptExecutionController {
 
         return StatusTimingPresentation.FormatDuration(timestamp - startedAt);
     }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Silent-completion watchdog
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Called from <c>HandleSubagentCompleted</c> when the coordinator's turn is active
+    /// and the subagent report was promoted into that turn.  Registers the agent as a
+    /// silent-completion candidate so we can detect if the coordinator's turn ends
+    /// without generating any follow-up response text.
+    /// </summary>
+    internal void NotifySubagentCompletedDuringTurn(string agentDisplayName) {
+        if (!_getIsPromptRunning())
+            return;
+
+        _silentCompletionCandidates.Add(new SilentCompletionCandidate(agentDisplayName, _responseCharacterCount));
+        SquadDashTrace.Write(
+            "PromptHealth",
+            $"SilentCompletionWatchdog: registered candidate agent={agentDisplayName} responseCharsAtArrival={_responseCharacterCount}");
+    }
+
+    /// <summary>
+    /// Checks whether any registered subagent produced zero coordinator response text
+    /// after it completed.  If so, enqueues a follow-up prompt so the coordinator
+    /// reviews and reports the silently-received results to the user.
+    /// Must be called before <c>_responseCharacterCount</c> is reset.
+    /// </summary>
+    private void MaybeInjectSilentCompletionFollowUp() {
+        var silentAgents = _silentCompletionCandidates
+            .Where(c => _responseCharacterCount == c.ResponseCharsAtArrival)
+            .Select(c => c.AgentDisplayName)
+            .ToList();
+
+        if (silentAgents.Count == 0) {
+            SquadDashTrace.Write(
+                "PromptHealth",
+                "SilentCompletionWatchdog: all candidates produced response text — no injection needed.");
+            return;
+        }
+
+        var names     = string.Join(", ", silentAgents.Select(n => $"**{n}**"));
+        var injection =
+            "The following subagents completed their work while your turn was active, but no response was generated. " +
+            $"Please review their results and report back to the user: {names}.";
+
+        SquadDashTrace.Write(
+            "PromptHealth",
+            $"SilentCompletionWatchdog: injecting follow-up for {silentAgents.Count} agent(s): {string.Join(", ", silentAgents)}");
+
+        _enqueuePrompt(injection);
+    }
+
 
     private static string FormatElapsedMilliseconds(DateTimeOffset startedAt, DateTimeOffset? milestoneAt) =>
         milestoneAt is { } value
