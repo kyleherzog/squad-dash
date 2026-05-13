@@ -7954,10 +7954,12 @@ public partial class MainWindow : Window, ILiveElementLocator
                                     _sessionCaretIndex      = _pttTargetTextBox!.SelectionStart;
                                     _sessionSelectionLength = _pttTargetTextBox!.SelectionLength;
                                 }
-                                // Queue whenever the target is the prompt box.
+                                // Queue whenever the target is the prompt box AND auto-send is enabled.
                                 // EnqueueCurrentPrompt works whether or not a prompt is currently running,
                                 // so we no longer need to gate on !_isPromptRunning.
-                                _voiceStartedWithSendEnabled = _pttTargetRichTextBox == null && _pttTargetTextBox == PromptTextBox;
+                                _voiceStartedWithSendEnabled = _settingsSnapshot.PttAutoSend
+                                                               && _pttTargetRichTextBox == null
+                                                               && _pttTargetTextBox == PromptTextBox;
                                 _pttState = PttState.Active;
                                 _ = StartPushToTalkAsync();
                             }
