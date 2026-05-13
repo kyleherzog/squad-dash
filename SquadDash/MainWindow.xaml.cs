@@ -6576,16 +6576,20 @@ public partial class MainWindow : Window, ILiveElementLocator
         // Low-contrast diagonal-stripe DrawingBrush: theme-aware subtle bands.
         // Dark theme: two close dark grays — barely perceptible but still readable.
         // Light theme: two close light grays — same idea on a white/light background.
+        // Dark: background band is slightly brighter than TranscriptSurface (#1E1C17), stripe
+        // bands are noticeably brighter still — creates a visible but unobtrusive shimmer.
+        // Light: TranscriptSurface is near-white (#FFFCF8), so even small alpha values are
+        // perceptible; keep both bands very low to stay whisper-quiet.
         SolidColorBrush lightBand, darkBand;
         if (string.Equals(_activeThemeName, "Light", StringComparison.OrdinalIgnoreCase))
         {
-            lightBand = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0));    // very light dark tint
-            darkBand  = new SolidColorBrush(Color.FromArgb(18, 0, 0, 0));    // even lighter
+            darkBand  = new SolidColorBrush(Color.FromArgb(7,  0, 0, 0));  // ~3% black — barely there background
+            lightBand = new SolidColorBrush(Color.FromArgb(16, 0, 0, 0));  // ~6% black — faint stripe
         }
         else
         {
-            lightBand = new SolidColorBrush(Color.FromArgb(55, 255, 255, 255)); // subtle light on dark
-            darkBand  = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)); // nearly transparent
+            darkBand  = new SolidColorBrush(Color.FromArgb(30,  255, 255, 255)); // ~12% white — slightly above transcript bg
+            lightBand = new SolidColorBrush(Color.FromArgb(85,  255, 255, 255)); // ~33% white — noticeably brighter stripe
         }
         lightBand.Freeze();
         darkBand.Freeze();
