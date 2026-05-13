@@ -2159,11 +2159,13 @@ public partial class MainWindow : Window, ILiveElementLocator
     /// </summary>
     private async Task DrainQueueBeforeLoopIterationAsync()
     {
+        bool dispatched = false;
         while (!_isPromptRunning && !_isClosing && !_restartPending && !LastTurnNeedsInput())
         {
             var item = GetAutoDispatchCandidate();
             if (item is null) break;
 
+            dispatched = true;
             var seqNum = item.SequenceNumber;
             _promptQueue.Remove(item.Id);
             SyncQueuePanel();
@@ -2193,7 +2195,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         // A queued prompt produced quick replies that need user input before the loop
         // can continue.  Stop the loop gracefully (the interrupt flag causes
         // OnNativeLoopStopped to re-queue it so it resumes once the user responds).
-        if (LastTurnNeedsInput())
+        // Only interrupt if we actually dispatched items this cycle — stale quick-reply
+        // state from the loop's own previous iteration must not be treated as a pause signal.
+        if (dispatched && LastTurnNeedsInput())
         {
             _loopInterruptedByQueue = true;
             _loopController.RequestStop();
