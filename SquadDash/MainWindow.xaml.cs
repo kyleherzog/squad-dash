@@ -6574,33 +6574,50 @@ public partial class MainWindow : Window, ILiveElementLocator
         tooltip.SetResourceReference(Control.BorderBrushProperty, "ActivePanelBorder");
         tooltip.BorderThickness = new Thickness(1);
 
-        // Low-contrast diagonal-stripe DrawingBrush: theme-aware subtle bands.
-        // Dark theme: two close dark grays — barely perceptible but still readable.
-        // Light theme: two close light grays — same idea on a white/light background.
+        var stripeBrush = BuildSessionGapStripeBrush();
+
+        var border = new Border
+        {
+            Height              = 10,
+            Margin              = new Thickness(0, 10, 0, 10),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Background          = stripeBrush,
+            ToolTip             = tooltip,
+            Cursor              = Cursors.Arrow,
+            Tag                 = "SessionGapStripe",
+        };
+        ToolTipService.SetInitialShowDelay(border, 200);
+
+        var container = new BlockUIContainer(border) { Margin = new Thickness(0) };
+        CoordinatorThread.Document.Blocks.Add(container);
+        ScrollToEndIfAtBottom(CoordinatorThread);
+    }
+
+    /// <summary>Rebuilds the <see cref="DrawingBrush"/> for session-gap stripes using the current theme.</summary>
+    private DrawingBrush BuildSessionGapStripeBrush()
+    {
         // Fully opaque solid colors anchored to each theme's TranscriptSurface.
-        // Dark (#1E1C17): band slightly lighter, stripe noticeably lighter — subtle but visible.
-        // Light (#FFFCF8): band barely darker, stripe a step darker still — whisper-quiet.
+        // Dark (#1E1C17): band slightly lighter, stripe noticeably lighter.
+        // Light (#FFFCF8): band barely darker, stripe a step darker still.
         SolidColorBrush lightBand, darkBand;
         if (string.Equals(_activeThemeName, "Light", StringComparison.OrdinalIgnoreCase))
         {
-            darkBand  = new SolidColorBrush(Color.FromRgb(0xF5, 0xF2, 0xEE)); // barely darker than #FFFCF8
-            lightBand = new SolidColorBrush(Color.FromRgb(0xE8, 0xE4, 0xDF)); // one step darker — visible stripe
+            darkBand  = new SolidColorBrush(Color.FromRgb(0xF5, 0xF2, 0xEE));
+            lightBand = new SolidColorBrush(Color.FromRgb(0xE8, 0xE4, 0xDF));
         }
         else
         {
-            darkBand  = new SolidColorBrush(Color.FromRgb(0x28, 0x25, 0x20)); // slightly lighter than #1E1C17
-            lightBand = new SolidColorBrush(Color.FromRgb(0x3C, 0x38, 0x30)); // noticeably lighter — clear stripe
+            darkBand  = new SolidColorBrush(Color.FromRgb(0x28, 0x25, 0x20));
+            lightBand = new SolidColorBrush(Color.FromRgb(0x3C, 0x38, 0x30));
         }
         lightBand.Freeze();
         darkBand.Freeze();
 
         const double tileW = 16.0, tileH = 10.0;
         var drawingGroup = new DrawingGroup();
-        // Dark background fill
         drawingGroup.Children.Add(new GeometryDrawing(
             darkBand, null,
             new RectangleGeometry(new Rect(0, 0, tileW, tileH))));
-        // Light diagonal band: parallelogram across the tile
         var lightFigure = new PathFigure(
             new Point(0, 0),
             new PathSegment[]
@@ -6614,29 +6631,32 @@ public partial class MainWindow : Window, ILiveElementLocator
             lightBand, null,
             new PathGeometry(new[] { lightFigure })));
 
-        var stripeBrush = new DrawingBrush
+        return new DrawingBrush
         {
             Drawing       = drawingGroup,
             TileMode      = TileMode.Tile,
             Viewport      = new Rect(0, 0, tileW, tileH),
             ViewportUnits = BrushMappingMode.Absolute,
         };
-
-        var border = new Border
-        {
-            Height              = 10,
-            Margin              = new Thickness(0, 10, 0, 10),
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Background          = stripeBrush,
-            ToolTip             = tooltip,
-            Cursor              = Cursors.Arrow,
-        };
-        ToolTipService.SetInitialShowDelay(border, 200);
-
-        var container = new BlockUIContainer(border) { Margin = new Thickness(0) };
-        CoordinatorThread.Document.Blocks.Add(container);
-        ScrollToEndIfAtBottom(CoordinatorThread);
     }
+
+    /// <summary>
+    /// Re-paints all session-gap stripe borders in the coordinator transcript with fresh
+    /// brushes for the current theme.  Called from <see cref="ApplyTheme"/> on every
+    /// theme switch so that live dark↔light toggling works correctly.
+    /// </summary>
+    private void RefreshSessionGapStripes()
+    {
+        foreach (var block in CoordinatorThread.Document.Blocks)
+        {
+            if (block is BlockUIContainer { Child: Border border }
+                && border.Tag is string tag && tag == "SessionGapStripe")
+            {
+                border.Background = BuildSessionGapStripeBrush();
+            }
+        }
+    }
+
 
     private void AppendQrCode(string url)
     {
@@ -21498,6 +21518,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         // have fully propagated before new elements establish their SetResourceReference
         // bindings — otherwise the active tab can render with stale theme brushes.
         Dispatcher.InvokeAsync(SyncQueuePanel, System.Windows.Threading.DispatcherPriority.Render);
+
+        // Re-paint session-gap stripes so baked solid colors match the new theme.
+        RefreshSessionGapStripes();
 
         UpdateThemeMenuState();
     }
