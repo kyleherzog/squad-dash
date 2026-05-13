@@ -12843,6 +12843,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         var savedEntries = _conversationManager.ConversationState.QueuedPromptEntries;
         var savedLegacy = _conversationManager.ConversationState.QueuedPrompts;
         var savedQueuePaused = _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath).QueuePaused == true;
+        // Restore _queueManuallyPaused before SyncQueuePanel() so it doesn't overwrite QueuePaused=true
+        // in the settings store. Without this, the UI calls SetQueuePaused(false) which resets the
+        // persisted value, causing RestoreDocsPanelState() to miss the paused state.
+        if (savedQueuePaused)
+            _queueManuallyPaused = true;
         if (savedEntries is { Count: > 0 })
         {
             _promptQueueSeq = 0;
