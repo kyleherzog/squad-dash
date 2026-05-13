@@ -6625,8 +6625,9 @@ public partial class MainWindow : Window, ILiveElementLocator
             HorizontalAlignment = HorizontalAlignment.Stretch,
             Background          = stripeBrush,
             ToolTip             = tooltip,
-            Cursor              = Cursors.Help,
+            Cursor              = Cursors.Arrow,
         };
+        ToolTipService.SetInitialShowDelay(border, 200);
 
         var container = new BlockUIContainer(border) { Margin = new Thickness(0) };
         CoordinatorThread.Document.Blocks.Add(container);
