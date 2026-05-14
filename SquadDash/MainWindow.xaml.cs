@@ -6554,25 +6554,31 @@ public partial class MainWindow : Window, ILiveElementLocator
         SquadDashTrace.Write(TraceCategory.UI, $"SessionGap: AppendSessionGapIndicator called shutdownTime={shutdownTime:O} offline={offlineDuration.TotalSeconds:F1}s");
         var resolvedStartupTime = startupTime?.ToLocalTime() ?? DateTimeOffset.Now;
 
-        // Build a styled multi-line tooltip matching the approval panel style
-        var tooltipPanel = new StackPanel { Margin = new Thickness(2) };
-        foreach (var line in new[]
-        {
-            ("Shutdown: ", StatusTimingPresentation.FormatRelativeTimestamp(shutdownTime)),
-            ("Offline:  ", StatusTimingPresentation.FormatOfflineDuration(offlineDuration)),
-            ("Startup:  ", StatusTimingPresentation.FormatRelativeTimestamp(resolvedStartupTime)),
-        })
-        {
-            var tb = new TextBlock { TextWrapping = TextWrapping.NoWrap };
-            tb.Inlines.Add(new System.Windows.Documents.Bold(new System.Windows.Documents.Run(line.Item1)));
-            tb.Inlines.Add(new System.Windows.Documents.Run(line.Item2));
-            tb.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
-            tooltipPanel.Children.Add(tb);
-        }
-        var tooltip = new ToolTip { Content = tooltipPanel, Padding = new Thickness(8, 6, 8, 6) };
+        var tooltip = new ToolTip { Padding = new Thickness(8, 6, 8, 6) };
         tooltip.SetResourceReference(Control.BackgroundProperty, "PopupSurface");
         tooltip.SetResourceReference(Control.BorderBrushProperty, "ActivePanelBorder");
         tooltip.BorderThickness = new Thickness(1);
+
+        // Rebuild the tooltip content fresh each time it opens so relative timestamps
+        // ("3 hours ago", "yesterday") are always up-to-date.
+        tooltip.Opened += (_, _) =>
+        {
+            var panel = new StackPanel { Margin = new Thickness(2) };
+            foreach (var (label, value) in new[]
+            {
+                ("Shutdown: ", StatusTimingPresentation.FormatRelativeTimestamp(shutdownTime)),
+                ("Offline:  ", StatusTimingPresentation.FormatOfflineDuration(offlineDuration)),
+                ("Startup:  ", StatusTimingPresentation.FormatRelativeTimestamp(resolvedStartupTime)),
+            })
+            {
+                var tb = new TextBlock { TextWrapping = TextWrapping.NoWrap };
+                tb.Inlines.Add(new System.Windows.Documents.Bold(new System.Windows.Documents.Run(label)));
+                tb.Inlines.Add(new System.Windows.Documents.Run(value));
+                tb.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+                panel.Children.Add(tb);
+            }
+            tooltip.Content = panel;
+        };
 
         var stripeBrush = BuildSessionGapStripeBrush();
 
