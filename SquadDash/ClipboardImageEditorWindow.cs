@@ -199,7 +199,6 @@ internal sealed class ClipboardImageEditorWindow : Window {
     private Border? _modeHintBorder;
     private TextBlock? _modeHintText;
     private DispatcherTimer? _modeHintFadeTimer;
-    private DoubleAnimation? _modeHintFadeAnim;
 
     // ── Undo / redo ───────────────────────────────────────────────────────────
 
@@ -2991,10 +2990,13 @@ internal sealed class ClipboardImageEditorWindow : Window {
         _colorPickerRect = null;
         _colorPickerText = null;
         _selectedText = null;
-        RemoveTextResizeHandles();
-        if (_textSelectionRect != null) {
-            _canvas.Children.Remove(_textSelectionRect);
-            _textSelectionRect = null;
+        // Don't remove handles while a text box is actively being edited.
+        if (_activeTextBox == null) {
+            RemoveTextResizeHandles();
+            if (_textSelectionRect != null) {
+                _canvas.Children.Remove(_textSelectionRect);
+                _textSelectionRect = null;
+            }
         }
     }
 
