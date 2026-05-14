@@ -24327,6 +24327,13 @@ public partial class MainWindow : Window, ILiveElementLocator
             var workspaceFolder = _currentWorkspace?.FolderPath;
             if (string.IsNullOrEmpty(workspaceFolder)) return;
 
+            // Shift+click: show a "Do these with…" context menu listing all loop files.
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+            {
+                ShowDoTheseWithMenu(sender as FrameworkElement);
+                return;
+            }
+
             var loopFilePath = Path.Combine(workspaceFolder, ".squad", "loop-filtered-tasks.md");
             if (!File.Exists(loopFilePath)) return;
 
@@ -24347,6 +24354,56 @@ public partial class MainWindow : Window, ILiveElementLocator
             await StartLoopImmediateAsync();
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(TasksPanelDoTheseButton_Click), ex); }
+    }
+
+    private void ShowDoTheseWithMenu(FrameworkElement? anchor)
+    {
+        if (_currentWorkspace is null) return;
+        var entries = LoopMdParser.ScanForLoopFiles(_currentWorkspace.SquadFolderPath);
+        if (entries.Count == 0) return;
+
+        var menu = new ContextMenu();
+        menu.SetResourceReference(ContextMenu.StyleProperty, "ThemedContextMenuStyle");
+
+        var header = new MenuItem {
+            Header = "Do these with:",
+            IsEnabled = false,
+        };
+        header.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+        menu.Items.Add(header);
+
+        menu.Items.Add(new Separator { Style = (Style)FindResource("ThemedMenuSeparatorStyle") });
+
+        foreach (var entry in entries)
+        {
+            var capturedPath = entry.FilePath;
+            var item = new MenuItem { Header = entry.DisplayName };
+            item.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+            if (!string.IsNullOrEmpty(entry.TooltipText))
+                item.ToolTip = entry.TooltipText;
+            item.Click += async (_, _) =>
+            {
+                try
+                {
+                    _selectedLoopMdPath = capturedPath;
+                    PersistLoopFileSelection();
+                    _loopPanelVisible = true;
+                    SyncLoopPanel();
+                    PopulateLoopFilePicker();
+                    RefreshLoopOptionsPanel();
+                    await StartLoopImmediateAsync();
+                }
+                catch (Exception ex) { HandleUiCallbackException("DoTheseWithMenu.Click", ex); }
+            };
+            menu.Items.Add(item);
+        }
+
+        if (anchor != null)
+        {
+            menu.PlacementTarget = anchor;
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        }
+        menu.IsOpen = true;
     }
 
     private void NotesFilterBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
