@@ -3476,6 +3476,10 @@ public partial class MainWindow : Window, ILiveElementLocator
                 HandleSubagentMessageDelta(evt);
                 break;
 
+            case "subagent_thinking_delta":
+                HandleSubagentThinkingDelta(evt);
+                break;
+
             case "subagent_message":
                 HandleSubagentMessage(evt);
                 break;
@@ -3733,6 +3737,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         switch (evt.Type)
         {
             case "thinking_delta":
+            case "subagent_thinking_delta":
                 _pendingThinkingDeltaTraceCount++;
                 _pendingThinkingDeltaTraceChars += evt.Text?.Length ?? 0;
                 FlushSdkDeltaTraceIfDue(force: false);
@@ -3993,6 +3998,27 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (!string.IsNullOrWhiteSpace(thread.LatestResponse))
             thread.DetailText = BuildThreadPreview(thread.LatestResponse!);
 
+        SyncThreadChip(thread);
+        UpdateAgentCardFromThread(thread, syncBuckets: false);
+        _conversationManager.SchedulePersistAgentThreadSnapshot(thread);
+    }
+
+    private void HandleSubagentThinkingDelta(SquadSdkEvent evt)
+    {
+        if (ShouldSuppressSilentBackgroundAgent(evt))
+            return;
+
+        var thought = NormalizeThinkingChunk(evt.Text ?? evt.ReasoningText);
+        if (string.IsNullOrWhiteSpace(thought))
+            return;
+
+        var thread = _agentThreadRegistry.GetOrCreateAgentThread(evt);
+        MaybeReactivateThread(thread);
+        _agentThreadRegistry.EnsureAgentThreadTurnStarted(thread);
+        thread.StatusText = "Thinking";
+        thread.IsCurrentBackgroundRun = true;
+        AppendThinkingText(thread, thought, thread.Title);
+        thread.DetailText = FormatThinkingText(thought);
         SyncThreadChip(thread);
         UpdateAgentCardFromThread(thread, syncBuckets: false);
         _conversationManager.SchedulePersistAgentThreadSnapshot(thread);
@@ -13186,18 +13212,18 @@ public partial class MainWindow : Window, ILiveElementLocator
             SquadDashTrace.Write(TraceCategory.UI, "SessionGap: no shutdown time found — stripe skipped.");
         }
 
-        SquadDashTrace.Write(TraceCategory.Performance, $"LOAD_CONVERSATION_START: folder={_currentWorkspace.FolderPath}");
+        SquadDashTrace.Write(TraceCategory.Performance, $"LOAD_CONVERSATION_START: folder={_currentWorkspace?.FolderPath}");
         var loadConvSw = Stopwatch.StartNew();
         await _conversationManager.LoadWorkspaceConversationAsync();
         loadConvSw.Stop();
         SquadDashTrace.Write(TraceCategory.Performance, $"LOAD_CONVERSATION_END: {loadConvSw.ElapsedMilliseconds}ms");
 
         // Prune agent reports older than 2 weeks on each workspace load.
-        var reportStateDir = _conversationManager.ConversationStore.GetWorkspaceStateDirectory(_currentWorkspace.FolderPath);
+        var reportStateDir = _conversationManager.ConversationStore.GetWorkspaceStateDirectory(_currentWorkspace?.FolderPath ?? string.Empty);
         AgentReportStore.PruneOld(AgentReportStore.GetReportsDir(reportStateDir));
 
         // Fire-and-forget: prune expired pasted images for this workspace.
-        _ = _pastedImageStore.PruneAsync(_currentWorkspace.FolderPath);
+        _ = _pastedImageStore.PruneAsync(_currentWorkspace?.FolderPath ?? string.Empty);
 
         // Restore loop-queued-to-dequeue state from previous session.
         _loopQueued = _conversationManager.ConversationState.LoopQueuedToDequeue == true;
@@ -16768,7 +16794,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         var stateDir    = _conversationManager.ConversationStore.GetWorkspaceStateDirectory(_currentWorkspace.FolderPath);
         var reportsDir  = AgentReportStore.GetReportsDir(stateDir);
         var reportPath  = AgentReportStore.Store(reportsDir, agentLabel, header, body, DateTimeOffset.UtcNow);
-        _conversationManager.AppendAgentReportToLastTurn(agentLabel, reportPath);
+        var reportInfo = new AgentReportInfo(agentLabel, reportPath);
+        if (CoordinatorThread.CurrentTurn is { } currentTurn)
+            currentTurn.AgentReports.Add(reportInfo);
+        else
+            _conversationManager.AppendAgentReportToLastTurn(agentLabel, reportPath);
         AppendAgentReportButton(agentLabel, reportPath);
     }
 

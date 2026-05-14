@@ -16,12 +16,11 @@ internal sealed class PostedUiActionTracker {
         }
     }
 
-    public void MarkCompleted(long sequence) {
+    public void MarkCompleted(long _) {
         TaskCompletionSource<bool>? completion = null;
 
         lock (_gate) {
-            if (sequence > _completedCount)
-                _completedCount = sequence;
+            _completedCount++;
 
             if (_completedCount >= _postedCount && _drainedTcs is not null) {
                 completion = _drainedTcs;

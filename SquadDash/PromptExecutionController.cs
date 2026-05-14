@@ -604,7 +604,7 @@ internal sealed class PromptExecutionController {
             return;
 
         var now = _lastPromptActivityAt ?? DateTimeOffset.Now;
-        var isStreamingDelta = evt.Type is "thinking_delta" or "response_delta";
+        var isStreamingDelta = evt.Type is "thinking_delta" or "response_delta" or "subagent_thinking_delta";
         if (isStreamingDelta)
             RecordPromptActivity(activityName, DateTimeOffset.Now, writeActivityTrace: false);
         else {
@@ -2030,13 +2030,13 @@ internal sealed class PromptExecutionController {
             }
         }
         finally {
-            if (_currentPromptStartedAt is not null)
-                StopPromptHealthMonitoring("completed");
-
             // Bridge events are posted onto the UI dispatcher. Wait for any already-posted
             // callbacks to run before persisting and clearing the live turn so tail response
             // chunks are not dropped after the bridge reports completion.
             await _waitForPostedUiActionsAsync();
+
+            if (_currentPromptStartedAt is not null)
+                StopPromptHealthMonitoring("completed");
 
             _conversationManager.SaveCurrentTurnToConversation(DateTimeOffset.UtcNow);
             _getCoordinatorThread().CurrentTurn = null;

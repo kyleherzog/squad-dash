@@ -807,9 +807,13 @@ function buildNamedAgentRunHandlers(requestId, toolCallId, agentHandle, agentDis
         },
         onThinking(text) {
             emit({
-                type: "thinking_delta",
-                requestId,
+                type: "subagent_thinking_delta",
+                sessionId: coordinatorSessionId,
+                parentToolCallId: toolCallId,
+                agentName: agentHandle,
+                agentDisplayName,
                 text,
+                reasoningText: text,
                 speaker: agentHandle
             });
         },

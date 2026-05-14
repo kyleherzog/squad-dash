@@ -28,6 +28,7 @@ internal sealed class TranscriptTurnView {
         ResponseEntries = new List<TranscriptResponseEntry>();
         ToolEntries = new List<ToolTranscriptEntry>();
         HostCommandEntries = new List<HostCommandTranscriptEntry>();
+        AgentReports = new List<AgentReportInfo>();
         NextNarrativeSequence = 1;
     }
 
@@ -43,6 +44,7 @@ internal sealed class TranscriptTurnView {
     public List<TranscriptResponseEntry> ResponseEntries { get; }
     public List<ToolTranscriptEntry> ToolEntries { get; }
     public List<HostCommandTranscriptEntry> HostCommandEntries { get; }
+    public List<AgentReportInfo> AgentReports { get; }
     public int NextNarrativeSequence { get; set; }
 }
 

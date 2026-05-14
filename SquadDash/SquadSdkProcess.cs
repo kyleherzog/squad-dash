@@ -997,6 +997,7 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
     private void TraceReceivedEvent(SquadSdkEvent evt) {
         switch (evt.Type) {
             case "thinking_delta":
+            case "subagent_thinking_delta":
                 _pendingBridgeThinkingDeltaCount++;
                 _pendingBridgeThinkingDeltaChars += evt.Text?.Length ?? 0;
                 FlushBridgeDeltaTrace(force: false);

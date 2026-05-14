@@ -899,7 +899,9 @@ internal sealed class TranscriptConversationManager {
             turn.ThinkingBlocks.Count == 0 || turn.ThinkingBlocks.All(block => !block.Expander.IsExpanded),
             tools,
             thoughts,
-            responseSegments);
+            responseSegments) {
+            AgentReports = turn.AgentReports.Count > 0 ? turn.AgentReports.ToArray() : null
+        };
     }
 
     private static TranscriptThoughtRecord BuildTranscriptThoughtRecord(TranscriptThoughtEntry entry) {
