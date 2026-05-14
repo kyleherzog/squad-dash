@@ -1570,6 +1570,13 @@ internal sealed class ClipboardImageEditorWindow : Window {
                 dispW = ann.Display.ActualWidth > 0 ? ann.Display.ActualWidth : ann.Display.DesiredSize.Width;
                 dispH = ann.Display.ActualHeight > 0 ? ann.Display.ActualHeight : ann.Display.DesiredSize.Height;
             }
+            else if (ann == _editingText && _activeTextBox != null) {
+                // Still being edited — use the live TextBox for accurate hit bounds.
+                left  = Canvas.GetLeft(_activeTextBox);
+                top   = Canvas.GetTop(_activeTextBox);
+                dispW = _activeTextBox.ActualWidth  > 0 ? _activeTextBox.ActualWidth  : (_activeTextBox.DesiredSize.Width  > 0 ? _activeTextBox.DesiredSize.Width  : ann.Bounds.Width);
+                dispH = _activeTextBox.ActualHeight > 0 ? _activeTextBox.ActualHeight : (_activeTextBox.DesiredSize.Height > 0 ? _activeTextBox.DesiredSize.Height : 20);
+            }
             else if (!ann.Bounds.IsEmpty && (ann.Bounds.Width > 0 || ann.Bounds.Height > 0)) {
                 left = ann.Bounds.Left;
                 top = ann.Bounds.Top;
@@ -1912,6 +1919,11 @@ internal sealed class ClipboardImageEditorWindow : Window {
             if (ann.Shadow != null) {
                 Canvas.SetLeft(ann.Shadow, newX + 1.5);
                 Canvas.SetTop(ann.Shadow, newY + 1.5);
+            }
+            // Keep the live TextBox in sync when dragging while in edit mode.
+            if (_activeTextBox != null && ann == _editingText) {
+                Canvas.SetLeft(_activeTextBox, newX);
+                Canvas.SetTop(_activeTextBox, newY);
             }
             UpdateTextSelectionBorder();
             e.Handled = true;
@@ -4942,8 +4954,19 @@ internal sealed class ClipboardImageEditorWindow : Window {
             _selectedText = annotation;
 
             var b = annotation.Bounds;
-            double sw = Math.Max(b.Width > 0 ? b.Width + 8 : 30, 30);
-            double sh = Math.Max(b.Height > 0 ? b.Height + 4 : 20, 20);
+            // When still editing, use the live TextBox dimensions — ann.Bounds.Height is 0 until commit.
+            double bLeft = b.Left, bTop = b.Top, sw, sh;
+            if (annotation == _editingText && _activeTextBox != null) {
+                bLeft = Canvas.GetLeft(_activeTextBox);
+                bTop  = Canvas.GetTop(_activeTextBox);
+                double tbW = _activeTextBox.ActualWidth  > 0 ? _activeTextBox.ActualWidth  : _activeTextBox.DesiredSize.Width;
+                double tbH = _activeTextBox.ActualHeight > 0 ? _activeTextBox.ActualHeight : _activeTextBox.DesiredSize.Height;
+                sw = Math.Max(tbW + 8, 30);
+                sh = Math.Max(tbH + 4, 20);
+            } else {
+                sw = Math.Max(b.Width  > 0 ? b.Width  + 8 : 30, 30);
+                sh = Math.Max(b.Height > 0 ? b.Height + 4 : 20, 20);
+            }
             _textSelectionRect = new Rectangle {
                 Width = sw,
                 Height = sh,
@@ -4960,8 +4983,8 @@ internal sealed class ClipboardImageEditorWindow : Window {
                 }
             };
             Panel.SetZIndex(_textSelectionRect, 21);
-            Canvas.SetLeft(_textSelectionRect, b.Left - 4);
-            Canvas.SetTop(_textSelectionRect, b.Top - 2);
+            Canvas.SetLeft(_textSelectionRect, bLeft - 4);
+            Canvas.SetTop(_textSelectionRect, bTop - 2);
             _canvas.Children.Add(_textSelectionRect);
             AddTextResizeHandles(annotation);
         }
@@ -4975,13 +4998,24 @@ internal sealed class ClipboardImageEditorWindow : Window {
     private void UpdateTextSelectionBorder() {
         if (_textSelectionRect == null || _selectedText == null) return;
         var b = _selectedText.Bounds;
-        double sw = Math.Max(b.Width > 0 ? b.Width + 8 : 30, 30);
-        double sh = Math.Max(b.Height > 0 ? b.Height + 4 : 20, 20);
+        double bLeft = b.Left, bTop = b.Top, sw, sh;
+        // When still editing, derive dimensions from the live TextBox — ann.Bounds.Height is 0 until commit.
+        if (_selectedText == _editingText && _activeTextBox != null) {
+            bLeft = Canvas.GetLeft(_activeTextBox);
+            bTop  = Canvas.GetTop(_activeTextBox);
+            double tbW = _activeTextBox.ActualWidth  > 0 ? _activeTextBox.ActualWidth  : _activeTextBox.DesiredSize.Width;
+            double tbH = _activeTextBox.ActualHeight > 0 ? _activeTextBox.ActualHeight : _activeTextBox.DesiredSize.Height;
+            sw = Math.Max(tbW + 8, 30);
+            sh = Math.Max(tbH + 4, 20);
+        } else {
+            sw = Math.Max(b.Width  > 0 ? b.Width  + 8 : 30, 30);
+            sh = Math.Max(b.Height > 0 ? b.Height + 4 : 20, 20);
+        }
         _textSelectionRect.Width = sw;
         _textSelectionRect.Height = sh;
         _textSelectionRect.StrokeThickness = 1.5 / _zoom;
-        Canvas.SetLeft(_textSelectionRect, b.Left - 4);
-        Canvas.SetTop(_textSelectionRect, b.Top - 2);
+        Canvas.SetLeft(_textSelectionRect, bLeft - 4);
+        Canvas.SetTop(_textSelectionRect, bTop - 2);
         PositionTextResizeHandles(_selectedText);
     }
 
