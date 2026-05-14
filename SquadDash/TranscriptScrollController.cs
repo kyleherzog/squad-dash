@@ -163,6 +163,16 @@ internal sealed class TranscriptScrollController
     /// </summary>
     private int _gate2BlockCount;
 
+    /// <summary>
+    /// Set by <see cref="ForceScrollToBottom"/> so that <see cref="ExecutePendingScrollToEnd"/>
+    /// bypasses the <see cref="IsUserScrolledAway"/> guard. Needed because WPF layout events
+    /// that fire between <see cref="ForceScrollToBottom"/> and the deferred
+    /// <see cref="ExecutePendingScrollToEnd"/> callback can re-set <see cref="IsUserScrolledAway"/>
+    /// to <c>true</c> (e.g. content-growth or clamp events that pass all three gates), which
+    /// would cause the prompt-submission scroll to be silently skipped.
+    /// </summary>
+    private bool _forceScrollPending;
+
     // -------------------------------------------------------------------------
     // Constructor
     // -------------------------------------------------------------------------
@@ -343,6 +353,7 @@ internal sealed class TranscriptScrollController
         IsUserScrolledAway = false;
         _pendingScrollRequest = false;
         _pendingLockedViewportReanchor = false;
+        _forceScrollPending = false;
 
         // Hide the button immediately — no fade; the transcript content is changing
         // entirely so the old scroll position is irrelevant.
@@ -550,6 +561,7 @@ internal sealed class TranscriptScrollController
         IsUserScrolledAway = false;
         _pendingScrollRequest = false;
         _pendingLockedViewportReanchor = false;
+        _forceScrollPending = true;
         RequestScrollToEnd();
     }
 
@@ -668,10 +680,20 @@ internal sealed class TranscriptScrollController
             : (long)((Stopwatch.GetTimestamp() - _pendingScrollQueuedAt) * 1000.0 / Stopwatch.Frequency);
         _pendingScrollRequest = false;
 
-        if (IsUserScrolledAway)
+        bool wasForced = _forceScrollPending;
+        _forceScrollPending = false;
+
+        if (IsUserScrolledAway && !wasForced)
         {
             ScrollTrace("SKIPPED", "IsUserScrolledAway=true");
             return;
+        }
+
+        if (IsUserScrolledAway)
+        {
+            // _forceScrollPending was set — override the lock and re-enable auto-scroll.
+            IsUserScrolledAway = false;
+            ScrollTrace("PROMPT SUBMITTED", "forced scroll overriding IsUserScrolledAway lock");
         }
 
         var sv = EnsureScrollViewer();
