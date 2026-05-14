@@ -11664,7 +11664,9 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         var lineLength = lineNum - 1 < lines.Length ? lines[lineNum - 1].Length : 0;
         DocSourceTextBox.ScrollToOffset(startPos);
-        HighlightDocSourceRange(startPos, lineLength);
+        // Defer highlight until after WPF has processed the scroll (layout settles at Render priority).
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render,
+            () => HighlightDocSourceRange(startPos, lineLength));
     }
 
     private Canvas EnsureDocSourceOverlayCanvas()

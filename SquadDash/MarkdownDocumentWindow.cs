@@ -1788,7 +1788,9 @@ internal sealed class MarkdownDocumentWindow : Window {
         var lineLength = lines[lineNum - 1].Length;
 
         textBox.ScrollToOffset(startPos);
-        HighlightSourceRange(textBox, startPos, lineLength);
+        // Defer highlight until after WPF has processed the scroll (layout settles at Render priority).
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render,
+            () => HighlightSourceRange(textBox, startPos, lineLength));
     }
 
     private Canvas EnsureSourceOverlayCanvas() {
