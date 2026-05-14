@@ -3701,12 +3701,15 @@ internal sealed class ClipboardImageEditorWindow : Window {
         _eyedropperTooltipBorder.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         var tw = _eyedropperTooltipBorder.DesiredSize.Width;
         var th = _eyedropperTooltipBorder.DesiredSize.Height;
-        // pt is in canvas logical coords; overlay coords = canvas coords × zoom
-        double tx = pt.X * _zoom + 14;
-        double ty = pt.Y * _zoom - th - 6;
+        // Find where _canvas origin sits inside _overlayCanvas (accounts for centering + margin after crop).
+        var canvasOrigin = _canvas.TranslatePoint(new Point(0, 0), _overlayCanvas);
+        double ox = canvasOrigin.X;
+        double oy = canvasOrigin.Y;
+        double tx = ox + pt.X * _zoom + 14;
+        double ty = oy + pt.Y * _zoom - th - 6;
         double canvasScreenWidth = _canvas.Width * _zoom;
-        if (tx + tw > canvasScreenWidth) tx = pt.X * _zoom - tw - 6;
-        if (ty < 0) ty = pt.Y * _zoom + 14;
+        if (tx + tw > ox + canvasScreenWidth) tx = ox + pt.X * _zoom - tw - 6;
+        if (ty < oy) ty = oy + pt.Y * _zoom + 14;
         Canvas.SetLeft(_eyedropperTooltipBorder, tx);
         Canvas.SetTop(_eyedropperTooltipBorder, ty);
     }
