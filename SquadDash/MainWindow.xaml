@@ -381,6 +381,11 @@
                               IsCheckable="True"
                               InputGestureText="F11"
                               Click="FullScreenTranscriptMenuItem_Click" />
+                    <MenuItem x:Name="FocusModeMenuItem"
+                              Header="Toggle _Agents/Panels"
+                              IsCheckable="True"
+                              InputGestureText="Shift+F11"
+                              Click="FocusModeMenuItem_Click" />
                     <Separator Style="{StaticResource ThemedMenuSeparatorStyle}"/>
                     <MenuItem Header="_Theme"
                               ItemContainerStyle="{StaticResource ThemedMenuItemStyle}">

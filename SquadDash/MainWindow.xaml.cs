@@ -231,6 +231,10 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _promptPanelOnTop;
     private WindowState _preFullScreenWindowState;
     private Rect _preFullScreenBounds;
+    private bool _agentsPanelFocusModeEnabled;
+    private WindowState _preFocusModeWindowState;
+    private double _preFocusModeHeight;
+    private double _preFocusModeTop;
     private bool _documentationModeEnabled;
     private string? _currentDocPath;          // tracks currently displayed doc for link resolution
     private string  _currentDocFrontMatter = string.Empty;  // Jekyll/JTD YAML block stripped from source editor; prepended on save
@@ -7884,6 +7888,13 @@ public partial class MainWindow : Window, ILiveElementLocator
                 return;
             }
 
+            if (e.Key == Key.F11 && (Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+            {
+                ToggleAgentsPanelFocusMode();
+                e.Handled = true;
+                return;
+            }
+
             if (e.Key == Key.F11)
             {
                 SetTranscriptFullScreen(!_transcriptFullScreenEnabled);
@@ -10152,6 +10163,18 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (_transcriptFullScreenEnabled == enabled)
             return;
 
+        // Entering full-screen: silently cancel focus mode first so that
+        // _preFullScreenBounds saves the original pre-focus-mode geometry.
+        if (enabled && _agentsPanelFocusModeEnabled)
+        {
+            _agentsPanelFocusModeEnabled = false;
+            if (_preFocusModeWindowState == WindowState.Normal && _preFocusModeHeight > 100)
+            {
+                Top    = _preFocusModeTop;
+                Height = _preFocusModeHeight;
+            }
+        }
+
         _transcriptFullScreenEnabled = enabled;
         _fullScreenPromptVisible = false; // reset peek state on any fullscreen transition
 
@@ -10211,6 +10234,73 @@ public partial class MainWindow : Window, ILiveElementLocator
         var state = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
         _docsPanelState = state with { FullScreenTranscript = enabled };
         _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
+    }
+
+    private void FocusModeMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            ToggleAgentsPanelFocusMode();
+        }
+        catch (Exception ex)
+        {
+            HandleUiCallbackException(nameof(FocusModeMenuItem_Click), ex);
+        }
+    }
+
+    private void ToggleAgentsPanelFocusMode()
+    {
+        // Per spec: if in full-screen, exit it first, then toggle focus mode.
+        if (_transcriptFullScreenEnabled)
+            SetTranscriptFullScreen(false);
+        SetAgentsPanelFocusMode(!_agentsPanelFocusModeEnabled);
+    }
+
+    /// <summary>
+    /// Hides the agent-cards / inline-panels strip (Shift+F11 toggle).
+    /// The prompt stays visible. When the window is in the Normal state the window
+    /// is resized to fill the work area height of the current monitor (width unchanged).
+    /// Pressing Shift+F11 a second time restores the panels and the original geometry.
+    /// </summary>
+    private void SetAgentsPanelFocusMode(bool enabled)
+    {
+        if (_agentsPanelFocusModeEnabled == enabled)
+            return;
+
+        _agentsPanelFocusModeEnabled = enabled;
+
+        if (enabled)
+        {
+            _preFocusModeWindowState = WindowState;
+            if (WindowState == WindowState.Normal)
+            {
+                _preFocusModeHeight = Height;
+                _preFocusModeTop    = Top;
+
+                var hwnd   = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                var physWa = NativeMethods.GetWorkAreaForWindow(hwnd);
+                var dpi    = System.Windows.Media.VisualTreeHelper.GetDpi(this);
+                Top    = physWa.Top    / dpi.DpiScaleY;
+                Height = physWa.Height / dpi.DpiScaleY;
+            }
+        }
+        else
+        {
+            if (_preFocusModeWindowState == WindowState.Normal && _preFocusModeHeight > 100)
+            {
+                Top    = _preFocusModeTop;
+                Height = _preFocusModeHeight;
+            }
+        }
+
+        bool wasAtBottom = !ActiveScrollController.IsUserScrolledAway;
+        ApplyViewMode();
+
+        // Re-anchor transcript after layout settles so revealing / hiding the
+        // status panel doesn't leave a gap when the user was already at the bottom.
+        if (wasAtBottom)
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,
+                (Action)(() => ActiveScrollController.ScrollToBottom()));
     }
 
     private void ShowFullScreenPrompt()
@@ -13002,31 +13092,36 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void ApplyViewMode()
     {
         if (NormalViewMenuItem is not null)
-            NormalViewMenuItem.IsChecked = !_transcriptFullScreenEnabled;
+            NormalViewMenuItem.IsChecked = !_transcriptFullScreenEnabled && !_agentsPanelFocusModeEnabled;
 
         if (FullScreenTranscriptMenuItem is not null)
             FullScreenTranscriptMenuItem.IsChecked = _transcriptFullScreenEnabled;
+
+        if (FocusModeMenuItem is not null)
+            FocusModeMenuItem.IsChecked = _agentsPanelFocusModeEnabled;
 
         if (ViewDocumentationMenuItem is not null)
             ViewDocumentationMenuItem.IsChecked = _documentationModeEnabled;
 
         if (StatusPanelBorder is not null)
-            StatusPanelBorder.Visibility = _transcriptFullScreenEnabled ? Visibility.Collapsed : Visibility.Visible;
+            StatusPanelBorder.Visibility = (_transcriptFullScreenEnabled || _agentsPanelFocusModeEnabled)
+                ? Visibility.Collapsed : Visibility.Visible;
 
         if (PromptBorder is not null)
             PromptBorder.Visibility = (_transcriptFullScreenEnabled && !_fullScreenPromptVisible)
                 ? Visibility.Collapsed
                 : Visibility.Visible;
 
-        // In fullscreen the status panel and prompt are hidden, so TranscriptPanelsGrid's
-        // own top/bottom margin (which provides separation from those neighbours) would
-        // double up with MainGrid's outer margin (14px) and make the top/bottom gaps twice
-        // as large as the left/right gaps.  Zero it out in fullscreen so all four sides are
-        // balanced at the outer 14px.
+        // In fullscreen both status panel and prompt are hidden — zero out top/bottom margin so
+        // the transcript sits flush against the outer 14 px MainGrid margin on all four sides.
+        // In focus mode only the status panel is hidden — keep the bottom margin for the prompt,
+        // but zero the top since there is no longer a neighbour above the transcript.
         if (TranscriptPanelsGrid is not null)
             TranscriptPanelsGrid.Margin = _transcriptFullScreenEnabled
                 ? new Thickness(0)
-                : new Thickness(0, 14, 0, 14);
+                : _agentsPanelFocusModeEnabled
+                    ? new Thickness(0, 0, 0, 14)
+                    : new Thickness(0, 14, 0, 14);
 
         // Documentation mode: show docs panel whenever documentation mode is active
         var docsVisible = _documentationModeEnabled;
