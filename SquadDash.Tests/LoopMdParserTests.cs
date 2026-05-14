@@ -790,6 +790,9 @@ internal sealed class LoopMdParserTests {
         finally { DeleteTempFile(path); }
     }
 
+    private static LoopOption Opt(string key, string value, string type = "string") =>
+        new(key, value, type, null, null, null);
+
     [Test]
     public void VariableInjection_GroupOption_ReplacesPlaceholderWithEmpty() {
         var path = WriteTempFile(
@@ -815,5 +818,179 @@ internal sealed class LoopMdParserTests {
                 "group option RawValue is empty string, so placeholder is replaced with nothing");
         }
         finally { DeleteTempFile(path); }
+    }
+
+    // ── PreprocessConditionals: mid-line tag handling ─────────────────────────
+
+    [Test]
+    public void PreprocessConditionals_MidLineIf_ConditionTrue_EmitsPrefixAndBody() {
+        var text =
+            "4. {{#if key == \"value\"}}\n" +
+            "   Body line.\n" +
+            "   {{/if}}";
+        var options = new[] { Opt("key", "value") };
+
+        var result = LoopMdParser.PreprocessConditionals(text, options);
+
+        Assert.That(result, Is.EqualTo("4. \n   Body line."));
+    }
+
+    [Test]
+    public void PreprocessConditionals_MidLineIf_ConditionFalse_OmitsPrefixAndBody() {
+        var text =
+            "4. {{#if key == \"value\"}}\n" +
+            "   Body line.\n" +
+            "   {{/if}}";
+        var options = new[] { Opt("key", "other") };
+
+        var result = LoopMdParser.PreprocessConditionals(text, options);
+
+        Assert.That(result, Is.EqualTo(""));
+    }
+
+    [Test]
+    public void PreprocessConditionals_MidLineUnless_ConditionNotMet_EmitsPrefixAndBody() {
+        // unless + key != expected → condition not met → block is included
+        var text =
+            "4. {{#unless key == \"value\"}}\n" +
+            "   Unless body.\n" +
+            "   {{/unless}}";
+        var options = new[] { Opt("key", "other") };
+
+        var result = LoopMdParser.PreprocessConditionals(text, options);
+
+        Assert.That(result, Is.EqualTo("4. \n   Unless body."));
+    }
+
+    [Test]
+    public void PreprocessConditionals_MidLineUnless_ConditionMet_OmitsPrefixAndBody() {
+        // unless + key == expected → condition met → block is excluded
+        var text =
+            "4. {{#unless key == \"value\"}}\n" +
+            "   Unless body.\n" +
+            "   {{/unless}}";
+        var options = new[] { Opt("key", "value") };
+
+        var result = LoopMdParser.PreprocessConditionals(text, options);
+
+        Assert.That(result, Is.EqualTo(""));
+    }
+
+    [Test]
+    public void PreprocessConditionals_NumberedListThreeBranches_AlwaysValue_EmitsOnlyAlwaysBranch() {
+        var text =
+            "4. {{#if commit_after_task == \"always\"}}\n" +
+            "   Commit automatically.\n" +
+            "   {{/if}}\n" +
+            "   {{#if commit_after_task == \"ask\"}}\n" +
+            "   Ask first.\n" +
+            "   {{/if}}\n" +
+            "   {{#if commit_after_task == \"never\"}}\n" +
+            "   Never commit.\n" +
+            "   {{/if}}";
+        var options = new[] { Opt("commit_after_task", "always", "enum") };
+
+        var result = LoopMdParser.PreprocessConditionals(text, options);
+
+        Assert.That(result, Does.StartWith("4. "),                 "numbered prefix emitted for matched branch");
+        Assert.That(result, Does.Contain("Commit automatically."), "always branch body included");
+        Assert.That(result, Does.Not.Contain("Ask first."),        "ask branch excluded");
+        Assert.That(result, Does.Not.Contain("Never commit."),     "never branch excluded");
+    }
+
+    [Test]
+    public void PreprocessConditionals_NumberedListThreeBranches_AskValue_EmitsOnlyAskBranch() {
+        var text =
+            "4. {{#if commit_after_task == \"always\"}}\n" +
+            "   Commit automatically.\n" +
+            "   {{/if}}\n" +
+            "   {{#if commit_after_task == \"ask\"}}\n" +
+            "   Ask first.\n" +
+            "   {{/if}}\n" +
+            "   {{#if commit_after_task == \"never\"}}\n" +
+            "   Never commit.\n" +
+            "   {{/if}}";
+        var options = new[] { Opt("commit_after_task", "ask", "enum") };
+
+        var result = LoopMdParser.PreprocessConditionals(text, options);
+
+        // The "4. " prefix is on the false "always" branch — it must not be emitted
+        Assert.That(result, Does.Not.StartWith("4. "),                  "prefix of false branch not emitted");
+        Assert.That(result, Does.Not.Contain("Commit automatically."),  "always branch excluded");
+        Assert.That(result, Does.Contain("Ask first."),                 "ask branch body included");
+        Assert.That(result, Does.Not.Contain("Never commit."),          "never branch excluded");
+    }
+
+    [Test]
+    public void PreprocessConditionals_NumberedListThreeBranches_NeverValue_EmitsOnlyNeverBranch() {
+        var text =
+            "4. {{#if commit_after_task == \"always\"}}\n" +
+            "   Commit automatically.\n" +
+            "   {{/if}}\n" +
+            "   {{#if commit_after_task == \"ask\"}}\n" +
+            "   Ask first.\n" +
+            "   {{/if}}\n" +
+            "   {{#if commit_after_task == \"never\"}}\n" +
+            "   Never commit.\n" +
+            "   {{/if}}";
+        var options = new[] { Opt("commit_after_task", "never", "enum") };
+
+        var result = LoopMdParser.PreprocessConditionals(text, options);
+
+        Assert.That(result, Does.Not.Contain("Commit automatically."), "always branch excluded");
+        Assert.That(result, Does.Not.Contain("Ask first."),            "ask branch excluded");
+        Assert.That(result, Does.Contain("Never commit."),             "never branch body included");
+    }
+
+    [Test]
+    public void PreprocessConditionals_WhitespaceOnlyPrefix_ConditionTrue_PrefixNotEmittedBodyIncluded() {
+        var text =
+            "   {{#if key == \"val\"}}\n" +
+            "   Body line.\n" +
+            "   {{/if}}";
+        var options = new[] { Opt("key", "val") };
+
+        var result = LoopMdParser.PreprocessConditionals(text, options);
+
+        // Whitespace-only prefix must never be emitted (same as whole-line tag behaviour)
+        Assert.That(result, Is.EqualTo("   Body line."));
+    }
+
+    [Test]
+    public void PreprocessConditionals_WhitespaceOnlyPrefix_ConditionFalse_BodyExcluded() {
+        var text =
+            "   {{#if key == \"val\"}}\n" +
+            "   Body line.\n" +
+            "   {{/if}}";
+        var options = new[] { Opt("key", "other") };
+
+        var result = LoopMdParser.PreprocessConditionals(text, options);
+
+        Assert.That(result, Is.EqualTo(""));
+    }
+
+    [Test]
+    public void PreprocessConditionals_MixedWholeLineAndMidLineTags_BothProcessedCorrectly() {
+        var text =
+            "Intro line.\n" +
+            "{{#if show_intro == \"yes\"}}\n" +
+            "Intro details.\n" +
+            "{{/if}}\n" +
+            "Step 1. {{#if do_step == \"true\"}}\n" +
+            "   Do the step.\n" +
+            "   {{/if}}\n" +
+            "Footer.";
+        var options = new[] {
+            Opt("show_intro", "yes"),
+            Opt("do_step",    "true"),
+        };
+
+        var result = LoopMdParser.PreprocessConditionals(text, options);
+
+        Assert.That(result, Does.Contain("Intro line."),    "static line before blocks preserved");
+        Assert.That(result, Does.Contain("Intro details."), "whole-line tag block body included");
+        Assert.That(result, Does.Contain("Step 1. "),       "mid-line prefix emitted for true branch");
+        Assert.That(result, Does.Contain("Do the step."),   "mid-line tag block body included");
+        Assert.That(result, Does.Contain("Footer."),        "static line after blocks preserved");
     }
 }

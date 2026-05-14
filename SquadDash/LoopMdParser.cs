@@ -280,9 +280,14 @@ internal static class LoopMdParser {
         return string.Join("\n", lines, i, lines.Length - i);
     }
 
-    // Matches {{#if key == "value"}} or {{#unless key == "value"}}
+    // Matches {{#if key == "value"}} or {{#unless key == "value"}}, optionally preceded
+    // by non-tag content on the same line (e.g. "4. {{#if key == "val"}}").
+    // Group 1 = prefix text (may be empty or whitespace-only)
+    // Group 2 = "if" or "unless"
+    // Group 3 = key
+    // Group 4 = expected value
     private static readonly Regex _conditionalOpenPattern =
-        new(@"^\s*\{\{#(if|unless)\s+(\w+)\s*==\s*""([^""]*)""\s*\}\}\s*$",
+        new(@"^(.*?)\{\{#(if|unless)\s+(\w+)\s*==\s*""([^""]*)""\s*\}\}\s*$",
             RegexOptions.Compiled);
 
     // Matches {{/if}} or {{/unless}}
@@ -328,14 +333,18 @@ internal static class LoopMdParser {
                 var m = _conditionalOpenPattern.Match(line);
                 if (m.Success)
                 {
-                    blockVerb    = m.Groups[1].Value;   // "if" or "unless"
-                    var key      = m.Groups[2].Value;
-                    var expected = m.Groups[3].Value;
+                    var prefix   = m.Groups[1].Value;   // text before the tag (may be empty)
+                    blockVerb    = m.Groups[2].Value;   // "if" or "unless"
+                    var key      = m.Groups[3].Value;
+                    var expected = m.Groups[4].Value;
                     var actual   = values.TryGetValue(key, out var v) ? v : string.Empty;
                     var met      = string.Equals(actual, expected, StringComparison.Ordinal);
                     includeBlock = blockVerb == "if" ? met : !met;
                     inBlock      = true;
-                    // Opening tag line is never emitted
+                    // Emit the prefix (e.g. "4. ") when the block is included and prefix
+                    // has non-whitespace content; pure-whitespace prefixes are not emitted.
+                    if (includeBlock && prefix.Trim().Length > 0)
+                        output.Add(prefix);
                 }
                 else
                 {
