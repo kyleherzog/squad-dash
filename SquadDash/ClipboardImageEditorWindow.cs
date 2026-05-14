@@ -12,6 +12,7 @@ using System.Windows.Threading;
 using System.Collections.Generic;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
+using System.Windows.Media.Animation;
 
 namespace SquadDash;
 
@@ -197,6 +198,8 @@ internal sealed class ClipboardImageEditorWindow : Window {
 
     private Border? _modeHintBorder;
     private TextBlock? _modeHintText;
+    private DispatcherTimer? _modeHintFadeTimer;
+    private DoubleAnimation? _modeHintFadeAnim;
 
     // ── Undo / redo ───────────────────────────────────────────────────────────
 
@@ -3568,15 +3571,44 @@ internal sealed class ClipboardImageEditorWindow : Window {
             _canvas.Children.Add(_modeHintBorder);
             _modeHintBorder.SizeChanged += (_, _) => PositionModeHint();
         }
+
+        // Cancel any running fade/timer and reset to fully opaque.
+        _modeHintFadeTimer?.Stop();
+        _modeHintBorder.BeginAnimation(UIElement.OpacityProperty, null);
+        _modeHintBorder.Opacity = 1.0;
+
         _modeHintText!.Text = text;
         _modeHintBorder.Visibility = Visibility.Visible;
         PositionModeHint();
         Dispatcher.InvokeAsync(PositionModeHint, DispatcherPriority.Loaded);
+
+        // After 5 seconds, fade out over 1.5 seconds then collapse.
+        _modeHintFadeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        _modeHintFadeTimer.Tick += (_, _) => {
+            _modeHintFadeTimer!.Stop();
+            if (_modeHintBorder == null) return;
+            var anim = new DoubleAnimation(1.0, 0.0, new Duration(TimeSpan.FromSeconds(1.5))) {
+                FillBehavior = FillBehavior.HoldEnd
+            };
+            anim.Completed += (_, _) => {
+                if (_modeHintBorder != null) {
+                    _modeHintBorder.BeginAnimation(UIElement.OpacityProperty, null);
+                    _modeHintBorder.Opacity = 1.0;
+                    _modeHintBorder.Visibility = Visibility.Collapsed;
+                }
+            };
+            _modeHintBorder.BeginAnimation(UIElement.OpacityProperty, anim);
+        };
+        _modeHintFadeTimer.Start();
     }
 
     private void HideModeHint() {
-        if (_modeHintBorder != null)
+        _modeHintFadeTimer?.Stop();
+        if (_modeHintBorder != null) {
+            _modeHintBorder.BeginAnimation(UIElement.OpacityProperty, null);
+            _modeHintBorder.Opacity = 1.0;
             _modeHintBorder.Visibility = Visibility.Collapsed;
+        }
     }
 
     private void PositionModeHint() {
