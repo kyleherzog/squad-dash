@@ -94,6 +94,7 @@ internal sealed class ClipboardImageEditorWindow : Window {
 
     private double _zoom = 1.0;
     private readonly ScaleTransform _scaleTransform = new(1.0, 1.0);
+    private Canvas _overlayCanvas = null!;
 
     // Scale factor: canvas logical units per image pixel (< 1 when image DPI > 96).
     private double _canvasScaleX = 1.0;
@@ -693,10 +694,20 @@ internal sealed class ClipboardImageEditorWindow : Window {
             Margin = new Thickness(4)
         };
 
+        _overlayCanvas = new Canvas {
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
+
+        var canvasGrid = new Grid();
+        canvasGrid.Children.Add(canvasWrapper);
+        canvasGrid.Children.Add(_overlayCanvas);
+
         _scrollViewer = new ScrollViewer {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = canvasWrapper
+            Content = canvasGrid
         };
         _scrollViewer.SetResourceReference(BackgroundProperty, "AppSurface");
 
@@ -3666,7 +3677,7 @@ internal sealed class ClipboardImageEditorWindow : Window {
                 Visibility = Visibility.Collapsed
             };
             Panel.SetZIndex(_eyedropperTooltipBorder, 200);
-            _canvas.Children.Add(_eyedropperTooltipBorder);
+            _overlayCanvas.Children.Add(_eyedropperTooltipBorder);
         }
         _eyedropperTooltipSwatch!.Background = new SolidColorBrush(color);
         var (h, s, l) = RgbToHsl(color);
@@ -3676,10 +3687,12 @@ internal sealed class ClipboardImageEditorWindow : Window {
         _eyedropperTooltipBorder.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         var tw = _eyedropperTooltipBorder.DesiredSize.Width;
         var th = _eyedropperTooltipBorder.DesiredSize.Height;
-        double tx = pt.X + 14;
-        double ty = pt.Y - th - 6;
-        if (tx + tw > _canvas.Width) tx = pt.X - tw - 6;
-        if (ty < 0) ty = pt.Y + 14;
+        // pt is in canvas logical coords; overlay coords = canvas coords × zoom
+        double tx = pt.X * _zoom + 14;
+        double ty = pt.Y * _zoom - th - 6;
+        double canvasScreenWidth = _canvas.Width * _zoom;
+        if (tx + tw > canvasScreenWidth) tx = pt.X * _zoom - tw - 6;
+        if (ty < 0) ty = pt.Y * _zoom + 14;
         Canvas.SetLeft(_eyedropperTooltipBorder, tx);
         Canvas.SetTop(_eyedropperTooltipBorder, ty);
     }
