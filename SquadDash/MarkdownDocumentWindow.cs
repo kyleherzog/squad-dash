@@ -1820,6 +1820,11 @@ internal sealed class MarkdownDocumentWindow : Window {
         var origin = textBox.TranslatePoint(new Point(0, 0), overlayCanvas);
         var charTopLeft = textBox.TranslatePoint(rect.TopLeft, overlayCanvas);
 
+        // If the target line is scrolled outside the visible area of the source box, don't draw.
+        double visibleTop = origin.Y;
+        double visibleBottom = origin.Y + textBox.ActualHeight;
+        if (charTopLeft.Y < visibleTop || charTopLeft.Y >= visibleBottom) return;
+
         var isDark = AgentStatusCard.IsDarkTheme;
         var highlightColor = isDark
             ? Color.FromArgb(60, 255, 220, 80)

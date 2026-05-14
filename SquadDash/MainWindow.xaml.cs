@@ -11721,6 +11721,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         var origin = DocSourceTextBox.TranslatePoint(new Point(0, 0), overlayCanvas);
         var charTopLeft = DocSourceTextBox.TranslatePoint(rect.TopLeft, overlayCanvas);
 
+        // If the target line is scrolled outside the visible area of the source box, don't draw.
+        double visibleTop = origin.Y;
+        double visibleBottom = origin.Y + DocSourceTextBox.ActualHeight;
+        if (charTopLeft.Y < visibleTop || charTopLeft.Y >= visibleBottom) return;
+
         var isDark = AgentStatusCard.IsDarkTheme;
         var highlightColor = isDark
             ? Color.FromArgb(60, 255, 220, 80)    // warm amber tint on dark
