@@ -3765,10 +3765,10 @@ internal sealed class ClipboardImageEditorWindow : Window
 
         _cursorImage = new Image
         {
-            Width = 22,
-            Height = 26,
-            Source = BuildCursorDrawing(),
-            Cursor = Cursors.SizeAll,
+            Width            = 16,
+            Height           = 26,
+            Source           = (DrawingImage)Application.Current.FindResource("ImageEditorCursorDrawing"),
+            Cursor           = Cursors.SizeAll,
             IsHitTestVisible = true
         };
         Panel.SetZIndex(_cursorImage, 100);
@@ -3832,61 +3832,6 @@ internal sealed class ClipboardImageEditorWindow : Window
         _inCursorPlacementMode = false;
         HideModeHint();
         EnterMoveMode();
-    }
-
-    /// <summary>
-    /// Builds a <see cref="DrawingImage"/> from the XAML cursor path data (black outline,
-    /// white fill). Coordinates are in the original 212×295 canvas space; a transform
-    /// normalises the clip region (59,22,121,259) to a display-friendly size.
-    /// Intentional literal-color usage — cursor rendering.
-    /// </summary>
-    private static DrawingImage BuildCursorDrawing()
-    {
-        // Black outline — clipped to Rect(59,22,121,259) matching the XAML inner-Canvas clip
-        const string blackData =
-            "M59.3125,21.5625 L177.875,157.5625 177.875,157.5625 178.4375,158.5625" +
-            " C179.375,161,178.6875,163.625,176.9375,165.25" +
-            " L174.9375,166.5 174.6875,166.625 174.125,166.6875 174.1875,166.8125 140.375,170.3125" +
-            " C151.5625,199.9375,162.125,228.1875,173.3125,257.8125" +
-            " C173.4375,258.1875,173.5,258.5,173.625,258.875" +
-            " C174.5625,261.3125,173.875,263.9375,172.125,265.625" +
-            " L170.1875,266.8125 169.8125,266.9375 169.3125,267 169.3125,267.125 137.5,279" +
-            " 137.5,278.9375 137.0625,279.1875 136.6875,279.3125 134.4375,279.6875" +
-            " C132.8125,279.625,131.3125,278.9375,130.1875,277.75" +
-            " L129,275.8125 128.5,274.5625 95.8125,187.0625 68,206.5625" +
-            " 67.9375,206.4375 67.5,206.75 67.25,206.8125 64.9375,207.1875" +
-            " C62.5,207.125,60.25,205.5625,59.375,203.125" +
-            " L59.25,202.375 59.3125,21.5625 z";
-
-        // White fill — no clip (matches the outer Canvas path in the XAML)
-        const string whiteData =
-            "M66.3125,40.0625" +
-            " L121.8125,104.9375 169.875,160.625 131.0625,165.0625" +
-            " C143.0625,196.75,154.8125,229.125,166.8125,260.875" +
-            " L134.9375,272.875" +
-            " C123.0625,241.1875,110.8125,208.9375,98.9375,177.25" +
-            " L66.625,199.25 66,40.375 66.25,40.6875 66.3125,40.0625 z";
-
-        // Clip matches the XAML RectangleGeometry Rect="59,22,121,259" (canvas coordinates)
-        var clippedBlack = new DrawingGroup();
-        clippedBlack.ClipGeometry = new RectangleGeometry(new Rect(59, 22, 121, 259));
-        clippedBlack.Children.Add(new GeometryDrawing(Brushes.Black, null, Geometry.Parse(blackData)));
-
-        var group = new DrawingGroup();
-        group.Children.Add(clippedBlack);
-        group.Children.Add(new GeometryDrawing(Brushes.White, null, Geometry.Parse(whiteData)));
-
-        // Translate so the clip origin (59,22) becomes (0,0), then scale the 259-unit
-        // clip height to 22 display pixels — matches the XAML Viewbox Height="42" proportions.
-        const double displayHeight = 26.0;
-        const double clipHeight = 259.0;
-        const double s = displayHeight / clipHeight;
-        var xf = new TransformGroup();
-        xf.Children.Add(new TranslateTransform(-59, -22));
-        xf.Children.Add(new ScaleTransform(s, s));
-        group.Transform = xf;
-
-        return new DrawingImage(group);
     }
 
     // ── Mode hint ─────────────────────────────────────────────────────────────
