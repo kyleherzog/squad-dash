@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -17258,6 +17258,60 @@ public partial class MainWindow : Window, ILiveElementLocator
         await _pec.ExecutePromptAsync(string.Empty, addToHistory: false, clearPromptBox: false);
     }
 
+    private async Task HandleResendLastPromptAsync()
+    {
+        var lastPrompt = _conversationManager.PromptHistory.LastOrDefault();
+        if (string.IsNullOrWhiteSpace(lastPrompt))
+        {
+            AppendLine("[info] No previous prompt found to resend.", null);
+            return;
+        }
+
+        SquadDashTrace.Write("UI", $"Interrupt recovery: resending last prompt ({lastPrompt.Length} chars).");
+        ResetQueuePausedState();
+        await _pec.ExecutePromptAsync(lastPrompt, addToHistory: false, clearPromptBox: false);
+    }
+
+    private async Task HandleCheckGitDiffAsync()
+    {
+        var workspacePath = _currentWorkspace?.FolderPath;
+        if (string.IsNullOrWhiteSpace(workspacePath))
+        {
+            AppendLine("[info] No workspace folder — cannot run git diff.", null);
+            return;
+        }
+
+        string diffOutput;
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo("git", "diff --stat")
+            {
+                WorkingDirectory           = workspacePath,
+                RedirectStandardOutput     = true,
+                RedirectStandardError      = true,
+                UseShellExecute            = false,
+                CreateNoWindow             = true,
+            };
+            using var proc = System.Diagnostics.Process.Start(psi)!;
+            var stdout = await proc.StandardOutput.ReadToEndAsync();
+            var stderr = await proc.StandardError.ReadToEndAsync();
+            await proc.WaitForExitAsync();
+            diffOutput = string.IsNullOrWhiteSpace(stdout)
+                ? (string.IsNullOrWhiteSpace(stderr) ? "(no changes)" : stderr.Trim())
+                : stdout.Trim();
+        }
+        catch (Exception ex)
+        {
+            AppendLine($"[info] Could not run git diff: {ex.Message}", null);
+            return;
+        }
+
+        SquadDashTrace.Write("UI", $"Interrupt recovery: git diff captured ({diffOutput.Length} chars), injecting as prompt.");
+        ResetQueuePausedState();
+        var prompt = $"The prompt was interrupted. Here is the current git diff — please review for partial changes and advise:\n\n```\n{diffOutput}\n```";
+        await _pec.ExecutePromptAsync(prompt, addToHistory: false, clearPromptBox: false);
+    }
+
     private async void QuickReplyButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { Tag: QuickReplyButtonPayload payload } ||
@@ -17283,6 +17337,22 @@ public partial class MainWindow : Window, ILiveElementLocator
                     await HandleRoutingRepairQuickReplyAsync(payload.Entry);
                     return;
                 }
+            }
+
+            // Programmatic interrupt recovery quick replies — handled locally, no AI dispatch.
+            var trimmedOption = payload.Option.Trim();
+            if (string.Equals(trimmedOption, PromptExecutionController.ResendLastPromptQuickReply, StringComparison.OrdinalIgnoreCase))
+            {
+                _pec.DisableQuickReplies(payload.Entry);
+                await HandleResendLastPromptAsync();
+                return;
+            }
+
+            if (string.Equals(trimmedOption, PromptExecutionController.CheckGitDiffQuickReply, StringComparison.OrdinalIgnoreCase))
+            {
+                _pec.DisableQuickReplies(payload.Entry);
+                await HandleCheckGitDiffAsync();
+                return;
             }
 
             // Sim quick replies (routeMode="sim") exercise the quick reply UI without

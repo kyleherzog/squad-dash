@@ -38,6 +38,12 @@ internal sealed class PromptExecutionController {
     /// </summary>
     internal const string QueueAwaitInputSentinel = "[[AWAITING_INPUT]]";
 
+    /// <summary>Quick reply label shown on an interrupted-bridge message that re-runs the last prompt.</summary>
+    internal const string ResendLastPromptQuickReply = "Resend last prompt";
+
+    /// <summary>Quick reply label shown on an interrupted-bridge message that runs <c>git diff --stat</c> and injects the output as context for the AI.</summary>
+    internal const string CheckGitDiffQuickReply = "Check git diff";
+
     /// <summary>
     /// Full path of the documentation file currently open in the docs panel.
     /// Injected into every prompt so agents know which file the user is referring to.
@@ -2001,7 +2007,9 @@ internal sealed class PromptExecutionController {
                 SquadDashTrace.Write("UI", $"ExecutePromptAsync interrupted: {ex.GetType().Name}: {message}");
                 StopPromptHealthMonitoring("interrupted");
                 MarkActiveToolsAsFailed("Interrupted");
-                _appendLine("[interrupted] " + message, ThemeBrush("SystemInfoText"));
+                _appendLine(
+                    $"[interrupted] {message}\n\n[{ResendLastPromptQuickReply}] [{CheckGitDiffQuickReply}]",
+                    ThemeBrush("SystemInfoText"));
                 _backgroundTaskPresenter.RefreshLeadAgentBackgroundStatus();
             }
         }
