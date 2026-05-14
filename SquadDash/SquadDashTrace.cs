@@ -6,12 +6,27 @@ namespace SquadDash;
 
 internal static class SquadDashTrace {
     private static readonly object Gate = new();
-    private static readonly string LogPath = BuildLogPath();
+    private static string _logPath = BuildGlobalLogPath();
+    private const long MaxLogBytes = 32L * 1024L * 1024L;
+    private static long _approxLogBytes = GetLogLength(_logPath);
 
     /// <summary>Full path to the active trace log file.</summary>
-    internal static string CurrentLogPath => LogPath;
-    private const long MaxLogBytes = 32L * 1024L * 1024L;
-    private static long ApproxLogBytes = GetInitialLogLength();
+    internal static string CurrentLogPath => _logPath;
+
+    /// <summary>
+    /// Switches the trace log to a per-workspace file inside
+    /// <paramref name="workspaceStateDirectory"/>.  Any subsequent writes go to
+    /// <c>trace.log</c> in that directory.  Call once after a workspace is loaded.
+    /// </summary>
+    internal static void SetWorkspace(string workspaceStateDirectory) {
+        var newPath = Path.Combine(workspaceStateDirectory, "trace.log");
+        lock (Gate) {
+            if (string.Equals(_logPath, newPath, StringComparison.OrdinalIgnoreCase))
+                return;
+            _logPath = newPath;
+            _approxLogBytes = GetLogLength(newPath);
+        }
+    }
 
     /// <summary>
     /// When non-null, receives every trace entry in real time via
@@ -75,16 +90,16 @@ internal static class SquadDashTrace {
         _              => TraceCategory.General,
     };
 
-    private static string BuildLogPath() {
+    private static string BuildGlobalLogPath() {
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var directory = Path.Combine(appData, "SquadDash");
         Directory.CreateDirectory(directory);
         return Path.Combine(directory, "trace.log");
     }
 
-    private static long GetInitialLogLength() {
+    private static long GetLogLength(string path) {
         try {
-            return File.Exists(LogPath) ? new FileInfo(LogPath).Length : 0;
+            return File.Exists(path) ? new FileInfo(path).Length : 0;
         }
         catch {
             return 0;
@@ -92,29 +107,30 @@ internal static class SquadDashTrace {
     }
 
     private static void AppendLineToLog(string line) {
+        var path = _logPath;
         var payload = line + Environment.NewLine;
         var byteCount = Encoding.UTF8.GetByteCount(payload);
-        RotateIfNeeded(byteCount);
-        File.AppendAllText(LogPath, payload, Encoding.UTF8);
-        ApproxLogBytes += byteCount;
+        RotateIfNeeded(path, byteCount);
+        File.AppendAllText(path, payload, Encoding.UTF8);
+        _approxLogBytes += byteCount;
     }
 
-    private static void RotateIfNeeded(int nextWriteBytes) {
-        if (ApproxLogBytes + nextWriteBytes <= MaxLogBytes)
+    private static void RotateIfNeeded(string path, int nextWriteBytes) {
+        if (_approxLogBytes + nextWriteBytes <= MaxLogBytes)
             return;
 
-        var archivePath = Path.Combine(Path.GetDirectoryName(LogPath)!, "trace.1.log");
+        var archivePath = Path.Combine(Path.GetDirectoryName(path)!, "trace.1.log");
         try {
             if (File.Exists(archivePath))
                 File.Delete(archivePath);
-            if (File.Exists(LogPath))
-                File.Move(LogPath, archivePath);
-            ApproxLogBytes = 0;
+            if (File.Exists(path))
+                File.Move(path, archivePath);
+            _approxLogBytes = 0;
         }
         catch {
             // If rotation loses a race with another process, keep tracing rather than
             // surfacing diagnostics failures to the app.
-            ApproxLogBytes = File.Exists(LogPath) ? new FileInfo(LogPath).Length : 0;
+            _approxLogBytes = File.Exists(path) ? new FileInfo(path).Length : 0;
         }
     }
 }

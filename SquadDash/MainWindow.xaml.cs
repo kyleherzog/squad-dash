@@ -13197,6 +13197,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         ViewPagesButton.Visibility = _workspaceGitHubUrl is not null ? Visibility.Visible : Visibility.Collapsed;
 
         var workspaceStateDir = _conversationManager.ConversationStore.GetWorkspaceStateDirectory(_currentWorkspace.FolderPath);
+        SquadDashTrace.SetWorkspace(workspaceStateDir);
         _approvalStore = new CommitApprovalStore(workspaceStateDir);
         _approvalItems = _approvalStore.Load();
         _approvalPanel?.ReplaceAllItems(_approvalItems);
