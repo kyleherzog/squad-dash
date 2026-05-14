@@ -22875,6 +22875,21 @@ public partial class MainWindow : Window, ILiveElementLocator
             menu.Items.Add(MakeSep());
             menu.Items.Add(copyLinkItem);
 
+            var showInFolderItem = MakeItem("Show in Folder");
+            showInFolderItem.Click += (_, _) =>
+            {
+                if (File.Exists(filePath))
+                    System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{filePath}\"");
+                else
+                {
+                    var dir = Path.GetDirectoryName(filePath);
+                    if (dir is not null && Directory.Exists(dir))
+                        System.Diagnostics.Process.Start("explorer.exe", dir);
+                }
+            };
+            menu.Items.Add(MakeSep());
+            menu.Items.Add(showInFolderItem);
+
             if (_docStatusStore?.GetStatus(filePath) == DocApprovalStatus.Approved)
             {
                 menu.Items.Add(MakeSep());
