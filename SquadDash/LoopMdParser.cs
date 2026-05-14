@@ -280,15 +280,108 @@ internal static class LoopMdParser {
         return string.Join("\n", lines, i, lines.Length - i);
     }
 
+    // Matches {{#if key == "value"}} or {{#unless key == "value"}}
+    private static readonly Regex _conditionalOpenPattern =
+        new(@"^\s*\{\{#(if|unless)\s+(\w+)\s*==\s*""([^""]*)""\s*\}\}\s*$",
+            RegexOptions.Compiled);
+
+    // Matches {{/if}} or {{/unless}}
+    private static readonly Regex _conditionalClosePattern =
+        new(@"^\s*\{\{/(if|unless)\s*\}\}\s*$", RegexOptions.Compiled);
+
+    // Matches any remaining stray conditional syntax line (opening or closing)
+    private static readonly Regex _anyConditionalLinePattern =
+        new(@"^\s*\{\{[/#](?:if|unless)[^}]*\}\}\s*$",
+            RegexOptions.Compiled | RegexOptions.Multiline);
+
+    /// <summary>
+    /// Evaluates <c>{{#if key == "value"}}…{{/if}}</c> and
+    /// <c>{{#unless key == "value"}}…{{/unless}}</c> conditional blocks in
+    /// <paramref name="text"/>, including or discarding their inner content based on
+    /// the current option values.  Must be called <em>before</em> plain
+    /// <c>{{key}}</c> substitution so that variable tokens inside included blocks
+    /// are resolved in the subsequent substitution pass.
+    /// <para>
+    /// After block evaluation, any remaining stray conditional-syntax lines are
+    /// stripped and runs of three or more consecutive blank lines are collapsed to two.
+    /// </para>
+    /// </summary>
+    public static string PreprocessConditionals(string text, IReadOnlyList<LoopOption>? options)
+    {
+        // Build a key→value lookup; skip group-type options (UI-only headers, no value).
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (options is not null)
+            foreach (var opt in options)
+                if (opt.Type != "group")
+                    values[opt.Key] = opt.RawValue;
+
+        var lines = text.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+        var output = new List<string>(lines.Length);
+        bool inBlock     = false;
+        bool includeBlock = false;
+        string? blockVerb = null;   // "if" or "unless" — which close tag to wait for
+
+        foreach (var line in lines)
+        {
+            if (!inBlock)
+            {
+                var m = _conditionalOpenPattern.Match(line);
+                if (m.Success)
+                {
+                    blockVerb    = m.Groups[1].Value;   // "if" or "unless"
+                    var key      = m.Groups[2].Value;
+                    var expected = m.Groups[3].Value;
+                    var actual   = values.TryGetValue(key, out var v) ? v : string.Empty;
+                    var met      = string.Equals(actual, expected, StringComparison.Ordinal);
+                    includeBlock = blockVerb == "if" ? met : !met;
+                    inBlock      = true;
+                    // Opening tag line is never emitted
+                }
+                else
+                {
+                    output.Add(line);
+                }
+            }
+            else
+            {
+                var m = _conditionalClosePattern.Match(line);
+                if (m.Success && m.Groups[1].Value == blockVerb)
+                {
+                    inBlock   = false;
+                    blockVerb = null;
+                    // Closing tag line is never emitted
+                }
+                else if (includeBlock)
+                {
+                    output.Add(line);
+                }
+                // else: content of a false block → silently discard
+            }
+        }
+
+        var processed = string.Join("\n", output);
+
+        // Safety cleanup: strip any stray unmatched conditional-syntax lines
+        processed = _anyConditionalLinePattern.Replace(processed, string.Empty);
+
+        // Collapse runs of 3+ consecutive blank lines down to 2
+        processed = Regex.Replace(processed, @"\n{3,}", "\n\n");
+
+        return processed;
+    }
+
     /// <summary>
     /// Returns the instructions body with all <c>{{optionKey}}</c> placeholders
     /// replaced by the current <c>RawValue</c> of the matching option, plus any
     /// <paramref name="extraSubstitutions"/> (e.g. system variables like {{iteration}}).
     /// Options of type "group" are skipped (they are UI headers, not values).
+    /// Conditional blocks (<c>{{#if}}</c>/<c>{{#unless}}</c>) are evaluated first.
     /// </summary>
     public static string BuildMergedBody(LoopMdConfig config, IReadOnlyDictionary<string, string>? extraSubstitutions = null)
     {
-        var body = config.Instructions;
+        // Conditionals must be resolved before plain substitution so that {{key}} tokens
+        // inside included blocks are substituted in the pass below.
+        var body = PreprocessConditionals(config.Instructions, config.Options);
         if (config.Options is not null)
         {
             foreach (var opt in config.Options)

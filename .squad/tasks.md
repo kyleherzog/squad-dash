@@ -48,13 +48,20 @@
   filter as a `{{variable}}` that the loop controller resolves before sending the prompt.
   **See TODO comment in `TasksPanelDoTheseButton_Click` (commit 9460f90).**
 
-- [ ] **Loop Settings — `{{variable}}` injection at prompt send time** *(Owner: Arjun Sen)*
+- [x] **Loop Settings — `{{variable}}` injection at prompt send time** *(Owner: Arjun Sen)*
   Before sending the loop prompt, substitute `{{key}}` tokens in the prompt body with the
   corresponding frontmatter values from the active loop file. Known UI keys (`commit_after_task`,
   `build_verify`, `test_after_task`) and user-defined injection variables (`build_command`,
-  `commit_trailer`, etc.) should all be substituted. Missing keys should substitute as empty string
-  or be left as-is (configurable). Implement in `SquadBridgePromptBuilder` or equivalent injection layer.
-  **Blocked by:** Loop Settings popup task (frontmatter schema must be stable first).
+  `commit_trailer`, etc.) should all be substituted. Missing keys are left as-is.
+  Group-type options (UI headers) are skipped. Implemented in `LoopController.ExpandVariables`
+  and `LoopMdParser.BuildMergedBody`.
+
+- [x] **Loop template preprocessing — `{{#if}}`/`{{#unless}}` conditional blocks** *(Owner: Arjun Sen)*
+  Extend the loop prompt preprocessing pipeline (from the `{{variable}}` injection task) to support
+  conditional blocks. Loop file authors write conditions in the body; SquadDash evaluates them against
+  the active frontmatter option values before sending the prompt. The AI receives only clean resolved
+  text — no template syntax. Implemented in `LoopMdParser.PreprocessConditionals`, called before
+  plain `{{key}}` substitution in both `LoopController.ExpandVariables` and `LoopMdParser.BuildMergedBody`.
 
 
 

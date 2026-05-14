@@ -226,10 +226,18 @@ internal sealed class LoopController {
     }
 
     private static string ExpandVariables(string text, LoopMdConfig config, int iteration, string? workspacePath) {
-        // Option variables — replace {{key}} with the raw value from the options block
+        // Conditional blocks must be evaluated before plain substitution so that {{key}}
+        // tokens inside included blocks are resolved in the pass below.
+        text = LoopMdParser.PreprocessConditionals(text, config.Options);
+
+        // Option variables — replace {{key}} with the raw value from the options block.
+        // Group-type options are UI-only headers with no substitutable value; skip them.
         if (config.Options != null)
             foreach (var opt in config.Options)
+            {
+                if (opt.Type == "group") continue;
                 text = text.Replace($"{{{{{opt.Key}}}}}", opt.RawValue, StringComparison.Ordinal);
+            }
 
         // System variables
         text = text.Replace("{{iteration}}", iteration.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
