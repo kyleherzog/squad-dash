@@ -86,7 +86,7 @@
 
 ## 🔴 High Priority
 
-- [ ] **[Orion audit] Bridge stall — surface "No bridge activity" warning in UI** *(Owner: Orion Vale)*
+- [x] **[Orion audit] Bridge stall — surface "No bridge activity" warning in UI** *(Owner: Orion Vale)*
   PromptHealth already logs `No bridge activity for Xs since prompt start` to the trace file, but this
   is completely invisible to the user. When the warning fires (currently at 96s), show a visible indicator
   in the UI — e.g. a status bar message, a subtle pulsing warning on the spinner, or a tooltip on the
