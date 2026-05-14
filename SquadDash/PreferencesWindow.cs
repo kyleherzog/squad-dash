@@ -88,7 +88,7 @@ internal sealed class PreferencesWindow : Window {
 
         Title = "Preferences";
         Width = 640;
-        Height = 720;
+        Height = 1000;
         MinWidth = 540;
         MinHeight = 560;
         ResizeMode = ResizeMode.CanResize;
@@ -544,14 +544,14 @@ internal sealed class PreferencesWindow : Window {
         // ── Push-to-talk ──────────────────────────────────────────────────
         AddSectionHeader(form, "Push-to-talk", topMargin: 24);
 
-        var pttHint = new TextBlock { FontSize = 11, Margin = new Thickness(0, 4, 0, 12), TextWrapping = TextWrapping.Wrap };
+        var pttHint = new TextBlock { FontSize = 11, Margin = new Thickness(0, 4, 0, 4), TextWrapping = TextWrapping.Wrap };
         pttHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
         pttHint.Inlines.Add(new Run("Double-tap and hold the "));
         pttHint.Inlines.Add(new Bold(new Run("Ctrl")));
         pttHint.Inlines.Add(new Run(" key to use PTT."));
         form.Children.Add(pttHint);
 
-        AddLabel(form, "When I release the Ctrl key (after I'm done speaking):");
+        AddLabel(form, "When I release the Ctrl key in the prompt text box (after I'm done speaking):");
 
         var pttStack = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
 
