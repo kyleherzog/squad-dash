@@ -1824,7 +1824,6 @@ internal sealed class ClipboardImageEditorWindow : Window {
                     _textDragPreview = new Rectangle {
                         Stroke = Brushes.White,
                         StrokeThickness = 1.5,
-                        StrokeDashArray = new DoubleCollection { 4, 2 },
                         Fill = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
                         IsHitTestVisible = false,
                     };
@@ -3892,6 +3891,8 @@ internal sealed class ClipboardImageEditorWindow : Window {
 
         // Show resize handles around the active TextBox immediately (same as CreateTextBoxOverlay).
         AddTextResizeHandles(annotation);
+        tb.Loaded += (_, _) =>
+            Dispatcher.BeginInvoke(DispatcherPriority.Render, () => PositionTextResizeHandles(annotation));
         tb.SizeChanged += (_, _) =>
             Dispatcher.BeginInvoke(DispatcherPriority.Render, () => PositionTextResizeHandles(annotation));
 
@@ -3997,6 +3998,8 @@ internal sealed class ClipboardImageEditorWindow : Window {
         // Show resize handles immediately around the active TextBox so the user can see them
         // as soon as the text box is placed — before typing or committing anything.
         AddTextResizeHandles(annotation);
+        tb.Loaded += (_, _) =>
+            Dispatcher.BeginInvoke(DispatcherPriority.Render, () => PositionTextResizeHandles(annotation));
         tb.SizeChanged += (_, _) =>
             Dispatcher.BeginInvoke(DispatcherPriority.Render, () => PositionTextResizeHandles(annotation));
 
