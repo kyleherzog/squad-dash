@@ -27,9 +27,9 @@ If the clipboard contains only text, **Ctrl+V** behaves normally and pastes the 
 
 ---
 
-## The Attachment Strip
+## Attachments
 
-Once an image is pasted, a **📷 Image** pill appears in the attachment strip beneath the prompt text box.
+Once an image is pasted, a **📷 Image** pill appears above the prompt text box.
 
 - **Click the pill** to open the image in the built-in **Image Viewer** tab, so you can verify what was captured before sending.
 - You can paste multiple images; each appears as its own pill.
