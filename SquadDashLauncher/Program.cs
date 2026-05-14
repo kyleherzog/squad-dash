@@ -44,6 +44,8 @@ internal static class Program {
         var registry = new RunningInstanceRegistry();
         var restartStateStore = new RestartCoordinatorStateStore();
         var instances = registry.LoadLiveInstances(appRoot);
+        var restartRequestId = instances.Count > 0 ? Guid.NewGuid().ToString("N") : null;
+        var restartRequestSaved = false;
 
         var activeState = slotStore.Load();
         string nextSlot;
@@ -51,37 +53,59 @@ internal static class Program {
         WaitForBuildOutputCompleteness(buildOutputDirectory, TimeSpan.FromSeconds(10));
 
         try {
-            nextSlot = PrepareNextSlot(slotStore, activeState.ActiveSlot);
+            try {
+                nextSlot = PrepareNextSlot(slotStore, activeState.ActiveSlot);
+            }
+            catch when (instances.Count > 0) {
+                SaveRestartRequest(restartStateStore, appRoot, restartRequestId!, instances);
+                restartRequestSaved = true;
+                ForceCloseRegisteredInstances(instances);
+                nextSlot = PrepareNextSlot(slotStore, activeState.ActiveSlot);
+            }
+
+            var nextSlotDirectory = slotStore.GetSlotDirectory(nextSlot);
+            CopyDirectory(buildOutputDirectory, nextSlotDirectory);
+            EnsurePayloadSupportFiles(buildOutputDirectory, nextSlotDirectory);
+
+            var nextSlotPayloadPath = slotStore.GetPayloadPath(nextSlot);
+            var slotIsComplete = IsPayloadDeploymentComplete(nextSlotPayloadPath);
+            if (slotIsComplete)
+                slotStore.Save(new RuntimeSlotState(nextSlot, DateTimeOffset.UtcNow));
+
+            if (instances.Count > 0) {
+                if (!restartRequestSaved)
+                    SaveRestartRequest(restartStateStore, appRoot, restartRequestId!, instances);
+
+                StartDetachedRestartCoordinator(restartRequestId!);
+            }
         }
-        catch when (instances.Count > 0) {
-            ForceCloseRegisteredInstances(instances);
-            nextSlot = PrepareNextSlot(slotStore, activeState.ActiveSlot);
-        }
+        catch {
+            if (restartRequestSaved && restartRequestId is not null) {
+                restartStateStore.ClearRequest(appRoot);
+                restartStateStore.ClearPlan(appRoot, restartRequestId);
+            }
 
-        var nextSlotDirectory = slotStore.GetSlotDirectory(nextSlot);
-        CopyDirectory(buildOutputDirectory, nextSlotDirectory);
-        EnsurePayloadSupportFiles(buildOutputDirectory, nextSlotDirectory);
-
-        var nextSlotPayloadPath = slotStore.GetPayloadPath(nextSlot);
-        var slotIsComplete = IsPayloadDeploymentComplete(nextSlotPayloadPath);
-        if (slotIsComplete)
-            slotStore.Save(new RuntimeSlotState(nextSlot, DateTimeOffset.UtcNow));
-
-        if (instances.Count > 0) {
-            var requestId = Guid.NewGuid().ToString("N");
-            restartStateStore.SavePlan(new RestartPlanState(
-                appRoot,
-                requestId,
-                DateTimeOffset.UtcNow,
-                instances));
-            restartStateStore.SaveRequest(new RestartRequestState(
-                appRoot,
-                requestId,
-                DateTimeOffset.UtcNow));
-            StartDetachedRestartCoordinator(requestId);
+            throw;
         }
 
         return 0;
+    }
+
+    private static void SaveRestartRequest(
+        RestartCoordinatorStateStore restartStateStore,
+        string appRoot,
+        string requestId,
+        IReadOnlyList<RunningInstanceRecord> instances) {
+        var requestedAt = DateTimeOffset.UtcNow;
+        restartStateStore.SavePlan(new RestartPlanState(
+            appRoot,
+            requestId,
+            requestedAt,
+            instances));
+        restartStateStore.SaveRequest(new RestartRequestState(
+            appRoot,
+            requestId,
+            requestedAt));
     }
 
     private static int CompleteRestart(string requestId) {

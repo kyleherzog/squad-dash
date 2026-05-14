@@ -13213,7 +13213,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         // boundary BEFORE LoadWorkspaceConversationAsync so it is injected into the turn
         // list before rendering starts and is saved as part of the conversation history.
         var shutdownTimesCount = _settingsSnapshot.WorkspaceShutdownTimes?.Count ?? -1;
-        var lookupKey = Path.GetFullPath(_currentWorkspace.FolderPath)
+        var lookupKey = Path.GetFullPath(_currentWorkspace?.FolderPath ?? string.Empty)
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         SquadDashTrace.Write(TraceCategory.UI, $"SessionGap: WorkspaceShutdownTimes count={shutdownTimesCount} lookupKey={lookupKey}");
         if (_currentWorkspace is not null &&
@@ -19847,6 +19847,10 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             _mainWindowClosingInProgress = true;
 
+            // If the restart-request watcher has not fired yet, adopt the persisted request
+            // here so an automated launcher close cannot fall through to the manual-close dialog.
+            TryAdoptPendingRestartRequestForClose();
+
             // If a deferred shutdown was already scheduled and has now fired, honour it — skip dialog.
             // Also skip dialog for rebuild-triggered restarts: the launcher wants to reload the new
             // binary immediately; queue items will resume in the reloaded instance.
@@ -21152,6 +21156,29 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         ShowRestartingOverlay();
         Close();
+    }
+
+    private void TryAdoptPendingRestartRequestForClose()
+    {
+        if (_restartPending)
+            return;
+
+        try
+        {
+            var request = _restartCoordinatorStateStore.LoadRequest(_workspacePaths.ApplicationRoot);
+            if (request is null || string.Equals(request.RequestId, _lastHandledRestartRequestId, StringComparison.Ordinal))
+                return;
+
+            _lastHandledRestartRequestId = request.RequestId;
+            _restartPending = true;
+            SquadDashTrace.Write(
+                "Shutdown",
+                $"Adopted pending rebuild restart during Closing requestId={request.RequestId}.");
+        }
+        catch (Exception ex)
+        {
+            SquadDashTrace.Write("Shutdown", $"Could not inspect restart request during Closing: {ex.Message}");
+        }
     }
 
     private void ShowRestartingOverlay()
