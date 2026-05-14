@@ -7873,10 +7873,15 @@ public partial class MainWindow : Window, ILiveElementLocator
                 (Keyboard.Modifiers & ModifierKeys.Control) != 0 &&
                 (Keyboard.Modifiers & ModifierKeys.Shift) != 0)
             {
+                // AppendLine only renders quick-reply buttons when there is an active
+                // CurrentTurn (it uses AppendResponseSegment → RenderResponseEntry path).
+                // Create a synthetic turn so the injected text goes through that path.
+                BeginTranscriptTurn("[debug interrupt]");
                 AppendLine(
                     $"[interrupted] The Squad bridge was disposed before the prompt completed.\n\n" +
                     $"[{PromptExecutionController.ResendLastPromptQuickReply}] [{PromptExecutionController.CheckGitDiffQuickReply}]",
                     ThemeBrush("SystemInfoText"));
+                CoordinatorThread.CurrentTurn = null;
                 e.Handled = true;
                 return;
             }
