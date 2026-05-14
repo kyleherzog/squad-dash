@@ -6584,7 +6584,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void AppendSessionGapIndicator(
         DateTimeOffset shutdownTime,
         TimeSpan offlineDuration,
-        DateTimeOffset? startupTime = null)
+        DateTimeOffset? startupTime = null,
+        string? appVersion = null)
     {
         SquadDashTrace.Write(TraceCategory.UI, $"SessionGap: AppendSessionGapIndicator called shutdownTime={shutdownTime:O} offline={offlineDuration.TotalSeconds:F1}s");
         var resolvedStartupTime = startupTime?.ToLocalTime() ?? DateTimeOffset.Now;
@@ -6599,12 +6600,15 @@ public partial class MainWindow : Window, ILiveElementLocator
         tooltip.Opened += (_, _) =>
         {
             var panel = new StackPanel { Margin = new Thickness(2) };
-            foreach (var (label, value) in new[]
+            var rows = new List<(string label, string value)>
             {
                 ("Shutdown: ", StatusTimingPresentation.FormatRelativeTimestamp(shutdownTime)),
                 ("Offline:  ", StatusTimingPresentation.FormatOfflineDuration(offlineDuration)),
                 ("Startup:  ", StatusTimingPresentation.FormatRelativeTimestamp(resolvedStartupTime)),
-            })
+            };
+            if (!string.IsNullOrEmpty(appVersion))
+                rows.Add(("Version:  ", $"SquadDash v{appVersion}"));
+            foreach (var (label, value) in rows)
             {
                 var tb = new TextBlock { TextWrapping = TextWrapping.NoWrap };
                 tb.Inlines.Add(new System.Windows.Documents.Bold(new System.Windows.Documents.Run(label)));
@@ -16122,7 +16126,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                 AppendSessionGapIndicator(
                     turn.SessionBoundaryShutdownTime ?? turn.StartedAt,
                     turn.SessionBoundaryOfflineDuration ?? TimeSpan.Zero,
-                    turn.SessionBoundaryStartupTime);
+                    turn.SessionBoundaryStartupTime,
+                    turn.SessionBoundaryAppVersion);
             return;
         }
 

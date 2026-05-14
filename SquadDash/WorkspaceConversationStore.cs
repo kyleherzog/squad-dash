@@ -654,6 +654,8 @@ internal sealed record TranscriptTurnRecord(
     public TimeSpan? SessionBoundaryOfflineDuration { get; init; }
     /// <summary>UTC time when this session started (i.e. when the boundary was created).</summary>
     public DateTimeOffset? SessionBoundaryStartupTime { get; init; }
+    /// <summary>SquadDash version string (e.g. "1.0.0.1105") recorded at startup time.</summary>
+    public string? SessionBoundaryAppVersion { get; init; }
 
     public IReadOnlyList<TranscriptThoughtRecord> GetThoughts() {
         if (Thoughts is { Count: > 0 })

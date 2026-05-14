@@ -204,6 +204,7 @@ internal sealed class TranscriptConversationManager {
             SessionBoundaryShutdownTime    = shutdownTime.ToUniversalTime(),
             SessionBoundaryOfflineDuration = offlineDuration,
             SessionBoundaryStartupTime     = DateTimeOffset.UtcNow,
+            SessionBoundaryAppVersion      = AppVersion.Full,
         };
         SquadDashTrace.Write(TraceCategory.UI,
             $"SessionGap: PrependSessionBoundary registered shutdownTime={shutdownTime:O} offline={offlineDuration.TotalSeconds:F1}s");
