@@ -3401,6 +3401,27 @@ public partial class MainWindow : Window, ILiveElementLocator
             }
 
             await AbortConfirmedTargetsAsync(dialog.SelectedTargets).ConfigureAwait(true);
+
+            // If a loop is running, offer to stop it too
+            if (IsLoopRunning)
+            {
+                var loopResult = MessageBox.Show(
+                    "A loop is also running.\n\nChoose how to handle it:\n• Yes — stop gracefully after this iteration\n• No — abort the loop immediately\n• Cancel — leave the loop running",
+                    "Loop Is Running",
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Question);
+                // Yes = stop gracefully after this iteration
+                // No = abort the loop immediately
+                // Cancel = leave the loop running
+                if (loopResult == MessageBoxResult.Yes)
+                {
+                    StopLoopButton_Click(this, new RoutedEventArgs());
+                }
+                else if (loopResult == MessageBoxResult.No)
+                {
+                    AbortLoopButton_Click(this, new RoutedEventArgs());
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -25005,6 +25026,17 @@ public partial class MainWindow : Window, ILiveElementLocator
             if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
             {
                 ShowDoTheseWithMenu(sender as FrameworkElement);
+                return;
+            }
+
+            // If the loop is already running, don't start another one
+            if (IsLoopRunning)
+            {
+                MessageBox.Show(
+                    "A loop is already running. Wait for the current loop to stop before starting a new one.",
+                    "Loop Already Running",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
                 return;
             }
 
