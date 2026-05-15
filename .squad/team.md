@@ -20,6 +20,7 @@
 | Vesper Knox | Testing & Quality Specialist | agents/vesper-knox/charter.md | active |
 | Mira Quill | Documentation & Memory Specialist | agents/mira-quill/charter.md | active |
 | Sorin Pyre | Performance Engineer | agents/sorin-pyre/charter.md | active |
+| Atlas Wren | Mac & Cross-Platform Specialist | agents/atlas-wren/charter.md | active |
 | Scribe | Session Logger | agents/scribe/charter.md | 📋 Silent |
 | Ralph | Work Monitor | — | 🔄 Monitor |
 

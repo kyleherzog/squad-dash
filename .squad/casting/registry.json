@@ -15,6 +15,14 @@
       "charter": "agents/sorin-pyre/charter.md",
       "status": "active",
       "hired_at": "2026-04-23"
+    },
+    "atlas-wren": {
+      "display_name": "Atlas Wren",
+      "universe": "SquadDash Universe",
+      "role": "Mac & Cross-Platform Specialist",
+      "charter": "agents/atlas-wren/charter.md",
+      "status": "active",
+      "hired_at": "2026-05-15"
     }
   }
 }

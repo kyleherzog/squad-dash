@@ -14,6 +14,7 @@ How to decide who handles what.
 | Testing & quality | Vesper Knox | NUnit test suite in `SquadDash.Tests/`, coverage gaps, test quality standards |
 | Documentation & institutional memory | Mira Quill | `.squad/decisions.md`, session logs, README, onboarding guides, runbooks |
 | Performance & execution speed | Sorin Pyre | Hot-path profiling, throughput bottlenecks, rendering responsiveness, build speed, benchmark baselines |
+| Mac & cross-platform porting | Atlas Wren | macOS builds, Avalonia/MAUI evaluation, platform-conditional code, `.app` packaging, code signing, non-Windows API gaps |
 | Architectural code review | Orion Vale | Staff-level review for architectural governance across all layers |
 | Scope & priorities | Orion Vale | What to build next, trade-offs, decomposing epics into phases |
 | Session logging | Scribe | Automatic — never needs routing |
