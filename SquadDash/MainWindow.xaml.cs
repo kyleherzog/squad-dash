@@ -23832,12 +23832,19 @@ public partial class MainWindow : Window, ILiveElementLocator
         var thread = FindThreadForDocument(rtb.Document);
         var selectionStart = rtb.Selection.Start;
         PromptEntry? precedingEntry = null;
-        foreach (var entry in thread.PromptParagraphs)
+        // Guard: only compare TextPointers when both belong to the same FlowDocument.
+        // FindThreadForDocument falls back to CoordinatorThread when the RTB's document
+        // isn't registered yet; in that case the PromptParagraphs belong to a different
+        // TextTree and CompareTo would throw ArgumentException.
+        if (ReferenceEquals(thread.Document, rtb.Document))
         {
-            if (entry.Paragraph.ContentStart.CompareTo(selectionStart) < 0)
-                precedingEntry = entry;
-            else
-                break;
+            foreach (var entry in thread.PromptParagraphs)
+            {
+                if (entry.Paragraph.ContentStart.CompareTo(selectionStart) < 0)
+                    precedingEntry = entry;
+                else
+                    break;
+            }
         }
         string? originalPrompt = precedingEntry is not null
             ? new TextRange(precedingEntry.Paragraph.ContentStart, precedingEntry.Paragraph.ContentEnd).Text.Trim()
