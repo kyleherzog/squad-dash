@@ -57,7 +57,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private const int UiDispatchQueueLagTraceMs = 250;
     private const int UiDispatchWorkTraceMs = 50;
     private const int UiResponsivenessLagTraceMs = 1000;
-    private const int PromptEditProbeTraceMs = 250;
+    private const int PromptTextChangedSevereTraceMs = 250;
     private static readonly TimeSpan MultiLineHintCooldown = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan AgentActiveDisplayLinger = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan DynamicAgentHistoryRetention = TimeSpan.FromDays(2);
@@ -65,6 +65,27 @@ public partial class MainWindow : Window, ILiveElementLocator
     private const int DelegationOutcomeRollupWindow = 8;
     private const int DynamicAgentHistoryCardLimit = 6;
     private static readonly string[] ToolSpinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    private enum PromptTextChangedPhase
+    {
+        ReadText,
+        EmptyUi,
+        HistoryDraft,
+        QueueDraftRefresh,
+        InteractiveState,
+        IntelliSense,
+        Count,
+    }
+
+    private static readonly string[] PromptTextChangedPhaseNames =
+    [
+        "read",
+        "empty",
+        "history",
+        "queue",
+        "interactive",
+        "intellisense",
+    ];
+
     private static readonly AgentAccentPaletteOption[] AgentAccentPalette = [
         new("#FF4472C4"),
         new("#FF4F5FB8"),
@@ -103,8 +124,6 @@ public partial class MainWindow : Window, ILiveElementLocator
     private readonly DispatcherTimer _uiResponsivenessTimer;
     private readonly Stopwatch _sdkDeltaTraceStopwatch = Stopwatch.StartNew();
     private DateTimeOffset _lastUiResponsivenessTick = DateTimeOffset.Now;
-    private int _promptEditProbeVersion;
-    private bool _promptEditProbeLayoutPending;
     private PromptExecutionController _pec = null!; // initialized in constructor after all services
     private LoopController _loopController = null!; // initialized in constructor after _pec
     private FileSystemWatcher? _inboxWatcher;
@@ -147,6 +166,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private int _promptTextChangedTraceCount;
     private long _promptTextChangedTraceElapsedMs;
     private long _promptTextChangedTraceMaxMs;
+    private readonly long[] _promptTextChangedPhaseElapsedMs = new long[(int)PromptTextChangedPhase.Count];
+    private readonly long[] _promptTextChangedPhaseMaxMs = new long[(int)PromptTextChangedPhase.Count];
     private int _promptKeyDownTraceCount;
     private long _promptKeyDownTraceElapsedMs;
     private long _promptKeyDownTraceMaxMs;
@@ -8820,12 +8841,21 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void PromptTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         var sw = Stopwatch.StartNew();
+        var phaseStart = Stopwatch.GetTimestamp();
+        void MarkPhase(PromptTextChangedPhase phase)
+        {
+            var elapsedMs = ElapsedMillisecondsSince(phaseStart);
+            RecordPromptTextChangedPhaseTiming(phase, elapsedMs);
+            phaseStart = Stopwatch.GetTimestamp();
+        }
+
         try
         {
             if (_conversationManager.IsApplyingHistoryEntry)
                 return;
 
             var text = PromptTextBox.Text;
+            MarkPhase(PromptTextChangedPhase.ReadText);
             if (string.IsNullOrEmpty(text))
             {
                 _promptHasVoiceInput = false;
@@ -8833,14 +8863,18 @@ public partial class MainWindow : Window, ILiveElementLocator
                 if (_transcriptFullScreenEnabled && _fullScreenPromptVisible)
                     HideFullScreenPrompt();
             }
+            MarkPhase(PromptTextChangedPhase.EmptyUi);
 
             _conversationManager.HistoryIndex = null;
             _conversationManager.HistoryDraft = text;
+            MarkPhase(PromptTextChangedPhase.HistoryDraft);
             QueuePromptDraftStateRefresh();
+            MarkPhase(PromptTextChangedPhase.QueueDraftRefresh);
             if (_isPromptRunning)
                 UpdateInteractiveControlState(promptTextOnly: true);
+            MarkPhase(PromptTextChangedPhase.InteractiveState);
             TryUpdateIntelliSense(text, PromptTextBox.CaretIndex);
-            SchedulePromptEditProbe("TextChanged");
+            MarkPhase(PromptTextChangedPhase.IntelliSense);
         }
         catch (Exception ex)
         {
@@ -8849,13 +8883,14 @@ public partial class MainWindow : Window, ILiveElementLocator
         finally
         {
             sw.Stop();
-            RecordPromptInputTiming(isTextChanged: true, sw.ElapsedMilliseconds);
-            if (sw.ElapsedMilliseconds >= 20)
+            if (sw.ElapsedMilliseconds >= PromptTextChangedSevereTraceMs)
             {
                 SquadDashTrace.Write(TraceCategory.Performance,
                     $"PROMPT_TEXT_CHANGED elapsed={sw.ElapsedMilliseconds}ms textLen={PromptTextBox.Text.Length} " +
-                    $"caret={PromptTextBox.CaretIndex} primaryHosts={_primaryAgentTranscriptHosts.Count}");
+                    $"caret={PromptTextBox.CaretIndex} primaryHosts={_primaryAgentTranscriptHosts.Count} " +
+                    $"phaseMaxMs={FormatPromptTextChangedPhaseMaxes()}");
             }
+            RecordPromptInputTiming(isTextChanged: true, sw.ElapsedMilliseconds);
         }
     }
 
@@ -8910,6 +8945,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             TraceCategory.UI,
             $"PROMPT_INPUT batchMs={_promptInputTraceStopwatch.ElapsedMilliseconds} " +
             $"textChangedCount={textChangedCount} textChangedAvgMs={FormatAverageMs(_promptTextChangedTraceElapsedMs, textChangedCount)} textChangedMaxMs={_promptTextChangedTraceMaxMs} " +
+            $"textChangedPhaseAvgMs={FormatPromptTextChangedPhaseAverages(textChangedCount)} textChangedPhaseMaxMs={FormatPromptTextChangedPhaseMaxes()} " +
             $"keyDownCount={keyDownCount} keyDownAvgMs={FormatAverageMs(_promptKeyDownTraceElapsedMs, keyDownCount)} keyDownMaxMs={_promptKeyDownTraceMaxMs} " +
             $"textLen={PromptTextBox.Text.Length} caret={PromptTextBox.CaretIndex} selectionLen={PromptTextBox.SelectionLength}");
 
@@ -8917,6 +8953,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         _promptTextChangedTraceCount = 0;
         _promptTextChangedTraceElapsedMs = 0;
         _promptTextChangedTraceMaxMs = 0;
+        Array.Clear(_promptTextChangedPhaseElapsedMs);
+        Array.Clear(_promptTextChangedPhaseMaxMs);
         _promptKeyDownTraceCount = 0;
         _promptKeyDownTraceElapsedMs = 0;
         _promptKeyDownTraceMaxMs = 0;
@@ -8925,65 +8963,29 @@ public partial class MainWindow : Window, ILiveElementLocator
     private static string FormatAverageMs(long elapsedMs, int count) =>
         count <= 0 ? "n/a" : ((double)elapsedMs / count).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
 
-    private void SchedulePromptEditProbe(string reason)
+    private void RecordPromptTextChangedPhaseTiming(PromptTextChangedPhase phase, long elapsedMs)
     {
-        var version = ++_promptEditProbeVersion;
-        var queuedAt = Stopwatch.GetTimestamp();
-        var textLen = PromptTextBox.Text.Length;
-        var caret = PromptTextBox.CaretIndex;
-        var lineCount = PromptTextBox.LineCount;
-        var wrapping = PromptTextBox.TextWrapping;
-
-        QueuePromptEditProbeCheckpoint(version, queuedAt, reason, "Input", DispatcherPriority.Input, textLen, caret, lineCount, wrapping);
-        QueuePromptEditProbeCheckpoint(version, queuedAt, reason, "Loaded", DispatcherPriority.Loaded, textLen, caret, lineCount, wrapping);
-        QueuePromptEditProbeCheckpoint(version, queuedAt, reason, "Render", DispatcherPriority.Render, textLen, caret, lineCount, wrapping);
-        QueuePromptEditProbeCheckpoint(version, queuedAt, reason, "Background", DispatcherPriority.Background, textLen, caret, lineCount, wrapping);
-
-        if (_promptEditProbeLayoutPending)
-            return;
-
-        _promptEditProbeLayoutPending = true;
-        EventHandler? layoutHandler = null;
-        layoutHandler = (_, _) =>
-        {
-            PromptTextBox.LayoutUpdated -= layoutHandler;
-            _promptEditProbeLayoutPending = false;
-            var elapsedMs = ElapsedMillisecondsSince(queuedAt);
-            if (elapsedMs >= PromptEditProbeTraceMs)
-            {
-                SquadDashTrace.Write(
-                    TraceCategory.UI,
-                    $"PROMPT_EDIT_LAYOUT reason={reason} elapsedMs={elapsedMs} textLen={textLen} currentTextLen={PromptTextBox.Text.Length} lineCount={lineCount} actualLineCount={PromptTextBox.LineCount} wrapping={wrapping}");
-            }
-        };
-        PromptTextBox.LayoutUpdated += layoutHandler;
+        var index = (int)phase;
+        _promptTextChangedPhaseElapsedMs[index] += elapsedMs;
+        _promptTextChangedPhaseMaxMs[index] = Math.Max(_promptTextChangedPhaseMaxMs[index], elapsedMs);
     }
 
-    private void QueuePromptEditProbeCheckpoint(
-        int version,
-        long queuedAt,
-        string reason,
-        string label,
-        DispatcherPriority priority,
-        int textLen,
-        int caret,
-        int lineCount,
-        TextWrapping wrapping)
+    private string FormatPromptTextChangedPhaseAverages(int textChangedCount)
     {
-        _ = Dispatcher.BeginInvoke(priority, () =>
-        {
-            if (version != _promptEditProbeVersion)
-                return;
+        if (textChangedCount <= 0)
+            return "n/a";
 
-            var elapsedMs = ElapsedMillisecondsSince(queuedAt);
-            if (elapsedMs < PromptEditProbeTraceMs)
-                return;
-
-            SquadDashTrace.Write(
-                TraceCategory.UI,
-                $"PROMPT_EDIT_PROBE reason={reason} checkpoint={label} elapsedMs={elapsedMs} textLen={textLen} currentTextLen={PromptTextBox.Text.Length} caret={caret} currentCaret={PromptTextBox.CaretIndex} lineCount={lineCount} actualLineCount={PromptTextBox.LineCount} wrapping={wrapping}");
-        });
+        return string.Join(
+            ',',
+            Enumerable.Range(0, (int)PromptTextChangedPhase.Count)
+                .Select(i => $"{PromptTextChangedPhaseNames[i]}={FormatAverageMs(_promptTextChangedPhaseElapsedMs[i], textChangedCount)}"));
     }
+
+    private string FormatPromptTextChangedPhaseMaxes() =>
+        string.Join(
+            ',',
+            Enumerable.Range(0, (int)PromptTextChangedPhase.Count)
+                .Select(i => $"{PromptTextChangedPhaseNames[i]}={_promptTextChangedPhaseMaxMs[i]}"));
 
     private void BuildAgentSuggestions()
     {
