@@ -238,11 +238,37 @@ internal sealed class TranscriptConversationManager {
         // persisted as part of the conversation history.
         if (_pendingSessionBoundary is { } boundary) {
             _pendingSessionBoundary = null;
-            _conversationState = _conversationState with {
-                Turns = _conversationState.Turns.Append(boundary).ToArray()
-            };
-            SquadDashTrace.Write(TraceCategory.UI,
-                $"SessionGap: boundary injected turns={_conversationState.Turns.Count} shutdownTime={boundary.SessionBoundaryShutdownTime:O}");
+            var existingTurns = _conversationState.Turns;
+            var lastTurn = existingTurns.Count > 0 ? existingTurns[existingTurns.Count - 1] : null;
+            if (lastTurn is { IsSessionBoundary: true }) {
+                // Consolidate: update the existing tail boundary in place rather than appending.
+                var updatedBoundary = lastTurn with {
+                    SessionBoundaryShutdownTime    = boundary.SessionBoundaryShutdownTime,
+                    SessionBoundaryOfflineDuration = boundary.SessionBoundaryOfflineDuration,
+                    SessionBoundaryStartupTime     = boundary.SessionBoundaryStartupTime,
+                    SessionBoundaryAppVersion      = boundary.SessionBoundaryAppVersion,
+                };
+                _conversationState = _conversationState with {
+                    Turns = existingTurns.Take(existingTurns.Count - 1).Append(updatedBoundary).ToArray()
+                };
+                SquadDashTrace.Write(TraceCategory.UI,
+                    $"SessionGap: existing tail boundary updated (consolidated) turns={_conversationState.Turns.Count}" +
+                    $" shutdownTime={updatedBoundary.SessionBoundaryShutdownTime:O}" +
+                    $" offline={updatedBoundary.SessionBoundaryOfflineDuration?.TotalSeconds:F1}s" +
+                    $" startupTime={updatedBoundary.SessionBoundaryStartupTime:O}" +
+                    $" appVersion={updatedBoundary.SessionBoundaryAppVersion}");
+            } else {
+                // Normal path: append a new session boundary turn.
+                _conversationState = _conversationState with {
+                    Turns = existingTurns.Append(boundary).ToArray()
+                };
+                SquadDashTrace.Write(TraceCategory.UI,
+                    $"SessionGap: new boundary appended turns={_conversationState.Turns.Count}" +
+                    $" shutdownTime={boundary.SessionBoundaryShutdownTime:O}" +
+                    $" offline={boundary.SessionBoundaryOfflineDuration?.TotalSeconds:F1}s" +
+                    $" startupTime={boundary.SessionBoundaryStartupTime:O}" +
+                    $" appVersion={boundary.SessionBoundaryAppVersion}");
+            }
             PersistConversationStateInBackground(_conversationState);
         }
 
