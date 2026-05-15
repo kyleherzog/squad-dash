@@ -115,18 +115,11 @@ Run the detected command with output fully captured. Record the exact command as
 
 Two owners apply to every test failure:
 
-**Triage owner:** Always **Vesper Knox** (Testing & quality). Vesper is responsible for diagnosing the failure and ensuring test quality standards are met.
+**Triage owner:** The **Testing & quality specialist** listed in `.squad/routing.md`. Read that file and find the agent responsible for testing, QA, and verification. That agent is responsible for diagnosing the failure and ensuring test quality standards are met.
 
-**Fix owner:** Determined by the affected source code area. Read `.squad/routing.md` and route based on which files/areas the failure implicates:
-- C# backend services & persistence → Arjun Sen
-- WPF/XAML UI & user experience → Lyra Morn
-- TypeScript/SDK bridge & event protocol → Talia Rune
-- Deployment, launcher & infrastructure → Jae Min Kade
-- System architecture & API contracts → Orion Vale
-- Testing & quality (test code itself is broken) → Vesper Knox
-- Any other area → check routing.md for the best match
+**Fix owner:** Determined by the affected source code area. Read `.squad/routing.md` and find the agent responsible for the files/areas the failure implicates. Use the routing table in that file — do not guess based on file type alone.
 
-If the failing test is in the test project itself (e.g. a bad assertion or missing setup) rather than in production code, both triage and fix owner are Vesper Knox.
+If the failing test is in the test project itself (e.g. a bad assertion or missing setup) rather than in production code, both triage and fix owner are the Testing & quality specialist from `.squad/routing.md`.
 
 ---
 
@@ -138,7 +131,7 @@ Create or overwrite `.squad/pending-fix.md` with the following structure:
 # Pending Fix
 
 **Task:** [TASK-ID] — one-line description
-**Triage owner:** Vesper Knox (Testing & quality)
+**Triage owner:** Testing & quality specialist (from `.squad/routing.md`)
 **Fix owner:** agent-handle (from routing.md, based on affected code area)
 
 ## Test Failure Evidence
@@ -229,7 +222,7 @@ If the root cause turns out to differ from what was described in `pending-fix.md
 
 Re-run the **exact Reproduction command** recorded in `pending-fix.md`. The specific failing test(s) named in the "Test Failure Evidence" section **must now pass**. If they do not pass, debug and fix before continuing — do not skip the verification step.
 
-If `build_verify` is `true`, also run the auto-detected build command (or `{{build_command}}` if set) and confirm the build passes cleanly.
+If `build_verify` is `true`, also run the appropriate build command for this project (e.g. `dotnet build`, `npm run build`, `make build`, or whatever the project uses) and confirm the build passes cleanly.
 
 If any related tests that were previously passing now fail (regression), fix those too before proceeding.
 
