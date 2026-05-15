@@ -6,7 +6,7 @@ parent: Panels
 
 # Tasks Panel
 
-The Tasks Panel is a read-only sidebar that surfaces the open task backlog from `.squad/tasks.md`. It groups tasks by priority so you can see at a glance what needs doing — without leaving SquadDash or opening a separate editor.
+The Tasks Panel surfaces the open task backlog from `.squad/tasks.md`. It groups tasks by priority so you can see at a glance what needs doing — without leaving SquadDash or opening a separate editor.
 
 ---
 
@@ -22,6 +22,7 @@ Close the panel with its **×** button.
 
 Tasks are read from `.squad/tasks.md` in the workspace's `.squad/` folder and grouped into three priority buckets, always in High → Mid → Low order:
 
+
 ![Screenshot: Tasks panel showing prioritised task groups](images/tasks-panel.png)
 
 | Emoji | Priority label | Dot color |
@@ -30,7 +31,7 @@ Tasks are read from `.squad/tasks.md` in the workspace's `.squad/` folder and gr
 | 🟡 | Mid Priority | Amber |
 | 🟢 | Low Priority | Blue (TaskPriorityLow theme colour) |
 
-The panel is **read-only** — checking off tasks requires editing `.squad/tasks.md` directly.
+You can assign tasks and mark them complete directly from the panel; see [Context Menu](#context-menu) below.
 
 ---
 
@@ -131,6 +132,17 @@ Click the **×** button that appears to the right of the filter box when text is
 
 ---
 
+## Do These
+
+The **Do these** button in the panel header starts the native loop, scoping it to the tasks currently visible in the panel (i.e. whatever the filter box is set to).
+
+- **Click** — selects `.squad/loop-filtered-tasks.md` as the loop file and starts the loop immediately.
+- **Shift+click** — opens a **"Do these with:"** menu listing all loop files found in `.squad/`. Select one to start the loop with that file instead.
+
+> **Note:** The current filter text is used for the panel's live display only. Injecting the filter text directly into the loop prompt at run time is a planned improvement.
+
+---
+
 ## Context Menu
 
 Right-click any task row to open its context menu.
@@ -141,7 +153,8 @@ Right-click any task row to open its context menu.
 |---|---|
 | **Mark as Complete** | Moves the task to the Done section by writing `- [x]` to `.squad/tasks.md`. |
 | **Assign to ▶** | Opens the assignment submenu — see [Assigning Tasks](#assigning-tasks) below. |
-| **Follow up…** | Attaches a follow-up prompt to the task (visible when follow-up actions are configured). |
+| **Add to chat** | Inserts the task as a follow-up attachment in the chat prompt box. |
+| **Add to Notes** | Appends the task to the Notes panel. |
 | **Show / Hide Completed Tasks** | Toggles the Done section at the bottom of the panel. |
 | **Edit Tasks** | Opens `.squad/tasks.md` in your editor. |
 
@@ -150,7 +163,8 @@ Right-click any task row to open its context menu.
 | Item | What it does |
 |---|---|
 | **Mark as Incomplete** | Returns the task to the open list by writing `- [ ]` to `.squad/tasks.md`. |
-| **Follow up…** | Attaches a follow-up prompt to the completed task. |
+| **Add to chat** | Inserts the task as a follow-up attachment in the chat prompt box. |
+| **Add to Notes** | Appends the task to the Notes panel. |
 | **Show / Hide Completed Tasks** | Toggles the Done section visibility. |
 | **Edit Tasks** | Opens `.squad/tasks.md` in your editor. |
 
