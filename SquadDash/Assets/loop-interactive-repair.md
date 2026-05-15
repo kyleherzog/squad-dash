@@ -182,11 +182,15 @@ Run the tests relevant to the changed files and confirm the specific failure des
 
 ### Step 4 — Commit
 
-`commit_after_task` = `{{commit_after_task}}`
-
-- `always` → commit immediately with a clear, descriptive message. Include the trailer: `{{copilot_trailer}}`
-- `ask` → offer a quick reply: **"Commit changes"** / **"Leave uncommitted"** before committing.
-- `never` → do not commit; describe the diff in your response instead.
+{{#if commit_after_task == "always"}}
+Commit immediately with a clear, descriptive message. Include the trailer: `{{copilot_trailer}}`
+{{/if}}
+{{#if commit_after_task == "ask"}}
+Offer a quick reply: **"Commit changes"** / **"Leave uncommitted"** and wait for confirmation before committing.
+{{/if}}
+{{#if commit_after_task == "never"}}
+Do not commit. Describe the diff in your response instead.
+{{/if}}
 
 ---
 
@@ -196,7 +200,7 @@ Run the tests relevant to the changed files and confirm the specific failure des
 2. Delete `.squad/pending-fix.md`.
 3. Report: **"Fixed [TASK-ID]: [what was done]"**
 
-Then stop the loop so you can review the result before the next task is analyzed:
+Stop the loop:
 
 ```
 HOST_COMMAND_JSON:
