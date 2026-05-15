@@ -14616,8 +14616,11 @@ public partial class MainWindow : Window, ILiveElementLocator
             return;
         }
 
-        SquadDashTrace.Write(TraceCategory.Performance,
-            $"PRIMARY_HOST_WARMUP_DELAY reason={reason} delayMs={delay.TotalMilliseconds:0}");
+        if (delay >= TimeSpan.FromSeconds(1))
+        {
+            SquadDashTrace.Write(TraceCategory.Performance,
+                $"PRIMARY_HOST_WARMUP_DELAY reason={reason} delayMs={delay.TotalMilliseconds:0}");
+        }
         _ = DelayPrimaryAgentHostWarmupAsync(delay);
     }
 
@@ -14762,6 +14765,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         var previousThread = previousThreadOverride ?? _selectedTranscriptThread;
         if (!scrollToStart &&
             !_searchNavigating &&
+            string.IsNullOrEmpty(SearchBox.Text) &&
+            _searchMatches.Count == 0 &&
             ReferenceEquals(previousThread, thread) &&
             !_conversationManager.HasPendingRender(thread) &&
             IsThreadAlreadyVisibleInMainTranscript(thread))
@@ -16802,16 +16807,14 @@ public partial class MainWindow : Window, ILiveElementLocator
             DocSourceTextBox?.IsKeyboardFocusWithin == true ||
             _docSourceFindTextBox?.IsKeyboardFocusWithin == true ||
             _intelliSenseOwnerBox?.IsKeyboardFocusWithin == true;
-        if (textEditingActive)
-        {
-            delay = NonEssentialUiWorkInputPollCadence;
-            return true;
-        }
 
-        if (elapsed >= NonEssentialUiWorkInputQuietPeriod)
+        var quietPeriod = textEditingActive
+            ? NonEssentialUiWorkInputQuietPeriod
+            : ResponseRenderInputQuietPeriod;
+        if (elapsed >= quietPeriod)
             return false;
 
-        var remaining = NonEssentialUiWorkInputQuietPeriod - elapsed;
+        var remaining = quietPeriod - elapsed;
         delay = remaining < NonEssentialUiWorkInputPollCadence
             ? remaining
             : NonEssentialUiWorkInputPollCadence;
