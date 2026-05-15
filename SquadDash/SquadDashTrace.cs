@@ -8,6 +8,7 @@ internal static class SquadDashTrace {
     private static readonly object Gate = new();
     private static string _logPath = BuildGlobalLogPath();
     private const long MaxLogBytes = 32L * 1024L * 1024L;
+    private const int MaxMessageChars = 16_000;
     private static long _approxLogBytes = GetLogLength(_logPath);
 
     /// <summary>Full path to the active trace log file.</summary>
@@ -43,6 +44,7 @@ internal static class SquadDashTrace {
     internal static void Write(TraceCategory category, string message) {
         var windowTarget = TraceTarget;   // capture before lock — prevents dispatcher
                                           // callbacks from holding the file-write mutex
+        message = TrimMessageForTrace(message);
         try {
             var line = $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff zzz} [{category}] {message}";
             lock (Gate) {
@@ -61,6 +63,7 @@ internal static class SquadDashTrace {
     /// </summary>
     public static void Write(string source, string message) {
         var windowTarget = TraceTarget;   // capture before lock
+        message = TrimMessageForTrace(message);
         try {
             var line = $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff zzz} [{source}] {message}";
             lock (Gate) {
@@ -70,6 +73,13 @@ internal static class SquadDashTrace {
         catch {
         }
         windowTarget?.AddEntry(MapSourceToCategory(source), message);   // outside lock
+    }
+
+    private static string TrimMessageForTrace(string message) {
+        if (message.Length <= MaxMessageChars)
+            return message;
+
+        return message[..MaxMessageChars] + $"... [trace message truncated; originalChars={message.Length}]";
     }
 
     private static TraceCategory MapSourceToCategory(string source) => source switch {

@@ -57,6 +57,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private const int UiDispatchQueueLagTraceMs = 250;
     private const int UiDispatchWorkTraceMs = 50;
     private const int UiResponsivenessLagTraceMs = 1000;
+    private const int DispatcherLongOperationTraceMs = 500;
+    private const int PromptRenderLatencyTraceMs = 250;
     private const int PromptTextChangedSevereTraceMs = 250;
     private static readonly TimeSpan MultiLineHintCooldown = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan AgentActiveDisplayLinger = TimeSpan.FromSeconds(20);
@@ -177,6 +179,12 @@ public partial class MainWindow : Window, ILiveElementLocator
     private int _promptKeyDownTraceCount;
     private long _promptKeyDownTraceElapsedMs;
     private long _promptKeyDownTraceMaxMs;
+    private readonly Dictionary<DispatcherOperation, (long StartedAt, DispatcherPriority Priority)> _dispatcherOperationStarts = [];
+    private bool _dispatcherDiagnosticsAttached;
+    private string _lastLongDispatcherOperationSummary = "none";
+    private long _promptRenderLatencyStartedAt;
+    private int _promptRenderLatencyTextLen;
+    private bool _promptRenderLatencyPending;
     private Dictionary<string, string> _agentHandleByDisplayName = new(StringComparer.OrdinalIgnoreCase);
     private string[] _agentDisplayNames = [];
     private string[] _tasksAgentSuggestions = [];
@@ -543,6 +551,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         SoundNotifications = new SoundNotificationService(_settingsStore, () => BuildTtsProvider(_settingsSnapshot));
         InitializeComponent();
         SquadDashTrace.Write(TraceCategory.Startup, $"Constructor: InitializeComponent {ctorSw.ElapsedMilliseconds}ms.");
+        SquadDashTrace.Write(
+            TraceCategory.Startup,
+            $"UI_THREAD_ID nativeThreadId={NativeMethods.GetCurrentNativeThreadId()} managedThreadId={Environment.CurrentManagedThreadId}");
         OutputTextBox.CacheMode = CreateTranscriptBitmapCache();
         _coordinatorScrollController = new TranscriptScrollController(OutputTextBox, Dispatcher);
         _coordinatorScrollController.SetScrollToBottomButton(ScrollToBottomButton);
@@ -796,6 +807,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _bridge.EventReceived += (_, evt) => QueueBridgeEventForUi(evt);
         _bridge.ErrorReceived += (_, text) => TryPostToUi(() => HandleBridgeError(text), "Bridge.ErrorReceived");
         InputManager.Current.PreProcessInput += MainWindow_PreProcessInput;
+        AttachDispatcherDiagnostics();
 
         _uiResponsivenessTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
         {
@@ -810,7 +822,10 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 SquadDashTrace.Write(
                     TraceCategory.UI,
-                    $"UI_THREAD_LAG elapsedMs={elapsedMs:0} promptFocused={PromptTextBox?.IsKeyboardFocusWithin == true} textLen={PromptTextBox?.Text.Length ?? 0} postedPending={_postedUiActionTracker.PendingCount}");
+                    $"UI_THREAD_LAG elapsedMs={elapsedMs:0} promptFocused={PromptTextBox?.IsKeyboardFocusWithin == true} " +
+                    $"textLen={PromptTextBox?.Text.Length ?? 0} postedPending={_postedUiActionTracker.PendingCount} " +
+                    $"promptRenderPendingMs={GetPromptRenderPendingMs()} uiNativeThreadId={NativeMethods.GetCurrentNativeThreadId()} " +
+                    $"lastLongDispatcherOp={_lastLongDispatcherOperationSummary}");
             }
         };
         _uiResponsivenessTimer.Start();
@@ -9212,8 +9227,119 @@ public partial class MainWindow : Window, ILiveElementLocator
         });
     }
 
+    private void AttachDispatcherDiagnostics()
+    {
+        if (_dispatcherDiagnosticsAttached)
+            return;
+
+        _dispatcherDiagnosticsAttached = true;
+        Dispatcher.Hooks.OperationStarted += DispatcherHooks_OperationStarted;
+        Dispatcher.Hooks.OperationCompleted += DispatcherHooks_OperationCompleted;
+        Dispatcher.Hooks.OperationAborted += DispatcherHooks_OperationAborted;
+    }
+
+    private void DetachDispatcherDiagnostics()
+    {
+        if (!_dispatcherDiagnosticsAttached)
+            return;
+
+        _dispatcherDiagnosticsAttached = false;
+        Dispatcher.Hooks.OperationStarted -= DispatcherHooks_OperationStarted;
+        Dispatcher.Hooks.OperationCompleted -= DispatcherHooks_OperationCompleted;
+        Dispatcher.Hooks.OperationAborted -= DispatcherHooks_OperationAborted;
+        CompositionTarget.Rendering -= PromptCompositionTarget_Rendering;
+        _promptRenderLatencyPending = false;
+        _dispatcherOperationStarts.Clear();
+    }
+
+    private void DispatcherHooks_OperationStarted(object? sender, DispatcherHookEventArgs e)
+    {
+        try
+        {
+            if (_dispatcherOperationStarts.Count > 1024)
+                _dispatcherOperationStarts.Clear();
+
+            _dispatcherOperationStarts[e.Operation] = (Stopwatch.GetTimestamp(), e.Operation.Priority);
+        }
+        catch
+        {
+            // Diagnostics must never perturb UI dispatch.
+        }
+    }
+
+    private void DispatcherHooks_OperationCompleted(object? sender, DispatcherHookEventArgs e) =>
+        CompleteDispatcherOperationTrace(e.Operation, "completed");
+
+    private void DispatcherHooks_OperationAborted(object? sender, DispatcherHookEventArgs e) =>
+        CompleteDispatcherOperationTrace(e.Operation, "aborted");
+
+    private void CompleteDispatcherOperationTrace(DispatcherOperation operation, string status)
+    {
+        try
+        {
+            if (!_dispatcherOperationStarts.Remove(operation, out var started))
+                return;
+
+            var elapsedMs = ElapsedMillisecondsSince(started.StartedAt);
+            if (elapsedMs < DispatcherLongOperationTraceMs)
+                return;
+
+            _lastLongDispatcherOperationSummary = $"{status}:{started.Priority}:{elapsedMs}ms";
+            SquadDashTrace.Write(
+                TraceCategory.Performance,
+                $"DISPATCHER_OP_LONG status={status} priority={started.Priority} elapsedMs={elapsedMs} " +
+                $"promptFocused={PromptTextBox?.IsKeyboardFocusWithin == true} textLen={PromptTextBox?.Text.Length ?? 0} " +
+                $"postedPending={_postedUiActionTracker.PendingCount} uiNativeThreadId={NativeMethods.GetCurrentNativeThreadId()}");
+        }
+        catch
+        {
+            // Diagnostics must never perturb UI dispatch.
+        }
+    }
+
+    private void MarkPromptInputAwaitingRender()
+    {
+        _promptRenderLatencyStartedAt = Stopwatch.GetTimestamp();
+        _promptRenderLatencyTextLen = PromptTextBox?.Text.Length ?? 0;
+
+        if (_promptRenderLatencyPending)
+            return;
+
+        _promptRenderLatencyPending = true;
+        CompositionTarget.Rendering += PromptCompositionTarget_Rendering;
+    }
+
+    private void PromptCompositionTarget_Rendering(object? sender, EventArgs e)
+    {
+        try
+        {
+            CompositionTarget.Rendering -= PromptCompositionTarget_Rendering;
+            _promptRenderLatencyPending = false;
+
+            var elapsedMs = ElapsedMillisecondsSince(_promptRenderLatencyStartedAt);
+            if (elapsedMs < PromptRenderLatencyTraceMs)
+                return;
+
+            SquadDashTrace.Write(
+                TraceCategory.Performance,
+                $"PROMPT_RENDER_LATENCY elapsedMs={elapsedMs} textLenAtInput={_promptRenderLatencyTextLen} " +
+                $"textLenNow={PromptTextBox?.Text.Length ?? 0} caret={PromptTextBox?.CaretIndex ?? 0} " +
+                $"selectionLen={PromptTextBox?.SelectionLength ?? 0} uiNativeThreadId={NativeMethods.GetCurrentNativeThreadId()} " +
+                $"lastLongDispatcherOp={_lastLongDispatcherOperationSummary}");
+        }
+        catch (Exception ex)
+        {
+            HandleUiCallbackException(nameof(PromptCompositionTarget_Rendering), ex);
+        }
+    }
+
+    private long GetPromptRenderPendingMs() =>
+        _promptRenderLatencyPending ? ElapsedMillisecondsSince(_promptRenderLatencyStartedAt) : 0;
+
     private void RecordPromptInputTiming(bool isTextChanged, long elapsedMs)
     {
+        MarkPromptInputAwaitingRender();
+
         if (isTextChanged)
         {
             _promptTextChangedTraceCount++;
@@ -20436,6 +20562,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             Microsoft.Win32.SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
             InputManager.Current.PreProcessInput -= MainWindow_PreProcessInput;
+            DetachDispatcherDiagnostics();
             _isClosing = true;
             _promptHealthTimer.Stop();
             _statusPresentationTimer.Stop();
@@ -22252,18 +22379,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         foreach (var card in visibleCards.Where(static card => !card.IsInActivePanel).OrderBy(GetAgentCardBucketSortKey))
             _inactiveAgentCards.Add(card);
 
-        foreach (var card in visibleCards)
-        {
-            var (group, sortTicks, _) = GetAgentCardBucketSortKey(card);
-            var bestThread = card.Threads
-                .Where(static t => !t.IsPlaceholderThread)
-                .OrderByDescending(AgentThreadRegistry.GetThreadLastActivityAt)
-                .FirstOrDefault();
-            var lastActivity = bestThread is not null ? AgentThreadRegistry.GetThreadLastActivityAt(bestThread).ToString("o") : "(none)";
-            SquadDashTrace.Write("AgentCards",
-                $"SyncAgentCardBuckets: card={card.Name} group={group} sortTicks={sortTicks} " +
-                $"threads={card.Threads.Count} lastActivity={lastActivity} active={card.IsInActivePanel}");
-        }
+        var activeNames = string.Join(", ", _activeAgentCards.Select(static card => card.Name));
+        SquadDashTrace.Write("AgentCards",
+            $"SyncAgentCardBuckets: visible={visibleCards.Length} active={_activeAgentCards.Count} " +
+            $"inactive={_inactiveAgentCards.Count} threads={visibleCards.Sum(static card => card.Threads.Count)} " +
+            $"activeCards={activeNames}");
 
         var currentActive = _activeAgentCards.ToHashSet();
         foreach (var added in currentActive.Except(_prevActiveAgentCards).Where(c => !c.IsLeadAgent))

@@ -253,7 +253,9 @@ internal sealed class MarkdownDocumentRenderer {
                 var p = CreateTranscriptParagraph(bottomMargin: level <= 2 ? 6 : 4);
                 p.FontSize = HeadingFontSize(level, _getFontSize());
                 p.Tag = new string('#', level) + " " + headingText;
-                p.Inlines.Add(new Run(headingText) { FontWeight = FontWeights.Bold });
+                var headingBold = new Bold();
+                AppendInlineMarkdown(headingBold.Inlines, headingText);
+                p.Inlines.Add(headingBold);
                 yield return p;
                 i++;
                 continue;

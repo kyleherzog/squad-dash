@@ -15,6 +15,7 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
     private static readonly TimeSpan DefaultBackgroundCancelResponseTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan BridgeDeltaTraceInterval = TimeSpan.FromSeconds(1);
     private const string SessionResetEventType = "session_reset";
+    private const int TracePreviewChars = 240;
 
     public event EventHandler<SquadSdkEvent>? EventReceived;
     public event EventHandler<string>? ErrorReceived;
@@ -87,7 +88,8 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
 
         SquadDashTrace.Write(
             "Bridge",
-            $"RunPromptAsync requested prompt={prompt} cwd={workingDirectory} sessionId={sessionId ?? "(new)"}");
+            $"RunPromptAsync requested promptChars={prompt.Length} promptLines={CountLines(prompt)} " +
+            $"promptPreview=\"{BuildTracePreview(prompt)}\" cwd={workingDirectory} sessionId={sessionId ?? "(new)"}");
 
         await _promptLock.WaitAsync().ConfigureAwait(false);
         try {
@@ -120,7 +122,8 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
 
         SquadDashTrace.Write(
             "Bridge",
-            $"RunNamedAgentDelegationAsync requested option={selectedOption} targetAgent={targetAgentHandle} cwd={workingDirectory} sessionId={sessionId}");
+            $"RunNamedAgentDelegationAsync requested optionChars={selectedOption.Length} " +
+            $"optionPreview=\"{BuildTracePreview(selectedOption)}\" targetAgent={targetAgentHandle} cwd={workingDirectory} sessionId={sessionId}");
 
         await _promptLock.WaitAsync().ConfigureAwait(false);
         try {
@@ -159,7 +162,8 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
 
         SquadDashTrace.Write(
             "Bridge",
-            $"RunNamedAgentDirectAsync targetAgent={targetAgentHandle} option={selectedOption} cwd={workingDirectory}");
+            $"RunNamedAgentDirectAsync targetAgent={targetAgentHandle} optionChars={selectedOption.Length} " +
+            $"optionPreview=\"{BuildTracePreview(selectedOption)}\" handoffChars={handoffContext?.Length ?? 0} cwd={workingDirectory}");
 
         await _promptLock.WaitAsync().ConfigureAwait(false);
         try {
@@ -181,6 +185,59 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
         finally {
             _promptLock.Release();
         }
+    }
+
+    private static int CountLines(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return 0;
+
+        var lines = 1;
+        foreach (var ch in text)
+        {
+            if (ch == '\n')
+                lines++;
+        }
+
+        return lines;
+    }
+
+    private static string BuildTracePreview(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return string.Empty;
+
+        var normalized = text
+            .Replace("\r", "\\r", StringComparison.Ordinal)
+            .Replace("\n", "\\n", StringComparison.Ordinal);
+        return normalized.Length <= TracePreviewChars
+            ? normalized
+            : normalized[..TracePreviewChars] + $"...(+{normalized.Length - TracePreviewChars} chars)";
+    }
+
+    private static string BuildSentRequestTrace<TRequest>(TRequest request, string payload)
+    {
+        var requestType = request?.GetType().Name ?? "(null)";
+        return request switch
+        {
+            SquadSdkPromptRequest promptRequest =>
+                $"Sent request type={promptRequest.Type} requestId={promptRequest.RequestId ?? "(none)"} " +
+                $"payloadChars={payload.Length} promptChars={promptRequest.Prompt.Length} promptLines={CountLines(promptRequest.Prompt)} " +
+                $"promptPreview=\"{BuildTracePreview(promptRequest.Prompt)}\" cwd={promptRequest.Cwd} sessionId={promptRequest.SessionId ?? "(new)"}",
+            SquadSdkDelegateRequest delegateRequest =>
+                $"Sent request type={delegateRequest.Type} requestId={delegateRequest.RequestId ?? "(none)"} " +
+                $"payloadChars={payload.Length} selectedOptionChars={delegateRequest.SelectedOption.Length} " +
+                $"targetAgent={delegateRequest.TargetAgent} cwd={delegateRequest.Cwd} sessionId={delegateRequest.SessionId}",
+            SquadSdkNamedAgentRequest namedAgentRequest =>
+                $"Sent request type={namedAgentRequest.Type} requestId={namedAgentRequest.RequestId ?? "(none)"} " +
+                $"payloadChars={payload.Length} selectedOptionChars={namedAgentRequest.SelectedOption.Length} " +
+                $"handoffChars={namedAgentRequest.HandoffContext?.Length ?? 0} targetAgent={namedAgentRequest.TargetAgent} " +
+                $"cwd={namedAgentRequest.Cwd} sessionId={namedAgentRequest.SessionId ?? "(new)"}",
+            SquadSdkRcPromptBroadcastRequest rcPromptRequest =>
+                $"Sent request type={rcPromptRequest.Type} payloadChars={payload.Length} textChars={rcPromptRequest.Text.Length} " +
+                $"textPreview=\"{BuildTracePreview(rcPromptRequest.Text)}\"",
+            _ => $"Sent request type={requestType} payloadChars={payload.Length}"
+        };
     }
 
     private async Task RunPromptWithSessionRecoveryAsync(
@@ -526,7 +583,7 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
 
             await input.WriteLineAsync(payload).ConfigureAwait(false);
             await input.FlushAsync().ConfigureAwait(false);
-            SquadDashTrace.Write("Bridge", $"Sent request: {payload}");
+            SquadDashTrace.Write("Bridge", BuildSentRequestTrace(request, payload));
         }
         catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException) {
             throw new InvalidOperationException("Failed to write to the Squad bridge.", ex);
