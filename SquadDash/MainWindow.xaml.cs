@@ -989,10 +989,17 @@ public partial class MainWindow : Window, ILiveElementLocator
                     }
                     else if (_deferredShutdown == DeferredShutdownMode.AfterAllQueued)
                     {
-                        if (_promptQueue.Count > 0 && GetAutoDispatchCandidate() is not null)
-                            _ = DrainQueueAsync(); // keep draining
+                        if (_promptQueue.Count > 0)
+                        {
+                            if (CanAutoDispatchPromptQueue("deferred-shutdown") && GetAutoDispatchCandidate() is not null)
+                                _ = DrainQueueAsync(); // keep draining
+                            else
+                                SquadDashTrace.Write("Shutdown", $"Deferred shutdown still waiting for queued items count={_promptQueue.Count}.");
+                        }
                         else
+                        {
                             Close(); // queue exhausted — shut down
+                        }
                     }
                     else if (_restartPending)
                     {
@@ -1012,7 +1019,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                     }
                     else
                     {
-                        if (_promptQueue.Count > 0 && GetAutoDispatchCandidate() is not null)
+                        if (_promptQueue.Count > 0 && CanAutoDispatchPromptQueue("prompt-finished") && GetAutoDispatchCandidate() is not null)
                         {
                             if (LastTurnNeedsInput())
                                 HandleQueuePausedForInput();
@@ -1026,9 +1033,11 @@ public partial class MainWindow : Window, ILiveElementLocator
                             // manually paused (items still present), so guard on Count == 0 to
                             // avoid firing the sound when the user clicked Pause.
                             if (_promptQueue.Count == 0)
+                            {
                                 SoundNotifications.Play(SoundEvent.QueueEmpty);
-                            // Resume a queued loop now that there are no more items to drain.
-                            _ = MaybeFireQueuedLoopAsync();
+                                // Resume a queued loop now that there are no more items to drain.
+                                _ = MaybeFireQueuedLoopAsync();
+                            }
                         }
                     }
                 }
@@ -2108,11 +2117,29 @@ public partial class MainWindow : Window, ILiveElementLocator
         return null;
     }
 
-    private async Task DrainQueueAsync()
+    private bool CanAutoDispatchPromptQueue(string reason)
     {
         if (_isPromptRunning || IsNativeLoopRunning || _isClosing || _restartPending)
+            return false;
+
+        if (_backgroundTaskPresenter.HasBackgroundTasks())
         {
-            SquadDashTrace.Write("Queue", $"DrainQueueAsync: skipped running={_isPromptRunning} loop={IsNativeLoopRunning} closing={_isClosing} restart={_restartPending}");
+            SquadDashTrace.Write(
+                "Queue",
+                $"Auto-dispatch blocked by active background work reason={reason} queueCount={_promptQueue.Count}");
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task DrainQueueAsync()
+    {
+        if (!CanAutoDispatchPromptQueue(nameof(DrainQueueAsync)))
+        {
+            SquadDashTrace.Write(
+                "Queue",
+                $"DrainQueueAsync: skipped running={_isPromptRunning} loop={IsNativeLoopRunning} closing={_isClosing} restart={_restartPending} background={_backgroundTaskPresenter.HasBackgroundTasks()}");
             return;
         }
 
@@ -2161,7 +2188,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private async Task DrainQueueIfNeededAsync()
     {
-        while (!_isPromptRunning && !IsNativeLoopRunning && !_isClosing && !_restartPending && !LastTurnNeedsInput())
+        while (CanAutoDispatchPromptQueue(nameof(DrainQueueIfNeededAsync)) && !LastTurnNeedsInput())
         {
             var item = GetAutoDispatchCandidate();
             if (item is null) break;
@@ -2210,6 +2237,26 @@ public partial class MainWindow : Window, ILiveElementLocator
             HandleRightmostTabHold();
 
         await MaybeFireQueuedLoopAsync();
+    }
+
+    private void DrainQueueAfterBackgroundWorkChanged(string reason)
+    {
+        if (_promptQueue.Count == 0)
+            return;
+
+        if (!CanAutoDispatchPromptQueue(reason))
+            return;
+
+        if (LastTurnNeedsInput())
+        {
+            HandleQueuePausedForInput();
+            return;
+        }
+
+        if (GetAutoDispatchCandidate() is not null)
+            _ = DrainQueueIfNeededAsync();
+        else if (IsRightmostQueueTabActive())
+            HandleRightmostTabHold();
     }
 
     /// <summary>
@@ -3026,7 +3073,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             $"text={msAfterText}ms tabSync={msAfterTabSync - msAfterText}ms " +
             $"followUp={(sw.ElapsedMilliseconds - msAfterTabSync)}ms total={sw.ElapsedMilliseconds}ms");
 
-        if (wasRightmostHold && !_isPromptRunning && !IsNativeLoopRunning)
+        if (wasRightmostHold && CanAutoDispatchPromptQueue("rightmost-tab-released"))
             _ = DrainQueueIfNeededAsync();
         SyncPromptTextBoxSimBorder();
     }
@@ -4036,6 +4083,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             _backgroundTaskPresenter.RefreshLeadAgentBackgroundStatus();
 
         UpdateInteractiveControlState();
+        DrainQueueAfterBackgroundWorkChanged("background-tasks-changed");
     }
 
     private void HandleTaskComplete(SquadSdkEvent evt)
@@ -4235,6 +4283,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         SyncAgentCardsWithThreads();
         _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, "subagent_completed");
         _conversationManager.SaveAgentThreadToConversation(thread, DateTimeOffset.UtcNow);
+        DrainQueueAfterBackgroundWorkChanged("subagent-completed");
     }
 
     private void HandleSubagentFailed(SquadSdkEvent evt)
@@ -4257,6 +4306,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         SyncAgentCardsWithThreads();
         _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, "subagent_failed");
         _conversationManager.SaveAgentThreadToConversation(thread, DateTimeOffset.UtcNow);
+        DrainQueueAfterBackgroundWorkChanged("subagent-failed");
     }
 
     private void HandleSubagentCancelled(SquadSdkEvent evt)
@@ -4280,6 +4330,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         SyncAgentCardsWithThreads();
         _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, "subagent_cancelled");
         _conversationManager.SaveAgentThreadToConversation(thread, DateTimeOffset.UtcNow);
+        DrainQueueAfterBackgroundWorkChanged("subagent-cancelled");
     }
 
     private void HandleLoopStarted(SquadSdkEvent evt)
