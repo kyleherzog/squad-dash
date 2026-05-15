@@ -979,9 +979,9 @@ public partial class MainWindow : Window, ILiveElementLocator
                 _isPromptRunning = v;
                 if (v)
                 {
-                    // Clear stale completion timestamp so it doesn't show "Completed just now"
-                    // while the new turn is still running.
-                    CoordinatorThread.CompletedAt = null;
+                    // Clear stale completion timestamp AND remove the "Completed N ago" footer
+                    // paragraph so it doesn't linger while the new turn is streaming.
+                    MaybeReactivateThread(CoordinatorThread);
                 }
                 else
                 {
