@@ -1473,7 +1473,7 @@
 
                 <!-- Grid wrapper lets the scroll-to-bottom button float over the transcript -->
                 <Grid>
-                    <RichTextBox x:Name="OutputTextBox"
+                    <local:ThrottledScrollRichTextBox x:Name="OutputTextBox"
                                  VerticalScrollBarVisibility="Auto"
                                  Background="Transparent"
                                  BorderThickness="0"

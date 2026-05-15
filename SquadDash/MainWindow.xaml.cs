@@ -13893,9 +13893,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         box.EndChange();
     }
 
-    private RichTextBox CreatePrimaryAgentTranscriptBox()
+    private ThrottledScrollRichTextBox CreatePrimaryAgentTranscriptBox()
     {
-        var rtb = new RichTextBox
+        var rtb = new ThrottledScrollRichTextBox
         {
             Visibility = Visibility.Collapsed,
             Opacity = 0,
