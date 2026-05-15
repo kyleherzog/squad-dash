@@ -65,10 +65,7 @@ internal sealed class MarkdownDocumentWindow : Window {
     private readonly Border _sourceBorder;
     private readonly Grid _sourceEditorHost;
     private readonly Border _sourceToolbarBorder;
-    private Button? _srcBoldButton;
-    private Button? _srcItalicButton;
-    private Button? _srcBulletButton;
-    private Button? _srcNumberedButton;
+    private MarkdownEditorToolbar? _mdToolbar;
     private bool _showSource;
     private bool _isSwitchingDocument;
     private bool _isClosingAfterPrompt;
@@ -396,17 +393,10 @@ internal sealed class MarkdownDocumentWindow : Window {
         _sourceBorder.SetResourceReference(Border.BackgroundProperty, "InputSurface");
         _sourceBorder.SetResourceReference(Border.BorderBrushProperty, "InputBorder");
 
-        _srcBoldButton   = MakeToolbarButton("B",  "Bold (Ctrl+B)",        bold:   true, enabled: false);
-        _srcItalicButton = MakeToolbarButton("I",  "Italic (Ctrl+I)",      italic: true, enabled: false);
-        var srcLinkBtn   = MakeToolbarButton("Link", "Insert link",         enabled: true);
-        var srcTableBtn  = MakeToolbarButton("Table", "Insert table",       enabled: true);
-        var srcCodeBtn   = MakeToolbarButton("`code`", "Insert inline code", enabled: true);
-        var srcBlockBtn  = MakeToolbarButton("{ }", "Insert code block",    enabled: true);
-        var srcHrBtn     = MakeToolbarButton("—",   "Insert horizontal rule (---)", enabled: true);
-        var srcBulletBtn = MakeToolbarButton(CreateBulletListIcon(), "• List",   "Convert selection to bullet list (requires selection)",   enabled: false);
-        var srcNumBtn    = MakeToolbarButton(CreateNumberedListIcon(), "1. List", "Convert selection to numbered list (requires selection)", enabled: false);
-        _srcBulletButton   = srcBulletBtn;
-        _srcNumberedButton = srcNumBtn;
+        _mdToolbar = new MarkdownEditorToolbar {
+            ShowImageButton = false,
+            ShowHrButton    = true,
+        };
 
         foreach (var document in _documents) {
             document.EditorTextBox.SelectionChanged += EditorTextBox_SelectionChanged;
@@ -416,13 +406,9 @@ internal sealed class MarkdownDocumentWindow : Window {
             DataObject.AddPastingHandler(document.EditorTextBox, EditorTextBox_Pasting);
         }
 
-        var tbStack = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(0, 0, 0, 6) };
-        foreach (var btn in new[] { (Button)_srcBoldButton, _srcItalicButton, srcLinkBtn, srcTableBtn, srcCodeBtn, srcBlockBtn, srcHrBtn, srcBulletBtn, srcNumBtn })
-            tbStack.Children.Add(btn);
-
         var sourceColumnPanel = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(tbStack, System.Windows.Controls.Dock.Top);
-        sourceColumnPanel.Children.Add(tbStack);
+        DockPanel.SetDock(_mdToolbar, System.Windows.Controls.Dock.Top);
+        sourceColumnPanel.Children.Add(_mdToolbar);
         sourceColumnPanel.Children.Add(_sourceBorder);
 
         _sourceToolbarBorder = new Border { Child = sourceColumnPanel, Visibility = Visibility.Collapsed };
@@ -569,13 +555,8 @@ internal sealed class MarkdownDocumentWindow : Window {
     }
 
     private void EditorTextBox_SelectionChanged(object sender, System.Windows.RoutedEventArgs e) {
-        if (sender is not RichTextBox { Tag: MarkdownDocumentTabState doc } tb || !ReferenceEquals(doc, _activeDocument))
+        if (sender is not RichTextBox { Tag: MarkdownDocumentTabState doc } || !ReferenceEquals(doc, _activeDocument))
             return;
-        var hasSelection = tb.GetSelectionLength() > 0;
-        if (_srcBoldButton     is not null) _srcBoldButton.IsEnabled     = hasSelection;
-        if (_srcItalicButton   is not null) _srcItalicButton.IsEnabled   = hasSelection;
-        if (_srcBulletButton   is not null) _srcBulletButton.IsEnabled   = hasSelection;
-        if (_srcNumberedButton is not null) _srcNumberedButton.IsEnabled = hasSelection;
     }
 
     private void EditorTextBox_ContextMenuOpening(object sender, ContextMenuEventArgs e) {
@@ -1230,86 +1211,6 @@ internal sealed class MarkdownDocumentWindow : Window {
     }
 
 
-    private Button MakeToolbarButton(string label, string tooltip, bool bold = false, bool italic = false, bool enabled = true) {
-        var btn = new Button {
-            Content = label,
-            Width   = 28,
-            Height  = 24,
-            Margin  = new System.Windows.Thickness(0, 0, 3, 0),
-            ToolTip = tooltip,
-            IsEnabled = enabled,
-            FontWeight = bold   ? System.Windows.FontWeights.Bold   : System.Windows.FontWeights.Normal,
-            FontStyle  = italic ? System.Windows.FontStyles.Italic  : System.Windows.FontStyles.Normal,
-        };
-        btn.SetResourceReference(StyleProperty, "ThemedButtonStyle");
-        btn.Click += (_, _) => OnToolbarButtonClick(label);
-        return btn;
-    }
-
-    private Button MakeToolbarButton(UIElement content, string dispatchKey, string tooltip, bool enabled = true) {
-        var btn = new Button {
-            Content   = content,
-            Width     = 28,
-            Height    = 24,
-            Margin    = new System.Windows.Thickness(0, 0, 3, 0),
-            ToolTip   = tooltip,
-            IsEnabled = enabled,
-        };
-        btn.SetResourceReference(StyleProperty, "ThemedButtonStyle");
-        btn.Click += (_, _) => OnToolbarButtonClick(dispatchKey);
-        return btn;
-    }
-
-    private static UIElement CreateBulletListIcon() {
-        var canvas = new Canvas { Width = 20, Height = 16 };
-        void AddRow(double cy) {
-            var dot = new System.Windows.Shapes.Ellipse { Width = 3.5, Height = 3.5 };
-            dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "LabelText");
-            Canvas.SetLeft(dot, 0); Canvas.SetTop(dot, cy - 1.75);
-            var line = new System.Windows.Shapes.Rectangle { Width = 15, Height = 2, RadiusX = 1, RadiusY = 1 };
-            line.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "LabelText");
-            Canvas.SetLeft(line, 5); Canvas.SetTop(line, cy - 1);
-            canvas.Children.Add(dot);
-            canvas.Children.Add(line);
-        }
-        AddRow(3); AddRow(8); AddRow(13);
-        return new Viewbox { Child = canvas, Width = 20, Height = 16, Stretch = Stretch.Uniform };
-    }
-
-    private static UIElement CreateNumberedListIcon() {
-        var canvas = new Canvas { Width = 20, Height = 16 };
-        void AddRow(double cy, string number) {
-            var text = new TextBlock { Text = number, FontSize = 5 };
-            text.SetResourceReference(TextElement.ForegroundProperty, "LabelText");
-            Canvas.SetLeft(text, 0); Canvas.SetTop(text, cy - 4.5);
-            var line = new System.Windows.Shapes.Rectangle { Width = 14.5, Height = 2, RadiusX = 1, RadiusY = 1 };
-            line.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "LabelText");
-            Canvas.SetLeft(line, 5.5); Canvas.SetTop(line, cy - 1);
-            canvas.Children.Add(text);
-            canvas.Children.Add(line);
-        }
-        AddRow(3, "1"); AddRow(8, "2"); AddRow(13, "3");
-        return new Viewbox { Child = canvas, Width = 20, Height = 16, Stretch = Stretch.Uniform };
-    }
-
-
-    private void OnToolbarButtonClick(string label) {
-        var tb = _activeDocument?.EditorTextBox;
-        if (tb is null) return;
-        switch (label) {
-            case "B":       MarkdownEditorCommands.ApplyBold(tb);            break;
-            case "I":       MarkdownEditorCommands.ApplyItalic(tb);          break;
-            case "Link":    MarkdownEditorCommands.InsertLink(tb);           break;
-            case "Table":   MarkdownEditorCommands.InsertTable(tb);          break;
-            case "`code`":  MarkdownEditorCommands.InsertInlineCode(tb);     break;
-            case "{ }":     MarkdownEditorCommands.InsertCodeBlock(tb);      break;
-            case "—":       MarkdownEditorCommands.InsertHorizontalRule(tb); break;
-            case "• List":  MarkdownEditorCommands.ApplyBulletList(tb);      break;
-            case "1. List": MarkdownEditorCommands.ApplyNumberedList(tb);    break;
-        }
-        tb.Focus();
-    }
-
     private void MarkdownDocumentWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e) {
         if (_isClosingAfterPrompt)
             return;
@@ -1345,6 +1246,7 @@ internal sealed class MarkdownDocumentWindow : Window {
     private void ActivateDocument(MarkdownDocumentTabState document, bool preserveCurrentState) {
         ClearSourceHoverHighlight();
         _activeDocument = document;
+        if (_mdToolbar is not null) _mdToolbar.TargetRichTextBox = _activeDocument?.EditorTextBox;
 
         _isSwitchingDocument = true;
         try {

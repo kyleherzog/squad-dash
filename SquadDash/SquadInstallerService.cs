@@ -200,15 +200,20 @@ internal sealed class SquadInstallerService {
 
     private static void EnsureLoopFiles(string activeDirectory) {
         var squadDir = Path.Combine(activeDirectory, ".squad");
-        var loopFilteredTasksPath = Path.Combine(squadDir, "loop-filtered-tasks.md");
-        if (File.Exists(loopFilteredTasksPath))
+        EnsureLoopFile(squadDir, "loop-filtered-tasks.md");
+        EnsureLoopFile(squadDir, "loop-fix-tagged-tasks.md");
+    }
+
+    private static void EnsureLoopFile(string squadDir, string fileName) {
+        var destPath = Path.Combine(squadDir, fileName);
+        if (File.Exists(destPath))
             return;
 
-        var content = LoadEmbeddedMarkdown("loop-filtered-tasks.md");
+        var content = LoadEmbeddedMarkdown(fileName);
         if (content is null)
             return;
 
-        File.WriteAllText(loopFilteredTasksPath, content, Encoding.UTF8);
+        File.WriteAllText(destPath, content, Encoding.UTF8);
     }
 
     public static string? LoadEmbeddedSquadDashMdPublic() => LoadEmbeddedSquadDashMd();

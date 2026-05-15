@@ -62,6 +62,10 @@ public partial class MainWindow : Window, ILiveElementLocator
     private static readonly TimeSpan AgentActiveDisplayLinger = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan DynamicAgentHistoryRetention = TimeSpan.FromDays(2);
     private static readonly TimeSpan ResponseRenderCadence = TimeSpan.FromMilliseconds(60);
+    private static readonly TimeSpan ResponseRenderInputQuietPeriod = TimeSpan.FromMilliseconds(750);
+    private static readonly TimeSpan ResponseRenderInputPollCadence = TimeSpan.FromMilliseconds(150);
+    private const int BridgeEventUiBatchLimit = 64;
+    private const int BridgeEventUiBatchMaxMs = 8;
     private const int DelegationOutcomeRollupWindow = 8;
     private const int DynamicAgentHistoryCardLimit = 6;
     private static readonly string[] ToolSpinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -273,6 +277,11 @@ public partial class MainWindow : Window, ILiveElementLocator
     private double _docPreviewScrollY;
     private readonly List<Image> _toolIconImages = [];
     private readonly HashSet<TranscriptResponseEntry> _pendingResponseEntryRenders = [];
+    private readonly HashSet<TranscriptThoughtEntry> _pendingThoughtEntryRenders = [];
+    private readonly object _bridgeEventQueueGate = new();
+    private readonly Queue<SquadSdkEvent> _pendingBridgeEvents = new();
+    private bool _bridgeEventDispatchPending;
+    private DateTimeOffset _lastKeyboardInputAt = DateTimeOffset.MinValue;
     private readonly PostedUiActionTracker _postedUiActionTracker = new();
     private readonly UiActionReplayRegistry _uiActionReplayRegistry = new();
     private readonly FixtureLoaderRegistry _fixtureLoaderRegistry = new();
@@ -750,7 +759,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         };
         _statusPresentationTimer.Start();
 
-        _responseRenderTimer = new DispatcherTimer
+        _responseRenderTimer = new DispatcherTimer(DispatcherPriority.ContextIdle, Dispatcher)
         {
             Interval = ResponseRenderCadence
         };
@@ -772,8 +781,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         };
         _teamRefreshDebounceTimer.Tick += TeamRefreshDebounceTimer_Tick;
 
-        _bridge.EventReceived += (_, evt) => TryPostToUi(() => HandleEvent(evt), $"Bridge.EventReceived:{evt.Type}");
+        _bridge.EventReceived += (_, evt) => QueueBridgeEventForUi(evt);
         _bridge.ErrorReceived += (_, text) => TryPostToUi(() => HandleBridgeError(text), "Bridge.ErrorReceived");
+        InputManager.Current.PreProcessInput += MainWindow_PreProcessInput;
 
         _uiResponsivenessTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
         {
@@ -1338,6 +1348,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try
         {
+            DocEditorToolbar.TargetRichTextBox = DocSourceTextBox;
+
             // Wire the search highlight adorner unconditionally (idempotent).
             if (_searchAdorner is null)
             {
@@ -11901,39 +11913,9 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void DocSourceTextBox_SelectionChanged(object sender, RoutedEventArgs e)
     {
-        var hasSelection = DocSourceTextBox?.GetSelectionLength() > 0;
-        if (DocBoldButton         is not null) DocBoldButton.IsEnabled         = hasSelection;
-        if (DocItalicButton       is not null) DocItalicButton.IsEnabled       = hasSelection;
-        if (DocBulletListButton   is not null) DocBulletListButton.IsEnabled   = hasSelection;
-        if (DocNumberedListButton is not null) DocNumberedListButton.IsEnabled = hasSelection;
     }
 
-    private void DocBoldButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (DocSourceTextBox is null) return;
-        ApplyMarkdownBold(DocSourceTextBox);
-        DocSourceTextBox.Focus();
-    }
-
-    private void DocItalicButton_Click(object sender, RoutedEventArgs e)
-    {
-        DocSourceTextBox_ApplyItalic();
-    }
-
-    private void DocLinkButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (DocSourceTextBox is null) return;
-        DocSourceTextBox_InsertLink();
-        DocSourceTextBox.Focus();
-    }
-
-    private void DocSourceTextBox_InsertLink()
-    {
-        if (DocSourceTextBox is null) return;
-        MarkdownEditorCommands.InsertLink(DocSourceTextBox);
-    }
-
-    private void DocImageButton_Click(object sender, RoutedEventArgs e)
+    private void DocEditorToolbar_ImageInsertRequested(object sender, RoutedEventArgs e)
     {
         if (DocSourceTextBox is null) return;
         DocSourceTextBox_InsertImagePlaceholder();
@@ -11949,59 +11931,6 @@ public partial class MainWindow : Window, ILiveElementLocator
             "> 📸 *Screenshot needed: Detailed description of what to capture in this screenshot.*";
         DocSourceTextBox.Focus();
         DocSourceTextBox.Selection.Text = placeholder; // inserts at caret, participates in WPF undo stack
-    }
-
-    private void DocTableButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (DocSourceTextBox is null) return;
-        DocSourceTextBox_InsertTable();
-        DocSourceTextBox.Focus();
-    }
-
-    private void DocSourceTextBox_InsertTable()
-    {
-        if (DocSourceTextBox is null) return;
-        MarkdownEditorCommands.InsertTable(DocSourceTextBox);
-    }
-
-    private void DocInlineCodeButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (DocSourceTextBox is null) return;
-        DocSourceTextBox_InsertInlineCode();
-        DocSourceTextBox.Focus();
-    }
-
-    private void DocSourceTextBox_InsertInlineCode()
-    {
-        if (DocSourceTextBox is null) return;
-        MarkdownEditorCommands.InsertInlineCode(DocSourceTextBox);
-    }
-
-    private void DocCodeBlockButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (DocSourceTextBox is null) return;
-        DocSourceTextBox_InsertCodeBlock();
-        DocSourceTextBox.Focus();
-    }
-
-    private void DocSourceTextBox_InsertCodeBlock()
-    {
-        if (DocSourceTextBox is null) return;
-        MarkdownEditorCommands.InsertCodeBlock(DocSourceTextBox);
-    }
-
-    private void DocBulletListButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (DocSourceTextBox is null) return;
-        MarkdownEditorCommands.ApplyBulletList(DocSourceTextBox);
-        DocSourceTextBox.Focus();
-    }
-
-    private void DocNumberedListButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (DocSourceTextBox is null) return;
-        MarkdownEditorCommands.ApplyNumberedList(DocSourceTextBox);
-        DocSourceTextBox.Focus();
     }
 
     private void DocSourceTextBox_PreviewTextInput(object sender, System.Windows.Input.TextCompositionEventArgs e)
@@ -16496,6 +16425,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (thread.CurrentTurn is null)
             return;
 
+        FlushPendingThoughtRendersForTurn(thread.CurrentTurn);
+
         foreach (var entry in thread.CurrentTurn.ResponseEntries)
             FlushResponseEntryRender(entry, force: true);
 
@@ -16527,24 +16458,81 @@ public partial class MainWindow : Window, ILiveElementLocator
             return;
         }
 
-        if (!_responseRenderTimer.IsEnabled)
-            _responseRenderTimer.Start();
+        ScheduleTranscriptRender(ResponseRenderCadence);
+    }
+
+    private void QueueThoughtEntryRender(TranscriptThoughtEntry entry, bool flushImmediately)
+    {
+        _pendingThoughtEntryRenders.Add(entry);
+
+        if (flushImmediately)
+        {
+            FlushThoughtEntryRender(entry, force: true);
+            return;
+        }
+
+        ScheduleTranscriptRender(ResponseRenderCadence);
     }
 
     private void FlushPendingResponseEntryRenders()
     {
-        if (_pendingResponseEntryRenders.Count == 0)
+        if (!HasPendingLiveTranscriptRender)
         {
             _responseRenderTimer.Stop();
+            _responseRenderTimer.Interval = ResponseRenderCadence;
             return;
         }
+
+        if (ShouldDeferLiveTranscriptRenderForInput(out var inputDelay))
+        {
+            ScheduleTranscriptRender(inputDelay);
+            return;
+        }
+
+        _responseRenderTimer.Interval = ResponseRenderCadence;
+
+        var pendingThoughts = _pendingThoughtEntryRenders.ToArray();
+        foreach (var entry in pendingThoughts)
+            FlushThoughtEntryRender(entry, force: false);
 
         var pendingEntries = _pendingResponseEntryRenders.ToArray();
         foreach (var entry in pendingEntries)
             FlushResponseEntryRender(entry, force: false);
 
-        if (_pendingResponseEntryRenders.Count == 0)
+        if (!HasPendingLiveTranscriptRender)
             _responseRenderTimer.Stop();
+    }
+
+    private bool HasPendingLiveTranscriptRender =>
+        _pendingResponseEntryRenders.Count > 0 ||
+        _pendingThoughtEntryRenders.Count > 0;
+
+    private void ScheduleTranscriptRender(TimeSpan interval)
+    {
+        if (_responseRenderTimer.Interval != interval)
+            _responseRenderTimer.Interval = interval;
+
+        if (!_responseRenderTimer.IsEnabled)
+            _responseRenderTimer.Start();
+    }
+
+    private bool ShouldDeferLiveTranscriptRenderForInput(out TimeSpan delay)
+    {
+        delay = TimeSpan.Zero;
+        var elapsed = DateTimeOffset.Now - _lastKeyboardInputAt;
+        if (elapsed < TimeSpan.Zero || elapsed >= ResponseRenderInputQuietPeriod)
+            return false;
+
+        var remaining = ResponseRenderInputQuietPeriod - elapsed;
+        if (remaining <= TimeSpan.Zero)
+            return false;
+
+        delay = remaining < ResponseRenderInputPollCadence
+            ? remaining
+            : ResponseRenderInputPollCadence;
+        if (delay < TimeSpan.FromMilliseconds(25))
+            delay = TimeSpan.FromMilliseconds(25);
+        return true;
     }
 
     private void FlushResponseEntryRender(TranscriptResponseEntry entry, bool force)
@@ -16556,6 +16544,20 @@ public partial class MainWindow : Window, ILiveElementLocator
         entry.HasPendingRender = false;
         entry.LastRenderedAt = DateTimeOffset.Now;
         RenderResponseEntry(entry);
+    }
+
+    private void FlushThoughtEntryRender(TranscriptThoughtEntry entry, bool force)
+    {
+        if (!_pendingThoughtEntryRenders.Remove(entry) && !force)
+            return;
+
+        RenderThoughtEntry(entry);
+    }
+
+    private void FlushPendingThoughtRendersForTurn(TranscriptTurnView turn)
+    {
+        foreach (var entry in turn.ThoughtEntries.ToArray())
+            FlushThoughtEntryRender(entry, force: true);
     }
 
     private void RenderResponseEntry(TranscriptResponseEntry entry)
@@ -17735,7 +17737,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (thread.CurrentTurn.ThoughtBlocks.LastOrDefault() is { } thoughtBlock)
             thoughtBlock.LastUpdatedAt = DateTimeOffset.Now;
 
-        RenderThoughtEntry(thoughtEntry);
+        QueueThoughtEntryRender(thoughtEntry, flushImmediately: false);
         ScrollToEndIfAtBottom(thread);
     }
 
@@ -18346,6 +18348,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         if (thread.CurrentTurn is null)
             return;
+
+        FlushPendingThoughtRendersForTurn(thread.CurrentTurn);
 
         foreach (var block in thread.CurrentTurn.ThoughtBlocks)
         {
@@ -20010,9 +20014,13 @@ public partial class MainWindow : Window, ILiveElementLocator
         try
         {
             Microsoft.Win32.SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+            InputManager.Current.PreProcessInput -= MainWindow_PreProcessInput;
             _isClosing = true;
             _promptHealthTimer.Stop();
             _statusPresentationTimer.Stop();
+            _responseRenderTimer.Stop();
+            _uiResponsivenessTimer.Stop();
+            _teamRefreshDebounceTimer.Stop();
             _speechService?.Dispose();
             _speechService = null;
             var pendingPlacement = _pendingWindowPlacement;
@@ -21506,6 +21514,94 @@ public partial class MainWindow : Window, ILiveElementLocator
         Close();
     }
 
+    private void MainWindow_PreProcessInput(object sender, PreProcessInputEventArgs e)
+    {
+        var input = e.StagingItem.Input;
+        if (input is KeyEventArgs keyEvent &&
+            (keyEvent.RoutedEvent == Keyboard.PreviewKeyDownEvent ||
+             keyEvent.RoutedEvent == Keyboard.KeyDownEvent))
+        {
+            _lastKeyboardInputAt = DateTimeOffset.Now;
+            return;
+        }
+
+        if (input is TextCompositionEventArgs textEvent &&
+            (textEvent.RoutedEvent == TextCompositionManager.PreviewTextInputEvent ||
+             textEvent.RoutedEvent == TextCompositionManager.TextInputEvent) &&
+            !string.IsNullOrEmpty(textEvent.Text))
+        {
+            _lastKeyboardInputAt = DateTimeOffset.Now;
+        }
+    }
+
+    private void QueueBridgeEventForUi(SquadSdkEvent evt)
+    {
+        var shouldPost = false;
+        lock (_bridgeEventQueueGate)
+        {
+            _pendingBridgeEvents.Enqueue(evt);
+            if (!_bridgeEventDispatchPending)
+            {
+                _bridgeEventDispatchPending = true;
+                shouldPost = true;
+            }
+        }
+
+        if (shouldPost)
+            PostToUiAsync(DrainBridgeEventQueueOnUi, "Bridge.EventReceived:batch");
+    }
+
+    private void DrainBridgeEventQueueOnUi()
+    {
+        var sw = Stopwatch.StartNew();
+        var handled = 0;
+        var deltaEvents = 0;
+
+        while (handled < BridgeEventUiBatchLimit && sw.ElapsedMilliseconds < BridgeEventUiBatchMaxMs)
+        {
+            SquadSdkEvent? evt;
+            lock (_bridgeEventQueueGate)
+            {
+                evt = _pendingBridgeEvents.Count > 0
+                    ? _pendingBridgeEvents.Dequeue()
+                    : null;
+            }
+
+            if (evt is null)
+                break;
+
+            if (IsHighFrequencyBridgeEvent(evt.Type))
+                deltaEvents++;
+
+            HandleEvent(evt);
+            handled++;
+        }
+
+        var shouldPostMore = false;
+        var remaining = 0;
+        lock (_bridgeEventQueueGate)
+        {
+            remaining = _pendingBridgeEvents.Count;
+            if (remaining > 0)
+                shouldPostMore = true;
+            else
+                _bridgeEventDispatchPending = false;
+        }
+
+        if (handled >= BridgeEventUiBatchLimit || sw.ElapsedMilliseconds >= BridgeEventUiBatchMaxMs)
+        {
+            SquadDashTrace.Write(
+                TraceCategory.UI,
+                $"Bridge.EventReceived batch handled={handled} deltaEvents={deltaEvents} elapsedMs={sw.ElapsedMilliseconds} remaining={remaining}");
+        }
+
+        if (shouldPostMore)
+            PostToUiAsync(DrainBridgeEventQueueOnUi, "Bridge.EventReceived:batch");
+    }
+
+    private static bool IsHighFrequencyBridgeEvent(string? eventType) =>
+        eventType is "thinking_delta" or "response_delta" or "subagent_message_delta" or "subagent_thinking_delta";
+
     private void TryPostToUi(Action action, string source)
     {
         if (_isClosing || _mainWindowClosingInProgress || Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
@@ -21526,6 +21622,25 @@ public partial class MainWindow : Window, ILiveElementLocator
                 return;
             }
 
+            PostToUiAsync(action, source);
+        }
+        catch (ObjectDisposedException ex)
+        {
+            SquadDashTrace.Write("Shutdown", $"{source} ignored after disposal: {ex.Message}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            SquadDashTrace.Write("Shutdown", $"{source} ignored during dispatcher shutdown: {ex.Message}");
+        }
+    }
+
+    private void PostToUiAsync(Action action, string source)
+    {
+        if (_isClosing || _mainWindowClosingInProgress || Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+            return;
+
+        try
+        {
             var sequence = _postedUiActionTracker.RegisterPostedAction();
             var queuedAt = Stopwatch.GetTimestamp();
             Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
