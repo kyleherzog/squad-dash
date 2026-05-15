@@ -115,7 +115,14 @@ internal sealed class LoopController {
         try {
             while (!_stopRequested && !ct.IsCancellationRequested) {
                 // Drain any queued prompts before firing this iteration.
-                await _onBeforeIteration();
+                // A stray exception from the hook (e.g. an aborted queued item whose
+                // cancellation escapes the delegate) must not kill the loop.
+                try {
+                    await _onBeforeIteration();
+                } catch (Exception) {
+                    if (_stopRequested || ct.IsCancellationRequested) break;
+                    continue;
+                }
                 if (_stopRequested) break;
 
                 iteration++;

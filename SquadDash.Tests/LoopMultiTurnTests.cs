@@ -430,59 +430,56 @@ internal sealed class LoopMultiTurnTests {
         Assert.That(controller.IsRunning, Is.False);
     }
 
-    // ── Scenario 9: Exception escapes onBeforeIteration — behavior-bug flag ──
+    // ── Scenario 9: Exception escapes onBeforeIteration — loop must survive ──
 
     /// <summary>
-    /// BEHAVIOR BUG FLAG:
-    /// <c>LoopController.RunLoopAsync</c> has no try/catch around the
-    /// <c>await _onBeforeIteration()</c> call (line ~118).  If an exception
-    /// escapes the delegate — e.g. an <see cref="OperationCanceledException"/>
-    /// from an aborted queue item — it propagates uncaught out of the while
-    /// loop and the finally block calls <c>_onStopped()</c>.  The loop stops
-    /// instead of continuing to the next iteration.
+    /// If an exception escapes <c>onBeforeIteration</c> (e.g. an
+    /// <see cref="OperationCanceledException"/> from an aborted queue item whose
+    /// cancellation was not swallowed inside the delegate), the loop must catch
+    /// it, skip the current iteration, and continue to the next one rather than
+    /// stopping.
     ///
-    /// In production this is latent: <c>DrainQueueBeforeLoopIterationAsync</c>
-    /// wraps its <c>ExecutePromptAsync</c> call in its own try/catch and never
-    /// lets an exception escape back to <c>LoopController</c>, so the loop
-    /// does resume.  But the contract is fragile: any future
-    /// <c>onBeforeIteration</c> implementation that lets an exception escape
-    /// will silently kill the loop.
-    ///
-    /// This test asserts the <b>actual</b> (buggy) behaviour so that any future
-    /// fix to <c>LoopController</c> is detected and this test updated
-    /// accordingly.  If <c>RunLoopAsync</c> gains a catch around
-    /// <c>_onBeforeIteration</c>, the assertions below should flip to
-    /// "loop continues" and this flag comment should be removed.
+    /// <c>LoopController.RunLoopAsync</c> wraps the
+    /// <c>await _onBeforeIteration()</c> call in a try/catch that swallows the
+    /// exception and calls <c>continue</c> — unless a stop/cancel was already
+    /// requested, in which case it breaks cleanly.
     /// </summary>
     [Test]
     public async Task OnBeforeIteration_ItemAbortedMidDrain_LoopContinuesToNextIteration() {
-        var finishedTcs    = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        bool stoppedCalled = false;
-        string? errorMsg   = null;
-        int execCount      = 0;
+        var firstExecTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stoppedTcs   = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        int execCount    = 0;
+        int beforeCount  = 0;
 
-        var controller = new LoopController(
-            executePromptAsync:   (_, __) => { execCount++; return Task.CompletedTask; },
+        LoopController? controller = null;
+        controller = new LoopController(
+            executePromptAsync: (_, __) => {
+                execCount++;
+                firstExecTcs.TrySetResult();
+                controller!.RequestStop();
+                return Task.CompletedTask;
+            },
             abortPrompt:          () => { },
             onIterationStarted:   _ => { },
-            onStopped:            () => { stoppedCalled = true; finishedTcs.TrySetResult(); },
-            onError:              msg => { errorMsg = msg; finishedTcs.TrySetResult(); },
+            onStopped:            () => stoppedTcs.TrySetResult(),
+            onError:              _ => stoppedTcs.TrySetResult(),
             onIterationCompleted: _ => { },
             onWaiting:            _ => { },
-            // Simulates an onBeforeIteration that lets the abort exception
-            // escape — NOT what DrainQueueBeforeLoopIterationAsync does, but
-            // what would happen if the catch were missing.
-            onBeforeIteration: () =>
-                Task.FromException(new OperationCanceledException("queue item aborted")));
+            // First call: exception escapes (simulates missing inner catch).
+            // Subsequent calls: return normally (queue is empty).
+            onBeforeIteration: () => {
+                beforeCount++;
+                if (beforeCount == 1)
+                    return Task.FromException(new OperationCanceledException("queue item aborted"));
+                return Task.CompletedTask;
+            });
 
-        _ = controller.StartAsync(MakeConfig(), continuousContext: true);
-        await finishedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        _ = controller!.StartAsync(MakeConfig(), continuousContext: true);
+        await firstExecTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await stoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        // ACTUAL behaviour (bug): the loop stops when the exception escapes.
-        // Expected behaviour: loop should swallow the exception and continue.
-        Assert.That(stoppedCalled, Is.True,      "loop stops (onStopped via finally) — see BUG FLAG in summary");
-        Assert.That(errorMsg,      Is.Null,       "onError not called: StopState==None so finally calls onStopped");
-        Assert.That(execCount,     Is.EqualTo(0), "executePromptAsync never fires — loop killed before first iteration");
+        Assert.That(execCount,   Is.GreaterThanOrEqualTo(1), "loop resumes and fires executePromptAsync after exception");
+        Assert.That(beforeCount, Is.GreaterThanOrEqualTo(2), "onBeforeIteration retried after the exception call");
         Assert.That(controller.IsRunning, Is.False);
     }
 
