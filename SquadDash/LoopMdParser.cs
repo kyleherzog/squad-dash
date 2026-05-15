@@ -322,9 +322,10 @@ internal static class LoopMdParser {
 
         var lines = text.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
         var output = new List<string>(lines.Length);
-        bool inBlock     = false;
+        bool inBlock      = false;
         bool includeBlock = false;
-        string? blockVerb = null;   // "if" or "unless" — which close tag to wait for
+        string? blockVerb     = null;   // "if" or "unless" — which close tag to wait for
+        string? pendingPrefix = null;   // prefix held until first non-empty content line
 
         foreach (var line in lines)
         {
@@ -341,10 +342,10 @@ internal static class LoopMdParser {
                     var met      = string.Equals(actual, expected, StringComparison.Ordinal);
                     includeBlock = blockVerb == "if" ? met : !met;
                     inBlock      = true;
-                    // Emit the prefix (e.g. "4. ") when the block is included and prefix
-                    // has non-whitespace content; pure-whitespace prefixes are not emitted.
+                    // When the block is included and the prefix has non-whitespace content,
+                    // hold it so it can be prepended to the first non-empty content line.
                     if (includeBlock && prefix.Trim().Length > 0)
-                        output.Add(prefix);
+                        pendingPrefix = prefix;
                 }
                 else
                 {
@@ -356,13 +357,26 @@ internal static class LoopMdParser {
                 var m = _conditionalClosePattern.Match(line);
                 if (m.Success && m.Groups[1].Value == blockVerb)
                 {
+                    // Block ended — if prefix was never consumed (no non-empty content), emit as-is.
+                    if (pendingPrefix != null)
+                    {
+                        output.Add(pendingPrefix);
+                        pendingPrefix = null;
+                    }
                     inBlock   = false;
                     blockVerb = null;
-                    // Closing tag line is never emitted
                 }
                 else if (includeBlock)
                 {
-                    output.Add(line);
+                    if (pendingPrefix != null && !string.IsNullOrWhiteSpace(line))
+                    {
+                        output.Add(pendingPrefix + line.TrimStart());
+                        pendingPrefix = null;
+                    }
+                    else
+                    {
+                        output.Add(line);
+                    }
                 }
                 // else: content of a false block → silently discard
             }

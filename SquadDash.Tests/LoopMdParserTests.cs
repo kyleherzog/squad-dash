@@ -832,7 +832,7 @@ internal sealed class LoopMdParserTests {
 
         var result = LoopMdParser.PreprocessConditionals(text, options);
 
-        Assert.That(result, Is.EqualTo("4. \n   Body line."));
+        Assert.That(result, Is.EqualTo("4. Body line."));
     }
 
     [Test]
@@ -859,7 +859,7 @@ internal sealed class LoopMdParserTests {
 
         var result = LoopMdParser.PreprocessConditionals(text, options);
 
-        Assert.That(result, Is.EqualTo("4. \n   Unless body."));
+        Assert.That(result, Is.EqualTo("4. Unless body."));
     }
 
     [Test]
@@ -992,5 +992,69 @@ internal sealed class LoopMdParserTests {
         Assert.That(result, Does.Contain("Step 1. "),       "mid-line prefix emitted for true branch");
         Assert.That(result, Does.Contain("Do the step."),   "mid-line tag block body included");
         Assert.That(result, Does.Contain("Footer."),        "static line after blocks preserved");
+    }
+
+    // ── PreprocessConditionals: pending-prefix (fix: prepend to first content line) ─
+
+    [Test]
+    public void PreprocessConditionals_InlineIf_Included_PrependsPrefixToFirstContentLine() {
+        var text =
+            "4. {{#if x == \"a\"}}\n" +
+            "   Content here\n" +
+            "   {{/if}}";
+        var options = new[] { Opt("x", "a") };
+
+        var result = LoopMdParser.PreprocessConditionals(text, options);
+
+        Assert.That(result, Is.EqualTo("4. Content here"));
+    }
+
+    [Test]
+    public void PreprocessConditionals_InlineIf_Excluded_EmitsNothing() {
+        var text =
+            "4. {{#if x == \"a\"}}\n" +
+            "   Content here\n" +
+            "   {{/if}}";
+        var options = new[] { Opt("x", "b") };
+
+        var result = LoopMdParser.PreprocessConditionals(text, options);
+
+        Assert.That(result, Is.EqualTo(""));
+    }
+
+    [Test]
+    public void PreprocessConditionals_NumberedListMultiBranch_FirstBranchSelected_PrependsPrefixToContent() {
+        // Only the first {{#if}} has a real prefix ("4. "); the others have whitespace-only prefixes.
+        var text =
+            "4. {{#if x == \"a\"}}\n" +
+            "   Branch A\n" +
+            "   {{/if}}\n" +
+            "   {{#if x == \"b\"}}\n" +
+            "   Branch B\n" +
+            "   {{/if}}";
+        var options = new[] { Opt("x", "a") };
+
+        var result = LoopMdParser.PreprocessConditionals(text, options);
+
+        Assert.That(result, Does.Contain("4. Branch A"), "prefix prepended to first content line");
+        Assert.That(result, Does.Not.Contain("Branch B"), "second branch excluded");
+    }
+
+    [Test]
+    public void PreprocessConditionals_NumberedListMultiBranch_SecondBranchSelected_NoPrefixOnSecondBranch() {
+        var text =
+            "4. {{#if x == \"a\"}}\n" +
+            "   Branch A\n" +
+            "   {{/if}}\n" +
+            "   {{#if x == \"b\"}}\n" +
+            "   Branch B\n" +
+            "   {{/if}}";
+        var options = new[] { Opt("x", "b") };
+
+        var result = LoopMdParser.PreprocessConditionals(text, options);
+
+        Assert.That(result, Does.Not.Contain("4. "),     "prefix of false branch not emitted");
+        Assert.That(result, Does.Not.Contain("Branch A"), "first branch excluded");
+        Assert.That(result, Does.Contain("Branch B"),     "second branch body included");
     }
 }
