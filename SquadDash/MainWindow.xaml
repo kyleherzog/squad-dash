@@ -832,6 +832,9 @@
                                     <MenuItem Header="Show selected loop in folder"
                                               Style="{StaticResource ThemedMenuItemStyle}"
                                               Click="LoopPanelShowInFolderMenuItem_Click" />
+                                    <MenuItem Header="Copy loop file path"
+                                              Style="{StaticResource ThemedMenuItemStyle}"
+                                              Click="LoopPanelCopyFilePathMenuItem_Click" />
                                     <Separator Style="{StaticResource ThemedMenuSeparatorStyle}" />
                                     <MenuItem x:Name="LoopPanelShowMergedMenuItem"
                                               Header="Preview merged loop"

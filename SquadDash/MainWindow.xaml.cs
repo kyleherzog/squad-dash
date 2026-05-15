@@ -10726,6 +10726,17 @@ public partial class MainWindow : Window, ILiveElementLocator
         catch (Exception ex) { HandleUiCallbackException(nameof(LoopPanelShowInFolderMenuItem_Click), ex); }
     }
 
+    private void LoopPanelCopyFilePathMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var loopMdPath = GetEffectiveLoopMdPath();
+            if (!string.IsNullOrEmpty(loopMdPath))
+                Clipboard.SetText(loopMdPath);
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(LoopPanelCopyFilePathMenuItem_Click), ex); }
+    }
+
     private void LoopPanelShowMergedMenuItem_Click(object sender, RoutedEventArgs e)
     {
         try
