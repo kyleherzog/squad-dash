@@ -2261,6 +2261,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (dispatched && LastTurnNeedsInput())
         {
             _loopInterruptedByQueue = true;
+            SquadDashTrace.Write("Queue", "Loop paused — dispatched queue item produced quick replies requiring user input; _loopInterruptedByQueue set, loop RequestStop called.");
             _loopController.RequestStop();
             HandleQueuePausedForInput();
         }
@@ -2270,12 +2271,18 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         // Quick replies are active (AI gave the user choices to pick from).
         if (_lastQuickReplyEntry?.AllowQuickReplies == true)
+        {
+            SquadDashTrace.Write("Queue", "LastTurnNeedsInput: true — AllowQuickReplies is set on _lastQuickReplyEntry.");
             return true;
+        }
 
         // AI explicitly signalled it needs human input before the queue continues.
         var lastResponseText = CoordinatorThread.CurrentTurn?.ResponseTextBuilder.ToString();
-        return lastResponseText?.Contains(PromptExecutionController.QueueAwaitInputSentinel,
-                                          StringComparison.Ordinal) == true;
+        var hasSentinel = lastResponseText?.Contains(PromptExecutionController.QueueAwaitInputSentinel,
+                                                     StringComparison.Ordinal) == true;
+        if (hasSentinel)
+            SquadDashTrace.Write("Queue", "LastTurnNeedsInput: true — QueueAwaitInputSentinel found in last response text.");
+        return hasSentinel;
     }
 
     private bool _queuePausedNotificationFired;
@@ -2286,6 +2293,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         // Only show the message once per pause to avoid spam.
         if (_queuePausedNotificationFired) return;
         _queuePausedNotificationFired = true;
+        SquadDashTrace.Write("Queue", "Loop paused for user input — quick reply notification fired.");
 
         SyncSendButton();
         BuildShortcutsHint();
@@ -4358,6 +4366,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         // mark the loop for resume once the queue drains.  Abort goes through
         // OnNativeLoopError and intentionally does NOT re-queue.
         bool hasInterrupt = _loopInterruptedByQueue;
+        SquadDashTrace.Write("Queue", $"OnNativeLoopStopped: hasInterrupt={hasInterrupt} hasReadyItems={_promptQueue.HasReadyItems} loopQueued={_loopQueued}.");
         if ((hasInterrupt || _promptQueue.HasReadyItems) && !_loopQueued)
         {
             _loopQueued = true;
