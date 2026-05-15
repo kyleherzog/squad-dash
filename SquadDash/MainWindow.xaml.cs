@@ -458,6 +458,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _pttHadPreexistingText;
     private bool _pttShiftTappedDuringRecording;
     private bool _voiceStartedWithSendEnabled;
+    private bool _dictationStartedForQuickReply; // set at PTT start when quick replies visible and box empty
     private bool _pttLostFocusDuringRecording;   // set when another window stole focus mid-PTT
     private DispatcherTimer? _pttCtrlPollTimer;   // polls GetAsyncKeyState while window is inactive
     private DateTime _ctrlFirstDownTime;
@@ -8087,6 +8088,10 @@ public partial class MainWindow : Window, ILiveElementLocator
                                 _voiceStartedWithSendEnabled = _settingsSnapshot.PttAutoSend
                                                                && _pttTargetRichTextBox == null
                                                                && _pttTargetTextBox == PromptTextBox;
+                                // Re-evaluate on each PTT activation: true only when quick reply
+                                // buttons are visible and the prompt box was empty at start time.
+                                _dictationStartedForQuickReply = _currentQuickReplyOptions.Length > 0
+                                                                 && string.IsNullOrEmpty(PromptTextBox?.Text);
                                 _pttState = PttState.Active;
                                 _ = StartPushToTalkAsync();
                             }
@@ -8282,8 +8287,11 @@ public partial class MainWindow : Window, ILiveElementLocator
                         var suppress = shiftHeld || _pttShiftTappedDuringRecording || _pttHadPreexistingText
                                                  || _pttLostFocusDuringRecording;
                         StopPttCtrlPollTimer();
-                        // Send only if PTT started with Send enabled AND no suppression flags
-                        _ = StopPushToTalkAsync(send: _voiceStartedWithSendEnabled && !suppress);
+                        var shouldSend = _voiceStartedWithSendEnabled && !suppress;
+                        // When the dictation session started with quick replies visible and an
+                        // empty box, route directly as a quick reply response instead of queuing.
+                        var sendAsQuickReply = shouldSend && _dictationStartedForQuickReply;
+                        _ = StopPushToTalkAsync(send: shouldSend && !sendAsQuickReply, sendAsQuickReply: sendAsQuickReply);
                     }
                     break;
             }
@@ -8469,7 +8477,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _pttWindow = null;
     }
 
-    private async Task StopPushToTalkAsync(bool send)
+    private async Task StopPushToTalkAsync(bool send, bool sendAsQuickReply = false)
     {
         _pttState = PttState.Idle;
         StopPttCtrlPollTimer();
@@ -8532,7 +8540,30 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (_restartPending && !_isPromptRunning)
             return; // Close() was initiated inside the dispatcher callback above.
 
-        if (send && wasTargetingPrompt)
+        if (sendAsQuickReply && wasTargetingPrompt)
+        {
+            // Dictation started with quick replies visible and an empty prompt box.
+            // Send the dictated text directly as a quick reply response (bypass the queue).
+            await Task.Delay(220).ConfigureAwait(false);
+            Dispatcher.Invoke(() =>
+            {
+                var text = PromptTextBox.Text.Trim();
+                if (!string.IsNullOrWhiteSpace(text) && _lastQuickReplyEntry != null)
+                {
+                    PromptTextBox.Clear();
+                    _pec.DisableQuickReplies(_lastQuickReplyEntry);
+                    ResetQueuePausedState();
+                    _ = _pec.ExecutePromptAsync(text, addToHistory: true, clearPromptBox: false);
+                }
+                else if (!string.IsNullOrWhiteSpace(text))
+                {
+                    // No quick reply entry to attach to — fall back to queue.
+                    EnqueueCurrentPrompt();
+                    _ = DrainQueueIfNeededAsync();
+                }
+            });
+        }
+        else if (send && wasTargetingPrompt)
         {
             await Task.Delay(220).ConfigureAwait(false);
             Dispatcher.Invoke(() =>
