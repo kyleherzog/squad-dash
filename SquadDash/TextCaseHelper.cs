@@ -151,9 +151,22 @@ internal static class TextCaseHelper
     /// <summary>
     /// Returns the six case variants in cycle order:
     /// [0] Title Case, [1] Sentence case, [2] UPPERCASE, [3] PascalCase, [4] kebab-case, [5] preserve_underscores.
+    /// If the original text doesn't appear in those six variants, it is appended as a 7th item
+    /// so cycling always returns to the original form.
     /// </summary>
-    internal static List<string> ComputeVariants(string text) =>
-        [ToTitleCase(text), ToSentenceCase(text), ToUpperCase(text), ToPascalCase(text), ToKebabCase(text), ToUnderscorePreserveCase(text)];
+    internal static List<string> ComputeVariants(string text)
+    {
+        var variants = new List<string>
+        {
+            ToTitleCase(text), ToSentenceCase(text), ToUpperCase(text),
+            ToPascalCase(text), ToKebabCase(text), ToUnderscorePreserveCase(text)
+        };
+        // If the original text doesn't appear in the six computed variants,
+        // append it so cycling always returns to the original form.
+        if (!variants.Contains(text, StringComparer.Ordinal))
+            variants.Add(text);
+        return variants;
+    }
 
     /// <summary>
     /// Returns the index into <see cref="ComputeVariants"/> of the variant to apply on the

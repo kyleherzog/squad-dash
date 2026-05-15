@@ -167,6 +167,7 @@
     <Compile Include="..\SquadDash\DocumentUtilities.cs" Link="Source\DocumentUtilities.cs" />
     <Compile Include="..\SquadDash\SmoothDictationHelper.cs" Link="Source\SmoothDictationHelper.cs" />
     <Compile Include="..\SquadDash\NotesSortOrder.cs" Link="Source\NotesSortOrder.cs" />
+    <Compile Include="..\SquadDash\TextCaseHelper.cs" Link="TextCaseHelper.cs" />
   </ItemGroup>
 
 </Project>
