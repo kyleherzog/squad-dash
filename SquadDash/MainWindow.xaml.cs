@@ -154,6 +154,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private string[] _agentDisplayNames = [];
     private string[] _tasksAgentSuggestions = [];
     private string[] _currentQuickReplyOptions = [];
+    private DateTime _quickRepliesShownAt = DateTime.MinValue;
+    private const int QuickReplyReadWindowMs = 400;
     private TranscriptResponseEntry? _lastQuickReplyEntry;
     private TranscriptResponseEntry? _routingIssueQuickReplyEntry;
     private string? _lastMissingUtilityAgentNoticeKey;
@@ -1059,7 +1061,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             waitForPostedUiActionsAsync: () => _postedUiActionTracker.WaitForDrainAsync(),
             getModelObservedThisSession: () => _modelObservedThisSession,
             getLastQuickReplyEntry: () => _lastQuickReplyEntry,
-            setLastQuickReplyEntryNull: () => { _lastQuickReplyEntry = null; },
+            setLastQuickReplyEntryNull: () => { _lastQuickReplyEntry = null; _quickRepliesShownAt = DateTime.MinValue; },
             renderResponseEntry: entry => RenderResponseEntry(entry),
             ensureThreadFooterAtEnd: thread => EnsureThreadFooterAtEnd(thread),
             scrollToEndIfAtBottom: () => ScrollToEndIfAtBottom(),
@@ -8089,9 +8091,11 @@ public partial class MainWindow : Window, ILiveElementLocator
                                                                && _pttTargetRichTextBox == null
                                                                && _pttTargetTextBox == PromptTextBox;
                                 // Re-evaluate on each PTT activation: true only when quick reply
-                                // buttons are visible and the prompt box was empty at start time.
+                                // buttons are visible, the prompt box was empty at start time,
+                                // and buttons appeared at least 400ms ago (so user could see them).
                                 _dictationStartedForQuickReply = _currentQuickReplyOptions.Length > 0
-                                                                 && string.IsNullOrEmpty(PromptTextBox?.Text);
+                                                                 && string.IsNullOrEmpty(PromptTextBox?.Text)
+                                                                 && (DateTime.UtcNow - _quickRepliesShownAt).TotalMilliseconds >= QuickReplyReadWindowMs;
                                 _pttState = PttState.Active;
                                 _ = StartPushToTalkAsync();
                             }
@@ -16923,6 +16927,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _currentQuickReplyOptions = options
             .Select(option => option.Label)
             .ToArray();
+        _quickRepliesShownAt = DateTime.UtcNow;
         _lastQuickReplyEntry = entry;
         SoundNotifications.Play(SoundEvent.QuickRepliesShown);
         var routeDecisions = options
