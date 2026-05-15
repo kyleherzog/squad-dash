@@ -14,6 +14,27 @@ namespace SquadDash.Tests;
 /// because <see cref="LoopController"/> simply awaits whatever the delegate
 /// returns.  All behaviour is modelled with fake async delegates — no WPF
 /// dependency.
+///
+/// ── WPF integration gap (cannot be unit-tested here) ──────────────────────
+/// The full queue-abort → loop-resume flow spans MainWindow.xaml.cs and
+/// requires live WPF infrastructure that cannot be exercised in a headless
+/// test runner:
+///
+///   1. Loop is running; its iteration ends.
+///   2. <c>DrainQueueBeforeLoopIterationAsync</c> dispatches a queued item.
+///   3. User presses Ctrl+Break: <c>setIsPromptRunning(false)</c> fires.
+///   4. <c>setIsPromptRunning</c> sees <c>_promptQueue.Count == 0</c> and
+///      calls <c>MaybeFireQueuedLoopAsync()</c>.
+///   5. <c>MaybeFireQueuedLoopAsync</c> checks <c>_loopQueued</c> /
+///      <c>_loopInterruptedByQueue</c> and restarts the loop via
+///      <c>StartLoopImmediateAsync</c>.
+///
+/// All five steps depend on <c>MainWindow</c> state fields
+/// (<c>_loopQueued</c>, <c>_loopInterruptedByQueue</c>, <c>_isPromptRunning</c>,
+/// <c>_promptQueue</c>), the WPF <c>Dispatcher</c>, and
+/// <c>PromptExecutionCoordinator</c>.  No seam exists to inject fakes without
+/// a full WPF harness.  The tests below exercise only the
+/// <see cref="LoopController"/> half of this contract.
 /// </summary>
 [TestFixture]
 internal sealed class LoopMultiTurnTests {
@@ -362,6 +383,170 @@ internal sealed class LoopMultiTurnTests {
         Assert.That(abortCalled,   Is.True,                   "abortPrompt must be called when timeout fires");
         Assert.That(errorMsg,      Does.Contain("timed out"), "onError must report the timeout message");
         Assert.That(stoppedCalled, Is.True,                   "onStopped fires in finally after timeout break");
+        Assert.That(controller.IsRunning, Is.False);
+    }
+
+    // ── Scenario 8: Queue item completes normally — loop continues ────────────
+
+    /// <summary>
+    /// When <c>onBeforeIteration</c> succeeds (simulating a queued item that
+    /// drains and finishes without error), the loop fires
+    /// <c>executePromptAsync</c> for the next iteration normally.
+    /// </summary>
+    [Test]
+    public async Task OnBeforeIteration_ItemCompletesNormally_LoopContinues() {
+        var beforeCalledTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondExecTcs   = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stoppedTcs      = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        int execCount   = 0;
+        int beforeCount = 0;
+
+        LoopController? controller = null;
+        controller = new LoopController(
+            executePromptAsync: (_, __) => {
+                execCount++;
+                if (execCount == 2) { secondExecTcs.TrySetResult(); controller!.RequestStop(); }
+                return Task.CompletedTask;
+            },
+            abortPrompt:          () => { },
+            onIterationStarted:   _ => { },
+            onStopped:            () => stoppedTcs.TrySetResult(),
+            onError:              _ => stoppedTcs.TrySetResult(),
+            onIterationCompleted: _ => { },
+            onWaiting:            _ => { },
+            onBeforeIteration: () => {
+                beforeCount++;
+                if (beforeCount == 1) beforeCalledTcs.TrySetResult();
+                return Task.CompletedTask; // queue item finishes without error
+            });
+
+        _ = controller!.StartAsync(MakeConfig(), continuousContext: true);
+        await beforeCalledTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await secondExecTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await stoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.That(execCount,   Is.GreaterThanOrEqualTo(2), "loop must reach a second iteration");
+        Assert.That(beforeCount, Is.GreaterThanOrEqualTo(2), "onBeforeIteration fires before every iteration");
+        Assert.That(controller.IsRunning, Is.False);
+    }
+
+    // ── Scenario 9: Exception escapes onBeforeIteration — behavior-bug flag ──
+
+    /// <summary>
+    /// BEHAVIOR BUG FLAG:
+    /// <c>LoopController.RunLoopAsync</c> has no try/catch around the
+    /// <c>await _onBeforeIteration()</c> call (line ~118).  If an exception
+    /// escapes the delegate — e.g. an <see cref="OperationCanceledException"/>
+    /// from an aborted queue item — it propagates uncaught out of the while
+    /// loop and the finally block calls <c>_onStopped()</c>.  The loop stops
+    /// instead of continuing to the next iteration.
+    ///
+    /// In production this is latent: <c>DrainQueueBeforeLoopIterationAsync</c>
+    /// wraps its <c>ExecutePromptAsync</c> call in its own try/catch and never
+    /// lets an exception escape back to <c>LoopController</c>, so the loop
+    /// does resume.  But the contract is fragile: any future
+    /// <c>onBeforeIteration</c> implementation that lets an exception escape
+    /// will silently kill the loop.
+    ///
+    /// This test asserts the <b>actual</b> (buggy) behaviour so that any future
+    /// fix to <c>LoopController</c> is detected and this test updated
+    /// accordingly.  If <c>RunLoopAsync</c> gains a catch around
+    /// <c>_onBeforeIteration</c>, the assertions below should flip to
+    /// "loop continues" and this flag comment should be removed.
+    /// </summary>
+    [Test]
+    public async Task OnBeforeIteration_ItemAbortedMidDrain_LoopContinuesToNextIteration() {
+        var finishedTcs    = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        bool stoppedCalled = false;
+        string? errorMsg   = null;
+        int execCount      = 0;
+
+        var controller = new LoopController(
+            executePromptAsync:   (_, __) => { execCount++; return Task.CompletedTask; },
+            abortPrompt:          () => { },
+            onIterationStarted:   _ => { },
+            onStopped:            () => { stoppedCalled = true; finishedTcs.TrySetResult(); },
+            onError:              msg => { errorMsg = msg; finishedTcs.TrySetResult(); },
+            onIterationCompleted: _ => { },
+            onWaiting:            _ => { },
+            // Simulates an onBeforeIteration that lets the abort exception
+            // escape — NOT what DrainQueueBeforeLoopIterationAsync does, but
+            // what would happen if the catch were missing.
+            onBeforeIteration: () =>
+                Task.FromException(new OperationCanceledException("queue item aborted")));
+
+        _ = controller.StartAsync(MakeConfig(), continuousContext: true);
+        await finishedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // ACTUAL behaviour (bug): the loop stops when the exception escapes.
+        // Expected behaviour: loop should swallow the exception and continue.
+        Assert.That(stoppedCalled, Is.True,      "loop stops (onStopped via finally) — see BUG FLAG in summary");
+        Assert.That(errorMsg,      Is.Null,       "onError not called: StopState==None so finally calls onStopped");
+        Assert.That(execCount,     Is.EqualTo(0), "executePromptAsync never fires — loop killed before first iteration");
+        Assert.That(controller.IsRunning, Is.False);
+    }
+
+    // ── Scenario 10: Queue drain with internal abort swallow — loop resumes ───
+
+    /// <summary>
+    /// Mirrors what <c>DrainQueueBeforeLoopIterationAsync</c> actually does:
+    /// exceptions from dispatching queue items are caught <b>inside</b> the
+    /// delegate and never propagate to <c>LoopController</c>.  From the
+    /// controller's perspective <c>onBeforeIteration</c> always returns
+    /// normally, so the loop continues to fire <c>executePromptAsync</c> for
+    /// every iteration regardless of whether individual queue items complete
+    /// cleanly or are aborted.
+    ///
+    /// Covers Case 1 (single queued item aborted) and Case 2 (multiple queued
+    /// items aborted one-by-one) from the original scenario description.
+    /// </summary>
+    [Test]
+    public async Task QueueDrain_ThenAbortQueueItem_LoopResumesAfterQueueEmpty() {
+        var thirdIterTcs  = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stoppedTcs    = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        int beforeCount   = 0;
+        int execCount     = 0;
+
+        LoopController? controller = null;
+        controller = new LoopController(
+            executePromptAsync: (_, __) => {
+                execCount++;
+                if (execCount == 3) { thirdIterTcs.TrySetResult(); controller!.RequestStop(); }
+                return Task.CompletedTask;
+            },
+            abortPrompt:          () => { },
+            onIterationStarted:   _ => { },
+            onStopped:            () => stoppedTcs.TrySetResult(),
+            onError:              _ => stoppedTcs.TrySetResult(),
+            onIterationCompleted: _ => { },
+            onWaiting:            _ => { },
+            // Mirrors DrainQueueBeforeLoopIterationAsync: for the first two calls
+            // a queued item is "dispatched" and then aborted — the exception is
+            // caught internally so it never reaches LoopController.  The third
+            // call represents an empty queue and returns immediately.
+            onBeforeIteration: async () => {
+                beforeCount++;
+                if (beforeCount <= 2) {
+                    try {
+                        // Simulate dispatching a queued item that gets aborted.
+                        await Task.FromException(
+                            new OperationCanceledException("queue item aborted by user"));
+                    }
+                    catch {
+                        // Swallow — mirrors the catch in DrainQueueBeforeLoopIterationAsync.
+                    }
+                }
+                // beforeCount >= 3: queue is empty, return immediately.
+            });
+
+        _ = controller!.StartAsync(MakeConfig(), continuousContext: true);
+        await thirdIterTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await stoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.That(execCount,   Is.GreaterThanOrEqualTo(3),
+            "loop fires executePromptAsync for every iteration even when queue items are aborted");
+        Assert.That(beforeCount, Is.GreaterThanOrEqualTo(3),
+            "onBeforeIteration fires before every iteration");
         Assert.That(controller.IsRunning, Is.False);
     }
 }
