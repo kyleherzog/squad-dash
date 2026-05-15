@@ -159,6 +159,68 @@ internal sealed class MarkdownEditorCommandsTests {
         Assert.That(tb.Text, Is.EqualTo("1. no selection"));
     }
 
+    // ── InsertLink ───────────────────────────────────────────────────────────
+
+    [Test]
+    public void InsertLink_NoSelection_InsertsTemplate_AndSelectsIt() {
+        var tb = MakeBox("see ");
+        tb.CaretIndex = 4;
+        MarkdownEditorCommands.InsertLink(tb);
+        Assert.Multiple(() => {
+            Assert.That(tb.Text,            Is.EqualTo("see [text](url)"));
+            Assert.That(tb.SelectionStart,  Is.EqualTo(4));
+            Assert.That(tb.SelectionLength, Is.EqualTo(11)); // "[text](url)"
+        });
+    }
+
+    [Test]
+    public void InsertLink_WithSelection_WrapsSelectedTextAsLinkLabel() {
+        var tb = MakeBox("click here");
+        Select(tb, 6, 4); // "here"
+        MarkdownEditorCommands.InsertLink(tb);
+        Assert.Multiple(() => {
+            Assert.That(tb.Text,            Is.EqualTo("click [here](url)"));
+            Assert.That(tb.SelectionStart,  Is.EqualTo(6));
+            Assert.That(tb.SelectionLength, Is.EqualTo(11)); // "[here](url)"
+        });
+    }
+
+    // ── InsertHorizontalRule ─────────────────────────────────────────────────
+
+    [Test]
+    public void InsertHorizontalRule_AtStartOfEmptyBox_InsertsDashesAndNewline() {
+        var tb = MakeBox("");
+        MarkdownEditorCommands.InsertHorizontalRule(tb);
+        Assert.That(tb.Text, Is.EqualTo("---\n"));
+    }
+
+    [Test]
+    public void InsertHorizontalRule_AtLineStart_NoPrefixNewline() {
+        // Caret is at position 0 (start of text), so no leading newline is added.
+        var tb = MakeBox("text");
+        tb.CaretIndex = 0;
+        MarkdownEditorCommands.InsertHorizontalRule(tb);
+        Assert.That(tb.Text, Does.StartWith("---\n"));
+    }
+
+    [Test]
+    public void InsertHorizontalRule_MidLine_AddsNewlineBeforeAndAfter() {
+        var tb = MakeBox("above\nbelow");
+        tb.CaretIndex = 3; // mid of "above"
+        MarkdownEditorCommands.InsertHorizontalRule(tb);
+        // prefix="\n" (not at line start), suffix="\n\n" (not at line end)
+        Assert.That(tb.Text, Is.EqualTo("abo\n---\n\nve\nbelow"));
+    }
+
+    [Test]
+    public void InsertHorizontalRule_AtEndOfDocument_AddsSingleTrailingNewline() {
+        var tb = MakeBox("text");
+        tb.CaretIndex = 4; // end of "text" — not at line start, but at doc end
+        MarkdownEditorCommands.InsertHorizontalRule(tb);
+        // prefix="\n" (not at line start), suffix="\n" (atLineEnd because caret==text.Length)
+        Assert.That(tb.Text, Is.EqualTo("text\n---\n"));
+    }
+
     // ── ContinueListOnEnter ──────────────────────────────────────────────────
 
     [Test]
