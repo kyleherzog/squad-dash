@@ -7,11 +7,11 @@ using System.Text.RegularExpressions;
 namespace SquadDash;
 
 /// <summary>
-/// Detects and cycles text through Title Case → Sentence case → UPPERCASE → PascalCase.
+/// Detects and cycles text through Title Case → Sentence case → UPPERCASE → PascalCase → kebab-case → preserve_underscores.
 /// </summary>
 internal static class TextCaseHelper
 {
-    internal enum TextCase { None, TitleCase, SentenceCase, UpperCase, PascalCase }
+    internal enum TextCase { None, TitleCase, SentenceCase, UpperCase, PascalCase, KebabCase, UnderscoreCase }
 
     /// <summary>
     /// Detects which case the text matches, or <see cref="TextCase.None"/> if it matches none.
@@ -23,6 +23,15 @@ internal static class TextCaseHelper
         // UPPERCASE: every letter is uppercase, at least one letter present (checked before PascalCase)
         if (text.Any(char.IsLetter) && text.All(c => !char.IsLetter(c) || char.IsUpper(c)))
             return TextCase.UpperCase;
+
+        // KebabCase: no whitespace, contains '-', all non-dash chars are lowercase
+        if (!text.Any(char.IsWhiteSpace) && text.Contains('-')
+            && text.All(c => c == '-' || !char.IsLetter(c) || char.IsLower(c)))
+            return TextCase.KebabCase;
+
+        // UnderscoreCase: no whitespace, contains '_', not also KebabCase
+        if (!text.Any(char.IsWhiteSpace) && text.Contains('_'))
+            return TextCase.UnderscoreCase;
 
         // PascalCase: no spaces, first char uppercase, at least one more uppercase after the first char
         if (!text.Contains(' ') && text.Length > 1 && char.IsUpper(text[0]) && text[1..].Any(char.IsUpper))
@@ -119,11 +128,32 @@ internal static class TextCaseHelper
     }
 
     /// <summary>
-    /// Returns the four case variants in cycle order:
-    /// [0] Title Case, [1] Sentence case, [2] UPPERCASE, [3] PascalCase.
+    /// All letters lowercased; spaces and underscores replaced by a single dash.
+    /// E.g. "Hello World" → "hello-world".
+    /// </summary>
+    internal static string ToKebabCase(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        var normalized = Regex.Replace(text, @"[\s_]+", "-");
+        return normalized.ToLower();
+    }
+
+    /// <summary>
+    /// Spaces replaced with underscores; letter case preserved exactly.
+    /// E.g. "Hello World" → "Hello_World".
+    /// </summary>
+    internal static string ToUnderscorePreserveCase(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        return Regex.Replace(text, @"\s+", "_");
+    }
+
+    /// <summary>
+    /// Returns the six case variants in cycle order:
+    /// [0] Title Case, [1] Sentence case, [2] UPPERCASE, [3] PascalCase, [4] kebab-case, [5] preserve_underscores.
     /// </summary>
     internal static List<string> ComputeVariants(string text) =>
-        [ToTitleCase(text), ToSentenceCase(text), ToUpperCase(text), ToPascalCase(text)];
+        [ToTitleCase(text), ToSentenceCase(text), ToUpperCase(text), ToPascalCase(text), ToKebabCase(text), ToUnderscorePreserveCase(text)];
 
     /// <summary>
     /// Returns the index into <see cref="ComputeVariants"/> of the variant to apply on the
@@ -132,16 +162,18 @@ internal static class TextCaseHelper
     internal static int GetFirstVariantIndex(string text) =>
         DetectCase(text) switch
         {
-            TextCase.TitleCase    => 1,
-            TextCase.SentenceCase => 2,
-            TextCase.UpperCase    => 3,
-            TextCase.PascalCase   => 0,
-            _                     => 0,
+            TextCase.TitleCase     => 1,
+            TextCase.SentenceCase  => 2,
+            TextCase.UpperCase     => 3,
+            TextCase.PascalCase    => 4,
+            TextCase.KebabCase     => 5,
+            TextCase.UnderscoreCase => 0,
+            _                      => 0,
         };
 
     /// <summary>
     /// Detects the current case and returns the text transformed to the next case in the cycle:
-    /// Title Case → Sentence case → UPPERCASE → PascalCase → (back to) Title Case.
+    /// Title Case → Sentence case → UPPERCASE → PascalCase → kebab-case → preserve_underscores → (back to) Title Case.
     /// If the text matches no known case, starts from Title Case.
     /// </summary>
     internal static string CycleCase(string text)
@@ -149,11 +181,13 @@ internal static class TextCaseHelper
         if (string.IsNullOrEmpty(text)) return text;
         return DetectCase(text) switch
         {
-            TextCase.TitleCase    => ToSentenceCase(text),
-            TextCase.SentenceCase => ToUpperCase(text),
-            TextCase.UpperCase    => ToPascalCase(text),
-            TextCase.PascalCase   => ToTitleCase(text),
-            _                     => ToTitleCase(text),
+            TextCase.TitleCase      => ToSentenceCase(text),
+            TextCase.SentenceCase   => ToUpperCase(text),
+            TextCase.UpperCase      => ToPascalCase(text),
+            TextCase.PascalCase     => ToKebabCase(text),
+            TextCase.KebabCase      => ToUnderscorePreserveCase(text),
+            TextCase.UnderscoreCase => ToTitleCase(text),
+            _                       => ToTitleCase(text),
         };
     }
 }
