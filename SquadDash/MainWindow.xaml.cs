@@ -64,6 +64,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private static readonly TimeSpan ResponseRenderCadence = TimeSpan.FromMilliseconds(60);
     private static readonly TimeSpan ResponseRenderInputQuietPeriod = TimeSpan.FromMilliseconds(750);
     private static readonly TimeSpan ResponseRenderInputPollCadence = TimeSpan.FromMilliseconds(150);
+    private static readonly TimeSpan NonEssentialUiWorkInputQuietPeriod = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan NonEssentialUiWorkInputPollCadence = TimeSpan.FromMilliseconds(250);
     private const int BridgeEventUiBatchLimit = 64;
     private const int BridgeEventUiBatchMaxMs = 8;
     private const int DelegationOutcomeRollupWindow = 8;
@@ -14599,13 +14601,38 @@ public partial class MainWindow : Window, ILiveElementLocator
             .ToArray();
     }
 
-    private void SchedulePrimaryAgentHostWarmup()
+    private void SchedulePrimaryAgentHostWarmup() =>
+        SchedulePrimaryAgentHostWarmup(TimeSpan.Zero, "default");
+
+    private void SchedulePrimaryAgentHostWarmup(TimeSpan delay, string reason)
     {
         if (_primaryAgentWarmupPending)
             return;
 
         _primaryAgentWarmupPending = true;
-        _ = Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, WarmPrimaryAgentTranscriptHosts);
+        if (delay <= TimeSpan.Zero)
+        {
+            _ = Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, WarmPrimaryAgentTranscriptHosts);
+            return;
+        }
+
+        SquadDashTrace.Write(TraceCategory.Performance,
+            $"PRIMARY_HOST_WARMUP_DELAY reason={reason} delayMs={delay.TotalMilliseconds:0}");
+        _ = DelayPrimaryAgentHostWarmupAsync(delay);
+    }
+
+    private async Task DelayPrimaryAgentHostWarmupAsync(TimeSpan delay)
+    {
+        try
+        {
+            await Task.Delay(delay);
+            if (!_isClosing)
+                _ = Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, WarmPrimaryAgentTranscriptHosts);
+        }
+        catch (Exception ex)
+        {
+            HandleUiCallbackException(nameof(DelayPrimaryAgentHostWarmupAsync), ex, showDialog: false);
+        }
     }
 
     private async void WarmPrimaryAgentTranscriptHosts()
@@ -14613,11 +14640,18 @@ public partial class MainWindow : Window, ILiveElementLocator
         _primaryAgentWarmupPending = false;
         try
         {
+            if (ShouldDeferNonEssentialUiWorkForInput(out var inputDelay))
+            {
+                SchedulePrimaryAgentHostWarmup(inputDelay, "input-active");
+                return;
+            }
+
             foreach (var thread in GetPrimaryAgentWarmupCandidates())
             {
                 if (_isClosing)
                     return;
 
+                var sw = Stopwatch.StartNew();
                 var entry = GetOrCreatePrimaryAgentTranscriptHost(thread);
                 if (!AttachDocumentToPrimaryAgentHost(entry, closeSecondaryOwner: false))
                     continue;
@@ -14631,7 +14665,13 @@ public partial class MainWindow : Window, ILiveElementLocator
                 if (_conversationManager.HasPendingRender(thread))
                     await _conversationManager.EnsureAgentThreadRenderedAsync(thread);
 
-                entry.TranscriptBox.UpdateLayout();
+                if (entry.TranscriptBox.Visibility == Visibility.Visible)
+                    entry.TranscriptBox.UpdateLayout();
+
+                sw.Stop();
+                if (sw.ElapsedMilliseconds >= 20)
+                    SquadDashTrace.Write(TraceCategory.Performance,
+                        $"PRIMARY_HOST_WARMUP thread={thread.ThreadId} visible={entry.TranscriptBox.Visibility == Visibility.Visible} work={sw.ElapsedMilliseconds}ms {GetPrimaryAgentHostSummary()}");
             }
         }
         catch (Exception ex)
@@ -14643,6 +14683,26 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void SelectTranscriptThread(TranscriptThreadState thread, bool scrollToStart = false)
     {
         SelectTranscriptThreadCore(thread, scrollToStart, allowSnapshotFastPath: true, previousThreadOverride: null);
+    }
+
+    private bool IsThreadAlreadyVisibleInMainTranscript(TranscriptThreadState thread)
+    {
+        if (!_mainTranscriptVisible)
+            return false;
+
+        if (thread.Kind == TranscriptThreadKind.Coordinator)
+        {
+            return ReferenceEquals(thread.Document.Parent, OutputTextBox) &&
+                   OutputTextBox.Visibility == Visibility.Visible &&
+                   OutputTextBox.Opacity > 0;
+        }
+
+        return _primaryAgentTranscriptHosts.TryGetValue(thread, out var entry) &&
+               ReferenceEquals(thread.Document.Parent, entry.TranscriptBox) &&
+               AgentTranscriptHost.Visibility == Visibility.Visible &&
+               AgentTranscriptHost.Opacity > 0 &&
+               entry.TranscriptBox.Visibility == Visibility.Visible &&
+               entry.TranscriptBox.Opacity > 0;
     }
 
     private void QueueDeferredSnapshotSelectionCompletion(
@@ -14700,6 +14760,17 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         var swSelect = System.Diagnostics.Stopwatch.StartNew();
         var previousThread = previousThreadOverride ?? _selectedTranscriptThread;
+        if (!scrollToStart &&
+            !_searchNavigating &&
+            ReferenceEquals(previousThread, thread) &&
+            !_conversationManager.HasPendingRender(thread) &&
+            IsThreadAlreadyVisibleInMainTranscript(thread))
+        {
+            SquadDashTrace.Write(TraceCategory.Performance,
+                $"SELECT_THREAD_SKIP target={thread.Kind} id={thread.ThreadId} reason=already-visible {GetPrimaryAgentHostSummary()}");
+            return;
+        }
+
         if (!ReferenceEquals(previousThread, thread))
             CollapseTranscriptSelectionsForFastSwitch("select-thread");
         var useSnapshotFastPath = allowSnapshotFastPath
@@ -16714,6 +16785,36 @@ public partial class MainWindow : Window, ILiveElementLocator
         delay = remaining < ResponseRenderInputPollCadence
             ? remaining
             : ResponseRenderInputPollCadence;
+        if (delay < TimeSpan.FromMilliseconds(25))
+            delay = TimeSpan.FromMilliseconds(25);
+        return true;
+    }
+
+    private bool ShouldDeferNonEssentialUiWorkForInput(out TimeSpan delay)
+    {
+        delay = TimeSpan.Zero;
+        var elapsed = DateTimeOffset.Now - _lastKeyboardInputAt;
+        if (elapsed < TimeSpan.Zero)
+            elapsed = TimeSpan.Zero;
+
+        var textEditingActive =
+            PromptTextBox?.IsKeyboardFocusWithin == true ||
+            DocSourceTextBox?.IsKeyboardFocusWithin == true ||
+            _docSourceFindTextBox?.IsKeyboardFocusWithin == true ||
+            _intelliSenseOwnerBox?.IsKeyboardFocusWithin == true;
+        if (textEditingActive)
+        {
+            delay = NonEssentialUiWorkInputPollCadence;
+            return true;
+        }
+
+        if (elapsed >= NonEssentialUiWorkInputQuietPeriod)
+            return false;
+
+        var remaining = NonEssentialUiWorkInputQuietPeriod - elapsed;
+        delay = remaining < NonEssentialUiWorkInputPollCadence
+            ? remaining
+            : NonEssentialUiWorkInputPollCadence;
         if (delay < TimeSpan.FromMilliseconds(25))
             delay = TimeSpan.FromMilliseconds(25);
         return true;
@@ -24907,15 +25008,40 @@ public partial class MainWindow : Window, ILiveElementLocator
             var loopFilePath = Path.Combine(workspaceFolder, ".squad", "loop-filtered-tasks.md");
             if (!File.Exists(loopFilePath)) return;
 
-            // Select the filtered-tasks loop file and persist the choice
-            _selectedLoopMdPath = loopFilePath;
-            PersistLoopFileSelection();
+            // When the loop panel is visible and the current loop is not the filtered-tasks loop,
+            // show a picker so the user can choose which loop to run.
+            if (_loopPanelVisible && !IsFilteredTasksLoopSelected())
+            {
+                var dialog = new LoopPickerDialog(
+                    currentLoopPath:   _selectedLoopMdPath ?? loopFilePath,
+                    currentLoopLabel:  GetCurrentLoopLabel(),
+                    filteredTasksPath: loopFilePath,
+                    otherLoops:        GetOtherLoopEntries(loopFilePath),
+                    owner:             this);
+                if (dialog.ShowDialog() != true) return;
 
-            // Ensure the loop panel is visible and fully refreshed
-            _loopPanelVisible = true;
-            SyncLoopPanel();
-            PopulateLoopFilePicker();
-            RefreshLoopOptionsPanel();
+                if (!string.Equals(dialog.SelectedLoopPath, _selectedLoopMdPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    _selectedLoopMdPath = dialog.SelectedLoopPath;
+                    PersistLoopFileSelection();
+                    _loopPanelVisible = true;
+                    SyncLoopPanel();
+                    PopulateLoopFilePicker();
+                    RefreshLoopOptionsPanel();
+                }
+            }
+            else
+            {
+                // Select the filtered-tasks loop file and persist the choice
+                _selectedLoopMdPath = loopFilePath;
+                PersistLoopFileSelection();
+
+                // Ensure the loop panel is visible and fully refreshed
+                _loopPanelVisible = true;
+                SyncLoopPanel();
+                PopulateLoopFilePicker();
+                RefreshLoopOptionsPanel();
+            }
 
             // TODO: The [**FILTER**] placeholder in loop-filtered-tasks.md is substituted only
             // in the merged-view preview (RefreshLoopMergedView), not during actual loop execution.
@@ -24924,6 +25050,39 @@ public partial class MainWindow : Window, ILiveElementLocator
             await StartLoopImmediateAsync();
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(TasksPanelDoTheseButton_Click), ex); }
+    }
+
+    private bool IsFilteredTasksLoopSelected()
+    {
+        if (_selectedLoopMdPath is null) return false;
+        return string.Equals(
+            Path.GetFileName(_selectedLoopMdPath),
+            "loop-filtered-tasks.md",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string GetCurrentLoopLabel()
+    {
+        var entry = GetSelectedLoopFileEntry();
+        if (entry is not null) return entry.DisplayName;
+        if (_selectedLoopMdPath is not null) return Path.GetFileName(_selectedLoopMdPath);
+        return "loop.md";
+    }
+
+    private IReadOnlyList<LoopFileEntry> GetOtherLoopEntries(string filteredTasksPath)
+    {
+        if (_currentWorkspace is null) return Array.Empty<LoopFileEntry>();
+        var allEntries = LoopMdParser.ScanForLoopFiles(_currentWorkspace.SquadFolderPath);
+        var result = new List<LoopFileEntry>();
+        foreach (var entry in allEntries)
+        {
+            if (string.Equals(entry.FilePath, _selectedLoopMdPath, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (string.Equals(entry.FilePath, filteredTasksPath, StringComparison.OrdinalIgnoreCase))
+                continue;
+            result.Add(entry);
+        }
+        return result;
     }
 
     private void ShowDoTheseWithMenu(FrameworkElement? anchor)
