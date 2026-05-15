@@ -241,11 +241,17 @@ internal sealed class TranscriptConversationManager {
             var existingTurns = _conversationState.Turns;
             var lastTurn = existingTurns.Count > 0 ? existingTurns[existingTurns.Count - 1] : null;
             if (lastTurn is { IsSessionBoundary: true }) {
-                // Consolidate: update the existing tail boundary in place rather than appending.
+                // Consolidate: keep the original shutdown time, take the latest startup time,
+                // and recalculate the total offline duration across all rapid restarts.
+                var oldShutdown = lastTurn.SessionBoundaryShutdownTime;
+                var newStartup  = boundary.SessionBoundaryStartupTime;
+                var totalOffline = (oldShutdown.HasValue && newStartup.HasValue)
+                    ? newStartup.Value - oldShutdown.Value
+                    : boundary.SessionBoundaryOfflineDuration;
                 var updatedBoundary = lastTurn with {
-                    SessionBoundaryShutdownTime    = boundary.SessionBoundaryShutdownTime,
-                    SessionBoundaryOfflineDuration = boundary.SessionBoundaryOfflineDuration,
-                    SessionBoundaryStartupTime     = boundary.SessionBoundaryStartupTime,
+                    SessionBoundaryShutdownTime    = oldShutdown,
+                    SessionBoundaryOfflineDuration = totalOffline,
+                    SessionBoundaryStartupTime     = newStartup,
                     SessionBoundaryAppVersion      = boundary.SessionBoundaryAppVersion,
                 };
                 _conversationState = _conversationState with {
