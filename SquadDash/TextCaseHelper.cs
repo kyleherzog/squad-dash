@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -6,11 +7,11 @@ using System.Text.RegularExpressions;
 namespace SquadDash;
 
 /// <summary>
-/// Detects and cycles text through Title Case → Sentence case → UPPERCASE → camelCase.
+/// Detects and cycles text through Title Case → Sentence case → UPPERCASE → PascalCase.
 /// </summary>
 internal static class TextCaseHelper
 {
-    internal enum TextCase { None, TitleCase, SentenceCase, UpperCase, CamelCase }
+    internal enum TextCase { None, TitleCase, SentenceCase, UpperCase, PascalCase }
 
     /// <summary>
     /// Detects which case the text matches, or <see cref="TextCase.None"/> if it matches none.
@@ -19,13 +20,13 @@ internal static class TextCaseHelper
     {
         if (string.IsNullOrEmpty(text)) return TextCase.None;
 
-        // camelCase: no spaces, first char lowercase, at least one uppercase letter present
-        if (!text.Contains(' ') && char.IsLower(text[0]) && text.Any(char.IsUpper))
-            return TextCase.CamelCase;
-
-        // UPPERCASE: every letter is uppercase, at least one letter present
+        // UPPERCASE: every letter is uppercase, at least one letter present (checked before PascalCase)
         if (text.Any(char.IsLetter) && text.All(c => !char.IsLetter(c) || char.IsUpper(c)))
             return TextCase.UpperCase;
+
+        // PascalCase: no spaces, first char uppercase, at least one more uppercase after the first char
+        if (!text.Contains(' ') && text.Length > 1 && char.IsUpper(text[0]) && text[1..].Any(char.IsUpper))
+            return TextCase.PascalCase;
 
         var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (words.Length == 0) return TextCase.None;
@@ -96,8 +97,11 @@ internal static class TextCaseHelper
     /// <summary>All letters uppercased.</summary>
     internal static string ToUpperCase(string text) => text.ToUpper();
 
-    /// <summary>Split on spaces/underscores/hyphens; first word all-lowercase, subsequent words title-capped; joined with no separator.</summary>
-    internal static string ToCamelCase(string text)
+    /// <summary>
+    /// Split on spaces/underscores/hyphens; every word title-capped; joined with no separator.
+    /// E.g. "hello world" → "HelloWorld".
+    /// </summary>
+    internal static string ToPascalCase(string text)
     {
         if (string.IsNullOrEmpty(text)) return text;
         var words = Regex.Split(text, @"[\s_\-]+")
@@ -105,19 +109,39 @@ internal static class TextCaseHelper
                          .ToArray();
         if (words.Length == 0) return text;
         var sb = new StringBuilder();
-        sb.Append(words[0].ToLower());
-        for (int i = 1; i < words.Length; i++)
+        foreach (var word in words)
         {
-            sb.Append(char.ToUpper(words[i][0]));
-            if (words[i].Length > 1)
-                sb.Append(words[i][1..].ToLower());
+            sb.Append(char.ToUpper(word[0]));
+            if (word.Length > 1)
+                sb.Append(word[1..].ToLower());
         }
         return sb.ToString();
     }
 
     /// <summary>
+    /// Returns the four case variants in cycle order:
+    /// [0] Title Case, [1] Sentence case, [2] UPPERCASE, [3] PascalCase.
+    /// </summary>
+    internal static List<string> ComputeVariants(string text) =>
+        [ToTitleCase(text), ToSentenceCase(text), ToUpperCase(text), ToPascalCase(text)];
+
+    /// <summary>
+    /// Returns the index into <see cref="ComputeVariants"/> of the variant to apply on the
+    /// first Shift+F3 press — i.e. the case that follows the currently-detected case.
+    /// </summary>
+    internal static int GetFirstVariantIndex(string text) =>
+        DetectCase(text) switch
+        {
+            TextCase.TitleCase    => 1,
+            TextCase.SentenceCase => 2,
+            TextCase.UpperCase    => 3,
+            TextCase.PascalCase   => 0,
+            _                     => 0,
+        };
+
+    /// <summary>
     /// Detects the current case and returns the text transformed to the next case in the cycle:
-    /// Title Case → Sentence case → UPPERCASE → camelCase → (back to) Title Case.
+    /// Title Case → Sentence case → UPPERCASE → PascalCase → (back to) Title Case.
     /// If the text matches no known case, starts from Title Case.
     /// </summary>
     internal static string CycleCase(string text)
@@ -127,8 +151,8 @@ internal static class TextCaseHelper
         {
             TextCase.TitleCase    => ToSentenceCase(text),
             TextCase.SentenceCase => ToUpperCase(text),
-            TextCase.UpperCase    => ToCamelCase(text),
-            TextCase.CamelCase    => ToTitleCase(text),
+            TextCase.UpperCase    => ToPascalCase(text),
+            TextCase.PascalCase   => ToTitleCase(text),
             _                     => ToTitleCase(text),
         };
     }

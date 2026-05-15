@@ -487,6 +487,13 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _pttDraining; // true while speech service is draining after PTT release
     private bool _promptHasVoiceInput;
     private bool _suppressPromptNextTextInput;
+
+    // ── Shift+F3 case-cycle state (PromptTextBox) ────────────────────────────────
+    private string?       _promptCycleOriginal;   // full TextBox.Text before first cycle press
+    private List<string>? _promptCycleVariants;   // [TitleCase, SentenceCase, UPPER, PascalCase]
+    private int           _promptCycleIndex;      // index of the variant currently shown
+    private int           _promptCycleSelStart;   // SelectionStart when cycle began
+    private int           _promptCycleSelLen;     // original selection length (before any variant)
     private bool _pttHadPreexistingText;
     private bool _pttShiftTappedDuringRecording;
     private bool _voiceStartedWithSendEnabled;
@@ -7558,11 +7565,38 @@ public partial class MainWindow : Window, ILiveElementLocator
             && Keyboard.Modifiers == ModifierKeys.Shift
             && DocSourceTextBox.GetSelectionLength() > 0)
         {
-            var selStart = DocSourceTextBox.GetSelectionStart();
-            var selLen   = DocSourceTextBox.GetSelectionLength();
-            var result   = TextCaseHelper.CycleCase(DocSourceTextBox.GetSelectedText());
-            DocSourceTextBox.ReplaceSelection(result);
-            DocSourceTextBox.SelectRange(selStart, result.Length);
+            var selStart     = DocSourceTextBox.GetSelectionStart();
+            var selectedText = DocSourceTextBox.GetSelectedText();
+
+            bool continuing = _docCycleVariants is not null
+                && selStart == _docCycleSelStart
+                && selectedText == _docCycleVariants[_docCycleIndex];
+
+            if (!continuing)
+            {
+                _docCycleOriginal = selectedText;
+                _docCycleVariants = TextCaseHelper.ComputeVariants(selectedText);
+                _docCycleIndex    = TextCaseHelper.GetFirstVariantIndex(selectedText);
+                _docCycleSelStart = selStart;
+
+                var firstVariant = _docCycleVariants[_docCycleIndex];
+                DocSourceTextBox.ReplaceSelection(firstVariant);
+                DocSourceTextBox.SelectRange(selStart, firstVariant.Length);
+            }
+            else
+            {
+                _docCycleIndex = (_docCycleIndex + 1) % _docCycleVariants!.Count;
+                var nextVariant = _docCycleVariants[_docCycleIndex];
+
+                // Restore original (no undo), then apply next variant as a single undo entry.
+                DocSourceTextBox.IsUndoEnabled = false;
+                DocSourceTextBox.SelectRange(_docCycleSelStart, selectedText.Length);
+                DocSourceTextBox.Selection.Text = _docCycleOriginal!;
+                DocSourceTextBox.IsUndoEnabled  = true;
+                DocSourceTextBox.SelectRange(_docCycleSelStart, _docCycleOriginal!.Length);
+                DocSourceTextBox.ReplaceSelection(nextVariant);
+                DocSourceTextBox.SelectRange(_docCycleSelStart, nextVariant.Length);
+            }
             e.Handled = true;
             return;
         }
@@ -7710,12 +7744,46 @@ public partial class MainWindow : Window, ILiveElementLocator
             // ── Shift+F3: cycle case of selected text ─────────────────────────────
             if (e.Key == Key.F3 && modifiers == ModifierKeys.Shift && PromptTextBox.SelectionLength > 0)
             {
-                var selStart  = PromptTextBox.SelectionStart;
-                var selLen    = PromptTextBox.SelectionLength;
-                var result    = TextCaseHelper.CycleCase(PromptTextBox.SelectedText);
-                PromptTextBox.SelectedText    = result;
-                PromptTextBox.SelectionStart  = selStart;
-                PromptTextBox.SelectionLength = result.Length;
+                var selStart     = PromptTextBox.SelectionStart;
+                var selectedText = PromptTextBox.SelectedText;
+
+                // Continue an existing cycle if the selection is still on the same range and
+                // shows one of our computed variants.
+                bool continuing = _promptCycleVariants is not null
+                    && selStart == _promptCycleSelStart
+                    && selectedText == _promptCycleVariants[_promptCycleIndex];
+
+                if (!continuing)
+                {
+                    // New selection — initialize cycle state.
+                    _promptCycleOriginal  = PromptTextBox.Text;
+                    _promptCycleVariants  = TextCaseHelper.ComputeVariants(selectedText);
+                    _promptCycleIndex     = TextCaseHelper.GetFirstVariantIndex(selectedText);
+                    _promptCycleSelStart  = selStart;
+                    _promptCycleSelLen    = PromptTextBox.SelectionLength;
+
+                    // First press: normal replacement — creates one undo entry (original → variant).
+                    PromptTextBox.SelectedText    = _promptCycleVariants[_promptCycleIndex];
+                    PromptTextBox.SelectionStart  = _promptCycleSelStart;
+                    PromptTextBox.SelectionLength = _promptCycleVariants[_promptCycleIndex].Length;
+                }
+                else
+                {
+                    // Subsequent press on same selection — advance to next variant.
+                    _promptCycleIndex = (_promptCycleIndex + 1) % _promptCycleVariants!.Count;
+                    var nextVariant = _promptCycleVariants[_promptCycleIndex];
+
+                    // Restore original text without adding to the undo stack, then apply the
+                    // new variant as a single replacement so Ctrl+Z always undoes back to original.
+                    PromptTextBox.IsUndoEnabled   = false;
+                    PromptTextBox.Text            = _promptCycleOriginal!;
+                    PromptTextBox.IsUndoEnabled   = true;
+                    PromptTextBox.SelectionStart  = _promptCycleSelStart;
+                    PromptTextBox.SelectionLength = _promptCycleSelLen;
+                    PromptTextBox.SelectedText    = nextVariant;
+                    PromptTextBox.SelectionStart  = _promptCycleSelStart;
+                    PromptTextBox.SelectionLength = nextVariant.Length;
+                }
                 e.Handled = true;
                 return;
             }
@@ -8034,6 +8102,13 @@ public partial class MainWindow : Window, ILiveElementLocator
 
             if (e.Key == Key.F3)
             {
+                // When the prompt box has a selection, Shift+F3 should cycle case there
+                // (handled by PromptTextBox_KeyDown), not navigate search results.
+                if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0
+                    && PromptTextBox?.IsKeyboardFocusWithin == true
+                    && PromptTextBox.SelectionLength > 0)
+                    return;
+
                 if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
                     _ = NavigateToMatchAsync(_searchMatchCursor - 1);
                 else
@@ -11487,6 +11562,12 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private bool _suppressDocSourceTextChanged;
     private bool _suppressDocSourceNextTextInput;
+
+    // ── Shift+F3 case-cycle state (DocSourceTextBox) ─────────────────────────────
+    private string?       _docCycleOriginal;    // original selected text before first cycle press
+    private List<string>? _docCycleVariants;    // [TitleCase, SentenceCase, UPPER, PascalCase]
+    private int           _docCycleIndex;       // index of the variant currently shown
+    private int           _docCycleSelStart;    // selection start when cycle began
     private DispatcherTimer? _docSourceSaveTimer;
     private DispatcherTimer? _docPreviewRefreshTimer;
 

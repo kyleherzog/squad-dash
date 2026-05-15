@@ -449,6 +449,13 @@ internal sealed class MarkdownDocumentWindow : Window {
     private bool _autoSave;
     private bool _suppressEditorNextTextInput;
 
+    // ── Shift+F3 case-cycle state (editor RichTextBox) ───────────────────────────
+    private RichTextBox?  _editorCycleRtb;      // which RichTextBox is currently cycling
+    private string?       _editorCycleOriginal; // original selected text before first cycle press
+    private List<string>? _editorCycleVariants; // [TitleCase, SentenceCase, UPPER, PascalCase]
+    private int           _editorCycleIndex;    // index of the variant currently shown
+    private int           _editorCycleSelStart; // selection start when cycle began
+
     public static void Show(Window? owner, string title, string filePath, bool showSource = false,
         MarkdownDocumentCaptureContext? captureContext = null, bool autoSave = false,
         NoteEditContext? noteContext = null, LoopEditContext? loopEditContext = null) {
@@ -916,10 +923,38 @@ internal sealed class MarkdownDocumentWindow : Window {
         if (e.Key == System.Windows.Input.Key.F3
             && System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Shift
             && tb.GetSelectionLength() > 0) {
-            var selStart = tb.GetSelectionStart();
-            var result   = TextCaseHelper.CycleCase(tb.GetSelectedText());
-            tb.ReplaceSelection(result);
-            tb.SelectRange(selStart, result.Length);
+            var selStart     = tb.GetSelectionStart();
+            var selectedText = tb.GetSelectedText();
+
+            bool continuing = _editorCycleVariants is not null
+                && ReferenceEquals(tb, _editorCycleRtb)
+                && selStart == _editorCycleSelStart
+                && selectedText == _editorCycleVariants[_editorCycleIndex];
+
+            if (!continuing) {
+                _editorCycleRtb      = tb;
+                _editorCycleOriginal = selectedText;
+                _editorCycleVariants = TextCaseHelper.ComputeVariants(selectedText);
+                _editorCycleIndex    = TextCaseHelper.GetFirstVariantIndex(selectedText);
+                _editorCycleSelStart = selStart;
+
+                var firstVariant = _editorCycleVariants[_editorCycleIndex];
+                tb.ReplaceSelection(firstVariant);
+                tb.SelectRange(selStart, firstVariant.Length);
+            }
+            else {
+                _editorCycleIndex = (_editorCycleIndex + 1) % _editorCycleVariants!.Count;
+                var nextVariant = _editorCycleVariants[_editorCycleIndex];
+
+                // Restore original (no undo), then apply next variant as a single undo entry.
+                tb.IsUndoEnabled = false;
+                tb.SelectRange(_editorCycleSelStart, selectedText.Length);
+                tb.Selection.Text = _editorCycleOriginal!;
+                tb.IsUndoEnabled  = true;
+                tb.SelectRange(_editorCycleSelStart, _editorCycleOriginal!.Length);
+                tb.ReplaceSelection(nextVariant);
+                tb.SelectRange(_editorCycleSelStart, nextVariant.Length);
+            }
             e.Handled = true;
             return;
         }
