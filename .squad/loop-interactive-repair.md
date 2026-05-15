@@ -1,5 +1,7 @@
 ---
 configured: true
+interval: 1
+timeout: 60
 options:
   behavior_header:
     type: group
