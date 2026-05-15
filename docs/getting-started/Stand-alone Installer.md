@@ -1,10 +1,5 @@
----
-title: Installing SquadDash
-nav_order: 2
-parent: Getting Started
----
 
-# Installing SquadDash
+# Installing SquadDash (not available yet)
 
 SquadDash ships as a standard Windows installer (`.exe`). The steps below walk you through downloading and running it for the first time.
 

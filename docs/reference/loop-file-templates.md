@@ -6,7 +6,7 @@ parent: Reference
 
 # Loop File Templates
 
-Loop files (`.squad/*.md`) support **template preprocessing** — a two-pass substitution system that runs before the prompt body is sent to the AI. Loop authors write a single file; SquadDash renders the right version based on the current UI settings. The agent only ever sees clean prose — no template tokens.
+Loop files (`.squad/loop*.md`) support **template preprocessing** — a two-pass substitution system that runs before the prompt body is sent to Squad. Loop authors write a single file; SquadDash renders the right version based on the current UI settings. The agent only ever sees clean prose — no template tokens.
 
 ---
 
@@ -31,7 +31,7 @@ Conditionals are always evaluated first. Variable substitution runs on the outpu
 
 ## Pass 1 — Conditional Blocks
 
-Wrap content in `{{#if}}` or `{{#unless}}` blocks to include or exclude it based on a frontmatter option value. The entire block — including its delimiter lines — is removed when the condition is false.
+Wrap content in `{{#if}}` or `{{#unless}}` blocks to include or exclude that block based on a frontmatter option value. The entire block — including its delimiter lines — is removed when the condition is false.
 
 ### Syntax
 
@@ -39,7 +39,9 @@ Wrap content in `{{#if}}` or `{{#unless}}` blocks to include or exclude it based
 {{#if key == "value"}}
 Content included when key equals "value".
 {{/if}}
+```
 
+```
 {{#unless key == "value"}}
 Content included when key does NOT equal "value".
 {{/unless}}

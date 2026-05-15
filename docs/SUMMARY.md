@@ -4,19 +4,20 @@
 
 ## Getting Started
 
-* [Installer](getting-started/Installer.md)
 * [Getting Started](getting-started/README.md)
-  * [New Document](getting-started/new-document.md)
+
   * [Installation](getting-started/installation.md)
   * [First Run](getting-started/first-run.md)
   * [Squad Team](concepts/squad-team.md)
   * [Hiring Agents](features/hiring-agents.md)
-  * [VS Tooling](getting-started/VS Tooling.md)
-  * [Windows Taskbar](getting-started/Windows Taskbar.md)
+  * \[VS Tooling](getting-started/VS Tooling.md)
+  * \[Windows Taskbar](getting-started/Windows Taskbar.md)
 
 ## Prompts
 
+  * [Stand-alone Installer](getting-started/Stand-alone Installer.md)
 * [Prompts](features/prompts.md)
+
   * [Entering Prompts](features/entering-prompts.md)
   * [Attaching Clipboard Text](features/attach-clipboard-text.md)
   * [Paste Image](features/paste-image.md)
@@ -26,12 +27,14 @@
 ## Features
 
 * [Features](features/README.md)
+
   * [Fullscreen Transcript](features/fullscreen-transcript.md)
   * [Text Formatting Shortcuts](features/text-formatting.md)
 
 ## Panels
 
 * [Panels](panels/README.md)
+
   * [Tasks](panels/Tasks.md)
   * [Loop](panels/Loop.md)
   * [Approvals](panels/Approvals.md)
@@ -40,6 +43,7 @@
 ## Options
 
 * [Options](options/README.md)
+
   * [General](options/general.md)
   * [Speech](options/speech.md)
   * [Remote Access](options/remote-access.md)
@@ -51,15 +55,18 @@
 ## Concepts
 
 * [Concepts](concepts/README.md)
+
   * [The Coordinator](concepts/coordinator.md)
   * [Agents](concepts/agents.md)
   * [Transcripts](concepts/transcripts.md)
   * [Documentation Panel](concepts/documentation-panel.md)
 
 
+
 ## Remote Control
 
 * [Remote Control](reference/remote-control.md)
+
   * [Local (LAN)](reference/remote-control/setup-local.md)
   * [ngrok](reference/remote-control/setup-ngrok.md)
   * [Cloudflare Tunnel](reference/remote-control/setup-cloudflare.md)
@@ -68,6 +75,7 @@
 ## Reference
 
 * [Reference](reference/README.md)
+
   * [Configuration](reference/configuration.md)
   * [Routing](reference/routing.md)
   * [Keyboard Shortcuts](reference/keyboard-shortcuts.md)
