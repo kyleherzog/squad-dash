@@ -8550,6 +8550,15 @@ public partial class MainWindow : Window, ILiveElementLocator
                 var text = PromptTextBox.Text.Trim();
                 if (!string.IsNullOrWhiteSpace(text) && _lastQuickReplyEntry != null)
                 {
+                    if (_activeTabId != null)
+                    {
+                        var idToRemove = _activeTabId;
+                        _activeTabId = null;
+                        SetPromptTextBoxLogicalBuffer(_queuePreEditDraft ?? string.Empty, 0, 0);
+                        _queuePreEditDraft = null;
+                        _promptQueue.Remove(idToRemove);
+                        SyncQueuePanel();
+                    }
                     PromptTextBox.Clear();
                     _pec.DisableQuickReplies(_lastQuickReplyEntry);
                     ResetQueuePausedState();
