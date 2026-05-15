@@ -480,6 +480,24 @@ internal sealed class MarkdownEditorCommandsTests {
         });
     }
 
+    [Test]
+    public void ApplyInlineQuote_TwoUndoRecords_IntermediateStateIsJustQuote() {
+        RunWithUndoBox("hello world", tb => {
+            Select(tb, 6, 5); // "world"
+            MarkdownEditorCommands.ApplyInlineQuote(tb);
+            Assert.That(tb.Text, Is.EqualTo("hello \"world\""));
+            Assert.That(tb.CanUndo, Is.True);
+
+            // Undo step 2: reverts wrap → just the pressed quote remains
+            tb.Undo();
+            Assert.That(tb.Text, Is.EqualTo("hello \""));
+
+            // Undo step 1: reverts pressed char → original text
+            tb.Undo();
+            Assert.That(tb.Text, Is.EqualTo("hello world"));
+        });
+    }
+
     // ── ApplyInlineCodeOrFence two-step undo ─────────────────────────────────
 
     [Test]
@@ -533,7 +551,7 @@ internal sealed class MarkdownEditorCommandsTests {
     public void ApplyInlineParens_SingleLineSelection_EmbedsInParens() {
         var tb = MakeBox("hello world");
         Select(tb, 6, 5); // "world"
-        var result = MarkdownEditorCommands.ApplyInlineParens(tb);
+        var result = MarkdownEditorCommands.ApplyInlineParens(tb, "(");
         Assert.That(result, Is.True);
         Assert.Multiple(() => {
             Assert.That(tb.Text,            Is.EqualTo("hello (world)"));
@@ -546,7 +564,7 @@ internal sealed class MarkdownEditorCommandsTests {
     public void ApplyInlineParens_LeadingAndTrailingSpaces_SpacesRemainOutsideParens() {
         var tb = MakeBox("  hello  ");
         Select(tb, 0, 9); // "  hello  "
-        MarkdownEditorCommands.ApplyInlineParens(tb);
+        MarkdownEditorCommands.ApplyInlineParens(tb, "(");
         Assert.Multiple(() => {
             Assert.That(tb.Text,            Is.EqualTo("  (hello)  "));
             Assert.That(tb.SelectionStart,  Is.EqualTo(2));
@@ -558,7 +576,7 @@ internal sealed class MarkdownEditorCommandsTests {
     public void ApplyInlineParens_MultiLineSelection_ReturnsFalse_AndTextUnchanged() {
         var tb = MakeBox("hello\nworld");
         Select(tb, 0, 11);
-        var result = MarkdownEditorCommands.ApplyInlineParens(tb);
+        var result = MarkdownEditorCommands.ApplyInlineParens(tb, "(");
         Assert.Multiple(() => {
             Assert.That(result,  Is.False);
             Assert.That(tb.Text, Is.EqualTo("hello\nworld"));
@@ -569,10 +587,50 @@ internal sealed class MarkdownEditorCommandsTests {
     public void ApplyInlineParens_EmptySelection_ReturnsFalse_AndTextUnchanged() {
         var tb = MakeBox("hello");
         tb.CaretIndex = 2;
-        var result = MarkdownEditorCommands.ApplyInlineParens(tb);
+        var result = MarkdownEditorCommands.ApplyInlineParens(tb, "(");
         Assert.Multiple(() => {
             Assert.That(result,  Is.False);
             Assert.That(tb.Text, Is.EqualTo("hello"));
+        });
+    }
+
+    [Test]
+    public void ApplyInlineParens_TwoUndoRecords_IntermediateStateIsPressedChar() {
+        RunWithUndoBox("hello world", tb => {
+            Select(tb, 6, 5); // "world"
+            MarkdownEditorCommands.ApplyInlineParens(tb, "(");
+            Assert.That(tb.Text, Is.EqualTo("hello (world)"));
+            Assert.That(tb.CanUndo, Is.True);
+
+            // Undo step 2: reverts wrap → just the pressed char remains
+            tb.Undo();
+            Assert.Multiple(() => {
+                Assert.That(tb.Text, Is.EqualTo("hello ("));
+            });
+
+            // Undo step 1: reverts pressed char → original text
+            tb.Undo();
+            Assert.That(tb.Text, Is.EqualTo("hello world"));
+        });
+    }
+
+    [Test]
+    public void ApplyInlineParens_CloseParen_TwoUndoRecords_IntermediateStateIsCloseParen() {
+        RunWithUndoBox("hello world", tb => {
+            Select(tb, 6, 5); // "world"
+            MarkdownEditorCommands.ApplyInlineParens(tb, ")");
+            Assert.That(tb.Text, Is.EqualTo("hello (world)"));
+            Assert.That(tb.CanUndo, Is.True);
+
+            // Undo step 2: reverts wrap → just the pressed char remains
+            tb.Undo();
+            Assert.Multiple(() => {
+                Assert.That(tb.Text, Is.EqualTo("hello )"));
+            });
+
+            // Undo step 1: reverts pressed char → original text
+            tb.Undo();
+            Assert.That(tb.Text, Is.EqualTo("hello world"));
         });
     }
 

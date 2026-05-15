@@ -952,7 +952,7 @@ internal sealed class MarkdownDocumentWindow : Window {
         // Paren embedding (works on all keyboard layouts)
         if ((e.Text == "(" || e.Text == ")") && tb.GetSelectionLength() > 0
             && !tb.GetSelectedText().Contains('\n')) {
-            if (MarkdownEditorCommands.ApplyInlineParens(tb)) {
+            if (MarkdownEditorCommands.ApplyInlineParens(tb, e.Text)) {
                 e.Handled = true;
                 return;
             }

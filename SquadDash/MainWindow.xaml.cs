@@ -7375,7 +7375,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         if ((e.Text == "(" || e.Text == ")") && PromptTextBox.SelectionLength > 0
             && !PromptTextBox.SelectedText.Contains('\n'))
         {
-            if (MarkdownEditorCommands.ApplyInlineParens(PromptTextBox))
+            if (MarkdownEditorCommands.ApplyInlineParens(PromptTextBox, e.Text))
             {
                 e.Handled = true;
                 return;
@@ -12017,7 +12017,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         if ((e.Text == "(" || e.Text == ")") && DocSourceTextBox.GetSelectionLength() > 0
             && !DocSourceTextBox.GetSelectedText().Contains('\n'))
         {
-            if (MarkdownEditorCommands.ApplyInlineParens(DocSourceTextBox))
+            if (MarkdownEditorCommands.ApplyInlineParens(DocSourceTextBox, e.Text))
             {
                 e.Handled = true;
                 return;

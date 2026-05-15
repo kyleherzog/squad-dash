@@ -581,6 +581,10 @@ internal static class MarkdownEditorCommands
         var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
         var trailingSpaces = raw[raw.TrimEnd(' ').Length..];
         var result         = $"{leadingSpaces}\"{trimmed}\"{trailingSpaces}";
+        // Step 1: replace selection with the pressed char — creates undo record 1
+        box.SelectedText = "\"";
+        box.Select(selStart, 1);
+        // Step 2: replace with full wrap — creates undo record 2
         box.SelectedText    = result;
         box.SelectionStart  = selStart + leadingSpaces.Length;
         box.SelectionLength = 1 + trimmed.Length + 1;
@@ -635,13 +639,17 @@ internal static class MarkdownEditorCommands
         var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
         var trailingSpaces = raw[raw.TrimEnd(' ').Length..];
         var result         = $"{leadingSpaces}\"{trimmed}\"{trailingSpaces}";
+        // Step 1: replace selection with the pressed char — creates undo record 1
         box.SelectRange(selStart, selLen);
+        box.ReplaceSelection("\"");
+        box.SelectRange(selStart, 1);
+        // Step 2: replace with full wrap — creates undo record 2
         box.ReplaceSelection(result);
         box.SelectRange(selStart + leadingSpaces.Length, 1 + trimmed.Length + 1);
         return true;
     }
 
-    internal static bool ApplyInlineParens(TextBox box)
+    internal static bool ApplyInlineParens(TextBox box, string pressedChar)
     {
         var selLen = box.SelectionLength;
         if (selLen == 0) return false;
@@ -654,13 +662,17 @@ internal static class MarkdownEditorCommands
         var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
         var trailingSpaces = raw[raw.TrimEnd(' ').Length..];
         var result         = $"{leadingSpaces}({trimmed}){trailingSpaces}";
+        // Step 1: replace selection with the pressed char — creates undo record 1
+        box.SelectedText = pressedChar;
+        box.Select(selStart, pressedChar.Length);
+        // Step 2: replace with full wrap — creates undo record 2
         box.SelectedText    = result;
         box.SelectionStart  = selStart + leadingSpaces.Length;
         box.SelectionLength = 1 + trimmed.Length + 1;
         return true;
     }
 
-    internal static bool ApplyInlineParens(RichTextBox box)
+    internal static bool ApplyInlineParens(RichTextBox box, string pressedChar)
     {
         var selLen = box.GetSelectionLength();
         if (selLen == 0) return false;
@@ -673,7 +685,11 @@ internal static class MarkdownEditorCommands
         var leadingSpaces  = raw[..(raw.Length - raw.TrimStart(' ').Length)];
         var trailingSpaces = raw[raw.TrimEnd(' ').Length..];
         var result         = $"{leadingSpaces}({trimmed}){trailingSpaces}";
+        // Step 1: replace selection with the pressed char — creates undo record 1
         box.SelectRange(selStart, selLen);
+        box.ReplaceSelection(pressedChar);
+        box.SelectRange(selStart, pressedChar.Length);
+        // Step 2: replace with full wrap — creates undo record 2
         box.ReplaceSelection(result);
         box.SelectRange(selStart + leadingSpaces.Length, 1 + trimmed.Length + 1);
         return true;
