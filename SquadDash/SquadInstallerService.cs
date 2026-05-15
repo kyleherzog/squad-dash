@@ -201,7 +201,7 @@ internal sealed class SquadInstallerService {
     private static void EnsureLoopFiles(string activeDirectory) {
         var squadDir = Path.Combine(activeDirectory, ".squad");
         EnsureLoopFile(squadDir, "loop-filtered-tasks.md");
-        EnsureLoopFile(squadDir, "loop-fix-tagged-tasks.md");
+        EnsureLoopFile(squadDir, "loop-fix-test-failures.md");
     }
 
     private static void EnsureLoopFile(string squadDir, string fileName) {
