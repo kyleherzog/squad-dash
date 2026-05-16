@@ -497,7 +497,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private TranscriptViewportAnchor? _pendingGridRebuildViewportAnchor;
 
     // Push-to-talk state
-    private enum PttState { Idle, TapDown, TapReleased, SecondTapDown, Active }
+    private enum PttState { Idle, TapDown, TapReleased, Active }
     private PttState _pttState = PttState.Idle;
     private bool _pttDraining; // true while speech service is draining after PTT release
     private bool _promptHasVoiceInput;
@@ -515,10 +515,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _dictationStartedForQuickReply; // set at PTT start when quick replies visible and box empty
     private bool _pttLostFocusDuringRecording;   // set when another window stole focus mid-PTT
     private DispatcherTimer? _pttCtrlPollTimer;   // polls GetAsyncKeyState while window is inactive
-    private DispatcherTimer? _pttActivationHoldTimer;
     private DateTime _ctrlFirstDownTime;
     private DateTime _ctrlFirstReleaseTime;
-    private DateTime _ctrlSecondDownTime;
     private ISpeechRecognitionService? _speechService;
     private PushToTalkWindow? _pttWindow;
     private TextBox? _pttTargetTextBox;       // resolved at activation; null = PromptTextBox
@@ -537,7 +535,6 @@ public partial class MainWindow : Window, ILiveElementLocator
     private string? _workspaceGitHubUrl;
     private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(5) };
     private const int PttMaxTapHoldMs = 250;
-    private const int PttSecondTapHoldMs = 150;
     const int PttDoubleClickTime = 350;
 
     private sealed record UiExceptionPanelState(
@@ -8388,10 +8385,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                         var gapMs = (DateTime.UtcNow - _ctrlFirstReleaseTime).TotalMilliseconds;
                         if (gapMs <= PttDoubleClickTime)
                         {
-                            _ctrlSecondDownTime = DateTime.UtcNow;
-                            _pttState = PttState.SecondTapDown;
-                            SquadDashTrace.Write("UI", $"PTT pending: second Ctrl down gapMs={gapMs:0}");
-                            StartPttActivationHoldTimer();
+                            TryStartPushToTalkFromFocusedTarget(gapMs);
                         }
                         else
                         {
@@ -8402,15 +8396,6 @@ public partial class MainWindow : Window, ILiveElementLocator
                     }
                     else if (!IsCtrlKey(e.Key))
                     {
-                        _pttState = PttState.Idle;
-                    }
-                    break;
-
-                case PttState.SecondTapDown:
-                    if (!IsCtrlKey(e.Key))
-                    {
-                        StopPttActivationHoldTimer();
-                        SquadDashTrace.Write("UI", $"PTT pending cancelled by key={e.Key}");
                         _pttState = PttState.Idle;
                     }
                     break;
@@ -8449,49 +8434,12 @@ public partial class MainWindow : Window, ILiveElementLocator
     /// <summary>Resets the PTT double-tap state machine to Idle (called when an owned window closes).</summary>
     internal void ResetPttState()
     {
-        StopPttActivationHoldTimer();
         _pttState = PttState.Idle;
         _ctrlFirstDownTime = default;
         _ctrlFirstReleaseTime = default;
-        _ctrlSecondDownTime = default;
     }
 
-    private void StartPttActivationHoldTimer()
-    {
-        StopPttActivationHoldTimer();
-        _pttActivationHoldTimer = new DispatcherTimer(DispatcherPriority.Input, Dispatcher)
-        {
-            Interval = TimeSpan.FromMilliseconds(PttSecondTapHoldMs)
-        };
-        _pttActivationHoldTimer.Tick += (_, _) =>
-        {
-            StopPttActivationHoldTimer();
-            if (_pttState != PttState.SecondTapDown)
-                return;
-
-            var heldMs = (DateTime.UtcNow - _ctrlSecondDownTime).TotalMilliseconds;
-            if (!NativeMethods.IsCtrlPhysicallyDown())
-            {
-                SquadDashTrace.Write("UI", $"PTT pending cancelled: second Ctrl released heldMs={heldMs:0}");
-                _pttState = PttState.Idle;
-                return;
-            }
-
-            TryStartPushToTalkFromFocusedTarget(heldMs);
-        };
-        _pttActivationHoldTimer.Start();
-    }
-
-    private void StopPttActivationHoldTimer()
-    {
-        if (_pttActivationHoldTimer is null)
-            return;
-
-        _pttActivationHoldTimer.Stop();
-        _pttActivationHoldTimer = null;
-    }
-
-    private void TryStartPushToTalkFromFocusedTarget(double secondCtrlHeldMs)
+    private void TryStartPushToTalkFromFocusedTarget(double secondTapGapMs)
     {
         // Resolve the target at activation time — prefer a focused RichTextBox
         // (e.g. DocSourceTextBox) over the fallback TextBox path.
@@ -8539,7 +8487,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                                        && _pttTargetTextBox == PromptTextBox
                                        && string.IsNullOrEmpty(PromptTextBox?.Text);
         SquadDashTrace.Write("UI",
-            $"PTT started: secondCtrlHeldMs={secondCtrlHeldMs:0} voiceSendEnabled={_voiceStartedWithSendEnabled} " +
+            $"PTT started: secondTapGapMs={secondTapGapMs:0} voiceSendEnabled={_voiceStartedWithSendEnabled} " +
             $"targetIsPrompt={_pttTargetTextBox == PromptTextBox} promptHasText={!string.IsNullOrEmpty(PromptTextBox?.Text)}");
 
         // Re-evaluate on each PTT activation: true only when quick reply
@@ -8576,13 +8524,10 @@ public partial class MainWindow : Window, ILiveElementLocator
 
                 case PttState.TapDown:
                 case PttState.TapReleased:
-                case PttState.SecondTapDown:
                     // Reset stale tap sequence — cannot complete the double-tap while inactive.
-                    StopPttActivationHoldTimer();
                     _pttState = PttState.Idle;
                     _ctrlFirstDownTime = default;
                     _ctrlFirstReleaseTime = default;
-                    _ctrlSecondDownTime = default;
                     break;
             }
         }
@@ -8673,16 +8618,6 @@ public partial class MainWindow : Window, ILiveElementLocator
                         {
                             _pttState = PttState.Idle;
                         }
-                    }
-                    break;
-
-                case PttState.SecondTapDown:
-                    if (IsCtrlKey(e.Key))
-                    {
-                        var heldMs = (DateTime.UtcNow - _ctrlSecondDownTime).TotalMilliseconds;
-                        StopPttActivationHoldTimer();
-                        SquadDashTrace.Write("UI", $"PTT pending cancelled: second Ctrl keyup heldMs={heldMs:0}");
-                        _pttState = PttState.Idle;
                     }
                     break;
 
@@ -20715,7 +20650,6 @@ public partial class MainWindow : Window, ILiveElementLocator
             InputManager.Current.PreProcessInput -= MainWindow_PreProcessInput;
             DetachDispatcherDiagnostics();
             _isClosing = true;
-            StopPttActivationHoldTimer();
             StopPttCtrlPollTimer();
             _promptHealthTimer.Stop();
             _statusPresentationTimer.Stop();
