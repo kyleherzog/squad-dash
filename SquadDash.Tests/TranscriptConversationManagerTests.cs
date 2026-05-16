@@ -246,6 +246,49 @@ internal sealed class TranscriptConversationManagerTests {
         Assert.That(index, Is.EqualTo(-1));
     }
 
+    [Test]
+    public void ApplyPendingSessionBoundary_AppendsAfterInteractiveTurn() {
+        var turn = MakeTurn("Ready.");
+        var boundary = MakeBoundary(
+            new DateTimeOffset(2026, 5, 16, 18, 5, 30, TimeSpan.Zero),
+            TimeSpan.FromSeconds(3),
+            new DateTimeOffset(2026, 5, 16, 18, 5, 33, TimeSpan.Zero));
+
+        var result = TranscriptConversationManager.ApplyPendingSessionBoundary([turn], boundary, out var replaced);
+
+        Assert.Multiple(() => {
+            Assert.That(replaced, Is.False);
+            Assert.That(result, Has.Count.EqualTo(2));
+            Assert.That(result[1].SessionBoundaryShutdownTime, Is.EqualTo(boundary.SessionBoundaryShutdownTime));
+        });
+    }
+
+    [Test]
+    public void ApplyPendingSessionBoundary_ReplacesTailBoundaryWithLatestRestart() {
+        var turn = MakeTurn("Ready.");
+        var oldBoundary = MakeBoundary(
+            new DateTimeOffset(2026, 5, 16, 17, 54, 28, TimeSpan.Zero),
+            TimeSpan.FromSeconds(2.5),
+            new DateTimeOffset(2026, 5, 16, 17, 54, 31, TimeSpan.Zero));
+        var latestBoundary = MakeBoundary(
+            new DateTimeOffset(2026, 5, 16, 18, 5, 30, TimeSpan.Zero),
+            TimeSpan.FromSeconds(2.9),
+            new DateTimeOffset(2026, 5, 16, 18, 5, 33, TimeSpan.Zero));
+
+        var result = TranscriptConversationManager.ApplyPendingSessionBoundary(
+            [turn, oldBoundary],
+            latestBoundary,
+            out var replaced);
+
+        Assert.Multiple(() => {
+            Assert.That(replaced, Is.True);
+            Assert.That(result, Has.Count.EqualTo(2));
+            Assert.That(result[1].SessionBoundaryShutdownTime, Is.EqualTo(latestBoundary.SessionBoundaryShutdownTime));
+            Assert.That(result[1].SessionBoundaryStartupTime, Is.EqualTo(latestBoundary.SessionBoundaryStartupTime));
+            Assert.That(result[1].SessionBoundaryOfflineDuration, Is.EqualTo(latestBoundary.SessionBoundaryOfflineDuration));
+        });
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static TranscriptTurnRecord MakeTurn(string response) =>
@@ -257,6 +300,25 @@ internal sealed class TranscriptConversationManagerTests {
             response,
             true,
             Array.Empty<TranscriptToolRecord>());
+
+    private static TranscriptTurnRecord MakeBoundary(
+        DateTimeOffset shutdownTime,
+        TimeSpan offlineDuration,
+        DateTimeOffset startupTime) =>
+        new(
+            shutdownTime,
+            null,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            false,
+            Array.Empty<TranscriptToolRecord>()) {
+            IsSessionBoundary              = true,
+            SessionBoundaryShutdownTime    = shutdownTime,
+            SessionBoundaryOfflineDuration = offlineDuration,
+            SessionBoundaryStartupTime     = startupTime,
+            SessionBoundaryAppVersion      = "test"
+        };
 
     private static AgentThreadRegistry MakeRegistry() =>
         new AgentThreadRegistry(

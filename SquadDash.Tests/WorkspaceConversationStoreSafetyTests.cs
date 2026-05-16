@@ -72,6 +72,51 @@ internal sealed class WorkspaceConversationStoreSafetyTests {
     }
 
     [Test]
+    public void Save_ExplicitClearCreatesTimestampedRescueBackup() {
+        using var workspace = new TestWorkspace();
+        var root = workspace.GetPath("state");
+        var store = new WorkspaceConversationStore(root);
+        var repo = workspace.GetPath("repo");
+        Directory.CreateDirectory(repo);
+
+        var state = new WorkspaceConversationState(
+            "session-1",
+            DateTimeOffset.UtcNow,
+            null,
+            Array.Empty<string>(),
+            new[] {
+                new TranscriptTurnRecord(
+                    DateTimeOffset.UtcNow.AddMinutes(-1),
+                    DateTimeOffset.UtcNow,
+                    "prompt",
+                    "thinking",
+                    "response",
+                    false,
+                    Array.Empty<TranscriptToolRecord>())
+            });
+
+        store.Save(repo, state);
+        var cleared = store.Save(
+            repo,
+            WorkspaceConversationState.Empty with {
+                ClearedAt = DateTimeOffset.UtcNow
+            });
+
+        var workspaceDirectory = Directory.GetDirectories(root).Single();
+        var rescueFiles = Directory.GetFiles(workspaceDirectory, "conversation.explicit-clear.*.json");
+        var rescue = JsonSerializer.Deserialize<WorkspaceConversationState>(File.ReadAllText(rescueFiles.Single()));
+
+        Assert.Multiple(() => {
+            Assert.That(cleared.Turns, Is.Empty);
+            Assert.That(cleared.ClearedAt, Is.Not.Null);
+            Assert.That(rescueFiles, Has.Length.EqualTo(1));
+            Assert.That(rescue, Is.Not.Null);
+            Assert.That(rescue!.SessionId, Is.EqualTo("session-1"));
+            Assert.That(rescue.Turns, Has.Count.EqualTo(1));
+        });
+    }
+
+    [Test]
     public void Save_DoesNotOverwriteRealTranscriptWithOnlySessionBoundary() {
         using var workspace = new TestWorkspace();
         var root = workspace.GetPath("state");

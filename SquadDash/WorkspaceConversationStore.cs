@@ -83,7 +83,12 @@ internal sealed class WorkspaceConversationStore {
             return existing;
         }
 
-        if (HasMeaningfulContent(existing))
+        var isExplicitClear = IsExplicitClear(normalized);
+        if (isExplicitClear && HasMeaningfulContent(existing)) {
+            CreateBackup(normalizedWorkspace, existing);
+            CreateRescueBackup(normalizedWorkspace, existing, "explicit-clear");
+        }
+        else if (HasMeaningfulContent(existing))
             CreateBackup(normalizedWorkspace, existing);
 
         var writeSw = Stopwatch.StartNew();

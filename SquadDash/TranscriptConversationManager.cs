@@ -238,36 +238,18 @@ internal sealed class TranscriptConversationManager {
         // persisted as part of the conversation history.
         if (_pendingSessionBoundary is { } boundary) {
             _pendingSessionBoundary = null;
-            var existingTurns = _conversationState.Turns;
-            var lastTurn = existingTurns.Count > 0 ? existingTurns[existingTurns.Count - 1] : null;
-            if (lastTurn is { IsSessionBoundary: true }) {
-                // Consolidate: keep the original shutdown time, take the latest startup time,
-                // and recalculate the total offline duration across all rapid restarts.
-                var oldShutdown = lastTurn.SessionBoundaryShutdownTime;
-                var newStartup  = boundary.SessionBoundaryStartupTime;
-                var totalOffline = (oldShutdown.HasValue && newStartup.HasValue)
-                    ? newStartup.Value - oldShutdown.Value
-                    : boundary.SessionBoundaryOfflineDuration;
-                var updatedBoundary = lastTurn with {
-                    SessionBoundaryShutdownTime    = oldShutdown,
-                    SessionBoundaryOfflineDuration = totalOffline,
-                    SessionBoundaryStartupTime     = newStartup,
-                    SessionBoundaryAppVersion      = boundary.SessionBoundaryAppVersion,
-                };
-                _conversationState = _conversationState with {
-                    Turns = existingTurns.Take(existingTurns.Count - 1).Append(updatedBoundary).ToArray()
-                };
+            var updatedTurns = ApplyPendingSessionBoundary(_conversationState.Turns, boundary, out var replacedTailBoundary);
+            _conversationState = _conversationState with {
+                Turns = updatedTurns
+            };
+            if (replacedTailBoundary) {
                 SquadDashTrace.Write(TraceCategory.UI,
-                    $"SessionGap: existing tail boundary updated (consolidated) turns={_conversationState.Turns.Count}" +
-                    $" shutdownTime={updatedBoundary.SessionBoundaryShutdownTime:O}" +
-                    $" offline={updatedBoundary.SessionBoundaryOfflineDuration?.TotalSeconds:F1}s" +
-                    $" startupTime={updatedBoundary.SessionBoundaryStartupTime:O}" +
-                    $" appVersion={updatedBoundary.SessionBoundaryAppVersion}");
+                    $"SessionGap: existing tail boundary replaced turns={_conversationState.Turns.Count}" +
+                    $" shutdownTime={boundary.SessionBoundaryShutdownTime:O}" +
+                    $" offline={boundary.SessionBoundaryOfflineDuration?.TotalSeconds:F1}s" +
+                    $" startupTime={boundary.SessionBoundaryStartupTime:O}" +
+                    $" appVersion={boundary.SessionBoundaryAppVersion}");
             } else {
-                // Normal path: append a new session boundary turn.
-                _conversationState = _conversationState with {
-                    Turns = existingTurns.Append(boundary).ToArray()
-                };
                 SquadDashTrace.Write(TraceCategory.UI,
                     $"SessionGap: new boundary appended turns={_conversationState.Turns.Count}" +
                     $" shutdownTime={boundary.SessionBoundaryShutdownTime:O}" +
@@ -306,6 +288,27 @@ internal sealed class TranscriptConversationManager {
         // own work could start.
         _ = RenderAllSequentiallyAsync(agentRenders, turns, dataLoadMs);
         _syncAgentCardsWithThreads();
+    }
+
+    internal static IReadOnlyList<TranscriptTurnRecord> ApplyPendingSessionBoundary(
+        IReadOnlyList<TranscriptTurnRecord> existingTurns,
+        TranscriptTurnRecord boundary,
+        out bool replacedTailBoundary) {
+        ArgumentNullException.ThrowIfNull(existingTurns);
+        ArgumentNullException.ThrowIfNull(boundary);
+        if (!boundary.IsSessionBoundary)
+            throw new ArgumentException("Boundary turn must be marked as a session boundary.", nameof(boundary));
+
+        if (existingTurns.Count > 0 && existingTurns[existingTurns.Count - 1].IsSessionBoundary) {
+            replacedTailBoundary = true;
+            return existingTurns
+                .Take(existingTurns.Count - 1)
+                .Append(boundary)
+                .ToArray();
+        }
+
+        replacedTailBoundary = false;
+        return existingTurns.Append(boundary).ToArray();
     }
 
     internal IReadOnlyList<string> GetKnownSessionIds() {
