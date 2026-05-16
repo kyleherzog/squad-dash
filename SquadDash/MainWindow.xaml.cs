@@ -4565,6 +4565,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void OnNativeLoopIterationCompleted(int iteration)
     {
+        _settingsSnapshot = _settingsStore.SaveLoopIteration(iteration);
         AppendLoopOutputLine($"✓ Round {iteration} completed — {LoopTimestamp()}", LoopLifecycleBrush);
         AppendLine($"  ✓ Round {iteration} complete");
         SoundNotifications.Play(SoundEvent.LoopIterationComplete);
@@ -14034,7 +14035,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 _ = Dispatcher.InvokeAsync(async () =>
                 {
                     AppendLoopOutputLine("🔄 Resuming loop from previous session…", LoopLifecycleBrush);
-                    await StartLoopImmediateAsync();
+                    await StartLoopImmediateAsync(resumeFromIteration: _settingsSnapshot.LoopLastIteration);
                 }, System.Windows.Threading.DispatcherPriority.Background);
             }
         }

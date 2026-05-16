@@ -430,12 +430,29 @@ internal sealed class ApplicationSettingsStore {
     /// <summary>
     /// Saves whether the native loop was active at the time of the call.
     /// Used to auto-resume the loop on the next startup if it was running when the app exited.
+    /// When <paramref name="active"/> is false, also resets <see cref="ApplicationSettingsSnapshot.LoopLastIteration"/> to 0.
     /// </summary>
     public ApplicationSettingsSnapshot SaveLoopActive(bool active) {
         using var mutex = AcquireMutex();
 
         var current = LoadCore();
-        var updated = current with { LoopActiveOnExit = active };
+        var updated = active
+            ? current with { LoopActiveOnExit = true }
+            : current with { LoopActiveOnExit = false, LoopLastIteration = 0 };
+
+        SaveCore(updated);
+        return updated;
+    }
+
+    /// <summary>
+    /// Persists the most recently completed loop iteration number so it can be
+    /// restored when the loop auto-resumes after a restart.
+    /// </summary>
+    public ApplicationSettingsSnapshot SaveLoopIteration(int iteration) {
+        using var mutex = AcquireMutex();
+
+        var current = LoadCore();
+        var updated = current with { LoopLastIteration = iteration };
 
         SaveCore(updated);
         return updated;
@@ -1030,6 +1047,13 @@ internal sealed record ApplicationSettingsSnapshot(
     public bool LoopActiveOnExit { get; init; } = false;
 
     /// <summary>
+    /// The last completed loop iteration number at the time of the last write.
+    /// Used to continue the iteration counter when auto-resuming after a restart.
+    /// Reset to 0 when the loop is stopped normally.
+    /// </summary>
+    public int LoopLastIteration { get; init; } = 0;
+
+    /// <summary>
     /// When true, Remote Access was active when the app last exited.
     /// SquadDash uses this to auto-resume RC after an unexpected shutdown or restart.
     /// </summary>
@@ -1314,6 +1338,7 @@ internal sealed record ApplicationSettingsSnapshot(
             LoopMode = LoopMode,
             LoopContinuousContext = LoopContinuousContext,
             LoopActiveOnExit = LoopActiveOnExit,
+            LoopLastIteration = LoopLastIteration,
             RemoteAccessActiveOnExit = RemoteAccessActiveOnExit,
             RcPersistentToken = string.IsNullOrWhiteSpace(RcPersistentToken) ? null : RcPersistentToken.Trim(),
             RcPersistentPort = RcPersistentPort,
