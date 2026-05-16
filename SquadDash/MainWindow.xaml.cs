@@ -198,6 +198,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private string? _lastMissingUtilityAgentNoticeKey;
     private string? _pendingQuickReplyRoutingInstruction;
     private PendingQuickReplyLaunchState? _pendingQuickReplyLaunch;
+    private readonly Dictionary<string, string> _shellDescriptions = new(StringComparer.OrdinalIgnoreCase);
     private string? _pendingSupplementalPromptInstruction;
     private string? _announcedRoutingIssueFingerprint;
     private bool _pendingRoutingRepairRecheck;
@@ -4129,6 +4130,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         var previousShells = _backgroundTaskPresenter.BackgroundShells;
         _backgroundTaskPresenter.BackgroundAgents = evt.BackgroundAgents ?? Array.Empty<SquadBackgroundAgentInfo>();
         _backgroundTaskPresenter.BackgroundShells = evt.BackgroundShells ?? Array.Empty<SquadBackgroundShellInfo>();
+        foreach (var shell in _backgroundTaskPresenter.BackgroundShells)
+            if (!string.IsNullOrWhiteSpace(shell.ShellId) && !string.IsNullOrWhiteSpace(shell.Description))
+                _shellDescriptions[shell.ShellId] = shell.Description;
 
         _agentThreadRegistry.SyncBackgroundAgentThreads(_backgroundTaskPresenter.BackgroundAgents);
         SyncAgentCardsWithThreads();
@@ -19719,15 +19723,23 @@ public partial class MainWindow : Window, ILiveElementLocator
             "report_intent" => TryGetJsonString(evt.Args, "intent") ?? evt.Intent,
             "sql" => TryGetJsonString(evt.Args, "description"),
             "powershell" => TryGetJsonString(evt.Args, "description") ?? TryGetJsonString(evt.Args, "command") ?? evt.Command,
-            "read_powershell"  => TryGetJsonString(evt.Args, "shellId"),
-            "write_powershell" => TryGetJsonString(evt.Args, "shellId"),
-            "stop_powershell"  => TryGetJsonString(evt.Args, "shellId"),
+            "read_powershell"  => LookupShellLabel(TryGetJsonString(evt.Args, "shellId")),
+            "write_powershell" => LookupShellLabel(TryGetJsonString(evt.Args, "shellId")),
+            "stop_powershell"  => LookupShellLabel(TryGetJsonString(evt.Args, "shellId")),
             "list_powershell"  => null,
             "read_agent"       => TryGetJsonString(evt.Args, "agent_id"),
             "list_agents"      => null,
             "fetch_copilot_cli_documentation" => null,
             _ => null
         };
+    }
+
+    private string? LookupShellLabel(string? shellId)
+    {
+        if (string.IsNullOrWhiteSpace(shellId)) return null;
+        return _shellDescriptions.TryGetValue(shellId, out var desc) && !string.IsNullOrWhiteSpace(desc)
+            ? desc
+            : $"Shell {shellId}";
     }
 
     private string? BuildRelativeToolPathLabel(string? path)
