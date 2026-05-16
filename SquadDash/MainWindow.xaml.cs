@@ -19748,6 +19748,14 @@ public partial class MainWindow : Window, ILiveElementLocator
             var reportsDir = AgentReportStore.GetReportsDir(stateDir);
             AgentReportStore.ClearAll(reportsDir);
         }
+        // Reset completion-footer state on all threads before clearing documents so that
+        // UpdateCompletedTimeFooters() (called indirectly by SelectTranscriptThread below)
+        // does not re-inject the "Completed N minutes ago" paragraph into the now-empty doc.
+        foreach (var thread in EnumerateTranscriptThreads())
+        {
+            thread.CompletedAt = null;
+            thread.CompletedTimeParagraph = null;
+        }
         CoordinatorThread.Document.Blocks.Clear();
         RemovePrimaryAgentTranscriptHosts(_primaryAgentTranscriptHosts.Keys.ToArray());
         _transcriptSnapshots.Clear();
