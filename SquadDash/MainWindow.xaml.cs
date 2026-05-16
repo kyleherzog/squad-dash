@@ -2495,6 +2495,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         SyncPromptTextBoxSimBorder();
         SquadDashTrace.Write(TraceCategory.Performance,
             $"SyncQueuePanel: full rebuild of {items.Count} queued tabs in {swFull.ElapsedMilliseconds}ms");
+        // Keep loop status in sync when queue count changes while loop is queued.
+        if (_loopQueued)
+            SyncLoopPanel();
     }
 
     private void SyncQueueTabHint()
@@ -5254,7 +5257,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         string status;
         if (_loopQueued)
-            status = "⏸ Paused — dequeuing prompts";
+            status = _promptQueue.Count > 0 ? "⏸ Paused — dequeuing prompts" : "⏸ Starting after this turn";
         else if (running
             && _activeLoopMode == LoopMode.NativeAgents
             && _loopController.StopState == LoopStopState.StopRequested)
