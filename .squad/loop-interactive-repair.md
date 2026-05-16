@@ -139,10 +139,6 @@ QUICK_REPLIES_JSON:
 ]
 ```
 
-Show a quick reply: **"Continue to next task"** so the user can confirm before the loop proceeds.
-
-If the user confirms, the loop will automatically continue to the next task.
-
 ---
 
 ## Implement Phase
@@ -188,10 +184,6 @@ Do not commit. Describe the diff in your response instead.
 1. Mark the task `[x]` in `.squad/tasks.md` and move it to the "Recently Completed" section at the bottom. Add a brief note: `✅ Fixed [TASK-ID]: one-line summary`
 2. Delete `.squad/pending-fix.md`.
 3. Report: **"Fixed [TASK-ID]: [what was done]"**
-
-Show a quick reply: **"Continue to next task"** so the user can confirm before the loop proceeds.
-
-If the user confirms, the loop will automatically continue to the next task.
 
 ---
 
