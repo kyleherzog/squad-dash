@@ -399,6 +399,12 @@ internal static class LoopMdParser {
     /// <paramref name="extraSubstitutions"/> (e.g. system variables like {{iteration}}).
     /// Options of type "group" are skipped (they are UI headers, not values).
     /// Conditional blocks (<c>{{#if}}</c>/<c>{{#unless}}</c>) are evaluated first.
+    /// <para>
+    /// <paramref name="extraSubstitutions"/> entries whose key matches <c>{{key}}</c>
+    /// syntax are replaced via the double-brace wrapper. The special key
+    /// <c>"[**FILTER**]"</c> is substituted literally (bracket syntax, not
+    /// double-brace).
+    /// </para>
     /// </summary>
     public static string BuildMergedBody(LoopMdConfig config, IReadOnlyDictionary<string, string>? extraSubstitutions = null)
     {
@@ -417,8 +423,50 @@ internal static class LoopMdParser {
         {
             foreach (var kvp in extraSubstitutions)
                 body = body.Replace($"{{{{{kvp.Key}}}}}", kvp.Value, StringComparison.Ordinal);
+
+            // [**FILTER**] uses bracket syntax, not {{...}}, so handle it directly.
+            if (extraSubstitutions.TryGetValue("[**FILTER**]", out var filterInstruction))
+                body = body.Replace("[**FILTER**]", filterInstruction, StringComparison.Ordinal);
         }
         return body;
+    }
+
+    /// <summary>
+    /// Converts a raw filter string (as typed in the Tasks panel filter box) into a
+    /// human-readable instruction suitable for substituting the <c>[**FILTER**]</c>
+    /// placeholder in loop templates.
+    /// </summary>
+    /// <param name="filterText">
+    /// The raw filter value. May contain <c>@agent-handle</c> mentions, keywords,
+    /// or both. Pass an empty string (or null) to produce the "no filter" instruction.
+    /// </param>
+    public static string BuildFilterInstruction(string? filterText)
+    {
+        filterText = filterText?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(filterText))
+            return "No filter — process any unchecked task not owned by User.";
+
+        var mentionMatches = Regex.Matches(filterText, @"@(\w[\w\-\.]*)", RegexOptions.IgnoreCase);
+        var agentNames     = new List<string>();
+        var seen           = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (Match m in mentionMatches)
+            if (seen.Add(m.Groups[1].Value))
+                agentNames.Add(m.Groups[1].Value);
+
+        var keyword = Regex.Replace(filterText, @"@\w[\w\-\.]*", "").Trim();
+
+        var parts = new List<string>();
+        if (agentNames.Count > 0)
+        {
+            var agentList = string.Join(", ", agentNames.Select(a => $"**@{a}**"));
+            var ownerList = string.Join(" or ", agentNames.Select(a => $"`*(Owner: {a})*`"));
+            parts.Add($"Only process tasks assigned to {agentList} — i.e., tasks that include {ownerList} on the task line or in its description.");
+        }
+        if (!string.IsNullOrWhiteSpace(keyword))
+            parts.Add($"Only process tasks whose description or content contains: **{keyword}**.");
+
+        return string.Join(" ", parts);
     }
 
     /// <summary>

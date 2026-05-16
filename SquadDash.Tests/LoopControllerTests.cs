@@ -559,4 +559,76 @@ internal sealed class LoopControllerTests {
         Assert.That(instrIdx,  Is.GreaterThanOrEqualTo(0));
         Assert.That(headerIdx, Is.GreaterThan(instrIdx));
     }
+
+    // ── filterText / [**FILTER**] ─────────────────────────────────────────────
+
+    [Test]
+    public async Task FilterText_Provided_FilterPlaceholderReplacedInPrompt() {
+        // Arrange — instructions contain [**FILTER**]; we pass a filter text.
+        // Verify that the prompt sent to executePromptAsync has the placeholder substituted.
+        var capturedPrompts = new System.Collections.Generic.List<string>();
+        var stoppedTcs      = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var controller = new LoopController(
+            executePromptAsync: (prompt, _) => { lock (capturedPrompts) capturedPrompts.Add(prompt); return Task.CompletedTask; },
+            abortPrompt:          () => { },
+            onIterationStarted:   _  => { },
+            onStopped:            () => stoppedTcs.TrySetResult(),
+            onError:              _  => stoppedTcs.TrySetResult(),
+            onIterationCompleted: _  => { },
+            onWaiting:            _  => { });
+
+        var config = new LoopMdConfig(
+            IntervalMinutes: 0.0001,
+            TimeoutMinutes:  5,
+            Description:     "",
+            Instructions:    "Find tasks matching: [**FILTER**]");
+
+        // Act
+        _ = controller.StartAsync(config, continuousContext: true, filterText: "@orion");
+        await Task.Delay(80);
+        controller.RequestStop();
+        await stoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Assert — [**FILTER**] must have been replaced; literal placeholder must not appear.
+        Assert.That(capturedPrompts, Has.Count.GreaterThanOrEqualTo(1));
+        foreach (var prompt in capturedPrompts) {
+            Assert.That(prompt, Does.Not.Contain("[**FILTER**]"),
+                "literal placeholder must not appear in the sent prompt");
+            Assert.That(prompt, Does.Contain("orion"),
+                "resolved filter text must appear in the sent prompt");
+        }
+    }
+
+    [Test]
+    public async Task FilterText_Null_FilterPlaceholderReplacedWithNoFilterMessage() {
+        var capturedPrompts = new System.Collections.Generic.List<string>();
+        var stoppedTcs      = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var controller = new LoopController(
+            executePromptAsync: (prompt, _) => { lock (capturedPrompts) capturedPrompts.Add(prompt); return Task.CompletedTask; },
+            abortPrompt:          () => { },
+            onIterationStarted:   _  => { },
+            onStopped:            () => stoppedTcs.TrySetResult(),
+            onError:              _  => stoppedTcs.TrySetResult(),
+            onIterationCompleted: _  => { },
+            onWaiting:            _  => { });
+
+        var config = new LoopMdConfig(
+            IntervalMinutes: 0.0001,
+            TimeoutMinutes:  5,
+            Description:     "",
+            Instructions:    "Tasks: [**FILTER**]");
+
+        _ = controller.StartAsync(config, continuousContext: true); // filterText defaults to null
+        await Task.Delay(80);
+        controller.RequestStop();
+        await stoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.That(capturedPrompts, Has.Count.GreaterThanOrEqualTo(1));
+        foreach (var prompt in capturedPrompts) {
+            Assert.That(prompt, Does.Not.Contain("[**FILTER**]"));
+            Assert.That(prompt, Does.Contain("No filter"));
+        }
+    }
 }

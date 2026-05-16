@@ -5708,7 +5708,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                 OpenLoopConfigFlyout(loopMdPath, LoopConfigFlyoutMode.Configure, existingConfig: null);
                 return;
             }
-            await _loopController.StartAsync(config, _settingsSnapshot.LoopContinuousContext, _currentWorkspace?.FolderPath, resumeFromIteration);
+            var filterText = TasksFilterBox?.Text?.Trim() ?? "";
+            await _loopController.StartAsync(config, _settingsSnapshot.LoopContinuousContext, _currentWorkspace?.FolderPath, resumeFromIteration, filterText);
         }
         else
         {
@@ -11058,48 +11059,12 @@ public partial class MainWindow : Window, ILiveElementLocator
             var tasksFilter = TasksFilterBox?.Text?.Trim() ?? "";
             var config = LoopMdParser.Parse(_selectedLoopMdPath);
 
-            // Resolve option-conditional instructions into flat sentences
-            var buildInstruction   = "";
-            var commitInstruction  = "";
-            var testInstruction    = "";
-
-            if (config?.Options != null)
-            {
-                var optDict = config.Options
-                    .Where(o => o.Type != "group")
-                    .ToDictionary(o => o.Key, o => o.RawValue, StringComparer.Ordinal);
-
-                if (optDict.TryGetValue("build_verify", out var bv) && bv == "true")
-                    buildInstruction = "   - Build the project and verify it succeeds before proceeding.\n";
-
-                if (optDict.TryGetValue("commit_after_task", out var cat))
-                    commitInstruction = cat switch
-                    {
-                        "always" => "   - Commit your changes immediately and report the SHA. Include trailer: " +
-                                    "`Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`\n",
-                        "never"  => "   - Do not commit your changes; describe the diff instead.\n",
-                        "ask"    => "   - Before committing, emit a quick-reply \"Commit changes?\" and wait for user confirmation.\n",
-                        _        => ""
-                    };
-
-                if (optDict.TryGetValue("test_after_task", out var tat))
-                    testInstruction = tat == "true"
-                        ? "Write comprehensive test cases for what was built this iteration."
-                        : "Skip tests this iteration.";
-            }
-
             var extraSubs = new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                ["iteration"]          = "1",
-                ["copilot_trailer"]    = "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>",
-                ["build_instruction"]  = buildInstruction,
-                ["commit_instruction"] = commitInstruction,
-                ["test_instruction"]   = testInstruction,
+                ["iteration"]       = "1",
+                ["copilot_trailer"] = "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>",
                 // build_command intentionally omitted — AI resolves build tooling automatically
-                // Preview always shows NativeAgents routing; Shift+click overrides mode at runtime only.
-                ["routing_instruction"] = _settingsSnapshot.LoopMode == LoopMode.NativeAgents
-                    ? "Spawn the correct specialist agent per `.squad/routing.md` to handle this task."
-                    : "Route to and adopt the role of the correct specialist per `.squad/routing.md` for this iteration.",
+                ["[**FILTER**]"]    = LoopMdParser.BuildFilterInstruction(tasksFilter),
             };
 
             var isCliMode = _settingsSnapshot.LoopMode == LoopMode.SquadCli;
@@ -11119,40 +11084,6 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 text = "";
             }
-
-            // Substitute [**FILTER**] placeholder with a context-aware filter instruction
-            // Parse filter: extract @mentions anywhere, remainder is keyword filter
-            var filterText = tasksFilter.Trim();
-            var mentionMatches = Regex.Matches(
-                filterText, @"@(\w[\w\-\.]*)", RegexOptions.IgnoreCase);
-            var agentNames = mentionMatches.Cast<Match>()
-                .Select(m => m.Groups[1].Value)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            var keyword = Regex.Replace(filterText, @"@\w[\w\-\.]*", "")
-                .Trim();
-
-            string filterInstruction;
-            if (string.IsNullOrWhiteSpace(filterText))
-            {
-                filterInstruction = "No filter — process any unchecked task not owned by User.";
-            }
-            else
-            {
-                var parts = new List<string>();
-                if (agentNames.Count > 0)
-                {
-                    var agentList = string.Join(", ", agentNames.Select(a => $"**@{a}**"));
-                    var ownerList = string.Join(" or ", agentNames.Select(a => $"`*(Owner: {a})*`"));
-                    parts.Add($"Only process tasks assigned to {agentList} — i.e., tasks that include {ownerList} on the task line or in its description.");
-                }
-                if (!string.IsNullOrWhiteSpace(keyword))
-                {
-                    parts.Add($"Only process tasks whose description or content contains: **{keyword}**.");
-                }
-                filterInstruction = string.Join(" ", parts);
-            }
-            text = text.Replace("[**FILTER**]", filterInstruction, StringComparison.Ordinal);
 
             _loopMergedViewWindow.UpdateContent(text);
         }
@@ -25359,10 +25290,6 @@ public partial class MainWindow : Window, ILiveElementLocator
                 RefreshLoopOptionsPanel();
             }
 
-            // TODO: The [**FILTER**] placeholder in loop-filtered-tasks.md is substituted only
-            // in the merged-view preview (RefreshLoopMergedView), not during actual loop execution.
-            // StartLoopImmediateAsync parses the raw config without injecting TasksFilterBox.Text.
-            // Wiring the live filter into the loop run is a known gap to address in a future change.
             await StartLoopImmediateAsync();
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(TasksPanelDoTheseButton_Click), ex); }

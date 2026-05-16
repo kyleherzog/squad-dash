@@ -70,10 +70,10 @@ No unchecked tasks remain (or all remaining tasks are Owner: User). Do the follo
 ## Step 3 — If a task IS found, implement it fully
 
 1. Read `.squad/routing.md` to identify the correct owner/agent for this task.
-2. Delegate to or become that agent. Complete the work — implementation, decisions, tests, commit.
+2. Delegate to or become that agent. Complete the work — implementation, decisions, tests, as appropriate.
 3. For **"define…" or "decide…" or "architecture" tasks**: document the decision in `.squad/decisions.md` (create if missing) and update relevant architecture docs, then consider the task done.
 4. For **implementation tasks**:
-   - `build_verify` = `{{build_verify}}` — if `true` and `{{build_command}}` is non-empty, run `{{build_command}}` and verify it succeeds before proceeding.
+   - `build_verify` = `{{build_verify}}` — if `true` and `{{build_command}}` is non-empty, run `{{build_command}}` and verify it passes before committing.
    - `commit_after_task` = `{{commit_after_task}}`:
      - `always` → commit immediately and report the SHA. Include trailer: `{{copilot_trailer}}`
      - `never` → skip commit; describe the diff instead.
@@ -83,7 +83,7 @@ No unchecked tasks remain (or all remaining tasks are Owner: User). Do the follo
 
 ## Step 4 — Write tests (if applicable)
 
-`test_after_task` = `{{test_after_task}}` — if `true`, create comprehensive test cases for what was built this iteration. If `false`, skip this step.
+`test_after_task` = `{{test_after_task}}` — if `true`, write comprehensive test cases for what was built this iteration. If `false`, skip this step.
 
 ## Step 5 — Surface human decisions
 

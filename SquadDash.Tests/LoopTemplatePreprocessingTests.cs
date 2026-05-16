@@ -150,6 +150,95 @@ internal sealed class LoopTemplatePreprocessingTests
         Assert.That(result, Does.Contain("done"));
     }
 
+    // ── [**FILTER**] in BuildMergedBody ──────────────────────────────────────
+
+    [Test]
+    public void BuildMergedBody_FilterPlaceholder_ReplacedFromExtraSubs()
+    {
+        var config = MakeConfig("Task filter: [**FILTER**]");
+        var extra  = new Dictionary<string, string> { ["[**FILTER**]"] = "Only bugs." };
+        Assert.That(LoopMdParser.BuildMergedBody(config, extra),
+            Is.EqualTo("Task filter: Only bugs."));
+    }
+
+    [Test]
+    public void BuildMergedBody_FilterPlaceholder_NoExtraSubs_LeftAsIs()
+    {
+        var config = MakeConfig("Task filter: [**FILTER**]");
+        Assert.That(LoopMdParser.BuildMergedBody(config),
+            Is.EqualTo("Task filter: [**FILTER**]"));
+    }
+
+    [Test]
+    public void BuildMergedBody_FilterPlaceholder_ExtraSubsWithoutFilterKey_LeftAsIs()
+    {
+        var config = MakeConfig("Task filter: [**FILTER**]");
+        var extra  = new Dictionary<string, string> { ["iteration"] = "1" };
+        Assert.That(LoopMdParser.BuildMergedBody(config, extra),
+            Is.EqualTo("Task filter: [**FILTER**]"));
+    }
+
+    // ── BuildFilterInstruction ────────────────────────────────────────────────
+
+    [Test]
+    public void BuildFilterInstruction_NullOrEmpty_ReturnsNoFilterMessage()
+    {
+        Assert.That(LoopMdParser.BuildFilterInstruction(null),
+            Is.EqualTo("No filter — process any unchecked task not owned by User."));
+        Assert.That(LoopMdParser.BuildFilterInstruction(""),
+            Is.EqualTo("No filter — process any unchecked task not owned by User."));
+        Assert.That(LoopMdParser.BuildFilterInstruction("   "),
+            Is.EqualTo("No filter — process any unchecked task not owned by User."));
+    }
+
+    [Test]
+    public void BuildFilterInstruction_MentionOnly_ReturnsOwnerFilter()
+    {
+        var result = LoopMdParser.BuildFilterInstruction("@orion");
+        Assert.That(result, Does.Contain("**@orion**"));
+        Assert.That(result, Does.Contain("`*(Owner: orion)*`"));
+        Assert.That(result, Does.Not.Contain("description or content"));
+    }
+
+    [Test]
+    public void BuildFilterInstruction_KeywordOnly_ReturnsKeywordFilter()
+    {
+        var result = LoopMdParser.BuildFilterInstruction("authentication");
+        Assert.That(result, Does.Contain("**authentication**"));
+        Assert.That(result, Does.Not.Contain("**@"));
+    }
+
+    [Test]
+    public void BuildFilterInstruction_MentionAndKeyword_ReturnsBothClauses()
+    {
+        var result = LoopMdParser.BuildFilterInstruction("@orion login bug");
+        Assert.That(result, Does.Contain("**@orion**"));
+        Assert.That(result, Does.Contain("**login bug**"));
+    }
+
+    [Test]
+    public void BuildFilterInstruction_MultipleMentions_AllIncluded()
+    {
+        var result = LoopMdParser.BuildFilterInstruction("@alice @bob");
+        Assert.That(result, Does.Contain("**@alice**"));
+        Assert.That(result, Does.Contain("**@bob**"));
+    }
+
+    [Test]
+    public void BuildFilterInstruction_DuplicateMention_DeduplicatedInOutput()
+    {
+        var result = LoopMdParser.BuildFilterInstruction("@alice @alice");
+        // "**@alice**" should appear exactly once
+        int count = 0;
+        int idx   = 0;
+        while ((idx = result.IndexOf("**@alice**", idx, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            idx++;
+        }
+        Assert.That(count, Is.EqualTo(1), "duplicate mention should be de-duplicated");
+    }
+
     // ── Safety cleanup ────────────────────────────────────────────────────────
 
     [Test]
