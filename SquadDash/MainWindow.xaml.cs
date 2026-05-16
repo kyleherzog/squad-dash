@@ -4177,6 +4177,11 @@ public partial class MainWindow : Window, ILiveElementLocator
             $"Subagent started {BackgroundTaskPresenter.BuildBackgroundAgentLabel(thread)} description={evt.AgentDescription?.Trim() ?? "(none)"}");
         SyncAgentCardsWithThreads();
         _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, "subagent_started");
+        // Persist the coordinator's completed "dispatching…" response immediately.
+        // RunPromptAsync only resolves (and the ExecuteCoordinatorTurnAsync finally-block only
+        // runs) after ALL background agents finish, so the coordinator turn would otherwise
+        // remain in-memory and be lost if the app restarts while the sub-agent is running.
+        _conversationManager.SaveCurrentTurnToConversation(DateTimeOffset.UtcNow);
         _conversationManager.PersistAgentThreadSnapshot(thread);
     }
 
