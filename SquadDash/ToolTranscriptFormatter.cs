@@ -34,7 +34,14 @@ internal static class ToolTranscriptFormatter {
             "store_memory"  when hasDisplayText => "💾",
             "report_intent" when hasDisplayText => "🎯",
             "sql"           when hasDisplayText => "🗄️",
-            "powershell"    when hasDisplayText => "💻",
+            "powershell"         when hasDisplayText => "💻",
+            "read_powershell"    when hasDisplayText => "💻",
+            "write_powershell"   when hasDisplayText => "⌨️",
+            "stop_powershell"    when hasDisplayText => "⛔",
+            "list_powershell"                        => "📋",
+            "read_agent"         when hasDisplayText => "🤖",
+            "list_agents"                            => "📋",
+            "fetch_copilot_cli_documentation"        => "📖",
             _               => string.Empty
         };
     }
@@ -52,7 +59,14 @@ internal static class ToolTranscriptFormatter {
         "store_memory"  => "💾",
         "report_intent" => "🎯",
         "sql"           => "🗄️",
-        "powershell"    => "💻",
+        "powershell"                      => "💻",
+        "read_powershell"                 => "💻",
+        "write_powershell"                => "⌨️",
+        "stop_powershell"                 => "⛔",
+        "list_powershell"                 => "📋",
+        "read_agent"                      => "🤖",
+        "list_agents"                     => "📋",
+        "fetch_copilot_cli_documentation" => "📖",
         _               => string.Empty
     };
 
@@ -252,6 +266,22 @@ internal static class ToolTranscriptFormatter {
 
             case "powershell" when !string.IsNullOrWhiteSpace(descriptor.DisplayText):
                 text = BuildFixedDisplayText("💻 ", descriptor.DisplayText!, success, outputText);
+                return true;
+
+            case "read_powershell" when !string.IsNullOrWhiteSpace(descriptor.DisplayText):
+                text = BuildFixedDisplayText("💻 ", descriptor.DisplayText!, success, outputText);
+                return true;
+
+            case "write_powershell" when !string.IsNullOrWhiteSpace(descriptor.DisplayText):
+                text = BuildFixedDisplayText("⌨️ ", descriptor.DisplayText!, success, outputText);
+                return true;
+
+            case "stop_powershell" when !string.IsNullOrWhiteSpace(descriptor.DisplayText):
+                text = BuildFixedDisplayText("⛔ ", descriptor.DisplayText!, success, outputText);
+                return true;
+
+            case "read_agent" when !string.IsNullOrWhiteSpace(descriptor.DisplayText):
+                text = BuildFixedDisplayText("🤖 ", descriptor.DisplayText!, success, outputText);
                 return true;
 
             default:

@@ -19635,6 +19635,13 @@ public partial class MainWindow : Window, ILiveElementLocator
             "report_intent" => TryGetJsonString(evt.Args, "intent") ?? evt.Intent,
             "sql" => TryGetJsonString(evt.Args, "description"),
             "powershell" => TryGetJsonString(evt.Args, "description") ?? TryGetJsonString(evt.Args, "command") ?? evt.Command,
+            "read_powershell"  => TryGetJsonString(evt.Args, "shellId"),
+            "write_powershell" => TryGetJsonString(evt.Args, "shellId"),
+            "stop_powershell"  => TryGetJsonString(evt.Args, "shellId"),
+            "list_powershell"  => null,
+            "read_agent"       => TryGetJsonString(evt.Args, "agent_id"),
+            "list_agents"      => null,
+            "fetch_copilot_cli_documentation" => null,
             _ => null
         };
     }
