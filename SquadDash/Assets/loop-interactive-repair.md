@@ -184,6 +184,7 @@ Do not commit. Describe the diff in your response instead.
 1. Mark the task `[x]` in `.squad/tasks.md` and move it to the "Recently Completed" section at the bottom. Add a brief note: `✅ Fixed [TASK-ID]: one-line summary`
 2. Delete `.squad/pending-fix.md`.
 3. Report: **"Fixed [TASK-ID]: [what was done]"**
+4. **End the iteration.** Do NOT offer quick replies to continue to the next task. Do NOT proceed to analyze the next task. The loop will automatically start the next iteration — your job ends here.
 
 ---
 
