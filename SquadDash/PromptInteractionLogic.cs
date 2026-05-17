@@ -8,7 +8,9 @@ internal enum PromptHintFeature {
     ShiftEnterNewline,
     CtrlArrowHistory,
     PushToTalk,
-    CtrlEnterPrioritize
+    CtrlEnterPrioritize,
+    CtrlQAddQueue,
+    CtrlTabNavigation
 }
 
 internal enum PromptInputKey {

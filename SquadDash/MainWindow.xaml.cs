@@ -249,6 +249,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     // ── Prompt shortcuts hint ────────────────────────────────────────────────
     private static readonly TimeSpan HintCooldown = TimeSpan.FromMinutes(10);
     private readonly Dictionary<PromptHintFeature, DateTime> _promptHintLastUsed = new();
+    private readonly HashSet<PromptHintFeature> _promptHintPermanentlyDismissed = new();
     private DispatcherTimer? _hintRefreshTimer;
     private readonly Dictionary<string, List<FollowUpAttachment>> _followUpAttachments = new();
     // Captured by ApplyFollowUpHeader; consumed by CreateTranscriptTurnView for the paperclip UI.
@@ -8117,6 +8118,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 && (Keyboard.Modifiers & ModifierKeys.Shift) == 0
                 && (Keyboard.Modifiers & ModifierKeys.Alt)   == 0)
             {
+                DismissHintPermanently(PromptHintFeature.CtrlQAddQueue);
                 AddEmptyQueueSlot();
                 e.Handled = true;
                 return;
@@ -8128,6 +8130,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 && (Keyboard.Modifiers & ModifierKeys.Shift)   != 0
                 && (Keyboard.Modifiers & ModifierKeys.Alt)     == 0)
             {
+                DismissHintPermanently(PromptHintFeature.CtrlQAddQueue);
                 AddEmptyQueueSlotAtEnd();
                 e.Handled = true;
                 return;
@@ -8402,6 +8405,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 _promptQueue.Items.Count > 0)
             {
                 bool reverse = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+                DismissHintPermanently(PromptHintFeature.CtrlTabNavigation);
                 CycleQueueTab(reverse);
                 e.Handled = true;
                 return;
@@ -9296,11 +9300,33 @@ public partial class MainWindow : Window, ILiveElementLocator
             inlines.Add(Bold("Ctrl")); inlines.Add(Normal("+"));
             inlines.Add(Bold("Enter")); inlines.Add(Normal(" moves this to the front of the queue."));
         }
+
+        if (IsHintVisible(PromptHintFeature.CtrlQAddQueue))
+        {
+            AddGap();
+            inlines.Add(Bold("Ctrl")); inlines.Add(Normal("+"));
+            inlines.Add(Bold("Q")); inlines.Add(Normal(" to add a new queued prompt."));
+            any = true;
+        }
+
+        if (IsHintVisible(PromptHintFeature.CtrlTabNavigation) && _promptQueue.Items.Count > 0)
+        {
+            AddGap();
+            inlines.Add(Bold("Ctrl+Tab")); inlines.Add(Normal(" / "));
+            inlines.Add(Bold("Ctrl+Shift+Tab")); inlines.Add(Normal(" to move forward/backwards through the prompt queue."));
+        }
     }
 
     private bool IsHintVisible(PromptHintFeature feature) =>
-        !_promptHintLastUsed.TryGetValue(feature, out var last) ||
-        DateTime.UtcNow - last >= HintCooldown;
+        !_promptHintPermanentlyDismissed.Contains(feature) &&
+        (!_promptHintLastUsed.TryGetValue(feature, out var last) ||
+        DateTime.UtcNow - last >= HintCooldown);
+
+    private void DismissHintPermanently(PromptHintFeature feature)
+    {
+        _promptHintPermanentlyDismissed.Add(feature);
+        BuildShortcutsHint();
+    }
 
     /// <summary>
     /// Returns true when Ctrl+Enter would have a meaningful effect — i.e., there are queue
