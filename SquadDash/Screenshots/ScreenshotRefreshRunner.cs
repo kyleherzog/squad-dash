@@ -132,7 +132,20 @@ public sealed class ScreenshotRefreshRunner
         foreach (var definition in targets)
         {
             ct.ThrowIfCancellationRequested();
-            await RunOneAsync(definition, log, ct).ConfigureAwait(false);
+            if (string.Equals(definition.Theme, "Both", StringComparison.OrdinalIgnoreCase)
+                && _applyThemeAsync is not null)
+            {
+                // "Both" → capture Light pass then Dark pass.
+                await RunOneAsync(definition with { Theme = "Light" }, log, ct)
+                    .ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
+                await RunOneAsync(definition with { Theme = "Dark" }, log, ct)
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                await RunOneAsync(definition, log, ct).ConfigureAwait(false);
+            }
         }
     }
 
@@ -179,8 +192,6 @@ public sealed class ScreenshotRefreshRunner
                 await _applyThemeAsync(definition.Theme).ConfigureAwait(false);
                 await Task.Delay(50, ct).ConfigureAwait(false); // allow theme resources to settle
             }
-            // TODO: iterate twice for Both (capture -light and -dark variants separately)
-
             // ── Step 2 — Apply fixture ────────────────────────────────────────
             var fixture = ScreenshotFixture.Empty;
 
