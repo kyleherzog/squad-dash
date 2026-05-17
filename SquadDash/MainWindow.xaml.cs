@@ -396,7 +396,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _loopPausedForQuickReply; // set at startup when loop resume is held for pending quick replies
     private int _activeTintStop;                       // 0 = natural; 1–7 = hue offsets at 45° steps
     private Dictionary<string, Color>? _tintBaseline; // baseline theme colors per TintKeys.All, refreshed on theme switch
-    private MenuItem? _tintSubmenu;                    // reference to tint submenu for UpdateTintMenuState()
+    private ResourceDictionary? _themeDict;            // the currently-loaded theme ResourceDictionary (cached to avoid URI-search fragility)
     // Held while a loop iteration is waiting for user follow-up after quick replies.
     // Completed (true) when input arrives; completed (false) on abort.
     private TaskCompletionSource<bool>? _loopFollowUpTcs;
@@ -21688,8 +21688,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _remoteAccessMenuItem.Click += RemoteAccessMenuItem_Click;
         RemoteMenuItem.Items.Add(_remoteAccessMenuItem);
 
-        _tintSubmenu = BuildTintSubmenu();
-        WorkspaceMenuItem.Items.Add(_tintSubmenu);
+        EnsureTintMenuItems();
 
         AddWorkspaceMenuSeparator();
 
@@ -23020,6 +23019,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             mergedDicts.Remove(existing);
 
         mergedDicts.Add(new ResourceDictionary { Source = themeUri });
+        _themeDict = mergedDicts.Last();
         CaptureTintBaseline();
         ApplyTintStop(_activeTintStop, notify: false);
         var previousThemeName = _activeThemeName;
@@ -23061,8 +23061,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void CaptureTintBaseline()
     {
         _tintBaseline = new Dictionary<string, Color>(StringComparer.Ordinal);
-        var themeDict = Application.Current.Resources.MergedDictionaries
-            .LastOrDefault(d => d.Source?.OriginalString?.Contains("/Themes/") == true);
+        var themeDict = _themeDict;
         if (themeDict is null) return;
         foreach (var key in TintKeys.All)
         {
@@ -23127,39 +23126,48 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void UpdateTintMenuState()
     {
-        if (_tintSubmenu is null) return;
-        for (int i = 0; i < _tintSubmenu.Items.Count; i++)
+        for (int i = 0; i < TintMenuItem.Items.Count; i++)
         {
-            if (_tintSubmenu.Items[i] is MenuItem item)
+            if (TintMenuItem.Items[i] is MenuItem item)
                 item.IsChecked = i == _activeTintStop;
         }
     }
 
-    private MenuItem BuildTintSubmenu()
+    private void EnsureTintMenuItems()
     {
-        string[] labels = ["Natural", "Warm+", "Yellow", "Lime", "Cool", "Blue", "Violet", "Rose"];
-        var sub = new MenuItem
+        if (TintMenuItem.Items.Count > 0)
         {
-            Header = "🎨 Workspace _Tint",
-            Style = (Style)FindResource("ThemedMenuItemStyle")
-        };
+            UpdateTintMenuState();
+            return;
+        }
+        string[] labels = ["Natural", "Warm+", "Yellow", "Lime", "Cool", "Blue", "Violet", "Rose"];
         for (int i = 0; i < labels.Length; i++)
         {
             var stop = i;
             var item = new MenuItem
             {
-                Header = labels[i],
+                Header    = labels[i],
                 IsCheckable = true,
-                IsChecked = _activeTintStop == stop,
-                Style = (Style)FindResource("ThemedMenuItemStyle")
+                IsChecked   = _activeTintStop == stop,
+                Style       = (Style)FindResource("ThemedMenuItemStyle")
             };
             item.Click += (_, _) =>
             {
                 try { SetWorkspaceTintStop(stop); }
                 catch (Exception ex) { HandleUiCallbackException("TintStop_Click", ex); }
             };
-            sub.Items.Add(item);
+            TintMenuItem.Items.Add(item);
         }
+    }
+
+    private MenuItem BuildTintSubmenu()
+    {
+        // Kept for compatibility but no longer used — tint lives in TintMenuItem (View menu).
+        var sub = new MenuItem
+        {
+            Header = "_Tint",
+            Style  = (Style)FindResource("ThemedMenuItemStyle")
+        };
         return sub;
     }
 

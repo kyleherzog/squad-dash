@@ -403,6 +403,10 @@
                                   Click="ThemeDarkMenuItem_Click" />
                     </MenuItem>
                     <Separator Style="{StaticResource ThemedMenuSeparatorStyle}"/>
+                    <MenuItem x:Name="TintMenuItem"
+                              Header="_Tint"
+                              ItemContainerStyle="{StaticResource ThemedMenuItemStyle}" />
+                    <Separator Style="{StaticResource ThemedMenuSeparatorStyle}"/>
                     <MenuItem x:Name="ToolIconGalleryMenuItem"
                               Header="Tool Icon Gallery..."
                               Visibility="Collapsed"
