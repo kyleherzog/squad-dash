@@ -284,22 +284,10 @@ internal sealed class PromptAttachmentViewerWindow : Window
 
     /// <summary>
     /// Strips the outer <c>&lt;attachment …&gt;…&lt;/attachment&gt;</c> wrapper from a typed
-    /// attachment block, returning just the inner content.  Falls back to returning the original
-    /// string unchanged if the format is not recognised (e.g. old SQUADCLIP blocks).
+    /// attachment block, returning just the inner content with any escaped close tags restored.
+    /// Falls back to returning the original string unchanged if the format is not recognised
+    /// (e.g. old SQUADCLIP blocks).
     /// </summary>
-    private static string StripAttachmentXmlTags(string block)
-    {
-        if (!block.StartsWith("<attachment ", StringComparison.Ordinal))
-            return block;
-        var closeAngle = block.IndexOf('>', StringComparison.Ordinal);
-        if (closeAngle < 0) return block;
-        const string closeTag = "</attachment>";
-        var closeIdx = block.LastIndexOf(closeTag, StringComparison.Ordinal);
-        if (closeIdx < 0) return block;
-        // Content is between the '>' of the open tag and the start of </attachment>.
-        var start = closeAngle + 1;
-        if (start < block.Length && block[start] == '\n') start++; // skip leading newline
-        var content = block[start..closeIdx];
-        return content.TrimEnd();
-    }
+    private static string StripAttachmentXmlTags(string block) =>
+        AttachmentBlockFormatter.ExtractAttachmentContent(block);
 }

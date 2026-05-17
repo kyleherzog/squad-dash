@@ -24982,14 +24982,11 @@ public partial class MainWindow : Window, ILiveElementLocator
     /// Builds a typed XML-style attachment block for the AI.
     /// Format: <c>&lt;attachment type="…" title="…"&gt;\ncontent\n&lt;/attachment&gt;</c>.
     /// The <paramref name="title"/> attribute is omitted when null.
+    /// Any <c>&lt;/attachment&gt;</c> in <paramref name="content"/> is escaped so the
+    /// block close tag cannot collide with content.
     /// </summary>
-    private static string BuildTypedAttachmentBlock(string type, string? title, string content)
-    {
-        var openTag = title is not null
-            ? $"<attachment type=\"{type}\" title=\"{title.Replace("\"", "&quot;")}\">"
-            : $"<attachment type=\"{type}\">";
-        return $"{openTag}\n{content}\n</attachment>";
-    }
+    private static string BuildTypedAttachmentBlock(string type, string? title, string content) =>
+        AttachmentBlockFormatter.BuildTypedAttachmentBlock(type, title, content);
 
     [Obsolete("Use BuildTypedAttachmentBlock for new attachments. This overload is retained only to generate " +
               "SQUADCLIP fences for addToNotes callers that still expect the old markdown format.")]
@@ -25026,41 +25023,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     /// <c>&lt;attachment&gt;</c> blocks), returns the index of the first character of the user's
     /// actual message.  Returns -1 if the header section cannot be parsed.
     /// </summary>
-    private static int StripTypedAttachmentHeaders(string prompt)
-    {
-        int pos = 0;
-
-        // Skip optional preamble (single line).
-        const string Preamble = "The user has attached the following context items. Please refer to them as needed.";
-        if (prompt.StartsWith(Preamble, StringComparison.Ordinal))
-        {
-            pos = Preamble.Length;
-            if (pos < prompt.Length && prompt[pos] == '\n') pos++;
-        }
-
-        // Scan past attachment blocks: XML <attachment> tags, bracket lines, and plain lines.
-        while (pos < prompt.Length)
-        {
-            // \n\n is the terminal separator between attachments and user text.
-            if (pos + 1 < prompt.Length && prompt[pos] == '\n' && prompt[pos + 1] == '\n')
-                return pos + 2;
-
-            // XML typed block: <attachment ...>...</attachment>
-            const string AttachOpen = "<attachment ";
-            const string AttachClose = "</attachment>";
-            if (pos + AttachOpen.Length <= prompt.Length &&
-                prompt.AsSpan(pos, AttachOpen.Length).SequenceEqual(AttachOpen.AsSpan()))
-            {
-                var closeIdx = prompt.IndexOf(AttachClose, pos, StringComparison.Ordinal);
-                if (closeIdx < 0) return -1;
-                pos = closeIdx + AttachClose.Length;
-                continue;
-            }
-
-            pos++;
-        }
-        return -1;
-    }
+    private static int StripTypedAttachmentHeaders(string prompt) =>
+        AttachmentBlockFormatter.StripTypedAttachmentHeaders(prompt);
 
     private void AttachContextFollowUp(string description, string contentBlock)
     {

@@ -163,6 +163,7 @@
     <Compile Include="..\SquadDash\DocStatusStore.cs" Link="Source\DocStatusStore.cs" />
     <Compile Include="..\SquadDash\LoopOutputStore.cs" Link="Source\LoopOutputStore.cs" />
     <Compile Include="..\SquadDash\DocTopicsLoader.cs" Link="Source\DocTopicsLoader.cs" />
+    <Compile Include="..\SquadDash\AttachmentBlockFormatter.cs" Link="Source\AttachmentBlockFormatter.cs" />
     <Compile Include="..\SquadDash\TranscriptTextUtilities.cs" Link="Source\TranscriptTextUtilities.cs" />
     <Compile Include="..\SquadDash\DocumentUtilities.cs" Link="Source\DocumentUtilities.cs" />
     <Compile Include="..\SquadDash\SmoothDictationHelper.cs" Link="Source\SmoothDictationHelper.cs" />
