@@ -2215,6 +2215,23 @@ public partial class MainWindow : Window, ILiveElementLocator
             return;
         }
 
+        // Silently discard items that have no text and no attachments.
+        while (item is not null && IsEmptyQueueItem(item))
+        {
+            SquadDashTrace.Write("Queue", $"DrainQueueAsync: discarding empty item #{item.SequenceNumber}");
+            _promptQueue.Remove(item.Id);
+            _followUpAttachments.Remove(item.Id);
+            SyncQueuePanel();
+            item = GetAutoDispatchCandidate();
+        }
+        if (item is null)
+        {
+            if (IsRightmostQueueTabActive())
+                HandleRightmostTabHold();
+            await MaybeFireQueuedLoopAsync();
+            return;
+        }
+
         var seqNum = item.SequenceNumber;
         SquadDashTrace.Write("Queue", $"DrainQueueAsync: dispatching #{seqNum} queueCount={_promptQueue.Count}");
         _promptQueue.Remove(item.Id);
@@ -2249,12 +2266,27 @@ public partial class MainWindow : Window, ILiveElementLocator
     private static string ApplyDictationAnnotation(PromptQueueItem item) =>
         item.IsDictated ? item.Text + "\n(some or all of this prompt was dictated by voice)" : item.Text;
 
+    // Returns true when a queued item has no text and no attachments — it should be silently discarded.
+    private bool IsEmptyQueueItem(PromptQueueItem item) =>
+        string.IsNullOrWhiteSpace(item.Text) &&
+        (!_followUpAttachments.TryGetValue(item.Id, out var atts) || atts.Count == 0);
+
     private async Task DrainQueueIfNeededAsync()
     {
         while (CanAutoDispatchPromptQueue(nameof(DrainQueueIfNeededAsync)) && !LastTurnNeedsInput())
         {
             var item = GetAutoDispatchCandidate();
             if (item is null) break;
+
+            // Silently discard items that have no text and no attachments.
+            if (IsEmptyQueueItem(item))
+            {
+                SquadDashTrace.Write("Queue", $"DrainQueueIfNeededAsync: discarding empty item #{item.SequenceNumber}");
+                _promptQueue.Remove(item.Id);
+                _followUpAttachments.Remove(item.Id);
+                SyncQueuePanel();
+                continue;
+            }
 
             var seqNum = item.SequenceNumber;
             SquadDashTrace.Write("Queue", $"DrainQueueIfNeededAsync: dispatching #{seqNum} queueCount={_promptQueue.Count}");
@@ -2334,6 +2366,16 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             var item = GetAutoDispatchCandidate();
             if (item is null) break;
+
+            // Silently discard items that have no text and no attachments.
+            if (IsEmptyQueueItem(item))
+            {
+                SquadDashTrace.Write("Queue", $"DrainQueueBeforeLoopIterationAsync: discarding empty item #{item.SequenceNumber}");
+                _promptQueue.Remove(item.Id);
+                _followUpAttachments.Remove(item.Id);
+                SyncQueuePanel();
+                continue;
+            }
 
             dispatched = true;
             var seqNum = item.SequenceNumber;
