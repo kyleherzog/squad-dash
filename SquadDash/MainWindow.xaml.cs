@@ -5621,7 +5621,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             reloadPanel: () => Dispatcher.BeginInvoke(LoadTasksPanel),
             attachFollowUp: task => AttachContextFollowUp(
                 $"Task: {task.Text}",
-                BuildClipboardContentBlock(BuildTaskContentBlock(task))),
+                BuildTypedAttachmentBlock("task", task.Text, BuildTaskContentBody(task))),
             addToNotes: task => AddNoteFromTextWithTitle(
                 $"Task - {task.Text}",
                 BuildTaskContentBlock(task)),
@@ -8151,7 +8151,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 var clipText = Clipboard.GetText();
                 if (!string.IsNullOrEmpty(clipText))
-                    AttachContextFollowUp(BuildClipboardAttachDescription(clipText), BuildClipboardContentBlock(clipText));
+                    AttachContextFollowUp(BuildClipboardAttachDescription(clipText), BuildTypedAttachmentBlock("clipboard", null, clipText));
                 e.Handled = true;
                 return;
             }
@@ -16551,6 +16551,14 @@ public partial class MainWindow : Window, ILiveElementLocator
                 if (bodyStart >= 0)
                     displayPrompt = displayPrompt[bodyStart..];
             }
+            else if (displayPrompt.StartsWith("The user has attached", StringComparison.Ordinal) ||
+                     displayPrompt.StartsWith("<attachment ", StringComparison.Ordinal))
+            {
+                // New typed-attachment format: scan past all XML blocks to find the user text.
+                var bodyStart = StripTypedAttachmentHeaders(displayPrompt);
+                if (bodyStart >= 0)
+                    displayPrompt = displayPrompt[bodyStart..];
+            }
             else
             {
                 // Strip the header block (everything before the first \n\n separator).
@@ -16571,6 +16579,16 @@ public partial class MainWindow : Window, ILiveElementLocator
                 if (bodyStart >= 0)
                     displayPrompt = displayPrompt[bodyStart..];
                 // Content is not reconstructed for historical turns; the 📎 link is shown.
+                attachmentsForViewer = null;
+            }
+            else if (displayPrompt.StartsWith("The user has attached", StringComparison.Ordinal) ||
+                     displayPrompt.StartsWith("<attachment ", StringComparison.Ordinal))
+            {
+                // New typed-attachment format used by recent prompts.
+                hasAttachments = true;
+                var bodyStart = StripTypedAttachmentHeaders(displayPrompt);
+                if (bodyStart >= 0)
+                    displayPrompt = displayPrompt[bodyStart..];
                 attachmentsForViewer = null;
             }
             else
@@ -24786,15 +24804,16 @@ public partial class MainWindow : Window, ILiveElementLocator
         string content = "";
         try { if (!string.IsNullOrEmpty(path)) content = File.ReadAllText(path); } catch { }
 
-        var block = new System.Text.StringBuilder();
-        block.AppendLine($"## Note: {note.Title}");
+        var body = new System.Text.StringBuilder();
         if (!string.IsNullOrEmpty(path))
-            block.AppendLine($"File: {path}");
-        block.AppendLine();
+            body.AppendLine($"File: {path}");
         if (!string.IsNullOrWhiteSpace(content))
-            block.Append(content);
+        {
+            if (body.Length > 0) body.AppendLine();
+            body.Append(content);
+        }
 
-        AttachContextFollowUp($"Note: {note.Title}", BuildClipboardContentBlock(block.ToString().TrimEnd()));
+        AttachContextFollowUp($"Note: {note.Title}", BuildTypedAttachmentBlock("note", note.Title, body.ToString().TrimEnd()));
     }
 
     private void AttachTopicFollowUp(TreeViewItem treeItem, string filePath)
@@ -24813,14 +24832,15 @@ public partial class MainWindow : Window, ILiveElementLocator
         string content = "";
         try { content = File.ReadAllText(filePath); } catch { }
 
-        var block = new System.Text.StringBuilder();
-        block.AppendLine($"## Documentation topic: {title}");
-        block.AppendLine($"File: {filePath}");
-        block.AppendLine();
+        var body = new System.Text.StringBuilder();
+        body.AppendLine($"File: {filePath}");
         if (!string.IsNullOrWhiteSpace(content))
-            block.Append(content);
+        {
+            body.AppendLine();
+            body.Append(content);
+        }
 
-        AttachContextFollowUp($"Topic: {title}", BuildClipboardContentBlock(block.ToString().TrimEnd()));
+        AttachContextFollowUp($"Topic: {title}", BuildTypedAttachmentBlock("doc", title, body.ToString().TrimEnd()));
     }
 
     private static string BuildTaskContentBlock(TaskItem task)
@@ -24828,6 +24848,32 @@ public partial class MainWindow : Window, ILiveElementLocator
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("## Task context");
         sb.AppendLine($"Title: {task.Text}");
+        var priority = task.Emoji switch {
+            "🔴" => "High",
+            "🟡" => "Mid",
+            "🟢" => "Low",
+            "✅" => "Done",
+            _    => task.Emoji
+        };
+        sb.AppendLine($"Priority: {priority}");
+        sb.AppendLine($"Status: {(task.IsChecked ? "Done" : "Open")}");
+        if (!string.IsNullOrWhiteSpace(task.Owner))
+            sb.AppendLine($"Owner: {task.Owner}");
+        if (!string.IsNullOrWhiteSpace(task.Description))
+        {
+            sb.AppendLine();
+            sb.AppendLine("Description:");
+            sb.AppendLine(task.Description.Trim());
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// Body content for a task typed attachment block (no markdown header — title goes in the XML attribute).
+    /// </summary>
+    private static string BuildTaskContentBody(TaskItem task)
+    {
+        var sb = new System.Text.StringBuilder();
         var priority = task.Emoji switch {
             "🔴" => "High",
             "🟡" => "Mid",
@@ -24874,10 +24920,23 @@ public partial class MainWindow : Window, ILiveElementLocator
         return $"Clipboard: {preview} ({text.Length:N0} chars)";
     }
 
+    /// <summary>
+    /// Builds a typed XML-style attachment block for the AI.
+    /// Format: <c>&lt;attachment type="…" title="…"&gt;\ncontent\n&lt;/attachment&gt;</c>.
+    /// The <paramref name="title"/> attribute is omitted when null.
+    /// </summary>
+    private static string BuildTypedAttachmentBlock(string type, string? title, string content)
+    {
+        var openTag = title is not null
+            ? $"<attachment type=\"{type}\" title=\"{title.Replace("\"", "&quot;")}\">"
+            : $"<attachment type=\"{type}\">";
+        return $"{openTag}\n{content}\n</attachment>";
+    }
+
+    [Obsolete("Use BuildTypedAttachmentBlock for new attachments. This overload is retained only to generate " +
+              "SQUADCLIP fences for addToNotes callers that still expect the old markdown format.")]
     private static string BuildClipboardContentBlock(string text)
     {
-        // Nonce-fenced block: safe against any clipboard content including the delimiter itself.
-        // The 8-hex nonce (4 billion possibilities) makes a collision with clipboard text negligible.
         var nonce = Guid.NewGuid().ToString("N")[..8];
         return $"<<<SQUADCLIP:{nonce}>>>\n{text}\n<<<ENDCLIP:{nonce}>>>";
     }
@@ -24901,6 +24960,47 @@ public partial class MainWindow : Window, ILiveElementLocator
         // Expect \n\n separator immediately after the close fence line.
         if (afterClose + 2 <= prompt.Length && prompt[afterClose] == '\n' && prompt[afterClose + 1] == '\n')
             return afterClose + 2;
+        return -1;
+    }
+
+    /// <summary>
+    /// Given a prompt that uses the typed attachment format (preamble line + XML-style
+    /// <c>&lt;attachment&gt;</c> blocks), returns the index of the first character of the user's
+    /// actual message.  Returns -1 if the header section cannot be parsed.
+    /// </summary>
+    private static int StripTypedAttachmentHeaders(string prompt)
+    {
+        int pos = 0;
+
+        // Skip optional preamble (single line).
+        const string Preamble = "The user has attached the following context items. Please refer to them as needed.";
+        if (prompt.StartsWith(Preamble, StringComparison.Ordinal))
+        {
+            pos = Preamble.Length;
+            if (pos < prompt.Length && prompt[pos] == '\n') pos++;
+        }
+
+        // Scan past attachment blocks: XML <attachment> tags, bracket lines, and plain lines.
+        while (pos < prompt.Length)
+        {
+            // \n\n is the terminal separator between attachments and user text.
+            if (pos + 1 < prompt.Length && prompt[pos] == '\n' && prompt[pos + 1] == '\n')
+                return pos + 2;
+
+            // XML typed block: <attachment ...>...</attachment>
+            const string AttachOpen = "<attachment ";
+            const string AttachClose = "</attachment>";
+            if (pos + AttachOpen.Length <= prompt.Length &&
+                prompt.AsSpan(pos, AttachOpen.Length).SequenceEqual(AttachOpen.AsSpan()))
+            {
+                var closeIdx = prompt.IndexOf(AttachClose, pos, StringComparison.Ordinal);
+                if (closeIdx < 0) return -1;
+                pos = closeIdx + AttachClose.Length;
+                continue;
+            }
+
+            pos++;
+        }
         return -1;
     }
 
@@ -25196,8 +25296,14 @@ public partial class MainWindow : Window, ILiveElementLocator
                 ? (op.Length > 120 ? op[..120] + "…" : op)
                 : att.Description;
             return $"[Follow-up on {att.CommitSha} — \"{att.Description}\": {summaryHint}]";
-        });
-        return string.Join("\n", headers) + "\n\n" + text;
+        }).ToList();
+
+        // When the user has any typed content/image attachments, prepend a one-liner so the AI
+        // understands the structure it is receiving.
+        bool hasTypedBlocks = stamped.Any(a => a.ContentBlock != null || a.ImagePath != null);
+        const string AttachmentPreamble = "The user has attached the following context items. Please refer to them as needed.";
+        var headerSection = string.Join("\n", headers);
+        return (hasTypedBlocks ? AttachmentPreamble + "\n" + headerSection : headerSection) + "\n\n" + text;
     }
 
     private void PersistApprovalPanelVisible()    {

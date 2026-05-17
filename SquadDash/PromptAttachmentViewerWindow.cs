@@ -228,8 +228,8 @@ internal sealed class PromptAttachmentViewerWindow : Window
         else if (!string.IsNullOrWhiteSpace(att.ContentBlock))
         {
             // Task/topic/doc/note attachments store their full rendered block here.
-            // Prefer it directly over the generic Summary/OriginalPrompt fallback.
-            text = att.ContentBlock!.TrimEnd();
+            // Strip outer <attachment> XML tags from the new typed format for cleaner display.
+            text = StripAttachmentXmlTags(att.ContentBlock!.TrimEnd());
         }
         else
         {
@@ -280,5 +280,26 @@ internal sealed class PromptAttachmentViewerWindow : Window
     {
         if (string.IsNullOrEmpty(text)) return string.Empty;
         return text.Length > maxLen ? text[..maxLen].TrimEnd() + "…" : text;
+    }
+
+    /// <summary>
+    /// Strips the outer <c>&lt;attachment …&gt;…&lt;/attachment&gt;</c> wrapper from a typed
+    /// attachment block, returning just the inner content.  Falls back to returning the original
+    /// string unchanged if the format is not recognised (e.g. old SQUADCLIP blocks).
+    /// </summary>
+    private static string StripAttachmentXmlTags(string block)
+    {
+        if (!block.StartsWith("<attachment ", StringComparison.Ordinal))
+            return block;
+        var closeAngle = block.IndexOf('>', StringComparison.Ordinal);
+        if (closeAngle < 0) return block;
+        const string closeTag = "</attachment>";
+        var closeIdx = block.LastIndexOf(closeTag, StringComparison.Ordinal);
+        if (closeIdx < 0) return block;
+        // Content is between the '>' of the open tag and the start of </attachment>.
+        var start = closeAngle + 1;
+        if (start < block.Length && block[start] == '\n') start++; // skip leading newline
+        var content = block[start..closeIdx];
+        return content.TrimEnd();
     }
 }
