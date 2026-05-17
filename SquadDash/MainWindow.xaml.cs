@@ -2080,6 +2080,16 @@ public partial class MainWindow : Window, ILiveElementLocator
         PromptTextBox.Focus();
     }
 
+    // Appends to the TAIL of the internal list, which SyncQueuePanel renders as the leftmost tab.
+    private void AddEmptyQueueSlotAtEnd()
+    {
+        _promptQueue.Enqueue(string.Empty, ++_promptQueueSeq);
+        var newId = _promptQueue.Items[^1].Id;
+        SyncQueuePanel();
+        OnQueueTabClicked(newId);
+        PromptTextBox.Focus();
+    }
+
     /// <summary>
     /// Records <paramref name="id"/> as the recently-prioritized item and starts a 3-second
     /// timer that clears the feedback label once it expires. <see cref="SyncQueuePanel"/> reads
@@ -8101,13 +8111,24 @@ public partial class MainWindow : Window, ILiveElementLocator
                 return;
             }
 
-            // ── Ctrl+Q: add a new queue slot — fires from anywhere in the window ────
+            // ── Ctrl+Q: add a new queue slot at the rightmost (front of dispatch) ──
             if (e.Key == Key.Q
                 && (Keyboard.Modifiers & ModifierKeys.Control) != 0
                 && (Keyboard.Modifiers & ModifierKeys.Shift) == 0
                 && (Keyboard.Modifiers & ModifierKeys.Alt)   == 0)
             {
                 AddEmptyQueueSlot();
+                e.Handled = true;
+                return;
+            }
+
+            // ── Ctrl+Shift+Q: add a new queue slot at the leftmost (tail) ────────
+            if (e.Key == Key.Q
+                && (Keyboard.Modifiers & ModifierKeys.Control) != 0
+                && (Keyboard.Modifiers & ModifierKeys.Shift)   != 0
+                && (Keyboard.Modifiers & ModifierKeys.Alt)     == 0)
+            {
+                AddEmptyQueueSlotAtEnd();
                 e.Handled = true;
                 return;
             }
