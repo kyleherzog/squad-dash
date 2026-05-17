@@ -367,4 +367,33 @@ internal sealed class PromptExecutionControllerTests {
     public void RequiresParameter_TrimsWhitespaceBeforeChecking() {
         Assert.That(SlashCommandParameterPolicy.RequiresParameter("  /activate  "), Is.True);
     }
+
+    // ── Attachment-strip history algorithm (PEC lines 1964–1966) ──────────────
+
+    [Test]
+    public void AttachmentStrip_PromptWithAttachmentBlock_HistoryTextIsCleanUserMessage() {
+        // Reproduce the exact 3-line algorithm from
+        // PromptExecutionController.ExecuteCoordinatorTurnAsync (lines 1964–1966).
+        var block = AttachmentBlockFormatter.BuildTypedAttachmentBlock("code", "snippet.cs", "int x = 1;");
+        var visiblePrompt = block + "\n\nPlease review the above.";
+
+        var historyText = visiblePrompt;
+        var bodyStart = AttachmentBlockFormatter.StripTypedAttachmentHeaders(visiblePrompt);
+        if (bodyStart >= 0) historyText = visiblePrompt[bodyStart..];
+
+        Assert.That(historyText, Is.EqualTo("Please review the above."));
+    }
+
+    [Test]
+    public void AttachmentStrip_PlainPromptWithoutAttachmentBlock_HistoryTextIsUnchanged() {
+        // When there is no attachment block, StripTypedAttachmentHeaders returns -1
+        // and the algorithm leaves visiblePrompt untouched.
+        var visiblePrompt = "Just a plain prompt.";
+
+        var historyText = visiblePrompt;
+        var bodyStart = AttachmentBlockFormatter.StripTypedAttachmentHeaders(visiblePrompt);
+        if (bodyStart >= 0) historyText = visiblePrompt[bodyStart..];
+
+        Assert.That(historyText, Is.EqualTo(visiblePrompt));
+    }
 }
