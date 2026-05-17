@@ -155,4 +155,29 @@ internal sealed class DocStatusStoreTests {
 
         Assert.That(DocStatusStore.HasScreenshotPlaceholders(missingPath), Is.False);
     }
+
+    // ── Save() silent-catch contract ──────────────────────────────────────────
+
+    [Test]
+    public void SetApproved_WhenSaveFails_DoesNotThrow() {
+        // Reproduce the Save() silent-catch contract: an I/O failure must never
+        // propagate out of SetApproved / SetNeedsReview.
+        var store = DocStatusStore.Load(_docsRoot);
+        var firstFile = CreateDocFile("first.md");
+
+        // First save succeeds and writes .doc-status.json.
+        store.SetApproved(firstFile);
+
+        // Make the JSON file read-only so the next write throws UnauthorizedAccessException.
+        var jsonPath = Path.Combine(_docsRoot, ".doc-status.json");
+        File.SetAttributes(jsonPath, FileAttributes.ReadOnly);
+
+        var secondFile = CreateDocFile("second.md");
+
+        // The catch block must absorb the failure — no exception should escape.
+        Assert.DoesNotThrow(() => store.SetApproved(secondFile));
+
+        // Restore so TearDown can delete the temp directory.
+        File.SetAttributes(jsonPath, FileAttributes.Normal);
+    }
 }
