@@ -7044,20 +7044,33 @@ public partial class MainWindow : Window, ILiveElementLocator
     /// <summary>Rebuilds the <see cref="DrawingBrush"/> for session-gap stripes using the current theme.</summary>
     private DrawingBrush BuildSessionGapStripeBrush()
     {
-        // Fully opaque solid colors anchored to each theme's TranscriptSurface.
-        // Dark (#1E1C17): band slightly lighter, stripe noticeably lighter.
-        // Light (#FFFCF8): band barely darker, stripe a step darker still.
-        SolidColorBrush lightBand, darkBand;
-        if (string.Equals(_activeThemeName, "Light", StringComparison.OrdinalIgnoreCase))
+        // Derive stripe colors from the live (possibly tinted) TranscriptSurface resource
+        // so the gap pattern always matches the current theme + tint stop.
+        Color baseColor;
+        if (Application.Current.Resources["TranscriptSurface"] is SolidColorBrush themeBrush)
+            baseColor = themeBrush.Color;
+        else if (string.Equals(_activeThemeName, "Light", StringComparison.OrdinalIgnoreCase))
+            baseColor = Color.FromRgb(0xFF, 0xFC, 0xF8);
+        else
+            baseColor = Color.FromRgb(0x1E, 0x1C, 0x17);
+
+        // Blend baseColor toward black (dark theme) or toward a mid-gray (light theme)
+        // to produce two subtly-distinct stripe bands.
+        bool isLight = string.Equals(_activeThemeName, "Light", StringComparison.OrdinalIgnoreCase);
+        Color lightBandColor, darkBandColor;
+        if (isLight)
         {
-            darkBand  = new SolidColorBrush(Color.FromRgb(0xF5, 0xF2, 0xEE));
-            lightBand = new SolidColorBrush(Color.FromRgb(0xE8, 0xE4, 0xDF));
+            darkBandColor  = Blend(baseColor, Colors.Black, 0.04);
+            lightBandColor = Blend(baseColor, Colors.Black, 0.10);
         }
         else
         {
-            darkBand  = new SolidColorBrush(Color.FromRgb(0x28, 0x25, 0x20));
-            lightBand = new SolidColorBrush(Color.FromRgb(0x3C, 0x38, 0x30));
+            darkBandColor  = Blend(baseColor, Colors.White, 0.06);
+            lightBandColor = Blend(baseColor, Colors.White, 0.14);
         }
+
+        var lightBand = new SolidColorBrush(lightBandColor);
+        var darkBand  = new SolidColorBrush(darkBandColor);
         lightBand.Freeze();
         darkBand.Freeze();
 
@@ -7087,6 +7100,12 @@ public partial class MainWindow : Window, ILiveElementLocator
             ViewportUnits = BrushMappingMode.Absolute,
         };
     }
+
+    private static Color Blend(Color a, Color b, double t) => Color.FromArgb(
+        a.A,
+        (byte)(a.R + (b.R - a.R) * t),
+        (byte)(a.G + (b.G - a.G) * t),
+        (byte)(a.B + (b.B - a.B) * t));
 
     /// <summary>
     /// Re-paints all session-gap stripe borders in the coordinator transcript with fresh
