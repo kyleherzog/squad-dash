@@ -164,6 +164,7 @@
     <Compile Include="..\SquadDash\LoopOutputStore.cs" Link="Source\LoopOutputStore.cs" />
     <Compile Include="..\SquadDash\DocTopicsLoader.cs" Link="Source\DocTopicsLoader.cs" />
     <Compile Include="..\SquadDash\AgentReportStore.cs" Link="Source\AgentReportStore.cs" />
+    <Compile Include="..\SquadDash\TintKeys.cs" Link="Source\TintKeys.cs" />
     <Compile Include="..\SquadDash\AttachmentBlockFormatter.cs" Link="Source\AttachmentBlockFormatter.cs" />
     <Compile Include="..\SquadDash\TranscriptTextUtilities.cs" Link="Source\TranscriptTextUtilities.cs" />
     <Compile Include="..\SquadDash\DocumentUtilities.cs" Link="Source\DocumentUtilities.cs" />
