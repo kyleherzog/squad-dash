@@ -3219,6 +3219,53 @@ public partial class MainWindow : Window, ILiveElementLocator
             OnQueueTabRemove(id);
     }
 
+    /// <summary>
+    /// Handles the Ctrl+Delete keyboard shortcut: deletes the active queue tab,
+    /// prompting for confirmation when the item contains text.  Selects the nearest
+    /// adjacent tab after deletion (left neighbour preferred; rightmost remaining as
+    /// fallback; stays on the draft tab if the queue becomes empty).
+    /// </summary>
+    private void DeleteActiveQueueTabWithKeyboard()
+    {
+        if (_activeTabId is null) return;
+        var id = _activeTabId;
+
+        var item = _promptQueue.Items.FirstOrDefault(i => i.Id == id);
+        if (item is null) return;
+
+        // Active tab's live text lives in PromptTextBox (not yet flushed to item.Text).
+        var effectiveText = PromptTextBox.Text;
+
+        if (!string.IsNullOrWhiteSpace(effectiveText))
+        {
+            var result = MessageBox.Show(
+                "Are you sure you want to delete this queued item?",
+                "Delete Queue Item",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+            if (result != MessageBoxResult.Yes)
+                return;
+        }
+
+        // Determine adjacent tab before removal.
+        // Visual order matches CycleQueueTab: null (draft) at [0], Items.Reverse() after.
+        var tabIds = new List<string?> { null };
+        foreach (var itm in _promptQueue.Items.Reverse())
+            tabIds.Add(itm.Id);
+
+        var currentIndex = tabIds.IndexOf(id);
+        string? nextId = currentIndex > 0
+            ? tabIds[currentIndex - 1]               // prefer left neighbour
+            : tabIds.LastOrDefault(t => t != id);    // rightmost remaining (fallback)
+
+        OnQueueTabRemove(id);
+
+        // Navigate to the adjacent tab; null means the draft tab, which OnQueueTabRemove
+        // already restored, so only switch explicitly when nextId is a queue item.
+        if (nextId is not null)
+            OnQueueTabClicked(nextId);
+    }
+
     // ── Queue tab drag-to-reorder ────────────────────────────────────────────
 
     /// <summary>
@@ -8132,6 +8179,18 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 DismissHintPermanently(PromptHintFeature.CtrlQAddQueue);
                 AddEmptyQueueSlotAtEnd();
+                e.Handled = true;
+                return;
+            }
+
+            // ── Ctrl+Delete: delete the active queue tab ──────────────────────────
+            if (e.Key == Key.Delete
+                && (Keyboard.Modifiers & ModifierKeys.Control) != 0
+                && (Keyboard.Modifiers & ModifierKeys.Shift) == 0
+                && (Keyboard.Modifiers & ModifierKeys.Alt)   == 0
+                && _activeTabId is not null)
+            {
+                DeleteActiveQueueTabWithKeyboard();
                 e.Handled = true;
                 return;
             }
