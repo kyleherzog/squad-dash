@@ -392,6 +392,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _loopQueued;
     private LoopMode _activeLoopMode = LoopMode.NativeAgents; // set at loop start; Shift+click overrides to SquadCli
     private bool _loopInterruptedByQueue; // set when user enqueues a prompt while native loop is running
+    private bool _loopPausedForQuickReply; // set at startup when loop resume is held for pending quick replies
     // Held while a loop iteration is waiting for user follow-up after quick replies.
     // Completed (true) when input arrives; completed (false) on abort.
     private TaskCompletionSource<bool>? _loopFollowUpTcs;
@@ -2434,10 +2435,13 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private async Task MaybeFireQueuedLoopAsync()
     {
-        bool shouldResume = _loopQueued || _loopInterruptedByQueue;
+        bool shouldResume = _loopQueued || _loopInterruptedByQueue || _loopPausedForQuickReply;
         if (!shouldResume || _isPromptRunning || IsLoopRunning) return;
+        bool wasQueueResume = _loopQueued || _loopInterruptedByQueue;
+        bool wasQrResume    = _loopPausedForQuickReply;
         _loopQueued = false;
         _loopInterruptedByQueue = false;
+        _loopPausedForQuickReply = false;
         _conversationManager.UpdateQueuedPromptsState(
             _promptQueue.Items, _followUpAttachments,
             queueRightmostHeld: IsRightmostQueueTabActive(),
@@ -2447,7 +2451,10 @@ public partial class MainWindow : Window, ILiveElementLocator
         SyncLoopPanel();
         try
         {
-            AppendLoopOutputLine($"▶ Loop starting — {LoopTimestamp()} — queue drained.", LoopLifecycleBrush);
+            var resumeMsg = wasQueueResume
+                ? $"▶ Loop starting — {LoopTimestamp()} — queue drained."
+                : $"▶ Loop resuming — {LoopTimestamp()} — quick replies answered.";
+            AppendLoopOutputLine(resumeMsg, LoopLifecycleBrush);
             AppendLine("▶ Starting queued loop…", (Brush)FindResource("SubtleText"));
             await StartLoopImmediateAsync(resumeFromIteration: _loopCurrentIteration);
         }
@@ -8133,7 +8140,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 var clipText = Clipboard.GetText();
                 if (!string.IsNullOrEmpty(clipText))
-                    AttachContextFollowUp(BuildClipboardAttachDescription(clipText), clipText);
+                    AttachContextFollowUp(BuildClipboardAttachDescription(clipText), BuildClipboardContentBlock(clipText));
                 e.Handled = true;
                 return;
             }
@@ -14047,7 +14054,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                 {
                     if (_lastQuickReplyEntry?.AllowQuickReplies == true)
                     {
-                        AppendLoopOutputLine("⏸ Loop paused — pending quick replies require your input. Answer them, then press Start Loop to resume.", LoopLifecycleBrush);
+                        _loopPausedForQuickReply = true;
+                        AppendLoopOutputLine("⏸ Loop paused — pending quick replies require your input. The loop will resume automatically after you respond.", LoopLifecycleBrush);
                         SyncLoopPanel();
                         return;
                     }
@@ -16514,43 +16522,69 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         if (hasAttachments)
         {
-            // Strip the header block (everything before the first \n\n separator).
-            var nnIdx = displayPrompt.IndexOf("\n\n", StringComparison.Ordinal);
-            if (nnIdx >= 0)
-                displayPrompt = displayPrompt[(nnIdx + 2)..];
+            // Nonce-fenced clipboard blocks (<<<SQUADCLIP:nonce>>>) may contain \n\n inside
+            // the clipboard text, so we cannot split on the first \n\n — we must find the
+            // matching close fence first, then the \n\n that follows it.
+            if (displayPrompt.StartsWith("<<<SQUADCLIP:", StringComparison.Ordinal))
+            {
+                var bodyStart = StripClipboardFenceHeader(displayPrompt);
+                if (bodyStart >= 0)
+                    displayPrompt = displayPrompt[bodyStart..];
+            }
+            else
+            {
+                // Strip the header block (everything before the first \n\n separator).
+                var nnIdx = displayPrompt.IndexOf("\n\n", StringComparison.Ordinal);
+                if (nnIdx >= 0)
+                    displayPrompt = displayPrompt[(nnIdx + 2)..];
+            }
         }
         else
         {
             // Historical turns: detect attachment header prefix by content pattern.
-            var nnIdx = displayPrompt.IndexOf("\n\n", StringComparison.Ordinal);
-            if (nnIdx > 0)
+            // Nonce-fenced clipboard blocks start with <<<SQUADCLIP: — handle before the
+            // \n\n-split path because the clipboard content may itself contain \n\n.
+            if (displayPrompt.StartsWith("<<<SQUADCLIP:", StringComparison.Ordinal))
             {
-                var prefix = displayPrompt[..nnIdx];
-                if (prefix.StartsWith("[Follow-up on ", StringComparison.Ordinal) ||
-                    prefix.StartsWith("Regarding this section of the transcript:", StringComparison.Ordinal) ||
-                    prefix.Contains("[Attached image:", StringComparison.Ordinal))
+                hasAttachments = true;
+                var bodyStart = StripClipboardFenceHeader(displayPrompt);
+                if (bodyStart >= 0)
+                    displayPrompt = displayPrompt[bodyStart..];
+                // Content is not reconstructed for historical turns; the 📎 link is shown.
+                attachmentsForViewer = null;
+            }
+            else
+            {
+                var nnIdx = displayPrompt.IndexOf("\n\n", StringComparison.Ordinal);
+                if (nnIdx > 0)
                 {
-                    hasAttachments = true;
-                    displayPrompt  = displayPrompt[(nnIdx + 2)..];
-
-                    // Reconstruct structured attachment objects from saved header lines so the
-                    // viewer can show image thumbnails for [Attached image: path] entries.
-                    var lines = prefix.Split('\n');
-                    var reconstructed = new List<FollowUpAttachment>();
-                    foreach (var line in lines)
+                    var prefix = displayPrompt[..nnIdx];
+                    if (prefix.StartsWith("[Follow-up on ", StringComparison.Ordinal) ||
+                        prefix.StartsWith("Regarding this section of the transcript:", StringComparison.Ordinal) ||
+                        prefix.Contains("[Attached image:", StringComparison.Ordinal))
                     {
-                        const string imgPrefix = "[Attached image: ";
-                        if (line.StartsWith(imgPrefix, StringComparison.Ordinal) && line.EndsWith("]"))
+                        hasAttachments = true;
+                        displayPrompt  = displayPrompt[(nnIdx + 2)..];
+
+                        // Reconstruct structured attachment objects from saved header lines so the
+                        // viewer can show image thumbnails for [Attached image: path] entries.
+                        var lines = prefix.Split('\n');
+                        var reconstructed = new List<FollowUpAttachment>();
+                        foreach (var line in lines)
                         {
-                            var imagePath = line[imgPrefix.Length..^1];
-                            reconstructed.Add(new FollowUpAttachment("", "Image", null, null, null, ImagePath: imagePath));
+                            const string imgPrefix = "[Attached image: ";
+                            if (line.StartsWith(imgPrefix, StringComparison.Ordinal) && line.EndsWith("]"))
+                            {
+                                var imagePath = line[imgPrefix.Length..^1];
+                                reconstructed.Add(new FollowUpAttachment("", "Image", null, null, null, ImagePath: imagePath));
+                            }
+                            else if (!string.IsNullOrWhiteSpace(line))
+                            {
+                                reconstructed.Add(new FollowUpAttachment("", "Attachment", line, null));
+                            }
                         }
-                        else if (!string.IsNullOrWhiteSpace(line))
-                        {
-                            reconstructed.Add(new FollowUpAttachment("", "Attachment", line, null));
-                        }
+                        attachmentsForViewer = reconstructed.Count > 0 ? reconstructed : null;
                     }
-                    attachmentsForViewer = reconstructed.Count > 0 ? reconstructed : null;
                 }
             }
         }
@@ -24818,6 +24852,36 @@ public partial class MainWindow : Window, ILiveElementLocator
             ? normalized[..PreviewLength] + "…"
             : normalized;
         return $"Clipboard: {preview} ({text.Length:N0} chars)";
+    }
+
+    private static string BuildClipboardContentBlock(string text)
+    {
+        // Nonce-fenced block: safe against any clipboard content including the delimiter itself.
+        // The 8-hex nonce (4 billion possibilities) makes a collision with clipboard text negligible.
+        var nonce = Guid.NewGuid().ToString("N")[..8];
+        return $"<<<SQUADCLIP:{nonce}>>>\n{text}\n<<<ENDCLIP:{nonce}>>>";
+    }
+
+    /// <summary>
+    /// Given a <paramref name="prompt"/> that starts with a nonce-fenced clipboard block
+    /// (<c>&lt;&lt;&lt;SQUADCLIP:nonce&gt;&gt;&gt;</c>), returns the index of the first character
+    /// AFTER the close fence and its trailing <c>\n\n</c> separator (i.e. the start of the user's
+    /// actual prompt body).  Returns -1 if the fence is malformed or the separator is missing.
+    /// </summary>
+    private static int StripClipboardFenceHeader(string prompt)
+    {
+        // Open fence line: <<<SQUADCLIP:{nonce}>>>
+        var openEnd = prompt.IndexOf(">>>", StringComparison.Ordinal);
+        if (openEnd < 0) return -1;
+        var nonce = prompt["<<<SQUADCLIP:".Length..openEnd];
+        var closeFence = $"\n<<<ENDCLIP:{nonce}>>>";
+        var closeIdx = prompt.IndexOf(closeFence, openEnd, StringComparison.Ordinal);
+        if (closeIdx < 0) return -1;
+        var afterClose = closeIdx + closeFence.Length;
+        // Expect \n\n separator immediately after the close fence line.
+        if (afterClose + 2 <= prompt.Length && prompt[afterClose] == '\n' && prompt[afterClose + 1] == '\n')
+            return afterClose + 2;
+        return -1;
     }
 
     private void AttachContextFollowUp(string description, string contentBlock)

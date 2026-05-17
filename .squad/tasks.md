@@ -30,7 +30,7 @@
   coordination flows) are not exercised. Audit the existing tests, identify missing paths, and fill
   them in. Focus on correctness contracts rather than line-count.
 
-- [ ] **Loop Settings popup — render loop file frontmatter as UI controls** *(Owner: Lyra Morn)*
+- [x] **Loop Settings popup — render loop file frontmatter as UI controls** *(Owner: Lyra Morn)*
   When the user right-clicks the gear/settings icon in the Loop panel, parse the YAML frontmatter
   of the active loop `.md` file and render its keys as controls in a popup:
   - Known UI keys get typed controls: `commit_after_task` → 3-way radio/dropdown (`always`/`never`/`ask`);
@@ -39,14 +39,15 @@
   - On save, write updated values back to the frontmatter block of the loop file.
   - Keys prefixed with `#` (comments) or without a recognized type hint should be ignored or shown as read-only labels.
   Scope: parsing, popup XAML, save-back logic. The `{{variable}}` substitution at prompt send time is a separate task.
+  ✅ Implemented — `OpenLoopConfigFlyout` / `LoopConfigFlyoutMode`; frontmatter parsed via `LoopMdParser.Parse` and rendered as typed controls; save-back wired.
 
-- [ ] **Loop "Do these" — inject TasksFilterBox text into live loop prompt** *(Owner: Lyra Morn)*
+- [x] **Loop "Do these" — inject TasksFilterBox text into live loop prompt** *(Owner: Lyra Morn)*
   When the "▶ Do these" button starts the loop, the active Tasks panel filter text is currently only
   substituted in the preview window (`RefreshLoopMergedView`), not in the actual prompt sent to the AI.
   The `[**FILTER**]` placeholder (and its smart context-aware expansion) must also be applied at loop
   start time — either by writing a temporary substituted copy of the loop file, or by injecting the
   filter as a `{{variable}}` that the loop controller resolves before sending the prompt.
-  **See TODO comment in `TasksPanelDoTheseButton_Click` (commit 9460f90).**
+  ✅ Fixed (commit d4c5c1b) — `BuildFilterInstruction` shared by preview+live; `LoopController.StartAsync` takes `filterText`; both paths unified via `BuildMergedBody`; system vars `{{routing_instruction}}` etc. removed from shipped loop files.
 
 - [x] **Loop Settings — `{{variable}}` injection at prompt send time** *(Owner: Arjun Sen)*
   Before sending the loop prompt, substitute `{{key}}` tokens in the prompt body with the
@@ -244,6 +245,10 @@
 
 > Full details in `.squad/completed-tasks.md`. This section is a compact AI-recall index only.
 
+- [x] Loop — multi-turn iterations (auto-pause on quick replies, resume on user input) — ✅ Implemented (commit 26ead85; `ExecuteLoopIterationAsync`; `_loopFollowUpTcs`; `CanAutoDispatchPromptQueue` guard; 10 new tests in `LoopMultiTurnTests.cs`; 1637 pass)
+- [x] Loop — `LoopController` harden `onBeforeIteration` exceptions — ✅ Fixed (commit 7932ea8; try/catch around `await _onBeforeIteration()`; break on stop/cancel, continue otherwise; test 9 updated)
+- [x] Loop — `loop-interactive-repair.md` frontmatter repair + `{{#if}}` conditional commit step — ✅ Fixed (commits 390ebfb, e0a09e8; redundant `stop_loop` JSON block removed; Step 5 uses "Continue to next task" quick reply)
+- [x] Transcript — heading inline rendering (commit hash links, backtick spans in headings) — ✅ Fixed (commit 9c22228; headings now use `AppendInlineMarkdown` path; bold preserved via `Bold` span; 5 new tests in `MarkdownDocumentRendererHeadingTests.cs`)
 - [x] Loop panel — enum options with ≤5 choices render as radio buttons — ✅ Implemented (commit 751179a; `CreateEnumOptionControl` branches on choice count; GroupName mutual exclusion; 12px indent; ≥6 choices keep ComboBox)
 - [x] [Vesper audit] Test coverage — WorkspaceOpenCoordinator, PromptInteractionLogic multi-path workflows — ✅ Implemented (commit d05de11; 11 new NUnit tests; whitespace workspace folder filter; contended-lease Blocked path; GetSlashCommand \n split; /queue-sim+/test-queue immediate-local; single-item history round-trip)
 - [x] [Vesper audit] Test coverage — BuiltInPromptInjections, PromptContextDiagnostics — ✅ Implemented (commit 6601175; 63 new NUnit tests; fake regex evaluator for injections; all risk bands + trace summary fields covered)
