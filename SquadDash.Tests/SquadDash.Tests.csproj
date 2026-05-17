@@ -33,9 +33,20 @@
 
   <ItemGroup>
     <Compile Include="..\SquadDash\Screenshots\IFixtureLoader.cs" Link="Source\IFixtureLoader.cs" />
+    <Compile Include="..\SquadDash\Screenshots\IReplayableUiAction.cs" Link="Source\IReplayableUiAction.cs" />
+    <Compile Include="..\SquadDash\Screenshots\ScreenshotCaptureRequestedEventArgs.cs" Link="Source\ScreenshotCaptureRequestedEventArgs.cs" />
+    <Compile Include="..\SquadDash\Screenshots\ScreenshotComparator.cs" Link="Source\ScreenshotComparator.cs" />
+    <Compile Include="..\SquadDash\Screenshots\ScreenshotComparisonResult.cs" Link="Source\ScreenshotComparisonResult.cs" />
+    <Compile Include="..\SquadDash\Screenshots\ScreenshotDefinitionRegistry.cs" Link="Source\ScreenshotDefinitionRegistry.cs" />
     <Compile Include="..\SquadDash\Screenshots\ScreenshotFixture.cs" Link="Source\ScreenshotFixture.cs" />
+    <Compile Include="..\SquadDash\Screenshots\ScreenshotManifest.cs" Link="Source\ScreenshotManifest.cs" />
+    <Compile Include="..\SquadDash\Screenshots\ScreenshotNamingHelper.cs" Link="Source\ScreenshotNamingHelper.cs" />
+    <Compile Include="..\SquadDash\Screenshots\ScreenshotRefreshLog.cs" Link="Source\ScreenshotRefreshLog.cs" />
     <Compile Include="..\SquadDash\Screenshots\ScreenshotRefreshMode.cs" Link="Source\ScreenshotRefreshMode.cs" />
     <Compile Include="..\SquadDash\Screenshots\ScreenshotRefreshOptions.cs" Link="Source\ScreenshotRefreshOptions.cs" />
+    <Compile Include="..\SquadDash\Screenshots\ScreenshotRefreshRunner.cs" Link="Source\ScreenshotRefreshRunner.cs" />
+    <Compile Include="..\SquadDash\Screenshots\UiActionReplayRegistry.cs" Link="Source\UiActionReplayRegistry.cs" />
+    <Compile Include="..\SquadDash\Screenshots\FixtureLoaderRegistry.cs" Link="Source\FixtureLoaderRegistry.cs" />
     <Compile Include="..\SquadDash\Screenshots\Fixtures\BackgroundTaskFixtureLoader.cs" Link="Source\BackgroundTaskFixtureLoader.cs" />
     <Compile Include="..\SquadDash\Screenshots\Fixtures\QuickReplyFixtureLoader.cs" Link="Source\QuickReplyFixtureLoader.cs" />
     <Compile Include="..\SquadDash\Screenshots\Fixtures\ScrollPositionFixtureLoader.cs" Link="Source\ScrollPositionFixtureLoader.cs" />
