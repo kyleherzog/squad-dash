@@ -659,7 +659,17 @@ public partial class MainWindow : Window, ILiveElementLocator
             getScrollableHeight: () => _coordinatorScrollController.GetScrollableHeight(),
             getVerticalOffset: () => _coordinatorScrollController.GetVerticalOffset(),
             scrollToAbsoluteOffset: target => _coordinatorScrollController.ScrollToAbsoluteOffset(target),
-            updateScrollLayout: () => OutputTextBox.UpdateLayout());
+            updateScrollLayout: () => OutputTextBox.UpdateLayout(),
+            getDraftAttachments: () => _followUpAttachments.TryGetValue("", out var list)
+                ? list.AsReadOnly()
+                : (IReadOnlyList<FollowUpAttachment>)Array.Empty<FollowUpAttachment>(),
+            applyDraftAttachments: attachments => {
+                if (attachments.Count == 0)
+                    _followUpAttachments.Remove("");
+                else
+                    _followUpAttachments[""] = new List<FollowUpAttachment>(attachments);
+                UpdateFollowUpStrip();
+            });
         // Wire the near-top prepend trigger: when the user scrolls within 400 px of the
         // top of the coordinator transcript, TranscriptScrollController calls this to
         // load the next batch of older turns from the virtual window.
@@ -1150,7 +1160,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             getToolEntries: () => _agentThreadRegistry.ToolEntries.Values,
             renderToolEntry: entry => RenderToolEntry(entry),
             updateToolSpinnerState: () => UpdateToolSpinnerState(),
-            workspacePaths: _workspacePaths);
+            workspacePaths: _workspacePaths,
+            getSubmittedAttachments: () => _pendingTranscriptAttachments ?? Array.Empty<FollowUpAttachment>());
 
         InitializeHostCommands();
         SquadDashTrace.Write(TraceCategory.Startup, $"Constructor: InitializeHostCommands {ctorSw.ElapsedMilliseconds}ms.");

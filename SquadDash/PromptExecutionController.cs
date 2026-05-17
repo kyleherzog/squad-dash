@@ -233,8 +233,7 @@ internal sealed class PromptExecutionController {
 
     // ── IWorkspacePaths ───────────────────────────────────────────────────
     private readonly IWorkspacePaths _workspacePaths;
-
-    /// <summary>
+    private readonly Func<IReadOnlyList<FollowUpAttachment>> _getSubmittedAttachments;
     /// When set, returns the HOST_COMMANDS catalog instruction to inject into every prompt.
     /// MainWindow sets this after constructing the HostCommandRegistry.
     /// </summary>
@@ -432,7 +431,8 @@ internal sealed class PromptExecutionController {
         Func<IEnumerable<ToolTranscriptEntry>> getToolEntries,
         Action<ToolTranscriptEntry> renderToolEntry,
         Action updateToolSpinnerState,
-        IWorkspacePaths workspacePaths) {
+        IWorkspacePaths workspacePaths,
+        Func<IReadOnlyList<FollowUpAttachment>>? getSubmittedAttachments = null) {
 
         _runPromptAsync                        = runPromptAsync;
         _runNamedAgentDelegationAsync          = runNamedAgentDelegationAsync;
@@ -500,6 +500,7 @@ internal sealed class PromptExecutionController {
         _renderToolEntry                       = renderToolEntry;
         _updateToolSpinnerState                = updateToolSpinnerState;
         _workspacePaths                        = workspacePaths;
+        _getSubmittedAttachments               = getSubmittedAttachments ?? (() => Array.Empty<FollowUpAttachment>());
 
         _promptHealthTimer.Tick += PromptHealthTimer_Tick;
     }
@@ -1946,7 +1947,7 @@ internal sealed class PromptExecutionController {
         _updateInteractiveControlState();
 
         if (addToHistory)
-            _conversationManager.AddPromptToHistory(visiblePrompt);
+            _conversationManager.AddPromptToHistory(visiblePrompt, _getSubmittedAttachments());
 
         _selectTranscriptThread(_getCoordinatorThread());
         _beginTranscriptTurn(visiblePrompt);

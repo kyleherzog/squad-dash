@@ -1,4 +1,4 @@
-﻿namespace SquadDash.Tests;
+namespace SquadDash.Tests;
 
 [TestFixture]
 internal sealed class PromptInteractionLogicTests {
@@ -67,13 +67,14 @@ internal sealed class PromptInteractionLogicTests {
 
     [Test]
     public void Navigate_CapturesDraftAndRestoresItWhenReturningToTop() {
-        var history = new[] { "first", "second" };
+        PromptHistoryEntry[] history = [new("first", []), new("second", [])];
 
         var previous = PromptHistoryNavigator.Navigate(
             history,
             historyIndex: null,
             historyDraft: null,
-            currentText: "draft prompt",
+            historyDraftAttachments: null,
+            currentText: "draft prompt", currentAttachments: [],
             direction: -1);
 
         Assert.Multiple(() => {
@@ -87,7 +88,7 @@ internal sealed class PromptInteractionLogicTests {
             history,
             previous.HistoryIndex,
             previous.HistoryDraft,
-            currentText: previous.Text,
+            null, currentText: previous.Text, currentAttachments: [],
             direction: 1);
 
         Assert.Multiple(() => {
@@ -383,10 +384,11 @@ internal sealed class PromptInteractionLogicTests {
     [Test]
     public void Navigate_EmptyHistory_ReturnsUnchangedResult() {
         var result = PromptHistoryNavigator.Navigate(
-            history: Array.Empty<string>(),
+            history: Array.Empty<PromptHistoryEntry>(),
             historyIndex: null,
             historyDraft: null,
-            currentText: "working",
+            historyDraftAttachments: null,
+            currentText: "working", currentAttachments: [],
             direction: -1);
 
         Assert.Multiple(() => {
@@ -399,12 +401,13 @@ internal sealed class PromptInteractionLogicTests {
 
     [Test]
     public void Navigate_BackwardFromFirstEntry_ClampsAndReportsNoChange() {
-        var history = new[] { "first", "second" };
+        PromptHistoryEntry[] history = [new("first", []), new("second", [])];
 
         // Navigate to the first entry (index 0).
         var atFirst = PromptHistoryNavigator.Navigate(
             history, historyIndex: 0, historyDraft: "draft",
-            currentText: "first", direction: -1);
+            historyDraftAttachments: null,
+            currentText: "first", currentAttachments: [], direction: -1);
 
         Assert.Multiple(() => {
             Assert.That(atFirst.Changed, Is.False,
@@ -417,11 +420,12 @@ internal sealed class PromptInteractionLogicTests {
     public void Navigate_ForwardAtTopLevel_ReportsNoChange() {
         // historyIndex == null means we are already at the live-draft position
         // (conceptually index == history.Count). Going forward from there is a no-op.
-        var history = new[] { "first", "second" };
+        PromptHistoryEntry[] history = [new("first", []), new("second", [])];
 
         var result = PromptHistoryNavigator.Navigate(
             history, historyIndex: null, historyDraft: null,
-            currentText: "live text", direction: +1);
+            historyDraftAttachments: null,
+            currentText: "live text", currentAttachments: [], direction: +1);
 
         Assert.Multiple(() => {
             Assert.That(result.Changed, Is.False);
@@ -434,13 +438,14 @@ internal sealed class PromptInteractionLogicTests {
         // When the caller is already mid-history (historyIndex set, historyDraft set),
         // a further navigation step must preserve the original draft rather than
         // overwriting it with the currently-displayed history entry.
-        var history = new[] { "first", "second", "third" };
+        PromptHistoryEntry[] history = [new("first", []), new("second", []), new("third", [])];
 
         var result = PromptHistoryNavigator.Navigate(
             history,
             historyIndex: 2,            // currently viewing "third"
             historyDraft: "my draft",   // original draft already captured
-            currentText: "third",
+            historyDraftAttachments: null,
+            currentText: "third", currentAttachments: [],
             direction: -1);             // go one step back to "second"
 
         Assert.Multiple(() => {
@@ -456,23 +461,24 @@ internal sealed class PromptInteractionLogicTests {
     public void Navigate_ReturnsToLiveDraftFromFirstEntry() {
         // Navigate all the way back to index 0, then forward step-by-step
         // to verify the draft is restored when we exit history entirely.
-        var history = new[] { "first", "second" };
+        PromptHistoryEntry[] history = [new("first", []), new("second", [])];
 
         var atFirst = PromptHistoryNavigator.Navigate(
             history, historyIndex: null, historyDraft: null,
-            currentText: "live", direction: -1);    // → index 1 ("second")
+            historyDraftAttachments: null,
+            currentText: "live", currentAttachments: [], direction: -1);    // → index 1 ("second")
 
         var atSecond = PromptHistoryNavigator.Navigate(
             history, atFirst.HistoryIndex, atFirst.HistoryDraft,
-            currentText: atFirst.Text, direction: -1);   // → index 0 ("first")
+            null, currentText: atFirst.Text, currentAttachments: [], direction: -1);   // → index 0 ("first")
 
         var restored = PromptHistoryNavigator.Navigate(
             history, atSecond.HistoryIndex, atSecond.HistoryDraft,
-            currentText: atSecond.Text, direction: +1);  // → index 1 ("second")
+            null, currentText: atSecond.Text, currentAttachments: [], direction: +1);  // → index 1 ("second")
 
         var backToLive = PromptHistoryNavigator.Navigate(
             history, restored.HistoryIndex, restored.HistoryDraft,
-            currentText: restored.Text, direction: +1);  // → live draft
+            null, currentText: restored.Text, currentAttachments: [], direction: +1);  // → live draft
 
         Assert.Multiple(() => {
             Assert.That(backToLive.Changed, Is.True);
@@ -706,11 +712,12 @@ internal sealed class PromptInteractionLogicTests {
     public void Navigate_SingleItemHistory_CanGoBackAndRestoreDraft() {
         // With exactly one history entry, navigate back to it and then forward
         // to verify the live draft is correctly restored.
-        var history = new[] { "only entry" };
+        PromptHistoryEntry[] history = [new("only entry", [])];
 
         var atEntry = PromptHistoryNavigator.Navigate(
             history, historyIndex: null, historyDraft: null,
-            currentText: "live draft", direction: -1);
+            historyDraftAttachments: null,
+            currentText: "live draft", currentAttachments: [], direction: -1);
 
         Assert.Multiple(() => {
             Assert.That(atEntry.Changed, Is.True);
@@ -721,7 +728,7 @@ internal sealed class PromptInteractionLogicTests {
 
         var restored = PromptHistoryNavigator.Navigate(
             history, atEntry.HistoryIndex, atEntry.HistoryDraft,
-            currentText: atEntry.Text, direction: +1);
+            null, currentText: atEntry.Text, currentAttachments: [], direction: +1);
 
         Assert.Multiple(() => {
             Assert.That(restored.Changed, Is.True);
@@ -734,11 +741,12 @@ internal sealed class PromptInteractionLogicTests {
     [Test]
     public void Navigate_SingleItemHistory_CannotGoBackBeyondFirstEntry() {
         // At index 0, further backward navigation must clamp and report no change.
-        var history = new[] { "only entry" };
+        PromptHistoryEntry[] history = [new("only entry", [])];
 
         var atEntry = PromptHistoryNavigator.Navigate(
             history, historyIndex: 0, historyDraft: "draft",
-            currentText: "only entry", direction: -1);
+            historyDraftAttachments: null,
+            currentText: "only entry", currentAttachments: [], direction: -1);
 
         Assert.Multiple(() => {
             Assert.That(atEntry.Changed, Is.False,

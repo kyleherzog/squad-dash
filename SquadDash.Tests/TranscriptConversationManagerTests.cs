@@ -48,8 +48,8 @@ internal sealed class TranscriptConversationManagerTests {
         var promptText = "current draft";
         var manager = MakeManager(getPromptText: () => promptText, setPromptText: (t, _, _, _) => promptText = t);
 
-        manager.PromptHistory.Add("first entry");
-        manager.PromptHistory.Add("second entry");
+        manager.AddPromptToHistory("first entry");
+        manager.AddPromptToHistory("second entry");
 
         manager.NavigateHistory(-1);
 
@@ -61,7 +61,7 @@ internal sealed class TranscriptConversationManagerTests {
         var promptText = "my draft";
         var manager = MakeManager(getPromptText: () => promptText, setPromptText: (t, _, _, _) => promptText = t);
 
-        manager.PromptHistory.Add("history entry");
+        manager.AddPromptToHistory("history entry");
 
         manager.NavigateHistory(-1); // go back to "history entry"
         manager.NavigateHistory(1);  // go forward → restore draft
@@ -159,8 +159,8 @@ internal sealed class TranscriptConversationManagerTests {
     public void CapturePromptContextDiagnostics_SummarizesCoordinatorAndAgentTranscriptState() {
         var manager = MakeManager();
         manager.CurrentSessionId = "session-42";
-        manager.PromptHistory.Add("First prompt");
-        manager.PromptHistory.Add("Second prompt");
+        manager.AddPromptToHistory("First prompt");
+        manager.AddPromptToHistory("Second prompt");
         manager.ConversationState = new WorkspaceConversationState(
             SessionId: "session-42",
             SessionUpdatedAt: new DateTimeOffset(2026, 4, 22, 17, 0, 0, TimeSpan.Zero),

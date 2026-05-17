@@ -34,11 +34,17 @@ internal enum PromptInputAction {
     AddQueueSlot
 }
 
+internal sealed record PromptHistoryEntry(
+    string Text,
+    IReadOnlyList<FollowUpAttachment> Attachments);
+
 internal sealed record PromptHistoryNavigationResult(
     bool Changed,
     string Text,
+    IReadOnlyList<FollowUpAttachment>? Attachments,
     int? HistoryIndex,
-    string? HistoryDraft);
+    string? HistoryDraft,
+    IReadOnlyList<FollowUpAttachment>? HistoryDraftAttachments);
 
 internal sealed record InteractiveControlState(
     bool AgentItemsEnabled,
@@ -110,19 +116,23 @@ internal static class PromptInputBehavior {
 
 internal static class PromptHistoryNavigator {
     public static PromptHistoryNavigationResult Navigate(
-        IReadOnlyList<string> history,
+        IReadOnlyList<PromptHistoryEntry> history,
         int? historyIndex,
         string? historyDraft,
+        IReadOnlyList<FollowUpAttachment>? historyDraftAttachments,
         string currentText,
+        IReadOnlyList<FollowUpAttachment> currentAttachments,
         int direction) {
         if (history.Count == 0)
-            return new PromptHistoryNavigationResult(false, currentText, historyIndex, historyDraft);
+            return new PromptHistoryNavigationResult(false, currentText, null, historyIndex, historyDraft, historyDraftAttachments);
 
         var effectiveDraft = historyDraft;
+        var effectiveDraftAttachments = historyDraftAttachments;
         var effectiveIndex = historyIndex;
 
         if (effectiveIndex is null) {
             effectiveDraft = currentText;
+            effectiveDraftAttachments = currentAttachments;
             effectiveIndex = history.Count;
         }
 
@@ -132,21 +142,25 @@ internal static class PromptHistoryNavigator {
             history.Count);
 
         if (nextIndex == effectiveIndex.Value)
-            return new PromptHistoryNavigationResult(false, currentText, historyIndex, historyDraft);
+            return new PromptHistoryNavigationResult(false, currentText, null, historyIndex, historyDraft, historyDraftAttachments);
 
         if (nextIndex == history.Count) {
             return new PromptHistoryNavigationResult(
                 true,
                 effectiveDraft ?? string.Empty,
+                effectiveDraftAttachments,
                 null,
-                effectiveDraft);
+                effectiveDraft,
+                effectiveDraftAttachments);
         }
 
         return new PromptHistoryNavigationResult(
             true,
-            history[nextIndex],
+            history[nextIndex].Text,
+            history[nextIndex].Attachments,
             nextIndex,
-            effectiveDraft);
+            effectiveDraft,
+            effectiveDraftAttachments);
     }
 }
 

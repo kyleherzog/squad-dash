@@ -23,9 +23,10 @@ internal sealed class TranscriptConversationManager {
     private WorkspaceConversationState _conversationState = WorkspaceConversationState.Empty;
     private readonly WorkspaceConversationStore _conversationStore = new();
     private string? _currentSessionId;
-    private readonly List<string> _promptHistory = [];
+    private readonly List<PromptHistoryEntry> _promptHistory = [];
     private int? _historyIndex;
     private string? _historyDraft;
+    private IReadOnlyList<FollowUpAttachment>? _historyDraftAttachments;
     private bool _isApplyingHistoryEntry;
     private (string FolderPath, WorkspaceConversationState State)? _pendingConversationSave;
     private readonly object _backgroundSaveGate = new();
@@ -72,7 +73,7 @@ internal sealed class TranscriptConversationManager {
         set => SetCurrentSessionId(value);
     }
 
-    internal List<string> PromptHistory => _promptHistory;
+    internal IReadOnlyList<string> PromptHistory => _promptHistory.Select(e => e.Text).ToArray();
 
     internal int? HistoryIndex {
         get => _historyIndex;
@@ -125,6 +126,11 @@ internal sealed class TranscriptConversationManager {
     private readonly Func<double>                                                     _getVerticalOffset;
     private readonly Action<double>                                                   _scrollToAbsoluteOffset;
     private readonly Action                                                           _updateScrollLayout;
+    // Attachment callbacks for prompt history navigation.
+    // _getDraftAttachments reads the current live-draft attachments (key "").
+    // _applyDraftAttachments writes attachments back to the live-draft slot and refreshes the UI.
+    private readonly Func<IReadOnlyList<FollowUpAttachment>>                          _getDraftAttachments;
+    private readonly Action<IReadOnlyList<FollowUpAttachment>>                        _applyDraftAttachments;
 
     internal TranscriptConversationManager(
         Func<SessionWorkspace?> getWorkspace,
@@ -149,7 +155,9 @@ internal sealed class TranscriptConversationManager {
         Func<double> getScrollableHeight,
         Func<double> getVerticalOffset,
         Action<double> scrollToAbsoluteOffset,
-        Action updateScrollLayout) {
+        Action updateScrollLayout,
+        Func<IReadOnlyList<FollowUpAttachment>>? getDraftAttachments = null,
+        Action<IReadOnlyList<FollowUpAttachment>>? applyDraftAttachments = null) {
         _getWorkspace              = getWorkspace;
         _getPromptText             = getPromptText;
         _setPromptText             = setPromptText;
@@ -173,6 +181,8 @@ internal sealed class TranscriptConversationManager {
         _getVerticalOffset         = getVerticalOffset;
         _scrollToAbsoluteOffset    = scrollToAbsoluteOffset;
         _updateScrollLayout        = updateScrollLayout;
+        _getDraftAttachments       = getDraftAttachments ?? (() => Array.Empty<FollowUpAttachment>());
+        _applyDraftAttachments     = applyDraftAttachments ?? (_ => { });
         _agentThreadSnapshotPersistTimer = new DispatcherTimer(
             AgentThreadSnapshotPersistDebounce,
             DispatcherPriority.Background,
@@ -267,7 +277,9 @@ internal sealed class TranscriptConversationManager {
         _currentSessionId = _conversationState.SessionId;
         _promptHistory.Clear();
         _promptHistory.AddRange(
-            _conversationState.PromptHistory.Where(entry => !string.IsNullOrWhiteSpace(entry)));
+            _conversationState.PromptHistory
+                .Where(text => !string.IsNullOrWhiteSpace(text))
+                .Select(text => new PromptHistoryEntry(text, Array.Empty<FollowUpAttachment>())));
         ApplyPromptText(
             _conversationState.PromptDraft ?? string.Empty,
             _conversationState.PromptDraftCaretIndex,
@@ -696,7 +708,7 @@ internal sealed class TranscriptConversationManager {
                 ? _conversationState.SessionUpdatedAt
                 : DateTimeOffset.UtcNow,
             PromptDraft = _getPromptText(),
-            PromptHistory = _promptHistory.ToArray(),
+            PromptHistory = _promptHistory.Select(e => e.Text).ToArray(),
             Turns = turns,
             Threads = BuildPersistedAgentThreadRecords(includeCurrentTurns: false)
         }, $"SaveTranscriptTurnToConversation:{reason}");
@@ -718,7 +730,7 @@ internal sealed class TranscriptConversationManager {
                 ? _conversationState.SessionUpdatedAt
                 : DateTimeOffset.UtcNow,
             PromptDraft = _getPromptText(),
-            PromptHistory = _promptHistory.ToArray(),
+            PromptHistory = _promptHistory.Select(e => e.Text).ToArray(),
             Threads = BuildPersistedAgentThreadRecords(includeCurrentTurns: false)
         }, $"SaveAgentThreadToConversation:{thread.ThreadId}");
     }
@@ -734,7 +746,7 @@ internal sealed class TranscriptConversationManager {
                 ? _conversationState.SessionUpdatedAt
                 : DateTimeOffset.UtcNow,
             PromptDraft = _getPromptText(),
-            PromptHistory = _promptHistory.ToArray(),
+            PromptHistory = _promptHistory.Select(e => e.Text).ToArray(),
             Threads = BuildPersistedAgentThreadRecords(includeCurrentTurns: true)
         }, $"PersistAgentThreadSnapshot:{thread.ThreadId}");
     }
@@ -788,7 +800,7 @@ internal sealed class TranscriptConversationManager {
         PersistConversationState(_conversationState with {
             SessionId = _currentSessionId,
             PromptDraft = _getPromptText(),
-            PromptHistory = _promptHistory.ToArray(),
+            PromptHistory = _promptHistory.Select(e => e.Text).ToArray(),
             Threads = BuildPersistedAgentThreadRecords(includeCurrentTurns: false)
         }, "SaveWorkspaceInputState");
     }
@@ -808,7 +820,7 @@ internal sealed class TranscriptConversationManager {
                     PromptDraftCaretIndex    = caretIndex,
                     PromptDraftSelectionStart  = selectionStart,
                     PromptDraftSelectionLength = selectionLength,
-                    PromptHistory      = _promptHistory.ToArray(),
+                    PromptHistory      = _promptHistory.Select(e => e.Text).ToArray(),
                     Threads            = BuildPersistedAgentThreadRecords(includeCurrentTurns: false)
                 }, "CaptureWorkspaceInputState"));
         }
@@ -842,7 +854,7 @@ internal sealed class TranscriptConversationManager {
                 PromptDraftCaretIndex    = caretIndex,
                 PromptDraftSelectionStart  = selectionStart,
                 PromptDraftSelectionLength = selectionLength,
-                PromptHistory      = _promptHistory.ToArray(),
+                PromptHistory      = _promptHistory.Select(e => e.Text).ToArray(),
                 Threads            = BuildPersistedAgentThreadRecords(includeCurrentTurns: true)
             }, $"EmergencySave:{reason}");
 
@@ -1082,11 +1094,12 @@ internal sealed class TranscriptConversationManager {
 
     // ── Prompt history ──────────────────────────────────────────────────────────
 
-    internal void AddPromptToHistory(string prompt) {
-        if (_promptHistory.Count == 0 || _promptHistory[^1] != prompt)
-            _promptHistory.Add(prompt);
+    internal void AddPromptToHistory(string prompt, IReadOnlyList<FollowUpAttachment>? attachments = null) {
+        var entry = new PromptHistoryEntry(prompt, attachments ?? Array.Empty<FollowUpAttachment>());
+        if (_promptHistory.Count == 0 || _promptHistory[^1].Text != prompt)
+            _promptHistory.Add(entry);
         _conversationState = _conversationState with {
-            PromptHistory = _promptHistory.ToArray()
+            PromptHistory = _promptHistory.Select(e => e.Text).ToArray()
         };
     }
 
@@ -1140,20 +1153,25 @@ internal sealed class TranscriptConversationManager {
             _promptHistory,
             _historyIndex,
             _historyDraft,
+            _historyDraftAttachments,
             _getPromptText(),
+            _getDraftAttachments(),
             direction);
 
         if (!result.Changed)
             return;
 
         _historyDraft = result.HistoryDraft;
+        _historyDraftAttachments = result.HistoryDraftAttachments;
         _historyIndex = result.HistoryIndex;
         ApplyPromptText(result.Text);
+        _applyDraftAttachments(result.Attachments ?? Array.Empty<FollowUpAttachment>());
     }
 
     internal void ResetHistoryNavigation() {
         _historyIndex = null;
         _historyDraft = null;
+        _historyDraftAttachments = null;
     }
 
     /// <summary>
@@ -1193,7 +1211,7 @@ internal sealed class TranscriptConversationManager {
             SessionId = _currentSessionId,
             SessionUpdatedAt = DateTimeOffset.UtcNow,
             PromptDraft = _getPromptText(),
-            PromptHistory = _promptHistory.ToArray(),
+            PromptHistory = _promptHistory.Select(e => e.Text).ToArray(),
             Threads = BuildPersistedAgentThreadRecords(includeCurrentTurns: false)
         }, "PersistSessionPointer");
     }
@@ -1215,7 +1233,7 @@ internal sealed class TranscriptConversationManager {
                 ? _conversationState.SessionUpdatedAt
                 : DateTimeOffset.UtcNow,
             PromptDraft = _getPromptText(),
-            PromptHistory = _promptHistory.ToArray(),
+            PromptHistory = _promptHistory.Select(e => e.Text).ToArray(),
             Threads = BuildPersistedAgentThreadRecords(includeCurrentTurns: true)
         }, "AgentThreadSnapshotTimer");
     }

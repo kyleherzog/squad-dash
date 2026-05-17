@@ -152,10 +152,11 @@ internal sealed class PromptExecutionControllerTests {
     [Test]
     public void Navigate_EmptyHistory_ReturnsUnchangedResult() {
         var result = PromptHistoryNavigator.Navigate(
-            history: Array.Empty<string>(),
+            history: Array.Empty<PromptHistoryEntry>(),
             historyIndex: null,
             historyDraft: null,
-            currentText: "current",
+            historyDraftAttachments: null,
+            currentText: "current", currentAttachments: [],
             direction: -1);
 
         Assert.Multiple(() => {
@@ -166,13 +167,14 @@ internal sealed class PromptExecutionControllerTests {
 
     [Test]
     public void Navigate_FromNullIndex_NavigatingBack_LoadsMostRecentEntry() {
-        var history = new[] { "oldest", "newest" };
+        PromptHistoryEntry[] history = [new("oldest", []), new("newest", [])];
 
         var result = PromptHistoryNavigator.Navigate(
             history,
             historyIndex: null,
             historyDraft: null,
-            currentText: "current draft",
+            historyDraftAttachments: null,
+            currentText: "current draft", currentAttachments: [],
             direction: -1);
 
         Assert.Multiple(() => {
@@ -187,13 +189,14 @@ internal sealed class PromptExecutionControllerTests {
     public void Navigate_AtCurrentDraftPosition_NavigatingForward_ReturnsUnchanged() {
         // historyIndex == null means we're already at the "live" draft position.
         // Navigating forward (direction = +1) should clamp and return unchanged.
-        var history = new[] { "first" };
+        PromptHistoryEntry[] history = [new("first", [])];
 
         var result = PromptHistoryNavigator.Navigate(
             history,
             historyIndex: null,
             historyDraft: null,
-            currentText: "draft",
+            historyDraftAttachments: null,
+            currentText: "draft", currentAttachments: [],
             direction: +1);
 
         Assert.Multiple(() => {
@@ -204,11 +207,11 @@ internal sealed class PromptExecutionControllerTests {
 
     [Test]
     public void Navigate_AtOldestEntry_NavigatingBackFurther_ReturnsUnchanged() {
-        var history = new[] { "oldest", "newest" };
+        PromptHistoryEntry[] history = [new("oldest", []), new("newest", [])];
 
         // Navigate backward twice to reach index 0 (oldest).
-        var step1 = PromptHistoryNavigator.Navigate(history, null, null, "draft", -1);
-        var atOldest = PromptHistoryNavigator.Navigate(history, step1.HistoryIndex, step1.HistoryDraft, step1.Text, -1);
+        var step1 = PromptHistoryNavigator.Navigate(history, null, null, null, "draft", [], -1);
+        var atOldest = PromptHistoryNavigator.Navigate(history, step1.HistoryIndex, step1.HistoryDraft, step1.HistoryDraftAttachments, step1.Text, [], -1);
 
         Assert.That(atOldest.HistoryIndex, Is.EqualTo(0), "Precondition: should be at oldest entry");
 
@@ -217,7 +220,9 @@ internal sealed class PromptExecutionControllerTests {
             history,
             atOldest.HistoryIndex,
             atOldest.HistoryDraft,
+            atOldest.HistoryDraftAttachments,
             atOldest.Text,
+            currentAttachments: [],
             direction: -1);
 
         Assert.Multiple(() => {
@@ -228,10 +233,10 @@ internal sealed class PromptExecutionControllerTests {
 
     [Test]
     public void Navigate_FromMidHistory_BackwardStep_LoadsOlderEntry() {
-        var history = new[] { "oldest", "middle", "newest" };
+        PromptHistoryEntry[] history = [new("oldest", []), new("middle", []), new("newest", [])];
 
         // Navigate to "newest" (index 2).
-        var atNewest = PromptHistoryNavigator.Navigate(history, null, null, "draft", -1);
+        var atNewest = PromptHistoryNavigator.Navigate(history, null, null, null, "draft", [], -1);
         Assert.That(atNewest.HistoryIndex, Is.EqualTo(2), "Precondition: at newest entry");
 
         // Navigate back one step → should load "middle" (index 1).
@@ -239,7 +244,9 @@ internal sealed class PromptExecutionControllerTests {
             history,
             atNewest.HistoryIndex,
             atNewest.HistoryDraft,
+            atNewest.HistoryDraftAttachments,
             atNewest.Text,
+            currentAttachments: [],
             direction: -1);
 
         Assert.Multiple(() => {
