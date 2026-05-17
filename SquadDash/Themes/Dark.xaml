@@ -112,10 +112,10 @@
     <SolidColorBrush x:Key="ToolActionLink" Color="#6BAED6"/>
     <SolidColorBrush x:Key="ToolActionLinkBorder" Color="#3A5070"/>
     <!-- Transcript Action Button Tokens (agent launch chip / report button) -->
-    <SolidColorBrush x:Key="TranscriptActionSurface" Color="#1A2535"/>
-    <SolidColorBrush x:Key="TranscriptActionHoverSurface" Color="#253550"/>
-    <SolidColorBrush x:Key="TranscriptActionBorder" Color="#3A5070"/>
-    <SolidColorBrush x:Key="TranscriptActionText" Color="#6BAED6"/>
+    <SolidColorBrush x:Key="TranscriptActionSurface"      Color="#242018"/><!-- = InputSurface dark -->
+    <SolidColorBrush x:Key="TranscriptActionHoverSurface"  Color="#252220"/><!-- = HoverSurface dark -->
+    <SolidColorBrush x:Key="TranscriptActionBorder"        Color="#3A342C"/><!-- = InputBorder dark -->
+    <SolidColorBrush x:Key="TranscriptActionText"          Color="#D8C8B0"/><!-- = LabelText dark -->
     <SolidColorBrush x:Key="DiffAddedText" Color="#A5D1EE"/>
     <SolidColorBrush x:Key="DiffRemovedText" Color="#F3A3A3"/>
     <SolidColorBrush x:Key="DiffAddedSummary" Color="#6BAED6"/>
