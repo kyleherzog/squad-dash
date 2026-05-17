@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -17,12 +18,14 @@ internal sealed class TranscriptInactiveSelectionAdorner : Adorner
 {
     private const double SameLineTolerance = 2.0;
     private const int    MaxLineSegments   = 1000;
+    private const int    SlowRenderTraceMs = 25;
 
     private readonly RichTextBox _rtb;
     private AdornerLayer? _layer;
     private ScrollViewer? _scrollViewer;
     private ScrollChangedEventHandler? _scrollChangedHandler;
     private MouseWheelEventHandler? _mouseWheelHandler;
+    private long _lastSlowRenderTraceAt;
 
     private TranscriptInactiveSelectionAdorner(RichTextBox rtb) : base(rtb)
     {
@@ -33,11 +36,6 @@ internal sealed class TranscriptInactiveSelectionAdorner : Adorner
         _rtb.Loaded += OnLoaded;
         _rtb.Unloaded += OnUnloaded;
         _rtb.SizeChanged += (_, _) => InvalidateHighlight();
-        _rtb.LayoutUpdated += (_, _) =>
-        {
-            if (ShouldDrawSelection())
-                InvalidateVisual();
-        };
         _rtb.SelectionChanged += (_, _) => InvalidateHighlight();
         _rtb.IsKeyboardFocusWithinChanged += (_, _) => InvalidateHighlight();
 
@@ -114,6 +112,7 @@ internal sealed class TranscriptInactiveSelectionAdorner : Adorner
         if (!ShouldDrawSelection())
             return;
 
+        var started = Stopwatch.GetTimestamp();
         var brush = GetBrush("DocEditorSelectionBrush", Color.FromRgb(21, 101, 192));
         var opacity = GetDouble("TranscriptInactiveSelectionOpacity", 0.15);
 
@@ -132,6 +131,7 @@ internal sealed class TranscriptInactiveSelectionAdorner : Adorner
         {
             dc.Pop();
             dc.Pop();
+            TraceSlowRenderIfNeeded(started);
         }
     }
 
@@ -293,4 +293,25 @@ internal sealed class TranscriptInactiveSelectionAdorner : Adorner
 
     private static double GetDouble(string key, double fallback) =>
         Application.Current?.Resources[key] is double value ? value : fallback;
+
+    private void TraceSlowRenderIfNeeded(long started)
+    {
+        var elapsedMs = (int)Math.Round((Stopwatch.GetTimestamp() - started) * 1000.0 / Stopwatch.Frequency);
+        if (elapsedMs < SlowRenderTraceMs)
+            return;
+
+        var now = Stopwatch.GetTimestamp();
+        if (_lastSlowRenderTraceAt != 0
+            && (now - _lastSlowRenderTraceAt) * 1000.0 / Stopwatch.Frequency < 5000)
+        {
+            return;
+        }
+
+        _lastSlowRenderTraceAt = now;
+        SquadDashTrace.Write(
+            TraceCategory.Performance,
+            $"TRANSCRIPT_INACTIVE_SELECTION_RENDER slowMs={elapsedMs} renderSize={RenderSize.Width:0.#}x{RenderSize.Height:0.#} " +
+            $"visible={_rtb.IsVisible} focusWithin={_rtb.IsKeyboardFocusWithin} selectionEmpty={_rtb.Selection.IsEmpty} " +
+            $"docBlocks={_rtb.Document?.Blocks.Count ?? 0}");
+    }
 }
