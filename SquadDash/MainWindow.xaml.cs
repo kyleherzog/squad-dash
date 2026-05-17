@@ -8529,7 +8529,10 @@ public partial class MainWindow : Window, ILiveElementLocator
         // Queue whenever the target is the prompt box AND auto-send is enabled.
         // EnqueueCurrentPrompt works whether or not a prompt is currently running,
         // so we no longer need to gate on !_isPromptRunning.
-        _voiceStartedWithSendEnabled = _settingsSnapshot.PttAutoSend
+        // Guard _activeTabId == null: when the user is editing a queued tab via Ctrl+Up/Down,
+        // the prompt box may be empty but we must not treat that as a new draft auto-send.
+        _voiceStartedWithSendEnabled = _activeTabId == null
+                                       && _settingsSnapshot.PttAutoSend
                                        && _pttTargetRichTextBox == null
                                        && _pttTargetTextBox == PromptTextBox
                                        && string.IsNullOrEmpty(PromptTextBox?.Text);
@@ -8540,7 +8543,10 @@ public partial class MainWindow : Window, ILiveElementLocator
         // Re-evaluate on each PTT activation: true only when quick reply
         // buttons are visible, the prompt box was empty at start time,
         // and buttons appeared at least 400ms ago (so user could see them).
-        _dictationStartedForQuickReply = _currentQuickReplyOptions.Length > 0
+        // Guard _activeTabId == null: Ctrl+Up/Down navigation to a queued tab leaves
+        // the prompt box empty, which must not be mistaken for an empty active draft.
+        _dictationStartedForQuickReply = _activeTabId == null
+                                         && _currentQuickReplyOptions.Length > 0
                                          && string.IsNullOrEmpty(PromptTextBox?.Text)
                                          && (DateTime.UtcNow - _quickRepliesShownAt).TotalMilliseconds >= QuickReplyReadWindowMs;
         _pttState = PttState.Active;
@@ -9026,7 +9032,10 @@ public partial class MainWindow : Window, ILiveElementLocator
                     PromptTextBox.Clear();
                     _pec.DisableQuickReplies(_lastQuickReplyEntry);
                     ResetQueuePausedState();
-                    _ = _pec.ExecutePromptAsync(text, addToHistory: true, clearPromptBox: false);
+                    // ApplyFollowUpHeader consumes any pending attachment for the active draft
+                    // ("" tabId) and injects it as a header. Skipping it here would orphan the
+                    // attachment — the strip would not clear and the image would not be sent.
+                    _ = _pec.ExecutePromptAsync(ApplyFollowUpHeader(text, ""), addToHistory: true, clearPromptBox: false);
                 }
                 else if (!string.IsNullOrWhiteSpace(text))
                 {
