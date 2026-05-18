@@ -23098,7 +23098,11 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         if (_tintBaseline is null) return;
         var resources = Application.Current.Resources;
-        var hueDelta = stop * (360.0 / 8); // 45° per step: 0, 45, 90, 135, 180, 225, 270, 315
+        // Subtract 35° to compensate for the ~34° baseline hue of the theme surfaces,
+        // so stop 1 (Warm+) lands near orange rather than yellow-green.
+        // Stop 0 is always unmodified (natural theme colours).
+        const double baselineHueOffset = 35.0;
+        var hueDelta = stop * (360.0 / 8) - baselineHueOffset; // adjusted steps
         foreach (var (key, baseColor) in _tintBaseline)
         {
             var tinted = stop == 0 ? baseColor : RotateHue(baseColor, hueDelta);
