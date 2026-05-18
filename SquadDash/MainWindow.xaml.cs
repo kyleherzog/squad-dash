@@ -23162,7 +23162,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         var fallback = Color.FromRgb(128, 128, 128);
         if (_tintBaseline is null || !_tintBaseline.TryGetValue("TranscriptSurface", out var baseColor))
             return fallback;
-        return stop == 0 ? baseColor : RotateHue(baseColor, stop * 45.0);
+        // Subtract the baseline hue (~35°) so stop 0 renders as neutral and the
+        // 8 stops spread evenly around the hue wheel from a true-red anchor.
+        const double baselineHueOffset = 35.0;
+        var hueDelta = stop * 45.0 - baselineHueOffset;
+        return RotateHue(baseColor, hueDelta);
     }
 
     private void ApplyTintSwatchToItem(MenuItem item, int stop)
