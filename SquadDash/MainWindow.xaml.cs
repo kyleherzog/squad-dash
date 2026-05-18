@@ -8375,6 +8375,28 @@ public partial class MainWindow : Window, ILiveElementLocator
                 return;
             }
 
+            // ── Ctrl+Alt+Plus / Ctrl+Alt+Add: next tint stop ─────────────────────
+            if ((e.Key == Key.OemPlus || e.Key == Key.Add)
+                && (Keyboard.Modifiers & ModifierKeys.Control) != 0
+                && (Keyboard.Modifiers & ModifierKeys.Alt)     != 0
+                && (Keyboard.Modifiers & ModifierKeys.Shift)   == 0)
+            {
+                SetWorkspaceTintStop((_activeTintStop + 1) % 8);
+                e.Handled = true;
+                return;
+            }
+
+            // ── Ctrl+Alt+Minus / Ctrl+Alt+Subtract: previous tint stop ───────────
+            if ((e.Key == Key.OemMinus || e.Key == Key.Subtract)
+                && (Keyboard.Modifiers & ModifierKeys.Control) != 0
+                && (Keyboard.Modifiers & ModifierKeys.Alt)     != 0
+                && (Keyboard.Modifiers & ModifierKeys.Shift)   == 0)
+            {
+                SetWorkspaceTintStop((_activeTintStop + 7) % 8);
+                e.Handled = true;
+                return;
+            }
+
             // ── Escape: dismiss doc find bar from any focus position (incl. WebBrowser preview) ──
             if (e.Key == Key.Escape && _docSourceFindBar is not null)
             {
