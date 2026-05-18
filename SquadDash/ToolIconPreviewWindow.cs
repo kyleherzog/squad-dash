@@ -59,7 +59,7 @@ internal sealed class ToolIconPreviewWindow : Window {
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center,
                 FontFamily = new FontFamily("Consolas"),
-                FontSize = 12
+                FontSize = (double)Application.Current.Resources["FontSizeBody"]
             };
             keyBlock.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
             row.Children.Add(keyBlock);
@@ -70,7 +70,7 @@ internal sealed class ToolIconPreviewWindow : Window {
                 TextAlignment = TextAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 FontFamily = new FontFamily("Segoe UI Emoji"),
-                FontSize = 16
+                FontSize = (double)Application.Current.Resources["FontSizeLargePlus"]
             };
             row.Children.Add(emojiBlock);
 
@@ -79,7 +79,7 @@ internal sealed class ToolIconPreviewWindow : Window {
                 Width = 140,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center,
-                FontSize = 12
+                FontSize = (double)Application.Current.Resources["FontSizeBody"]
             };
             nameBlock.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
             row.Children.Add(nameBlock);
@@ -107,7 +107,7 @@ internal sealed class ToolIconPreviewWindow : Window {
                         Text = "?",
                         HorizontalAlignment = HorizontalAlignment.Center,
                         VerticalAlignment = VerticalAlignment.Center,
-                        FontSize = 18,
+                        FontSize = (double)Application.Current.Resources["FontSizeSubtitle"],
                         Opacity = 0.4
                     };
                     missing.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
@@ -148,7 +148,7 @@ internal sealed class ToolIconPreviewWindow : Window {
             Text = text,
             Width = width,
             FontWeight = FontWeights.SemiBold,
-            FontSize = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis
         };

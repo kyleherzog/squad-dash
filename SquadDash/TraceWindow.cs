@@ -141,7 +141,7 @@ internal sealed class TraceWindow : Window, ILiveTraceTarget
         var titleBlock = new TextBlock
         {
             Text = "Trace",
-            FontSize = 18,
+            FontSize = (double)Application.Current.Resources["FontSizeSubtitle"],
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -215,7 +215,7 @@ internal sealed class TraceWindow : Window, ILiveTraceTarget
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             BorderThickness = new Thickness(0),
             FontFamily = new FontFamily("Consolas"),
-            FontSize = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
         };
         _logTextBox.SetResourceReference(TextBox.BackgroundProperty, "CardSurface");
         _logTextBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");

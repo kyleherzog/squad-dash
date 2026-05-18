@@ -26,7 +26,7 @@ internal sealed class RevisionResultWindow : Window
         var notice = new TextBlock {
             Text        = "The original selection was edited while AI was working. The revised text couldn't be applied automatically — copy it below.",
             TextWrapping = TextWrapping.Wrap,
-            FontSize    = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             Margin      = new Thickness(0, 0, 0, 8)
         };
         notice.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
@@ -44,7 +44,7 @@ internal sealed class RevisionResultWindow : Window
             Content  = "Copy & Close",
             MinWidth = 100,
             Height   = 28,
-            FontSize = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             Padding  = new Thickness(12, 0, 12, 0),
             Margin   = new Thickness(0, 0, 8, 0),
             IsDefault = true,
@@ -58,7 +58,7 @@ internal sealed class RevisionResultWindow : Window
             Content  = "Dismiss",
             MinWidth = 80,
             Height   = 28,
-            FontSize = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             Padding  = new Thickness(12, 0, 12, 0),
             IsCancel = true,
         };
@@ -73,7 +73,7 @@ internal sealed class RevisionResultWindow : Window
             IsReadOnly               = true,
             AcceptsReturn            = true,
             TextWrapping             = TextWrapping.Wrap,
-            FontSize                 = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             Padding                  = new Thickness(6),
             BorderThickness          = new Thickness(1),
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,

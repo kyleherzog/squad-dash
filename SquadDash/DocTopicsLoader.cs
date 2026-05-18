@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -205,7 +205,7 @@ internal static class DocTopicsLoader
         {
             Text = " " + text,
             VerticalAlignment = VerticalAlignment.Center,
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             ToolTip = tooltip,
             Opacity = opacity,
         };

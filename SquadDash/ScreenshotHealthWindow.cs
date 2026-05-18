@@ -105,7 +105,7 @@ internal sealed class ScreenshotHealthWindow : Window
         var titleBlock = new TextBlock
         {
             Text                = "Screenshot Health",
-            FontSize            = 18,
+            FontSize = (double)Application.Current.Resources["FontSizeSubtitle"],
             FontWeight          = FontWeights.SemiBold,
             VerticalAlignment   = VerticalAlignment.Center,
         };
@@ -129,7 +129,7 @@ internal sealed class ScreenshotHealthWindow : Window
         _summaryBlock = new TextBlock
         {
             Text         = "No results yet — press Run Check to begin.",
-            FontSize     = 13,
+            FontSize = (double)Application.Current.Resources["FontSizeNormal"],
             Margin       = new Thickness(0, 0, 0, 8),
             TextWrapping = TextWrapping.Wrap,
         };
@@ -291,7 +291,7 @@ internal sealed class ScreenshotHealthWindow : Window
         var nameBlock = new TextBlock
         {
             Text         = $"{statusIcon}  {result.DefinitionName}",
-            FontSize     = 13,
+            FontSize = (double)Application.Current.Resources["FontSizeNormal"],
             FontFamily   = new FontFamily("Consolas"),
             FontWeight   = result.Issues.Count > 0 ? FontWeights.SemiBold : FontWeights.Normal,
             TextWrapping = TextWrapping.NoWrap,
@@ -313,7 +313,7 @@ internal sealed class ScreenshotHealthWindow : Window
             var issueLine = new TextBlock
             {
                 Text         = $"   {issueIcon}  [{issue.Code}]  {issue.Message}",
-                FontSize     = 12,
+                FontSize = (double)Application.Current.Resources["FontSizeBody"],
                 FontFamily   = new FontFamily("Consolas"),
                 TextWrapping = TextWrapping.Wrap,
                 Margin       = new Thickness(18, 1, 0, 1),
@@ -332,7 +332,7 @@ internal sealed class ScreenshotHealthWindow : Window
         var block = new TextBlock
         {
             Text         = message,
-            FontSize     = 13,
+            FontSize = (double)Application.Current.Resources["FontSizeNormal"],
             TextWrapping = TextWrapping.Wrap,
             Margin       = new Thickness(4, 4, 4, 4),
         };

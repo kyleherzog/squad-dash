@@ -189,7 +189,7 @@ internal sealed class MarkdownDocumentWindow : Window {
 
             var noteLabel = new TextBlock {
                 Text              = "Note:",
-                FontSize          = 12,
+                FontSize = (double)Application.Current.Resources["FontSizeBody"],
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin            = new Thickness(0, 0, 8, 0),
             };
@@ -199,7 +199,7 @@ internal sealed class MarkdownDocumentWindow : Window {
 
             var noteTitleBox = new TextBox {
                 Text            = noteContext.InitialTitle,
-                FontSize        = 12,
+                FontSize = (double)Application.Current.Resources["FontSizeBody"],
                 Padding         = new Thickness(6, 4, 6, 4),
                 BorderThickness = new Thickness(1),
                 VerticalContentAlignment = VerticalAlignment.Center,
@@ -246,7 +246,7 @@ internal sealed class MarkdownDocumentWindow : Window {
 
             var loopDescLabel = new TextBlock {
                 Text              = "Description:",
-                FontSize          = 12,
+                FontSize = (double)Application.Current.Resources["FontSizeBody"],
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin            = new Thickness(0, 0, 8, 0),
             };
@@ -256,7 +256,7 @@ internal sealed class MarkdownDocumentWindow : Window {
 
             var loopDescHint = new TextBlock {
                 Text              = "e.g. 'My Loop - tooltip hint shown on hover'",
-                FontSize          = 11,
+                FontSize = (double)Application.Current.Resources["FontSizeSmall"],
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin            = new Thickness(12, 0, 8, 0),
                 FontStyle         = FontStyles.Italic,
@@ -268,7 +268,7 @@ internal sealed class MarkdownDocumentWindow : Window {
 
             var loopDescBox = new TextBox {
                 Text                     = loopEditContext.InitialDescription,
-                FontSize                 = 12,
+                FontSize = (double)Application.Current.Resources["FontSizeBody"],
                 Padding                  = new Thickness(6, 4, 6, 4),
                 BorderThickness          = new Thickness(1),
                 Height                   = 28,
@@ -301,7 +301,7 @@ internal sealed class MarkdownDocumentWindow : Window {
             // ── Include front matter checkbox ──────────────────────────────────
             var frontMatterCheckBox = new CheckBox {
                 Content   = "Include front matter",
-                FontSize  = 11,
+                FontSize = (double)Application.Current.Resources["FontSizeSmall"],
                 IsChecked = false,
                 Margin    = new Thickness(99, 0, 12, 8),
                 VerticalAlignment = VerticalAlignment.Center,
@@ -2092,7 +2092,7 @@ internal sealed class MarkdownDocumentWindow : Window {
         _editorFindMatchCount = new TextBlock {
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0),
-            FontSize = 11
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"]
         };
         _editorFindMatchCount.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
 
@@ -2349,7 +2349,7 @@ internal sealed class MarkdownDocumentTabState {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             FontFamily = new FontFamily("Consolas, Segoe UI Emoji"),
-            FontSize = 14,
+            FontSize = (double)Application.Current.Resources["FontSizeMedium"],
             BorderThickness = new Thickness(0),
             Visibility = Visibility.Collapsed
         };
@@ -2454,7 +2454,7 @@ internal static class MarkdownFlowDocumentBuilder {
 
         var document = new FlowDocument {
             FontFamily = new FontFamily("Segoe UI, Segoe UI Emoji"),
-            FontSize = 14,
+            FontSize = (double)Application.Current.Resources["FontSizeMedium"],
             Foreground = foreground,
             PagePadding = new Thickness(18)
         };

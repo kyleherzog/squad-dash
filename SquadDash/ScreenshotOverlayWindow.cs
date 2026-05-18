@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -315,7 +315,7 @@ internal sealed class ScreenshotOverlayWindow : Window
         var instrText = new TextBlock
         {
             Text             = "Drag handles to adjust region  ·  Enter to capture  ·  Esc to cancel",
-            FontSize         = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Padding          = new Thickness(8, 3, 8, 3),
             IsHitTestVisible = false
         };
@@ -388,7 +388,7 @@ internal sealed class ScreenshotOverlayWindow : Window
         {
             var labelTb = new TextBlock
             {
-                FontSize          = 11,
+                FontSize = (double)Application.Current.Resources["FontSizeSmall"],
                 FontFamily        = new FontFamily("Segoe UI"),
                 Foreground        = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
                 VerticalAlignment = VerticalAlignment.Center,
@@ -414,7 +414,7 @@ internal sealed class ScreenshotOverlayWindow : Window
         var nameLabel = new TextBlock
         {
             Text              = "Name:",
-            FontSize          = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(0, 0, 6, 0)
         };
@@ -424,7 +424,7 @@ internal sealed class ScreenshotOverlayWindow : Window
         {
             Width                    = 220,
             Height                   = 26,
-            FontSize                 = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             IsHitTestVisible         = true,
             Focusable                = true,
             VerticalContentAlignment = VerticalAlignment.Center,
@@ -549,7 +549,7 @@ internal sealed class ScreenshotOverlayWindow : Window
             AcceptsReturn                = true,
             TextWrapping                 = TextWrapping.Wrap,
             Height                       = 56,          // ~3 lines at FontSize 12
-            FontSize                     = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             Margin                       = new Thickness(0, 6, 0, 0),
             Padding                      = new Thickness(4, 3, 4, 3),
             BorderThickness              = new Thickness(1.5),
@@ -1338,7 +1338,7 @@ internal sealed class ScreenshotOverlayWindow : Window
         var countLabel = new System.Windows.Controls.TextBlock
         {
             Text                = seconds.ToString(),
-            FontSize            = 180,
+            FontSize = (double)Application.Current.Resources["FontSizeDisplay"],
             FontWeight          = FontWeights.Bold,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment   = VerticalAlignment.Center,
@@ -2082,7 +2082,7 @@ internal sealed class ScreenshotOverlayWindow : Window
         {
             _modeHintText = new TextBlock
             {
-                FontSize         = 11,
+                FontSize = (double)Application.Current.Resources["FontSizeSmall"],
                 FontFamily       = new FontFamily("Segoe UI"),
                 Foreground       = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
                 TextAlignment    = TextAlignment.Center,

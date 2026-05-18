@@ -109,7 +109,7 @@ internal sealed class PushToTalkWindow : Window
         var hintLine1 = new TextBlock
         {
             Text = "Release Ctrl to send IMMEDIATELY",
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Margin = new Thickness(0, 0, 0, 2)
         };
         hintLine1.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
@@ -117,7 +117,7 @@ internal sealed class PushToTalkWindow : Window
         var hintLine2 = new TextBlock
         {
             Text = "Tap Shift to edit dictation",
-            FontSize = 11
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"]
         };
         hintLine2.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
 

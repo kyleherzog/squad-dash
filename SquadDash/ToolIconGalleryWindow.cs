@@ -38,7 +38,7 @@ internal sealed class ToolIconGalleryWindow : Window {
         // Title bar
         var titleBlock = new TextBlock {
             Text = "Tool Icons",
-            FontSize = 18,
+            FontSize = (double)Application.Current.Resources["FontSizeSubtitle"],
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(20, 18, 20, 12)
         };
@@ -97,7 +97,7 @@ internal sealed class ToolIconGalleryWindow : Window {
             var tb = new TextBlock {
                 Text = label,
                 FontWeight = FontWeights.SemiBold,
-                FontSize = 11,
+                FontSize = (double)Application.Current.Resources["FontSizeSmall"],
                 Margin = new Thickness(0, 0, 12, 0)
             };
             tb.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
@@ -131,7 +131,7 @@ internal sealed class ToolIconGalleryWindow : Window {
         var nameBlock = new TextBlock {
             Text = toolName,
             FontFamily = new System.Windows.Media.FontFamily("Consolas"),
-            FontSize = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 5, 8, 5)
         };
@@ -143,7 +143,7 @@ internal sealed class ToolIconGalleryWindow : Window {
         // Description cell
         var descBlock = new TextBlock {
             Text = description,
-            FontSize = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 5, 0, 5)

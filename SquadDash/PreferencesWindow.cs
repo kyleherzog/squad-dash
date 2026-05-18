@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Windows;
 using System.Net.Http;
@@ -143,7 +143,7 @@ internal sealed class PreferencesWindow : Window {
         _azureSpeechRadio = new RadioButton {
             Content = "Azure Cognitive Services",
             GroupName = "SpeechProvider",
-            FontSize = 13,
+            FontSize = (double)Application.Current.Resources["FontSizeNormal"],
             Margin = new Thickness(0, 0, 0, 6),
             IsChecked = !isOpenAi
         };
@@ -152,7 +152,7 @@ internal sealed class PreferencesWindow : Window {
         _openAiSpeechRadio = new RadioButton {
             Content = "OpenAI Whisper",
             GroupName = "SpeechProvider",
-            FontSize = 13,
+            FontSize = (double)Application.Current.Resources["FontSizeNormal"],
             Margin = new Thickness(0, 0, 0, 6),
             IsChecked = isOpenAi
         };
@@ -316,7 +316,7 @@ internal sealed class PreferencesWindow : Window {
         _byokTestStatusText = new TextBlock {
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(10, 0, 0, 0),
-            FontSize = 11
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"]
         };
         _byokTestStatusText.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
 
@@ -347,7 +347,7 @@ internal sealed class PreferencesWindow : Window {
         };
         _ntfyUrlText = new TextBlock {
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             FontFamily = new System.Windows.Media.FontFamily("Consolas")
         };
         _ntfyUrlText.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
@@ -501,7 +501,7 @@ internal sealed class PreferencesWindow : Window {
 
         var regionHint = new TextBlock {
             Text = "e.g. eastus, westus2, westeurope",
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Margin = new Thickness(0, 3, 0, 0)
         };
         regionHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
@@ -544,7 +544,7 @@ internal sealed class PreferencesWindow : Window {
         // ── Push-to-talk ──────────────────────────────────────────────────
         AddSectionHeader(form, "Push-to-talk", topMargin: 24);
 
-        var pttHint = new TextBlock { FontSize = 11, Margin = new Thickness(0, 4, 0, 4), TextWrapping = TextWrapping.Wrap };
+        var pttHint = new TextBlock { FontSize = (double)Application.Current.Resources["FontSizeSmall"], Margin = new Thickness(0, 4, 0, 4), TextWrapping = TextWrapping.Wrap };
         pttHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
         pttHint.Inlines.Add(new Run("Double-tap and hold the "));
         pttHint.Inlines.Add(new Bold(new Run("Ctrl")));
@@ -557,7 +557,7 @@ internal sealed class PreferencesWindow : Window {
 
         pttStack.Children.Add(_pttAutoSendRadio);
 
-        var autoSendSubHint = new TextBlock { FontSize = 11, Margin = new Thickness(20, 2, 0, 8), TextWrapping = TextWrapping.Wrap };
+        var autoSendSubHint = new TextBlock { FontSize = (double)Application.Current.Resources["FontSizeSmall"], Margin = new Thickness(20, 2, 0, 8), TextWrapping = TextWrapping.Wrap };
         autoSendSubHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
         autoSendSubHint.Inlines.Add(new Run("(unless I'm using voice to modify "));
         autoSendSubHint.Inlines.Add(new Bold(new Run("existing")));
@@ -568,7 +568,7 @@ internal sealed class PreferencesWindow : Window {
 
         pttStack.Children.Add(_pttDoNothingRadio);
 
-        var doNothingSubHint = new TextBlock { FontSize = 11, Margin = new Thickness(20, 2, 0, 8), TextWrapping = TextWrapping.Wrap };
+        var doNothingSubHint = new TextBlock { FontSize = (double)Application.Current.Resources["FontSizeSmall"], Margin = new Thickness(20, 2, 0, 8), TextWrapping = TextWrapping.Wrap };
         doNothingSubHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
         doNothingSubHint.Inlines.Add(new Run("(I'll press "));
         doNothingSubHint.Inlines.Add(new Bold(new Run("Enter")));
@@ -586,7 +586,7 @@ internal sealed class PreferencesWindow : Window {
 
         var gridHint = new TextBlock {
             Text = "Double-click a cell to edit. Changes are saved automatically.",
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Margin = new Thickness(0, 2, 0, 6)
         };
         gridHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
@@ -719,7 +719,7 @@ internal sealed class PreferencesWindow : Window {
         var hint = new TextBlock {
             Text = "Optionally auto-start a public tunnel when Remote Access starts, for access from outside your local network.",
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Margin = new Thickness(0, 0, 0, 12)
         };
         hint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
@@ -758,7 +758,7 @@ internal sealed class PreferencesWindow : Window {
         var hint = new TextBlock {
             Text = "Override the default Copilot model with a custom provider (e.g. Ollama). Leave blank to use GitHub Copilot.",
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Margin = new Thickness(0, 0, 0, 12)
         };
         hint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
@@ -769,7 +769,7 @@ internal sealed class PreferencesWindow : Window {
 
         var urlHint = new TextBlock {
             Text = "e.g. http://localhost:11434/v1",
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Margin = new Thickness(0, 3, 0, 12)
         };
         urlHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
@@ -867,7 +867,7 @@ internal sealed class PreferencesWindow : Window {
 
         var scanHint = new TextBlock {
             Text = "Scan with ntfy phone app",
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Margin = new Thickness(0, 0, 0, 2)
         };
         scanHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
@@ -910,7 +910,7 @@ internal sealed class PreferencesWindow : Window {
         var headerHint = new TextBlock {
             Text = "Play a sound when events occur. Check the box to enable; enter a path to a .mp3 or .wav file for a custom sound, leave blank to use the default Windows alert sound, or enter a quoted phrase like \"Prompt complete\" to have text-to-speech speak it. Right-click a path box to test.",
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Margin = new Thickness(0, 0, 0, 16)
         };
         headerHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
@@ -949,7 +949,7 @@ internal sealed class PreferencesWindow : Window {
         var ttsHint = new TextBlock {
             Text = "When a sound-event path is a quoted phrase like \"Done!\", SquadDash speaks it aloud using the TTS provider below.",
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Margin = new Thickness(0, 0, 0, 12)
         };
         ttsHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
@@ -1108,7 +1108,7 @@ internal sealed class PreferencesWindow : Window {
         var ttsErrorText = new TextBlock {
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 0),
-            FontSize = 12
+            FontSize = (double)Application.Current.Resources["FontSizeBody"]
         };
         ttsErrorText.SetResourceReference(TextBlock.ForegroundProperty, "ErrorText");
 
@@ -1317,7 +1317,7 @@ internal sealed class PreferencesWindow : Window {
         var devHint = new TextBlock {
             Text = "Use this only for UI testing. Startup simulations affect the top issue panel. Runtime simulations make the next prompt fail through the friendly error path.",
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Margin = new Thickness(0, 0, 0, 12)
         };
         devHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
@@ -1342,7 +1342,7 @@ internal sealed class PreferencesWindow : Window {
 
         var hint = new TextBlock {
             Text = "This prompt is sent automatically when you press Ctrl+Shift+C with text selected in any markdown source editor. When the AI revision lands, the original selection is replaced with the cleaned-up version. You can work elsewhere in the document while waiting for AI to return.",
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 0)
         };
@@ -1516,7 +1516,7 @@ internal sealed class PreferencesWindow : Window {
         var header = new TextBlock {
             Text = text,
             FontWeight = FontWeights.SemiBold,
-            FontSize = 14,
+            FontSize = (double)Application.Current.Resources["FontSizeMedium"],
             Margin = new Thickness(0, topMargin, 0, 12)
         };
         header.SetResourceReference(TextBlock.ForegroundProperty, "ImportantText");

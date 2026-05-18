@@ -258,7 +258,7 @@ internal sealed class PromptAttachmentViewerWindow : Window
             AcceptsReturn                 = true,
             BorderThickness               = new Thickness(0),
             Background                    = Brushes.Transparent,
-            FontSize                      = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             Padding                       = new Thickness(2),
             VerticalScrollBarVisibility   = ScrollBarVisibility.Disabled,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,

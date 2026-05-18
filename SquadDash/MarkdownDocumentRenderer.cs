@@ -219,7 +219,7 @@ internal sealed class MarkdownDocumentRenderer {
             yield return BuildQuickReplyBlock(entry, quickReplyOptions);
             var hintParagraph = CreateTranscriptParagraph(bottomMargin: 6);
             var hintRun = new Run("Press \u201c[\u201d to respond with the keyboard.") {
-                FontSize = 11
+                FontSize = (double)Application.Current.Resources["FontSizeSmall"]
             };
             hintRun.SetResourceReference(TextElement.ForegroundProperty, "KeyboardHintText");
             hintParagraph.Inlines.Add(hintRun);
@@ -401,7 +401,7 @@ internal sealed class MarkdownDocumentRenderer {
         var copyBtn = new Button {
             Content             = "📋",
             ToolTip             = copiedTip,
-            FontSize            = 13,
+            FontSize = (double)Application.Current.Resources["FontSizeNormal"],
             Width               = 26,
             Height              = 22,
             Padding             = new Thickness(0),
@@ -470,7 +470,7 @@ internal sealed class MarkdownDocumentRenderer {
             var caption = new TextBlock {
                 Text = captionText,
                 Margin = new Thickness(0, 0, 0, 6),
-                FontSize = 12
+                FontSize = (double)Application.Current.Resources["FontSizeBody"]
             };
             caption.SetResourceReference(TextBlock.ForegroundProperty, "AgentRoleText");
             stack.Children.Add(caption);

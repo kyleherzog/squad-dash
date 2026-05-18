@@ -418,7 +418,7 @@ internal sealed class CommitApprovalPanel {
         var relTime = StatusTimingPresentation.FormatRelativeTimestamp(item.TurnStartedAt);
         var relBlock = new TextBlock {
             Text         = relTime,
-            FontSize     = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Margin       = new Thickness(0, 3, 0, 0),
             TextWrapping = TextWrapping.Wrap,
         };

@@ -90,7 +90,7 @@ internal sealed class TasksStatusWindow : Window {
 
         var titleBlock = new TextBlock {
             Text = "Live Tasks",
-            FontSize = 18,
+            FontSize = (double)Application.Current.Resources["FontSizeSubtitle"],
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -120,7 +120,7 @@ internal sealed class TasksStatusWindow : Window {
             IsReadOnly = true,
             BorderThickness = new Thickness(0),
             FontFamily = new FontFamily("Consolas"),
-            FontSize = 13,
+            FontSize = (double)Application.Current.Resources["FontSizeNormal"],
             Padding = new Thickness(0),
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -135,7 +135,7 @@ internal sealed class TasksStatusWindow : Window {
 
         var doc = new FlowDocument {
             FontFamily = new FontFamily("Consolas"),
-            FontSize = 13,
+            FontSize = (double)Application.Current.Resources["FontSizeNormal"],
             PagePadding = new Thickness(0),
         };
         doc.SetResourceReference(FlowDocument.ForegroundProperty, "LabelText");

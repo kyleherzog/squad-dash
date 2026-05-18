@@ -86,7 +86,7 @@ internal sealed class LoopOutputWindow : Window
         var titleBlock = new TextBlock
         {
             Text              = "Loop Output",
-            FontSize          = 18,
+            FontSize = (double)Application.Current.Resources["FontSizeSubtitle"],
             FontWeight        = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -116,7 +116,7 @@ internal sealed class LoopOutputWindow : Window
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             BorderThickness               = new Thickness(0),
             FontFamily                    = new FontFamily("Consolas"),
-            FontSize                      = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
         };
         _logTextBox.SetResourceReference(TextBox.BackgroundProperty, "CardSurface");
         _logTextBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");

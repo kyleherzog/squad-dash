@@ -70,7 +70,7 @@ internal sealed class LoopMergedViewWindow : Window
         var titleBlock = new TextBlock
         {
             Text                = "Loop Preview",
-            FontSize            = 13,
+            FontSize = (double)Application.Current.Resources["FontSizeNormal"],
             FontWeight          = FontWeights.SemiBold,
             VerticalAlignment   = VerticalAlignment.Center,
         };
@@ -94,7 +94,7 @@ internal sealed class LoopMergedViewWindow : Window
             BorderThickness               = new Thickness(0),
             Background                    = Brushes.Transparent,
             FontFamily                    = new FontFamily("Consolas, Courier New, monospace"),
-            FontSize                      = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             AcceptsReturn                 = true,
             VerticalScrollBarVisibility   = ScrollBarVisibility.Disabled,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,

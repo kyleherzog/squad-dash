@@ -41,7 +41,7 @@ internal sealed class RevisionWorkingOverlay : Window
 
         var tb = new TextBlock {
             Text       = "⟳  Working…",
-            FontSize   = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             FontWeight = FontWeights.SemiBold,
         };
         tb.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");

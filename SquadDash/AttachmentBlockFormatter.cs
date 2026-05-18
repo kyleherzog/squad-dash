@@ -27,30 +27,50 @@ internal static class AttachmentBlockFormatter
     }
 
     /// <summary>
-    /// Given a <paramref name="prompt"/> that uses the typed attachment format (optional
-    /// preamble line + one or more <c>&lt;attachment&gt;</c> blocks), returns the index of
-    /// the first character of the user's actual message.
+    /// Given a <paramref name="prompt"/> that starts with a recognized attachment/follow-up
+    /// header, returns the index of the first character of the user's actual message.
     /// Returns -1 if the header section cannot be parsed.
     /// </summary>
     internal static int StripTypedAttachmentHeaders(string prompt)
     {
         int pos = 0;
+        var sawHeader = false;
 
         // Skip optional preamble (single line).
         const string Preamble = "The user has attached the following context items. Please refer to them as needed.";
         if (prompt.StartsWith(Preamble, StringComparison.Ordinal))
         {
             pos = Preamble.Length;
-            if (pos < prompt.Length && prompt[pos] == '\n') pos++;
+            sawHeader = true;
         }
 
-        // Scan past attachment blocks: XML <attachment> tags, bracket lines, and plain lines.
+        // Scan past attachment blocks and known one-line follow-up headers.
         const string AttachOpen  = "<attachment ";
         while (pos < prompt.Length)
         {
-            // \n\n is the terminal separator between attachments and user text.
-            if (pos + 1 < prompt.Length && prompt[pos] == '\n' && prompt[pos + 1] == '\n')
-                return pos + 2;
+            // Blank line is the terminal separator between attachments and user text.
+            if (sawHeader)
+            {
+                var next = pos;
+                if (TryConsumeBlankLine(prompt, ref next))
+                {
+                    pos = next;
+                    return pos;
+                }
+
+                next = pos;
+                if (TryConsumeLineBreak(prompt, ref next))
+                {
+                    pos = next;
+                    continue;
+                }
+            }
+
+            if (TryConsumeRecognizedHeaderLine(prompt, ref pos))
+            {
+                sawHeader = true;
+                continue;
+            }
 
             // XML typed block: <attachment ...>...</attachment>
             // Content with literal </attachment> is escaped, so IndexOf finds only the real close tag.
@@ -60,12 +80,76 @@ internal static class AttachmentBlockFormatter
                 var closeIdx = prompt.IndexOf(LiteralCloseTag, pos, StringComparison.Ordinal);
                 if (closeIdx < 0) return -1;
                 pos = closeIdx + LiteralCloseTag.Length;
+                sawHeader = true;
                 continue;
             }
 
-            pos++;
+            return -1;
         }
         return -1;
+    }
+
+    private static bool TryConsumeRecognizedHeaderLine(string prompt, ref int pos)
+    {
+        var lineEnd = FindLineEnd(prompt, pos);
+        var line = prompt[pos..lineEnd];
+        if (line.StartsWith("[Attached image: ", StringComparison.Ordinal) ||
+            line.StartsWith("[Follow-up on ", StringComparison.Ordinal) ||
+            line.StartsWith("Regarding this section of the transcript:", StringComparison.Ordinal))
+        {
+            pos = lineEnd;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static int FindLineEnd(string text, int start)
+    {
+        var cr = text.IndexOf('\r', start);
+        var lf = text.IndexOf('\n', start);
+        return (cr, lf) switch
+        {
+            (< 0, < 0) => text.Length,
+            (< 0, _)   => lf,
+            (_, < 0)   => cr,
+            _          => Math.Min(cr, lf),
+        };
+    }
+
+    private static bool TryConsumeLineBreak(string text, ref int pos)
+    {
+        if (pos >= text.Length)
+            return false;
+
+        if (text[pos] == '\r')
+        {
+            pos++;
+            if (pos < text.Length && text[pos] == '\n')
+                pos++;
+            return true;
+        }
+
+        if (text[pos] == '\n')
+        {
+            pos++;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryConsumeBlankLine(string text, ref int pos)
+    {
+        var original = pos;
+        if (!TryConsumeLineBreak(text, ref pos))
+            return false;
+
+        if (TryConsumeLineBreak(text, ref pos))
+            return true;
+
+        pos = original;
+        return false;
     }
 
     /// <summary>

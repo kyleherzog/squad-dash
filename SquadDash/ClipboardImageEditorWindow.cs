@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -549,7 +549,7 @@ internal sealed class ClipboardImageEditorWindow : Window {
         var badgeBg = new SolidColorBrush(Color.FromArgb(200, 0, 0, 0));
         _dimWidthLabel = new TextBlock {
             Foreground = Brushes.White,
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             FontWeight = FontWeights.SemiBold,
             IsHitTestVisible = false
         };
@@ -568,7 +568,7 @@ internal sealed class ClipboardImageEditorWindow : Window {
 
         _dimHeightLabel = new TextBlock {
             Foreground = Brushes.White,
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             FontWeight = FontWeights.SemiBold,
             IsHitTestVisible = false
         };
@@ -861,7 +861,7 @@ internal sealed class ClipboardImageEditorWindow : Window {
             Text = string.Empty,
             VerticalAlignment = VerticalAlignment.Center,
             FontFamily = new FontFamily("Consolas"),
-            FontSize = 13,
+            FontSize = (double)Application.Current.Resources["FontSizeNormal"],
             Margin = new Thickness(0, 0, 8, 0),
             Cursor = Cursors.Hand,
             ToolTip = "Copy"
@@ -1001,7 +1001,7 @@ internal sealed class ClipboardImageEditorWindow : Window {
             Text = $"{_zoom * 100:F0}%",
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 4, 0),
-            FontSize = 11
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"]
         };
         _zoomLabel.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
 
@@ -3569,7 +3569,7 @@ internal sealed class ClipboardImageEditorWindow : Window {
     private void ShowModeHint(string text) {
         if (_modeHintBorder == null) {
             _modeHintText = new TextBlock {
-                FontSize = 11,
+                FontSize = (double)Application.Current.Resources["FontSizeSmall"],
                 FontFamily = new FontFamily("Segoe UI"),
                 Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
                 TextAlignment = TextAlignment.Center,
@@ -3706,13 +3706,13 @@ internal sealed class ClipboardImageEditorWindow : Window {
                 IsHitTestVisible = false
             };
             _eyedropperTooltipRgbText = new TextBlock {
-                FontSize = 13,
+                FontSize = (double)Application.Current.Resources["FontSizeNormal"],
                 FontFamily = new FontFamily("Consolas"),
                 Foreground = Brushes.White,
                 IsHitTestVisible = false
             };
             _eyedropperTooltipHslText = new TextBlock {
-                FontSize = 13,
+                FontSize = (double)Application.Current.Resources["FontSizeNormal"],
                 FontFamily = new FontFamily("Consolas"),
                 Foreground = Brushes.White,
                 IsHitTestVisible = false,

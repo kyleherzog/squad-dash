@@ -198,6 +198,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private string? _lastMissingUtilityAgentNoticeKey;
     private string? _pendingQuickReplyRoutingInstruction;
     private PendingQuickReplyLaunchState? _pendingQuickReplyLaunch;
+    private readonly HashSet<string> _directQuickReplyAgentThreadIds = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _shellDescriptions = new(StringComparer.OrdinalIgnoreCase);
     private string? _pendingSupplementalPromptInstruction;
     private string? _announcedRoutingIssueFingerprint;
@@ -285,9 +286,9 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _activeAgentLaneNudgeScheduled;
     private bool _inactiveAgentLaneNudgeScheduled;
     private int _toolSpinnerFrame;
-    private double _transcriptFontSize = 14;
-    private double _promptFontSize = 14;
-    private double _docSourceFontSize = 12;
+    private double _transcriptFontSize = (double)Application.Current.Resources["FontSizeMedium"];
+    private double _promptFontSize = (double)Application.Current.Resources["FontSizeMedium"];
+    private double _docSourceFontSize = (double)Application.Current.Resources["FontSizeBody"];
     private double _docPreviewScrollY;
     private readonly List<Image> _toolIconImages = [];
     private readonly HashSet<TranscriptResponseEntry> _pendingResponseEntryRenders = [];
@@ -1139,23 +1140,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             showLiveTraceWindow: () => ShowTraceWindow(),
             runDoctor: () => RunDoctorButton_Click(null!, null!),
             showHireAgentWindow: () => ShowHireAgentWindow(),
-            enqueuePrompt: (text, isSystemInjected) =>
-            {
-                var item = new PromptQueueItem {
-                    Text             = text,
-                    SequenceNumber   = ++_promptQueueSeq,
-                    IsSystemInjected = isSystemInjected,
-                };
-                if (isSystemInjected && _activeTabId is null && !_queueManuallyPaused) {
-                    _promptQueue.EnqueueItemAtFront(item);
-                    _promptQueue.RenumberSequentially();
-                }
-                else {
-                    _promptQueue.EnqueueItem(item);
-                }
-                SyncQueuePanel();
-                _ = DrainQueueIfNeededAsync();
-            },
+            enqueuePrompt: (text, isSystemInjected) => EnqueuePrompt(text, isSystemInjected),
             showScreenshotOverlay: () => ShowScreenshotOverlay(),
             showRuntimeIssue: msg => ShowRuntimeIssue(msg),
             clearRuntimeIssue: () => ClearRuntimeIssue(),
@@ -1165,7 +1150,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             waitForPostedUiActionsAsync: () => _postedUiActionTracker.WaitForDrainAsync(),
             getModelObservedThisSession: () => _modelObservedThisSession,
             getLastQuickReplyEntry: () => _lastQuickReplyEntry,
-            setLastQuickReplyEntryNull: () => { _lastQuickReplyEntry = null; _quickRepliesShownAt = DateTime.MinValue; },
+            setLastQuickReplyEntryNull: () => ClearActiveQuickReplyState(),
             renderResponseEntry: entry => RenderResponseEntry(entry),
             ensureThreadFooterAtEnd: thread => EnsureThreadFooterAtEnd(thread),
             scrollToEndIfAtBottom: () => ScrollToEndIfAtBottom(),
@@ -1931,7 +1916,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             // When the queue is idle the original direct-dispatch path is correct.
             if (_activeTabId is not null)
             {
-                if (_isPromptRunning || IsNativeLoopRunning || _queueManuallyPaused)
+                if (_isPromptRunning || IsNativeLoopRunning || _queueManuallyPaused || HasPendingDirectQuickReplyAgentFollowUp())
                 {
                     OnQueueTabClicked(null);
                     return;
@@ -1959,7 +1944,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 return;
             }
 
-            if (_isPromptRunning || IsNativeLoopRunning || _queueManuallyPaused)
+            if (_isPromptRunning || IsNativeLoopRunning || _queueManuallyPaused || HasPendingDirectQuickReplyAgentFollowUp())
             {
                 if (IsNativeLoopRunning && _loopFollowUpTcs == null)
                     _loopInterruptedByQueue = true;
@@ -1990,6 +1975,30 @@ public partial class MainWindow : Window, ILiveElementLocator
     }
 
     // ── Prompt Queue ──────────────────────────────────────────────────────────
+
+    private void EnqueuePrompt(string text, bool isSystemInjected)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return;
+
+        var item = new PromptQueueItem {
+            Text             = text,
+            SequenceNumber   = ++_promptQueueSeq,
+            IsSystemInjected = isSystemInjected,
+        };
+        if (isSystemInjected && _activeTabId is null && !_queueManuallyPaused) {
+            _promptQueue.EnqueueItemAtFront(item);
+            _promptQueue.RenumberSequentially();
+        }
+        else {
+            _promptQueue.EnqueueItem(item);
+        }
+        SquadDashTrace.Write(
+            "Queue",
+            $"Enqueued prompt #{item.SequenceNumber} systemInjected={isSystemInjected} queueCount={_promptQueue.Count} chars={text.Length}");
+        SyncQueuePanel();
+        _ = DrainQueueIfNeededAsync();
+    }
 
     private void EnqueueCurrentPrompt()
     {
@@ -2145,7 +2154,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _queuePreEditDraft = null;
         UpdateFollowUpStrip();
 
-        if (_isPromptRunning || IsNativeLoopRunning)
+        if (_isPromptRunning || IsNativeLoopRunning || HasPendingDirectQuickReplyAgentFollowUp())
         {
             // Coordinator busy — item stays in queue with updated text.
             SyncQueuePanel();
@@ -2161,7 +2170,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         try
         {
             ResetQueuePausedState();
-            await _pec.ExecutePromptAsync(ApplyFollowUpHeader(ApplyDictationAnnotation(item), id), addToHistory: true, clearPromptBox: false);
+            await _pec.ExecutePromptAsync(ApplyFollowUpHeader(ApplyDictationAnnotation(item), id), addToHistory: !item.IsSystemInjected, clearPromptBox: false);
         }
         catch (Exception ex)
         {
@@ -2195,6 +2204,14 @@ public partial class MainWindow : Window, ILiveElementLocator
             SquadDashTrace.Write(
                 "Queue",
                 $"Auto-dispatch blocked by active background work reason={reason} queueCount={_promptQueue.Count}");
+            return false;
+        }
+
+        if (HasPendingDirectQuickReplyAgentFollowUp())
+        {
+            SquadDashTrace.Write(
+                "Queue",
+                $"Auto-dispatch blocked by direct named-agent quick reply follow-up reason={reason} queueCount={_promptQueue.Count} pending={_directQuickReplyAgentThreadIds.Count}");
             return false;
         }
 
@@ -2258,7 +2275,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             _pec.CurrentDispatchedItem = item;
             _queueDrainActive = true;
             _pendingPromptIsSystemInjected = item.IsSystemInjected;
-            await _pec.ExecutePromptAsync(ApplyFollowUpHeader(ApplyDictationAnnotation(item), item.Id), addToHistory: true, clearPromptBox: false);
+            await _pec.ExecutePromptAsync(ApplyFollowUpHeader(ApplyDictationAnnotation(item), item.Id), addToHistory: !item.IsSystemInjected, clearPromptBox: false);
         }
         catch (Exception ex)
         {
@@ -2315,7 +2332,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 _pec.CurrentDispatchedItem = item;
                 _queueDrainActive = true;
                 _pendingPromptIsSystemInjected = item.IsSystemInjected;
-                await _pec.ExecutePromptAsync(ApplyFollowUpHeader(ApplyDictationAnnotation(item), item.Id), addToHistory: true, clearPromptBox: false);
+                await _pec.ExecutePromptAsync(ApplyFollowUpHeader(ApplyDictationAnnotation(item), item.Id), addToHistory: !item.IsSystemInjected, clearPromptBox: false);
             }
             catch (Exception ex)
             {
@@ -2373,7 +2390,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private async Task DrainQueueBeforeLoopIterationAsync()
     {
         bool dispatched = false;
-        while (!_isPromptRunning && !_isClosing && !_restartPending && !LastTurnNeedsInput())
+        while (!_isPromptRunning && !_isClosing && !_restartPending && !HasPendingDirectQuickReplyAgentFollowUp() && !LastTurnNeedsInput())
         {
             var item = GetAutoDispatchCandidate();
             if (item is null) break;
@@ -2403,7 +2420,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 _pec.CurrentDispatchedItem = item;
                 _queueDrainActive = true;
                 _pendingPromptIsSystemInjected = item.IsSystemInjected;
-                await _pec.ExecutePromptAsync(ApplyFollowUpHeader(ApplyDictationAnnotation(item), item.Id), addToHistory: true, clearPromptBox: false);
+                await _pec.ExecutePromptAsync(ApplyFollowUpHeader(ApplyDictationAnnotation(item), item.Id), addToHistory: !item.IsSystemInjected, clearPromptBox: false);
             }
             catch (Exception ex)
             {
@@ -2606,7 +2623,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         var hint = new TextBlock
         {
             Text = $"Automatic prompting will pause when it's time to send this active tab (\"{activeTabLabel}\")",
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(10, 0, 8, 0),
             FontStyle = FontStyles.Italic,
@@ -2890,7 +2907,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 var hint = new TextBlock
                 {
                     Text = text,
-                    FontSize = 11,
+                    FontSize = (double)Application.Current.Resources["FontSizeSmall"],
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(10, 0, 8, 0),
                     FontStyle = FontStyles.Italic,
@@ -2917,7 +2934,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         var tb = new TextBlock
         {
             Text              = "« Now at the front of the queue.",
-            FontSize          = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             FontStyle         = FontStyles.Italic,
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(8, 0, 8, 0),
@@ -2977,7 +2994,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         var textBlock = new TextBlock
         {
             Text = label,
-            FontSize = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             FontWeight = isActive ? FontWeights.SemiBold : FontWeights.Normal,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -4302,6 +4319,11 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void HandleSubagentStarted(SquadSdkEvent evt)
     {
+        var matchedPendingQuickReply = _pendingQuickReplyLaunch is { ExpectedAgentStarted: false } pendingLaunch &&
+                                       QuickReplyAgentLaunchPolicy.MatchesExpectedAgent(
+                                           pendingLaunch.ExpectedAgentHandle,
+                                           pendingLaunch.ExpectedAgentLabel,
+                                           evt);
         NotePendingQuickReplySubagentStarted(evt);
         if (ShouldSuppressSilentBackgroundAgent(evt))
         {
@@ -4312,6 +4334,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         var thread = _agentThreadRegistry.GetOrCreateAgentThread(evt);
         _agentThreadRegistry.EnsureAgentThreadTurnStarted(thread);
         _agentThreadRegistry.UpdateAgentThreadLifecycle(thread, evt, statusText: "Running", detailText: evt.AgentDescription ?? "Background work started.");
+        if (matchedPendingQuickReply)
+            TrackDirectQuickReplyAgentThread(thread);
         SquadDashTrace.Write(
             "UI",
             $"Subagent started {BackgroundTaskPresenter.BuildBackgroundAgentLabel(thread)} description={evt.AgentDescription?.Trim() ?? "(none)"}");
@@ -4475,10 +4499,13 @@ public partial class MainWindow : Window, ILiveElementLocator
         UpdateCompletedTimeFooters();
         var summary = BackgroundTaskPresenter.BuildThreadCompletionSummary(thread);
         SquadDashTrace.Write("UI", $"Subagent completed {summary}");
+        var needsDirectQuickReplyFollowUp = CompleteDirectQuickReplyAgentThread(thread, "subagent_completed");
 
         var promoted = _backgroundTaskPresenter.PromoteBackgroundAgentReportNow(thread, "subagent_completed");
         if (promoted && _isPromptRunning)
             _pec.NotifySubagentCompletedDuringTurn(thread, thread.Title ?? evt.AgentDisplayName ?? evt.AgentName ?? "Unknown agent");
+        else if (promoted && needsDirectQuickReplyFollowUp)
+            EnqueueDirectQuickReplyAgentFollowUp(thread);
         _backgroundTaskPresenter.SkipNextBackgroundCompletionFallback = true;
         _backgroundTaskPresenter.RecordBackgroundCompletion(summary, BackgroundTaskPresenter.BuildThreadAnnouncementKey(thread), appendNotice: !promoted);
         SyncAgentCardsWithThreads();
@@ -4501,6 +4528,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _agentThreadRegistry.FinalizeAgentThread(thread);
         UpdateCompletedTimeFooters();
         SquadDashTrace.Write("UI", $"Subagent failed {summary}");
+        CompleteDirectQuickReplyAgentThread(thread, "subagent_failed");
 
         _backgroundTaskPresenter.SkipNextBackgroundCompletionFallback = true;
         _backgroundTaskPresenter.AppendBackgroundNotice(summary, ThemeBrush("TaskFailureText"), BackgroundTaskPresenter.BuildThreadAnnouncementKey(thread) + ":failed");
@@ -4525,6 +4553,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _agentThreadRegistry.FinalizeAgentThread(thread);
         UpdateCompletedTimeFooters();
         SquadDashTrace.Write("UI", $"Subagent cancelled {summary}");
+        CompleteDirectQuickReplyAgentThread(thread, "subagent_cancelled");
 
         _backgroundTaskPresenter.SkipNextBackgroundCompletionFallback = true;
         _backgroundTaskPresenter.AppendBackgroundNotice(summary, ThemeBrush("SystemInfoText"), BackgroundTaskPresenter.BuildThreadAnnouncementKey(thread) + ":cancelled");
@@ -4636,7 +4665,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             _pendingPromptIsSystemInjected = item.IsSystemInjected;
             try
             {
-                await _pec.ExecutePromptAsync(ApplyFollowUpHeader(ApplyDictationAnnotation(item), item.Id), addToHistory: true, clearPromptBox: false);
+                await _pec.ExecutePromptAsync(ApplyFollowUpHeader(ApplyDictationAnnotation(item), item.Id), addToHistory: !item.IsSystemInjected, clearPromptBox: false);
             }
             finally
             {
@@ -6129,7 +6158,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 Text = "Prompt:",
                 Foreground = subtleBrush,
-                FontSize = 10,
+                FontSize = (double)Application.Current.Resources["FontSizeXSmall"],
                 Margin = new Thickness(0, 6, 0, 2),
             };
             stack.Children.Add(promptLabel);
@@ -8724,6 +8753,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         // Guard _activeTabId == null: Ctrl+Up/Down navigation to a queued tab leaves
         // the prompt box empty, which must not be mistaken for an empty active draft.
         _dictationStartedForQuickReply = _activeTabId == null
+                                         && _lastQuickReplyEntry?.AllowQuickReplies == true
                                          && _currentQuickReplyOptions.Length > 0
                                          && string.IsNullOrEmpty(PromptTextBox?.Text)
                                          && (DateTime.UtcNow - _quickRepliesShownAt).TotalMilliseconds >= QuickReplyReadWindowMs;
@@ -9196,7 +9226,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             Dispatcher.Invoke(() =>
             {
                 var text = PromptTextBox.Text.Trim();
-                if (!string.IsNullOrWhiteSpace(text) && _lastQuickReplyEntry != null)
+                var quickReplyEntry = _lastQuickReplyEntry;
+                if (!string.IsNullOrWhiteSpace(text) && quickReplyEntry?.AllowQuickReplies == true)
                 {
                     if (_activeTabId != null)
                     {
@@ -9208,7 +9239,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                         SyncQueuePanel();
                     }
                     PromptTextBox.Clear();
-                    _pec.DisableQuickReplies(_lastQuickReplyEntry);
+                    _pec.DisableQuickReplies(quickReplyEntry);
+                    ClearActiveQuickReplyState(quickReplyEntry);
                     ResetQueuePausedState();
                     // ApplyFollowUpHeader consumes any pending attachment for the active draft
                     // ("" tabId) and injects it as a header. Skipping it here would orphan the
@@ -13464,7 +13496,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0),
-            FontSize = 11
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"]
         };
         _docSourceFindMatchCount.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
 
@@ -15615,7 +15647,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         var p = CreateTranscriptParagraph(bottomMargin: 0);
         p.Margin = new Thickness(0, 10, 0, 0);
-        var run = new Run(text) { FontSize = 11 };
+        var run = new Run(text) { FontSize = (double)Application.Current.Resources["FontSizeSmall"] };
         run.SetResourceReference(TextElement.ForegroundProperty, "SubtleText");
         p.Inlines.Add(run);
         return p;
@@ -16100,7 +16132,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             Text = titleText,
             ToolTip = BuildGpaTooltip(baseDisplayName),
-            FontSize = 18,
+            FontSize = (double)Application.Current.Resources["FontSizeSubtitle"],
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -16519,7 +16551,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Bottom,
             Margin = new Thickness(0, 0, 0, 8),
-            FontSize = 13,
+            FontSize = (double)Application.Current.Resources["FontSizeNormal"],
             IsHitTestVisible = false
         };
         overlay.SetValue(Panel.ZIndexProperty, 20);
@@ -17562,7 +17594,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             var hintParagraph = CreateTranscriptParagraph(bottomMargin: 6);
             var hintRun = new Run("Press \u201c[\u201d to respond with the keyboard.")
             {
-                FontSize = 11
+                FontSize = (double)Application.Current.Resources["FontSizeSmall"]
             };
             hintRun.SetResourceReference(TextElement.ForegroundProperty, "KeyboardHintText");
             hintParagraph.Inlines.Add(hintRun);
@@ -17757,7 +17789,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             Content = "📋",
             ToolTip = copiedTip,
-            FontSize = 13,
+            FontSize = (double)Application.Current.Resources["FontSizeNormal"],
             Width = 26,
             Height = 22,
             Padding = new Thickness(0),
@@ -17868,7 +17900,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 Text = captionText,
                 Margin = new Thickness(0, 0, 0, 6),
-                FontSize = 12
+                FontSize = (double)Application.Current.Resources["FontSizeBody"]
             };
             caption.SetResourceReference(TextBlock.ForegroundProperty, "AgentRoleText");
             stack.Children.Add(caption);
@@ -18217,6 +18249,61 @@ public partial class MainWindow : Window, ILiveElementLocator
             $"Named-agent quick reply observed expected launch agent={pendingLaunch.ExpectedAgentHandle ?? "(unknown)"} option='{pendingLaunch.SelectedOption}' sessionAtClick={pendingLaunch.SessionIdAtClick ?? "(none)"} {pendingLaunch.ContextDiagnosticsSummary}");
     }
 
+    private bool HasPendingDirectQuickReplyAgentFollowUp() =>
+        _directQuickReplyAgentThreadIds.Count > 0;
+
+    private void TrackDirectQuickReplyAgentThread(TranscriptThreadState thread)
+    {
+        if (string.IsNullOrWhiteSpace(thread.ThreadId))
+            return;
+
+        if (_directQuickReplyAgentThreadIds.Add(thread.ThreadId))
+        {
+            SquadDashTrace.Write(
+                "Routing",
+                $"Direct named-agent quick reply is blocking queued dispatch until coordinator follow-up thread={thread.ThreadId} agent={thread.Title ?? "(unknown)"} pending={_directQuickReplyAgentThreadIds.Count}");
+        }
+    }
+
+    private bool CompleteDirectQuickReplyAgentThread(TranscriptThreadState thread, string reason)
+    {
+        if (string.IsNullOrWhiteSpace(thread.ThreadId))
+            return false;
+
+        var removed = _directQuickReplyAgentThreadIds.Remove(thread.ThreadId);
+        if (removed)
+        {
+            SquadDashTrace.Write(
+                "Routing",
+                $"Direct named-agent quick reply unblocked by {reason} thread={thread.ThreadId} agent={thread.Title ?? "(unknown)"} pending={_directQuickReplyAgentThreadIds.Count}");
+        }
+
+        return removed;
+    }
+
+    private void EnqueueDirectQuickReplyAgentFollowUp(TranscriptThreadState thread)
+    {
+        var reportText = !string.IsNullOrWhiteSpace(thread.LastCoordinatorAnnouncedResponse)
+            ? thread.LastCoordinatorAnnouncedResponse
+            : thread.LatestResponse;
+        var prompt = SilentCompletionFollowUpPromptBuilder.Build([
+            new SilentCompletionFollowUpReport(
+                string.IsNullOrWhiteSpace(thread.Title) ? "Background Agent" : thread.Title,
+                string.IsNullOrWhiteSpace(thread.ThreadId) ? null : thread.ThreadId,
+                thread.CompletedAt,
+                thread.Prompt,
+                reportText)
+        ]);
+
+        if (string.IsNullOrWhiteSpace(prompt))
+            return;
+
+        EnqueuePrompt(prompt, isSystemInjected: true);
+        SquadDashTrace.Write(
+            "PromptHealth",
+            $"DirectQuickReplyCompletion: queued coordinator follow-up thread={thread.ThreadId} agent={thread.Title ?? "(unknown)"}");
+    }
+
     private void MaybeReportPendingQuickReplyLaunchFailure(PendingQuickReplyLaunchState? pendingLaunch)
     {
         if (pendingLaunch is null || pendingLaunch.ExpectedAgentStarted)
@@ -18444,6 +18531,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void HandleRoutingIgnoreQuickReply(TranscriptResponseEntry entry)
     {
         _pec.DisableQuickReplies(entry);
+        ClearActiveQuickReplyState(entry);
         _routingIssueQuickReplyEntry = null;
 
         if (!string.IsNullOrWhiteSpace(_currentRoutingAssessment?.IssueFingerprint))
@@ -18461,6 +18549,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
 
         _pec.DisableQuickReplies(entry);
+        ClearActiveQuickReplyState(entry);
         _routingIssueQuickReplyEntry = null;
 
         var backupPath = _currentWorkspace is null
@@ -18527,6 +18616,16 @@ public partial class MainWindow : Window, ILiveElementLocator
         await _pec.ExecutePromptAsync(prompt, addToHistory: false, clearPromptBox: false);
     }
 
+    private void ClearActiveQuickReplyState(TranscriptResponseEntry? entry = null)
+    {
+        if (entry is not null && !ReferenceEquals(entry, _lastQuickReplyEntry))
+            return;
+
+        _lastQuickReplyEntry = null;
+        _currentQuickReplyOptions = [];
+        _quickRepliesShownAt = DateTime.MinValue;
+    }
+
     private async void QuickReplyButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { Tag: QuickReplyButtonPayload payload } ||
@@ -18559,6 +18658,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (string.Equals(trimmedOption, PromptExecutionController.ResendLastPromptQuickReply, StringComparison.OrdinalIgnoreCase))
             {
                 _pec.DisableQuickReplies(payload.Entry);
+                ClearActiveQuickReplyState(payload.Entry);
                 await HandleResendLastPromptAsync();
                 return;
             }
@@ -18566,6 +18666,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (string.Equals(trimmedOption, PromptExecutionController.CheckGitDiffQuickReply, StringComparison.OrdinalIgnoreCase))
             {
                 _pec.DisableQuickReplies(payload.Entry);
+                ClearActiveQuickReplyState(payload.Entry);
                 await HandleCheckGitDiffAsync();
                 return;
             }
@@ -18575,11 +18676,13 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (string.Equals(payload.RouteMode, "sim", StringComparison.OrdinalIgnoreCase))
             {
                 _pec.DisableQuickReplies(payload.Entry);
+                ClearActiveQuickReplyState(payload.Entry);
                 SquadDashTrace.Write("UI", $"Quick reply sim button clicked: '{payload.Option.Trim()}' — no AI dispatch.");
                 return;
             }
 
             _pec.DisableQuickReplies(payload.Entry);
+            ClearActiveQuickReplyState(payload.Entry);
             ResetQueuePausedState();
             var pendingLaunch = CreatePendingQuickReplyLaunch(payload);
             _pendingQuickReplyLaunch = pendingLaunch;
@@ -20159,6 +20262,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         _agentThreadRegistry.ClearAll();
         _backgroundTaskPresenter.ClearState();
         _routingIssueQuickReplyEntry = null;
+        ClearActiveQuickReplyState();
+        _directQuickReplyAgentThreadIds.Clear();
         _announcedRoutingIssueFingerprint = null;
         _pendingSupplementalPromptInstruction = null;
         _pendingRoutingRepairRecheck = false;
@@ -25501,7 +25606,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 {
                     VerticalAlignment = VerticalAlignment.Center,
                     TextTrimming      = TextTrimming.CharacterEllipsis,
-                    FontSize          = 11,
+                    FontSize = (double)Application.Current.Resources["FontSizeSmall"],
                 };
                 label.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
 

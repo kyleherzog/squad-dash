@@ -43,7 +43,7 @@ internal sealed class AgentInfoWindow : Window {
         // Agent name
         var nameBlock = new TextBlock {
             Text = card.Name,
-            FontSize = 22,
+            FontSize = (double)Application.Current.Resources["FontSizeHeading"],
             FontWeight = FontWeights.Bold,
             HorizontalAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(24, 16, 24, 8)
@@ -64,7 +64,7 @@ internal sealed class AgentInfoWindow : Window {
             rolePill.SetResourceReference(Border.BorderBrushProperty, "BadgeBorder");
             var roleText = new TextBlock {
                 Text = card.RoleText,
-                FontSize = 13
+                FontSize = (double)Application.Current.Resources["FontSizeNormal"]
             };
             roleText.SetResourceReference(TextBlock.ForegroundProperty, "AgentRoleText");
             rolePill.Child = roleText;
@@ -82,7 +82,7 @@ internal sealed class AgentInfoWindow : Window {
             var bioBlock = new TextBlock {
                 Text = bioText,
                 TextWrapping = TextWrapping.Wrap,
-                FontSize = 13,
+                FontSize = (double)Application.Current.Resources["FontSizeNormal"],
                 LineHeight = 20
             };
             bioBlock.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");

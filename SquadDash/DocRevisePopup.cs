@@ -78,7 +78,7 @@ internal sealed class DocRevisePopup : Window {
         var titleLabel = new TextBlock {
             Text = "✏  Revise with AI",
             FontWeight = FontWeights.SemiBold,
-            FontSize = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             VerticalAlignment = VerticalAlignment.Center
         };
         titleLabel.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
@@ -94,7 +94,7 @@ internal sealed class DocRevisePopup : Window {
             TextWrapping = TextWrapping.Wrap,
             MinHeight = 80,
             MaxHeight = 180,
-            FontSize = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             Padding = new Thickness(6, 6, 6, 6),
             BorderThickness = new Thickness(1),
             VerticalContentAlignment = VerticalAlignment.Top,
@@ -107,7 +107,7 @@ internal sealed class DocRevisePopup : Window {
         // Hint overlay — shown when TextBox is empty, hidden once text is entered.
         var hintBlock = new TextBlock {
             Text = HintText,
-            FontSize = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             IsHitTestVisible = false,
             VerticalAlignment = VerticalAlignment.Top,
             HorizontalAlignment = HorizontalAlignment.Left,
@@ -141,14 +141,14 @@ internal sealed class DocRevisePopup : Window {
 
         _progressLabel = new TextBlock {
             Text = "⟳  Working…",
-            FontSize = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             Visibility = Visibility.Collapsed,
             Margin = new Thickness(0, 8, 0, 0)
         };
         _progressLabel.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
 
         _errorLabel = new TextBlock {
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0x33, 0x33)),
             TextWrapping = TextWrapping.Wrap,
             Visibility = Visibility.Collapsed,
@@ -160,7 +160,7 @@ internal sealed class DocRevisePopup : Window {
             Content = "Apply",
             MinWidth = 70,
             Height = 28,
-            FontSize = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             Padding = new Thickness(12, 0, 12, 0),
             Margin = new Thickness(8, 0, 0, 0),
             IsDefault = true,
@@ -173,7 +173,7 @@ internal sealed class DocRevisePopup : Window {
             Content = "Cancel",
             MinWidth = 70,
             Height = 28,
-            FontSize = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             Padding = new Thickness(12, 0, 12, 0),
             IsCancel = true,
         };

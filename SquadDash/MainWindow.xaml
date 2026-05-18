@@ -251,7 +251,7 @@
                                                         Foreground="{Binding ChipForeground}"
                                                         ToolTip="{Binding ChipToolTip}">
                                                     <TextBlock Text="{Binding ChipLabel}"
-                                                               FontSize="11"
+                                                               FontSize="{DynamicResource FontSizeSmall}"
                                                                FontWeight="Normal" />
                                                 </Button>
                                                 <Border Grid.Row="1"
@@ -271,7 +271,7 @@
                                         Visibility="{Binding OverflowChipVisibility}"
                                         MouseLeftButtonUp="OverflowChipBorder_MouseLeftButtonUp">
                                     <TextBlock Text="{Binding OverflowChipText}"
-                                               FontSize="11"
+                                               FontSize="{DynamicResource FontSizeSmall}"
                                                FontWeight="SemiBold"
                                                Foreground="{DynamicResource ChipText}" />
                                 </Border>
@@ -476,7 +476,7 @@
                          Height="26"
                          VerticalAlignment="Center"
                          Padding="6,4,6,4"
-                         FontSize="12"
+                         FontSize="{DynamicResource FontSizeBody}"
                          Background="{DynamicResource InputSurface}"
                          Foreground="{DynamicResource LabelText}"
                          BorderBrush="{DynamicResource InputBorder}"
@@ -558,7 +558,7 @@
                 </Button>
                 <TextBlock x:Name="SearchMatchCountText"
                            Margin="6,0,0,0"
-                           FontSize="11"
+                           FontSize="{DynamicResource FontSizeSmall}"
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource SubtleText}"
                            Visibility="Collapsed" />
@@ -606,7 +606,7 @@
 
                 <StackPanel Margin="0,0,18,0">
                     <TextBlock x:Name="WorkspaceIssueTitleTextBlock"
-                               FontSize="20"
+                               FontSize="{DynamicResource FontSizeTitle}"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource ImportantText}" />
                     <TextBlock x:Name="InstallStatusTextBlock"
@@ -733,7 +733,7 @@
                             <Grid>
                                 <TextBlock x:Name="ActivePanelTitleTextBlock"
                                            Text="Active"
-                                           FontSize="15"
+                                           FontSize="{DynamicResource FontSizeLarge}"
                                            FontWeight="SemiBold"
                                            Foreground="{DynamicResource ActivePanelTitle}"
                                            HorizontalAlignment="Left"
@@ -781,7 +781,7 @@
 
                             <TextBlock x:Name="RosterPanelTitleTextBlock"
                                        Text="Roster &amp; History"
-                                       FontSize="15"
+                                       FontSize="{DynamicResource FontSizeLarge}"
                                        FontWeight="SemiBold"
                                        Foreground="{DynamicResource RosterPanelTitle}" />
                             <TextBlock x:Name="RosterPanelSubtitleTextBlock"
@@ -865,7 +865,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0"
                                                Text="Loop"
-                                               FontSize="15"
+                                               FontSize="{DynamicResource FontSizeLarge}"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center"
                                                Foreground="{DynamicResource RosterPanelTitle}" />
@@ -882,7 +882,7 @@
                                             Content="×"
                                             Width="22"
                                             Height="22"
-                                            FontSize="13"
+                                            FontSize="{DynamicResource FontSizeNormal}"
                                             VerticalAlignment="Top"
                                             Style="{StaticResource PanelCloseButtonStyle}"
                                             ToolTip="Hide Loop panel"
@@ -1065,14 +1065,14 @@
                                         Content="×"
                                         Width="22"
                                         Height="22"
-                                        FontSize="13"
+                                        FontSize="{DynamicResource FontSizeNormal}"
                                         VerticalAlignment="Top"
                                         Style="{StaticResource PanelCloseButtonStyle}"
                                         ToolTip="Hide Tasks panel"
                                         Click="TasksPanelCloseButton_Click" />
                                 <TextBlock DockPanel.Dock="Left"
                                            Text="Tasks"
-                                           FontSize="15"
+                                           FontSize="{DynamicResource FontSizeLarge}"
                                            FontWeight="SemiBold"
                                            Foreground="{DynamicResource RosterPanelTitle}"
                                            VerticalAlignment="Center" />
@@ -1083,7 +1083,7 @@
                                     <TextBox x:Name="TasksFilterBox"
                                              Width="80"
                                              Height="17"
-                                             FontSize="11"
+                                             FontSize="{DynamicResource FontSizeSmall}"
                                              VerticalContentAlignment="Center"
                                              Background="{DynamicResource InputSurface}"
                                              Foreground="{DynamicResource LabelText}"
@@ -1097,7 +1097,7 @@
                                             Content="×"
                                             Width="14"
                                             Height="14"
-                                            FontSize="10"
+                                            FontSize="{DynamicResource FontSizeXSmall}"
                                             Margin="2,0,0,0"
                                             VerticalAlignment="Center"
                                             Visibility="Collapsed"
@@ -1107,7 +1107,7 @@
                                     <Button x:Name="TasksPanelDoTheseButton"
                                             Content="▶ Do these"
                                             Height="17"
-                                            FontSize="10"
+                                            FontSize="{DynamicResource FontSizeXSmall}"
                                             Margin="4,0,0,0"
                                             Padding="4,0"
                                             VerticalAlignment="Center"
@@ -1129,7 +1129,7 @@
                                         x:Name="TasksCompletedSection"
                                         Visibility="Collapsed">
                                 <TextBlock Text="Completed"
-                                           FontSize="11"
+                                           FontSize="{DynamicResource FontSizeSmall}"
                                            Margin="0,8,0,4"
                                            Foreground="{DynamicResource SubtleText}" />
                                 <ScrollViewer VerticalScrollBarVisibility="Auto"
@@ -1158,7 +1158,7 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <TextBlock Text="Watch"
-                                       FontSize="15"
+                                       FontSize="{DynamicResource FontSizeLarge}"
                                        FontWeight="SemiBold"
                                        Foreground="{DynamicResource ActivePanelTitle}" />
                             <StackPanel x:Name="WatchStatusStack"
@@ -1202,7 +1202,7 @@
                                         Content="×"
                                         Width="22"
                                         Height="22"
-                                        FontSize="13"
+                                        FontSize="{DynamicResource FontSizeNormal}"
                                         VerticalAlignment="Center"
                                         Style="{StaticResource PanelCloseButtonStyle}"
                                         ToolTip="Hide Approvals panel"
@@ -1210,7 +1210,7 @@
 
                                 <TextBlock DockPanel.Dock="Left"
                                            Text="Approvals"
-                                           FontSize="15"
+                                           FontSize="{DynamicResource FontSizeLarge}"
                                            FontWeight="SemiBold"
                                            Foreground="{DynamicResource RosterPanelTitle}"
                                            VerticalAlignment="Center" />
@@ -1223,7 +1223,7 @@
                                     <TextBox x:Name="ApprovalFilterBox"
                                              Width="80"
                                              Height="17"
-                                             FontSize="11"
+                                             FontSize="{DynamicResource FontSizeSmall}"
                                              VerticalContentAlignment="Center"
                                              Background="{DynamicResource InputSurface}"
                                              Foreground="{DynamicResource LabelText}"
@@ -1238,7 +1238,7 @@
                                             Content="×"
                                             Width="14"
                                             Height="14"
-                                            FontSize="10"
+                                            FontSize="{DynamicResource FontSizeXSmall}"
                                             Margin="2,0,0,0"
                                             VerticalAlignment="Center"
                                             Visibility="Collapsed"
@@ -1252,7 +1252,7 @@
                             <!-- "Needs Approval" header -->
                             <TextBlock Grid.Row="1"
                                        Text="Needs Approval"
-                                       FontSize="11"
+                                       FontSize="{DynamicResource FontSizeSmall}"
                                        Margin="0,8,0,4"
                                        Foreground="{DynamicResource SubtleText}" />
 
@@ -1272,7 +1272,7 @@
                                        Visibility="Collapsed">
                                 <TextBlock DockPanel.Dock="Left"
                                            Text="Approved"
-                                           FontSize="11"
+                                           FontSize="{DynamicResource FontSizeSmall}"
                                            VerticalAlignment="Center"
                                            Foreground="{DynamicResource SubtleText}" />
                                 <Button x:Name="ApprovalClearAllButton"
@@ -1280,7 +1280,7 @@
                                         Content="Clear Approved"
                                         Height="20"
                                         Padding="6,0"
-                                        FontSize="11"
+                                        FontSize="{DynamicResource FontSizeSmall}"
                                         Style="{StaticResource ThemedButtonStyle}"
                                         Click="ApprovalClearAllButton_Click" />
                             </DockPanel>
@@ -1299,7 +1299,7 @@
                                         x:Name="ApprovalRejectedSection"
                                         Visibility="Collapsed">
                                 <TextBlock Text="Rejected"
-                                           FontSize="11"
+                                           FontSize="{DynamicResource FontSizeSmall}"
                                            Margin="0,8,0,4"
                                            Foreground="{DynamicResource SubtleText}" />
                                 <ScrollViewer VerticalScrollBarVisibility="Auto"
@@ -1343,14 +1343,14 @@
                                         Content="×"
                                         Width="22"
                                         Height="22"
-                                        FontSize="13"
+                                        FontSize="{DynamicResource FontSizeNormal}"
                                         VerticalAlignment="Top"
                                         Style="{StaticResource PanelCloseButtonStyle}"
                                         ToolTip="Hide Notes panel"
                                         Click="NotesPanelCloseButton_Click" />
                                 <TextBlock DockPanel.Dock="Left"
                                            Text="Notes"
-                                           FontSize="15"
+                                           FontSize="{DynamicResource FontSizeLarge}"
                                            FontWeight="SemiBold"
                                            Foreground="{DynamicResource RosterPanelTitle}"
                                            VerticalAlignment="Center" />
@@ -1361,7 +1361,7 @@
                                     <TextBox x:Name="NotesFilterBox"
                                              Width="80"
                                              Height="17"
-                                             FontSize="11"
+                                             FontSize="{DynamicResource FontSizeSmall}"
                                              VerticalContentAlignment="Center"
                                              Background="{DynamicResource InputSurface}"
                                              Foreground="{DynamicResource LabelText}"
@@ -1374,7 +1374,7 @@
                                             Content="×"
                                             Width="14"
                                             Height="14"
-                                            FontSize="10"
+                                            FontSize="{DynamicResource FontSizeXSmall}"
                                             Margin="2,0,0,0"
                                             VerticalAlignment="Center"
                                             Visibility="Collapsed"
@@ -1460,7 +1460,7 @@
                     </StackPanel>
                     <TextBlock x:Name="TranscriptTitleTextBlock"
                                Text="Transcript"
-                               FontSize="18"
+                               FontSize="{DynamicResource FontSizeSubtitle}"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource LabelText}" />
                     <TextBlock x:Name="SessionStateTextBlock"
@@ -1471,7 +1471,7 @@
                 </DockPanel>
                 <TextBlock x:Name="PromptNavHintTextBlock"
                            HorizontalAlignment="Right"
-                           FontSize="11"
+                           FontSize="{DynamicResource FontSizeSmall}"
                            Foreground="{DynamicResource SubtleText}"
                            Visibility="Collapsed" />
                 </StackPanel>
@@ -1516,7 +1516,7 @@
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center"
                                Visibility="Visible"
-                               FontSize="13"
+                               FontSize="{DynamicResource FontSizeNormal}"
                                Foreground="{DynamicResource SubtleText}"
                                IsHitTestVisible="False"
                                Panel.ZIndex="5" />
@@ -1530,11 +1530,11 @@
                                 Panel.ZIndex="5">
                         <TextBlock Text="Select a working folder from the File menu to get started."
                                    HorizontalAlignment="Center"
-                                   FontSize="14"
+                                   FontSize="{DynamicResource FontSizeMedium}"
                                    Foreground="{DynamicResource SubtleText}" />
                         <TextBlock Text="File  →  Open Folder…"
                                    HorizontalAlignment="Center"
-                                   FontSize="12"
+                                   FontSize="{DynamicResource FontSizeBody}"
                                    Margin="0,6,0,0"
                                    Foreground="{DynamicResource SubtleText}"
                                    Opacity="0.7" />
@@ -1620,12 +1620,12 @@
                                 Content="+"
                                 Height="20"
                                 Padding="6,0,6,0"
-                                FontSize="13"
+                                FontSize="{DynamicResource FontSizeNormal}"
                                 FontWeight="Bold"
                                 Style="{StaticResource ThemedButtonStyle}"
                                 Click="AddDocumentButton_Click" />
                         <TextBlock Text="Topics"
-                                   FontSize="13"
+                                   FontSize="{DynamicResource FontSizeNormal}"
                                    FontWeight="SemiBold"
                                    Foreground="{DynamicResource LabelText}" />
                     </DockPanel>
@@ -1785,7 +1785,7 @@
                 <DockPanel>
                 <DockPanel DockPanel.Dock="Top" Margin="14,10,14,4">
                     <TextBlock Text="Source"
-                               FontSize="13"
+                               FontSize="{DynamicResource FontSizeNormal}"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource LabelText}"
                                VerticalAlignment="Center" />
@@ -1805,7 +1805,7 @@
                              ScrollViewer.VerticalScrollBarVisibility="Auto"
                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
                              FontFamily="Consolas, Courier New, monospace"
-                             FontSize="12"
+                             FontSize="{DynamicResource FontSizeBody}"
                              Padding="10"
                              BorderThickness="0"
                              Background="{DynamicResource InputSurface}"
@@ -1905,7 +1905,7 @@
                                         Margin="4,2,6,2">
                                 <TextBlock x:Name="QueueStatusLabel"
                                            Text="Queue is running"
-                                           FontSize="11"
+                                           FontSize="{DynamicResource FontSizeSmall}"
                                            VerticalAlignment="Center"
                                            Padding="4,2"
                                            Margin="0,0,6,0"
@@ -2104,7 +2104,7 @@
 
                             <StackPanel>
                                 <TextBlock x:Name="ExceptionPanelTitleTextBlock"
-                                           FontSize="14"
+                                           FontSize="{DynamicResource FontSizeMedium}"
                                            FontWeight="SemiBold"
                                            Foreground="{DynamicResource ToastText}"
                                            Text="Unexpected error" />
@@ -2151,7 +2151,7 @@
         <TextBlock x:Name="SquadDashVersionTextBlock"
                    VerticalAlignment="Center"
                    Margin="0,0,20,0"
-                   FontSize="12"
+                   FontSize="{DynamicResource FontSizeBody}"
                    Cursor="Hand"
                    ToolTip="Click or right-click for system info"
                    Foreground="{DynamicResource BodyText}"
@@ -2166,7 +2166,7 @@
                     Margin="0,0,0,0"
                     shell:WindowChrome.IsHitTestVisibleInChrome="True">
             <TextBlock x:Name="SquadVersionTextBlock"
-                       FontSize="12"
+                       FontSize="{DynamicResource FontSizeBody}"
                        Cursor="Hand"
                        ToolTip="Click or right-click for system info"
                        Foreground="{DynamicResource BodyText}"
@@ -2175,7 +2175,7 @@
                        shell:WindowChrome.IsHitTestVisibleInChrome="True" />
             <TextBlock x:Name="SquadUpdateBadge"
                        Margin="5,0,0,0"
-                       FontSize="12"
+                       FontSize="{DynamicResource FontSizeBody}"
                        Cursor="Hand"
                        Visibility="Collapsed"
                        Foreground="{DynamicResource AgentTaskStartText}"
@@ -2188,7 +2188,7 @@
         <TextBlock x:Name="WorkspaceTitleText"
                    VerticalAlignment="Center"
                    Margin="20,0,10,0"
-                   FontSize="12"
+                   FontSize="{DynamicResource FontSizeBody}"
                    FontWeight="Bold"
                    Foreground="{DynamicResource LabelText}"
                    Cursor="Hand"
@@ -2217,7 +2217,7 @@
                 shell:WindowChrome.IsHitTestVisibleInChrome="True"
                 Style="{StaticResource CaptionButtonStyle}">
             <TextBlock Text="&#x2014;"
-                       FontSize="12"
+                       FontSize="{DynamicResource FontSizeBody}"
                        VerticalAlignment="Center"
                        HorizontalAlignment="Center" />
         </Button>
@@ -2271,7 +2271,7 @@
                 shell:WindowChrome.IsHitTestVisibleInChrome="True"
                 Style="{StaticResource CaptionCloseButtonStyle}">
             <TextBlock Text="&#x2715;"
-                       FontSize="12"
+                       FontSize="{DynamicResource FontSizeBody}"
                        VerticalAlignment="Center"
                        HorizontalAlignment="Center" />
         </Button>
@@ -2280,7 +2280,7 @@
     <!-- Restarting overlay: shown immediately when a build-triggered restart fires -->
     <TextBlock x:Name="RestartingOverlay"
                Text="Restarting…"
-               FontSize="52"
+               FontSize="{DynamicResource FontSizeHero}"
                FontWeight="Bold"
                Foreground="#CCFF3333"
                HorizontalAlignment="Center"

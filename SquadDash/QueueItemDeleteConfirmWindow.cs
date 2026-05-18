@@ -80,7 +80,7 @@ internal sealed class QueueItemDeleteConfirmWindow : Window {
         var titleText = new TextBlock
         {
             Text              = "Confirmation required",
-            FontSize          = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             FontWeight        = FontWeights.Bold,
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(14, 0, 0, 0),
@@ -93,7 +93,7 @@ internal sealed class QueueItemDeleteConfirmWindow : Window {
         var closeBtn = new Button
         {
             Content           = "✕",
-            FontSize          = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Width             = 28,
             Height            = 28,
             VerticalAlignment = VerticalAlignment.Top,
@@ -117,7 +117,7 @@ internal sealed class QueueItemDeleteConfirmWindow : Window {
         var heading = new TextBlock
         {
             Text         = $"Delete queued item {itemLabel}?",
-            FontSize     = 15,
+            FontSize = (double)Application.Current.Resources["FontSizeLarge"],
             FontWeight   = FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
             Margin       = new Thickness(0, 0, 0, 8),
@@ -130,7 +130,7 @@ internal sealed class QueueItemDeleteConfirmWindow : Window {
             var preview = new TextBlock
             {
                 Text         = previewText,
-                FontSize     = 12,
+                FontSize = (double)Application.Current.Resources["FontSizeBody"],
                 TextWrapping = TextWrapping.Wrap,
                 Margin       = new Thickness(0, 0, 0, 16),
             };

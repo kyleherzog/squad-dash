@@ -58,7 +58,7 @@ internal sealed class DiffHoverPopup : Popup {
             var textBlock = new TextBlock {
                 Text = line.Text,
                 FontFamily = new FontFamily("Consolas"),
-                FontSize = 13,
+                FontSize = (double)Application.Current.Resources["FontSizeNormal"],
                 Padding = new Thickness(4, 1, 4, 1),
                 TextWrapping = TextWrapping.NoWrap
             };
@@ -78,7 +78,7 @@ internal sealed class DiffHoverPopup : Popup {
 
                 case DiffLineKind.Header:
                     textBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
-                    textBlock.FontSize = 11;
+                    textBlock.FontSize = (double)Application.Current.Resources["FontSizeSmall"];
                     textBlock.Opacity = 0.8;
                     break;
 
@@ -94,7 +94,7 @@ internal sealed class DiffHoverPopup : Popup {
             var truncatedLabel = new TextBlock {
                 Text = $"… ({linesList.Count - MaxDisplayLines} more lines)",
                 FontFamily = new FontFamily("Consolas"),
-                FontSize = 11,
+                FontSize = (double)Application.Current.Resources["FontSizeSmall"],
                 Padding = new Thickness(4, 2, 4, 2),
                 FontStyle = FontStyles.Italic
             };

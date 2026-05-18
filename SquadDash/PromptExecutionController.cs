@@ -2093,8 +2093,9 @@ internal sealed class PromptExecutionController {
 
     private void DisableTranscriptQuickReplies(TranscriptThreadState thread) {
         var lastEntry = _getLastQuickReplyEntry();
-        if (lastEntry?.AllowQuickReplies == true) {
-            DisableQuickReplies(lastEntry);
+        if (lastEntry is not null) {
+            if (lastEntry.AllowQuickReplies)
+                DisableQuickReplies(lastEntry);
             _setLastQuickReplyEntryNull();
         }
 

@@ -37,7 +37,7 @@ internal sealed class RevisionHintOverlay : Window
 
         var tb = new TextBlock {
             Text       = message,
-            FontSize   = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             FontWeight = FontWeights.SemiBold,
             Foreground = Brushes.White,
         };

@@ -204,7 +204,7 @@ internal sealed class HireAgentWindow : Window {
 
         var previewTitle = new TextBlock {
             Text = "New Agent",
-            FontSize = 22,
+            FontSize = (double)Application.Current.Resources["FontSizeHeading"],
             FontWeight = FontWeights.Bold,
             Margin = new Thickness(0, 0, 0, 18)
         };
@@ -250,7 +250,7 @@ internal sealed class HireAgentWindow : Window {
             Margin = new Thickness(0, 18, 0, 0),
             TextWrapping = TextWrapping.Wrap,
             TextAlignment = TextAlignment.Left,
-            FontSize = 11
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"]
         };
         disclaimerText.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
         Grid.SetRow(disclaimerText, 1);
@@ -513,7 +513,7 @@ internal sealed class HireAgentWindow : Window {
     private static TextBlock BuildHintText(string text) {
         var block = new TextBlock {
             Text = text,
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Margin = new Thickness(0, 2, 0, 14)
         };
         block.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
@@ -893,7 +893,7 @@ internal sealed class HireAgentWindow : Window {
             avatar.SetResourceReference(Border.BorderBrushProperty, "BadgeBorder");
             avatar.Child = new TextBlock {
                 Text = string.IsNullOrWhiteSpace(option.Name) ? "?" : option.Name.Trim()[..1].ToUpperInvariant(),
-                FontSize = 20,
+                FontSize = (double)Application.Current.Resources["FontSizeTitle"],
                 FontWeight = FontWeights.Bold,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
@@ -914,7 +914,7 @@ internal sealed class HireAgentWindow : Window {
             var roleBlock = new TextBlock {
                 Text = option.Role,
                 Margin = new Thickness(0, 6, 0, 0),
-                FontSize = 11,
+                FontSize = (double)Application.Current.Resources["FontSizeSmall"],
                 TextAlignment = TextAlignment.Center,
                 TextWrapping = TextWrapping.Wrap
             };

@@ -35,7 +35,7 @@ internal sealed class ShutdownProtectionWindow : Window {
         // Header
         root.Children.Add(new TextBlock {
             Text = "SquadDash is busy",
-            FontSize = 18,
+            FontSize = (double)Application.Current.Resources["FontSizeSubtitle"],
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 10),
         });
@@ -58,7 +58,7 @@ internal sealed class ShutdownProtectionWindow : Window {
         if (canDefer) {
             root.Children.Add(new TextBlock {
                 Text = "Or schedule shutdown after:",
-                FontSize = 13,
+                FontSize = (double)Application.Current.Resources["FontSizeNormal"],
                 FontWeight = FontWeights.SemiBold,
                 Margin = new Thickness(0, 0, 0, 8),
             });
@@ -70,7 +70,7 @@ internal sealed class ShutdownProtectionWindow : Window {
                 afterTurnRadio = new RadioButton {
                     Content = afterTurnText,
                     GroupName = "DeferredMode",
-                    FontSize = 13,
+                    FontSize = (double)Application.Current.Resources["FontSizeNormal"],
                     Margin = new Thickness(4, 0, 0, 6),
                     IsChecked = true,
                 };
@@ -82,7 +82,7 @@ internal sealed class ShutdownProtectionWindow : Window {
                 afterQueuedRadio = new RadioButton {
                     Content = "All queued items complete",
                     GroupName = "DeferredMode",
-                    FontSize = 13,
+                    FontSize = (double)Application.Current.Resources["FontSizeNormal"],
                     Margin = new Thickness(4, 0, 0, 6),
                     IsChecked = afterTurnRadio is null, // default if no turn option
                 };
@@ -152,7 +152,7 @@ internal sealed class ShutdownProtectionWindow : Window {
     private static void AddStatus(StackPanel root, string text) {
         root.Children.Add(new TextBlock {
             Text = "• " + text,
-            FontSize = 13,
+            FontSize = (double)Application.Current.Resources["FontSizeNormal"],
             Margin = new Thickness(0, 0, 0, 4),
         });
     }
@@ -170,7 +170,7 @@ internal sealed class ShutdownProtectionWindow : Window {
         });
         canvas.Children.Add(new TextBlock {
             Text = "!",
-            FontSize = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             FontWeight = FontWeights.Bold,
             Foreground = new SolidColorBrush(Color.FromRgb(0xC6, 0x28, 0x28)),
             Width = 16,

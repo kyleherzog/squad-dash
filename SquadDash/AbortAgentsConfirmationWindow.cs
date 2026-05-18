@@ -76,7 +76,7 @@ internal sealed class AbortAgentsConfirmationWindow : Window {
 
         var title = new TextBlock {
             Text = "Abort these agents?",
-            FontSize = 20,
+            FontSize = (double)Application.Current.Resources["FontSizeTitle"],
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 14)
         };
@@ -176,7 +176,7 @@ internal sealed class AbortAgentsConfirmationWindow : Window {
         var secondary = new TextBlock {
             Text = secondaryText,
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             Margin = new Thickness(0, 2, 0, 0)
         };
         secondary.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");

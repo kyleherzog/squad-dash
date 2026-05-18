@@ -396,4 +396,15 @@ internal sealed class PromptExecutionControllerTests {
 
         Assert.That(historyText, Is.EqualTo(visiblePrompt));
     }
+
+    [Test]
+    public void AttachmentStrip_PlainMultiParagraphPrompt_HistoryTextIsUnchanged() {
+        var visiblePrompt = "First paragraph.\n\nSecond paragraph.";
+
+        var historyText = visiblePrompt;
+        var bodyStart = AttachmentBlockFormatter.StripTypedAttachmentHeaders(visiblePrompt);
+        if (bodyStart >= 0) historyText = visiblePrompt[bodyStart..];
+
+        Assert.That(historyText, Is.EqualTo(visiblePrompt));
+    }
 }

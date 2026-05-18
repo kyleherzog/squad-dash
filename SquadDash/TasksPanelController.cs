@@ -93,7 +93,7 @@ internal sealed class TasksPanelController {
                 };
                 var headingLabel = new TextBlock {
                     Text              = group.Label,
-                    FontSize          = 11,
+                    FontSize = (double)Application.Current.Resources["FontSizeSmall"],
                     FontWeight        = FontWeights.SemiBold,
                     VerticalAlignment = VerticalAlignment.Center,
                 };
@@ -253,7 +253,7 @@ internal sealed class TasksPanelController {
 
         var label = new TextBlock {
             Text         = item.Text,
-            FontSize     = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             TextWrapping = TextWrapping.Wrap,
             MaxWidth     = 220,
         };
@@ -269,7 +269,7 @@ internal sealed class TasksPanelController {
 
             var titleBlock = new TextBlock {
                 Text         = item.Text,
-                FontSize     = 13,
+                FontSize = (double)Application.Current.Resources["FontSizeNormal"],
                 FontWeight   = FontWeights.SemiBold,
                 TextWrapping = TextWrapping.Wrap,
                 MaxWidth     = 300,
@@ -322,7 +322,7 @@ internal sealed class TasksPanelController {
                 } else {
                     var noDesc = new TextBlock {
                         Text      = "No description",
-                        FontSize  = 11,
+                        FontSize = (double)Application.Current.Resources["FontSizeSmall"],
                         FontStyle = FontStyles.Italic,
                         Margin    = new Thickness(0, 4, 0, 0),
                         Opacity   = 0.6,
@@ -488,7 +488,7 @@ internal sealed class TasksPanelController {
 
         var label = new TextBlock {
             Text              = item.Text,
-            FontSize          = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             TextWrapping      = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -496,7 +496,7 @@ internal sealed class TasksPanelController {
 
         var checkMark = new TextBlock {
             Text              = "✔",
-            FontSize          = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             VerticalAlignment = VerticalAlignment.Top,
             Margin            = new Thickness(2, 1, 4, 0),
         };
@@ -576,7 +576,7 @@ internal sealed class TasksPanelController {
         _activePanel.Children.Clear();
         var empty = new TextBlock {
             Text       = message,
-            FontSize   = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             Margin     = new Thickness(0, 4, 0, 0),
             Opacity    = 0.6,
         };

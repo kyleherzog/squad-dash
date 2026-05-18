@@ -63,7 +63,7 @@ internal sealed class LoopPickerDialog : Window
         var titleText = new TextBlock
         {
             Text              = "Starting Loop for Filtered Tasks",
-            FontSize          = 12,
+            FontSize = (double)Application.Current.Resources["FontSizeBody"],
             FontWeight        = FontWeights.Bold,
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(14, 0, 0, 0),
@@ -75,7 +75,7 @@ internal sealed class LoopPickerDialog : Window
         var closeBtn = new Button
         {
             Content           = "✕",
-            FontSize          = 11,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Width             = 28,
             Height            = 28,
             VerticalAlignment = VerticalAlignment.Top,
@@ -98,7 +98,7 @@ internal sealed class LoopPickerDialog : Window
         var prompt = new TextBlock
         {
             Text         = "Which loop should run for the filtered tasks?",
-            FontSize     = 13,
+            FontSize = (double)Application.Current.Resources["FontSizeNormal"],
             FontWeight   = FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
             Margin       = new Thickness(0, 0, 0, 14),

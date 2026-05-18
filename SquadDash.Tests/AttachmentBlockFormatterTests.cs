@@ -53,6 +53,39 @@ internal sealed class AttachmentBlockFormatterTests {
         Assert.That(prompt[idx..], Is.EqualTo(userMessage));
     }
 
+    [Test]
+    public void StripTypedAttachmentHeaders_PlainMultiParagraphPrompt_ReturnsMinusOne() {
+        const string prompt = "First paragraph.\n\nSecond paragraph.";
+
+        var idx = AttachmentBlockFormatter.StripTypedAttachmentHeaders(prompt);
+
+        Assert.That(idx, Is.EqualTo(-1));
+    }
+
+    [Test]
+    public void StripTypedAttachmentHeaders_TranscriptQuoteHeader_ReturnsBodyStart() {
+        const string userMessage = "Please continue from this selection.";
+        var prompt = "Regarding this section of the transcript: \"selected text\"\n\n" + userMessage;
+
+        var idx = AttachmentBlockFormatter.StripTypedAttachmentHeaders(prompt);
+
+        Assert.That(idx, Is.GreaterThan(0));
+        Assert.That(prompt[idx..], Is.EqualTo(userMessage));
+    }
+
+    [Test]
+    public void StripTypedAttachmentHeaders_CrlfTypedBlock_ReturnsBodyStart() {
+        var block = AttachmentBlockFormatter.BuildTypedAttachmentBlock("file", null, "some content")
+            .Replace("\n", "\r\n");
+        const string userMessage = "Please summarise the above.";
+        var prompt = $"{block}\r\n\r\n{userMessage}";
+
+        var idx = AttachmentBlockFormatter.StripTypedAttachmentHeaders(prompt);
+
+        Assert.That(idx, Is.GreaterThan(0));
+        Assert.That(prompt[idx..], Is.EqualTo(userMessage));
+    }
+
     // ── ExtractAttachmentContent ──────────────────────────────────────────────
 
     [Test]

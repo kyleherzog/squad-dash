@@ -41,4 +41,24 @@ internal sealed class TintKeysTests {
         // or an accidental deletion.
         Assert.That(TintKeys.All.Count, Is.EqualTo(74));
     }
+
+    [Test]
+    public void TintKeys_ActiveAccentContainsExpectedKeys() {
+        Assert.Multiple(() => {
+            Assert.That(TintKeys.ActiveAccent, Does.Contain("QueueTabActiveBorder"));
+            Assert.That(TintKeys.ActiveAccent, Does.Contain("ActivePanelSurface"));
+            Assert.That(TintKeys.ActiveAccent, Does.Contain("ActivePanelBorder"));
+            Assert.That(TintKeys.ActiveAccent, Does.Contain("ActivePanelTitle"));
+            Assert.That(TintKeys.ActiveAccent, Does.Contain("ActivePanelSubtitle"));
+        });
+    }
+
+    [Test]
+    public void TintKeys_ActiveAccentDoesNotOverlapAll() {
+        // ActiveAccent keys are rotated separately; they must not also be in All
+        // or they would receive a double rotation.
+        foreach (var key in TintKeys.ActiveAccent)
+            Assert.That(TintKeys.All, Does.Not.Contain(key),
+                $"'{key}' appears in both TintKeys.All and TintKeys.ActiveAccent — it would be rotated twice.");
+    }
 }
