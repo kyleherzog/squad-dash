@@ -544,7 +544,14 @@ internal sealed class PreferencesWindow : Window {
         TreeViewItem MakeGroup(string label, params string[] children) {
             var groupItem = new TreeViewItem { Style = groupStyle, IsExpanded = true };
             groupItem.Header = label;
-            groupItem.Selected += (s, _) => ((TreeViewItem)s).IsSelected = false;
+            groupItem.Selected += (s, e) => {
+                var item = (TreeViewItem)s;
+                item.IsSelected = false;
+                // Only toggle expansion when the group header itself was clicked,
+                // not when a child leaf's Selected event bubbles up.
+                if (ReferenceEquals(e.Source, item))
+                    item.IsExpanded = !item.IsExpanded;
+            };
             foreach (var child in children)
                 if (pageIndex.ContainsKey(child))
                     groupItem.Items.Add(MakeLeaf(child));
@@ -583,9 +590,10 @@ internal sealed class PreferencesWindow : Window {
 
         // Header border
         var headerBorder = new FrameworkElementFactory(typeof(Border));
+        headerBorder.Name = "HeaderBd";
         headerBorder.SetValue(Border.BackgroundProperty, Brushes.Transparent);
         headerBorder.SetValue(Border.PaddingProperty, new Thickness(10, 8, 10, 5));
-        headerBorder.SetValue(Border.CursorProperty, Cursors.Arrow);
+        headerBorder.SetValue(Border.CursorProperty, Cursors.Hand);
 
         // Arrow + label in a horizontal panel
         var headerRow = new FrameworkElementFactory(typeof(StackPanel));
@@ -624,6 +632,12 @@ internal sealed class PreferencesWindow : Window {
         collapseTrigger.Setters.Add(new Setter(TextBlock.TextProperty, "▸", "ArrowGlyph"));
         tpl.Triggers.Add(collapseTrigger);
 
+        // Header hover highlight
+        var groupHoverTrigger = new MultiTrigger();
+        groupHoverTrigger.Conditions.Add(new Condition(UIElement.IsMouseOverProperty, true));
+        groupHoverTrigger.Setters.Add(new Setter(Border.BackgroundProperty, new DynamicResourceExtension("HoverSurface"), "HeaderBd"));
+        tpl.Triggers.Add(groupHoverTrigger);
+
         style.Setters.Add(new Setter(TreeViewItem.TemplateProperty, tpl));
         return style;
     }
@@ -634,6 +648,11 @@ internal sealed class PreferencesWindow : Window {
         style.Setters.Add(new Setter(FrameworkElement.FocusVisualStyleProperty, null));
         style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
         style.Setters.Add(new Setter(Control.CursorProperty, Cursors.Hand));
+        // Default foreground on the TreeViewItem so ContentPresenter can inherit it.
+        // Do NOT set foreground locally on the ContentPresenter — that would block
+        // the selected-trigger's ImportantText from propagating via inheritance.
+        style.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension("BodyText")));
+        style.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.Normal));
 
         var tpl = new ControlTemplate(typeof(TreeViewItem));
 
@@ -645,8 +664,8 @@ internal sealed class PreferencesWindow : Window {
         var cp = new FrameworkElementFactory(typeof(ContentPresenter));
         cp.SetValue(ContentPresenter.ContentSourceProperty, "Header");
         cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
-        cp.SetResourceReference(TextElement.ForegroundProperty, "BodyText");
         cp.SetResourceReference(TextElement.FontSizeProperty, "FontSizeNormal");
+        // Foreground and FontWeight are inherited from the TreeViewItem — no local value here.
 
         border.AppendChild(cp);
         tpl.VisualTree = border;
@@ -656,7 +675,7 @@ internal sealed class PreferencesWindow : Window {
         tpl.Triggers.Add(hoverTrigger);
 
         var selectedTrigger = new Trigger { Property = TreeViewItem.IsSelectedProperty, Value = true };
-        selectedTrigger.Setters.Add(new Setter(Border.BackgroundProperty, new DynamicResourceExtension("AppSurface"), "Bd"));
+        selectedTrigger.Setters.Add(new Setter(Border.BackgroundProperty, new DynamicResourceExtension("ActivePanelSurface"), "Bd"));
         selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension("ImportantText")));
         selectedTrigger.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
         tpl.Triggers.Add(selectedTrigger);
