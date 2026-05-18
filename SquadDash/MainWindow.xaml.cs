@@ -395,6 +395,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _loopInterruptedByQueue; // set when user enqueues a prompt while native loop is running
     private bool _loopPausedForQuickReply; // set at startup when loop resume is held for pending quick replies
     private int _activeTintStop;                       // 0 = natural; 1–7 = hue offsets at 45° steps
+    private int _activeAccentHueOffset;               // extra hue rotation for ActiveAccent keys, in degrees
     private Dictionary<string, Color>? _tintBaseline; // baseline theme colors per TintKeys.All, refreshed on theme switch
     private ResourceDictionary? _themeDict;            // the currently-loaded theme ResourceDictionary (cached to avoid URI-search fragility)
     // Held while a loop iteration is waiting for user follow-up after quick replies.
@@ -23128,8 +23129,10 @@ public partial class MainWindow : Window, ILiveElementLocator
         var hueDelta = stop * (360.0 / 8) - baselineHueOffset; // adjusted steps
         foreach (var (key, baseColor) in _tintBaseline)
         {
-            double delta = hueDelta; // accent keys rotate by the same delta as the rest of the palette
-            var tinted = stop == 0 ? baseColor : RotateHue(baseColor, delta);
+            bool isAccent = TintKeys.ActiveAccent.Contains(key);
+            double delta = isAccent ? hueDelta + _activeAccentHueOffset : hueDelta;
+            bool shouldRotate = stop != 0 || (isAccent && _activeAccentHueOffset != 0);
+            var tinted = shouldRotate ? RotateHue(baseColor, delta) : baseColor;
             var brush = new SolidColorBrush(tinted);
             brush.Freeze();
             resources[key] = brush;
@@ -23164,6 +23167,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         var key = Path.GetFullPath(folderPath)
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         _activeTintStop = _settingsSnapshot.TintStopByWorkspace.TryGetValue(key, out var stop) ? stop : 0;
+        _activeAccentHueOffset = _settingsSnapshot.AccentHueOffsetByWorkspace.TryGetValue(key, out var accentOffset) ? accentOffset : 0;
         ApplyTintStop(_activeTintStop);
         UpdateTintMenuState();
     }
@@ -23175,6 +23179,14 @@ public partial class MainWindow : Window, ILiveElementLocator
         _settingsSnapshot = _settingsStore.SaveWorkspaceTintStop(_currentWorkspace.FolderPath, stop);
         ApplyTintStop(stop);
         UpdateTintMenuState();
+    }
+
+    private void SetWorkspaceAccentHueOffset(int offsetDegrees)
+    {
+        if (_currentWorkspace is null) return;
+        _activeAccentHueOffset = offsetDegrees;
+        _settingsSnapshot = _settingsStore.SaveWorkspaceAccentHueOffset(_currentWorkspace.FolderPath, offsetDegrees);
+        ApplyTintStop(_activeTintStop);
     }
 
     private void UpdateTintMenuState()
@@ -23211,6 +23223,72 @@ public partial class MainWindow : Window, ILiveElementLocator
         item.Background  = new SolidColorBrush(swatch);
         item.Foreground  = foregroundBrush;
         item.BorderBrush = foregroundBrush;
+    }
+
+    // Accent hue offsets offered in the right-click menu, in degrees.
+    // Span ≈225° total (±105°) in 30° steps, centered on the natural complement.
+    private static readonly int[] AccentHueOffsets = [-105, -90, -60, -30, 0, 30, 60, 90, 105];
+
+    private Color ComputeAccentSwatch(int offsetDegrees)
+    {
+        var fallback = Color.FromRgb(80, 120, 200);
+        if (_tintBaseline is null || !_tintBaseline.TryGetValue("ActivePanelSurface", out var baseColor))
+            return fallback;
+        const double baselineHueOffset = 35.0;
+        var hueDelta = _activeTintStop * (360.0 / 8) - baselineHueOffset;
+        var totalDelta = hueDelta + offsetDegrees;
+        return (_activeTintStop == 0 && offsetDegrees == 0) ? baseColor : RotateHue(baseColor, totalDelta);
+    }
+
+    private void ApplyAccentSwatchToItem(MenuItem item, int offsetDegrees)
+    {
+        var swatch = ComputeAccentSwatch(offsetDegrees);
+        ColorUtilities.RgbToHsl(swatch.R, swatch.G, swatch.B, out double h, out _, out double l);
+        var textL = l > 0.5 ? 0.25 : 0.82;
+        ColorUtilities.HslToRgb(h, 0.60, textL, out byte r, out byte g, out byte b);
+        var foregroundBrush = new SolidColorBrush(Color.FromRgb(r, g, b));
+        item.Background  = new SolidColorBrush(swatch);
+        item.Foreground  = foregroundBrush;
+        item.BorderBrush = foregroundBrush;
+    }
+
+    private ContextMenu CreateAccentHueContextMenu()
+    {
+        var menu = MakeMenu();
+        foreach (var offset in AccentHueOffsets)
+        {
+            var label = offset == 0 ? "0°" : (offset > 0 ? $"+{offset}°" : $"{offset}°");
+            var item = new MenuItem
+            {
+                Header           = label,
+                IsCheckable      = true,
+                IsChecked        = _activeAccentHueOffset == offset,
+                Style            = (Style)FindResource("TintMenuItemStyle"),
+                StaysOpenOnClick = false,
+            };
+            ApplyAccentSwatchToItem(item, offset);
+            var captured = offset;
+            item.Click += (_, _) =>
+            {
+                try { SetWorkspaceAccentHueOffset(captured); }
+                catch (Exception ex) { HandleUiCallbackException("AccentHue_Click", ex); }
+            };
+            menu.Items.Add(item);
+        }
+        return menu;
+    }
+
+    private void ActiveAgentsPanelBorder_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        try
+        {
+            var menu = CreateAccentHueContextMenu();
+            menu.PlacementTarget = ActiveAgentsPanelBorder;
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+            menu.IsOpen = true;
+            e.Handled = true;
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(ActiveAgentsPanelBorder_MouseRightButtonUp), ex); }
     }
 
     private void EnsureTintMenuItems()

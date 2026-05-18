@@ -721,7 +721,8 @@
                             Background="{DynamicResource ActivePanelSurface}"
                             BorderBrush="{DynamicResource ActivePanelBorder}"
                             BorderThickness="1"
-                            CornerRadius="16">
+                            CornerRadius="16"
+                            MouseRightButtonUp="ActiveAgentsPanelBorder_MouseRightButtonUp">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />

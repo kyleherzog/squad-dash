@@ -367,6 +367,18 @@ internal sealed class ApplicationSettingsStore {
         return updated;
     }
 
+    public ApplicationSettingsSnapshot SaveWorkspaceAccentHueOffset(string workspaceFolder, int offsetDegrees) {
+        using var mutex = AcquireMutex();
+        var normalizedWorkspace = NormalizeFolder(workspaceFolder);
+        var current = LoadCore();
+        var offsets = current.AccentHueOffsetByWorkspace
+            .ToDictionary(e => e.Key, e => e.Value, StringComparer.OrdinalIgnoreCase);
+        offsets[normalizedWorkspace] = Math.Clamp(offsetDegrees, -180, 180);
+        var updated = current with { AccentHueOffsetByWorkspace = offsets };
+        SaveCore(updated);
+        return updated;
+    }
+
     public ApplicationSettingsSnapshot SaveLastUsedModel(string model) {
         using var mutex = AcquireMutex();
         var current = LoadCore();
@@ -1178,6 +1190,14 @@ internal sealed record ApplicationSettingsSnapshot(
     public IReadOnlyDictionary<string, int> TintStopByWorkspace { get; init; } =
         new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Per-workspace accent hue offset in degrees applied on top of the tint stop for all
+    /// ActiveAccent keys (0 = natural complement; valid range −180 to +180).
+    /// Keyed by normalised workspace folder path.
+    /// </summary>
+    public IReadOnlyDictionary<string, int> AccentHueOffsetByWorkspace { get; init; } =
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
     public static ApplicationSettingsSnapshot Empty{ get; } =
         new(
             null,
@@ -1304,6 +1324,16 @@ internal sealed record ApplicationSettingsSnapshot(
             }
         }
 
+        var normalizedAccentOffsets = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        if (AccentHueOffsetByWorkspace is not null) {
+            foreach (var entry in AccentHueOffsetByWorkspace) {
+                if (string.IsNullOrWhiteSpace(entry.Key)) continue;
+                var normalizedWorkspace = Path.GetFullPath(entry.Key)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                normalizedAccentOffsets[normalizedWorkspace] = Math.Clamp(entry.Value, -180, 180);
+            }
+        }
+
         IReadOnlyDictionary<string, DateTimeOffset>? normalizedShutdownTimes = null;
         if (WorkspaceShutdownTimes is not null) {
             var dict = new Dictionary<string, DateTimeOffset>(StringComparer.OrdinalIgnoreCase);
@@ -1405,6 +1435,7 @@ internal sealed record ApplicationSettingsSnapshot(
             Preferences_LastPage = Math.Max(0, Preferences_LastPage),
             WorkspaceShutdownTimes = normalizedShutdownTimes,
             TintStopByWorkspace = normalizedTintStops,
+            AccentHueOffsetByWorkspace = normalizedAccentOffsets,
         };
     }
 
