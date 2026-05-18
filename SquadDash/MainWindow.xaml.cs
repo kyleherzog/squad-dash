@@ -11093,14 +11093,11 @@ public partial class MainWindow : Window, ILiveElementLocator
                 var physWa = NativeMethods.GetWorkAreaForWindow(hwnd);
                 var dpi    = System.Windows.Media.VisualTreeHelper.GetDpi(this);
 
-                // Don't change height if the window is snapped to the top or bottom
-                // half of the screen (Windows 11 Snap Layouts). Detect this by
-                // checking whether the window's physical height is less than 75% of
-                // the work area — a snapped half/third zone is always shorter.
-                var physWindowHeight = Height * dpi.DpiScaleY;
-                var isSnappedVertically = physWindowHeight < physWa.Height * 0.75;
-
-                if (!isSnappedVertically)
+                // Skip height change when the window is in a Windows 11 Snap
+                // Layout zone (Win32 WS_MAXIMIZE set + partial work-area coverage).
+                // WPF's WindowState stays Normal for custom-chrome windows, so we
+                // must query Win32 directly via NativeMethods.IsWindowSnapped.
+                if (!NativeMethods.IsWindowSnapped(hwnd))
                 {
                     Top    = physWa.Top    / dpi.DpiScaleY;
                     Height = physWa.Height / dpi.DpiScaleY;
