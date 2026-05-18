@@ -21,6 +21,21 @@ namespace SquadDash;
 /// </remarks>
 internal static class TintKeys
 {
+    /// <summary>
+    /// Keys for the "active highlight" accent colors (queue-tab border, active-panel chrome).
+    /// These are <em>not</em> in <see cref="All"/> — they are rotated separately in
+    /// <c>ApplyTintStop</c> using a complementary offset (180°) so the accent always
+    /// contrasts with the current palette rather than blending into it.
+    /// </summary>
+    internal static readonly IReadOnlySet<string> ActiveAccent = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "QueueTabActiveBorder",
+        "ActivePanelSurface",
+        "ActivePanelBorder",
+        "ActivePanelTitle",
+        "ActivePanelSubtitle",
+    };
+
     internal static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         // Surfaces
