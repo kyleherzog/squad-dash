@@ -888,6 +888,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 OnMainWindowMoved();
                 UpdateAgentCardImageVisibility(e.NewSize.Height);
+                UpdateRosterHeightCap();
             }
             catch (Exception ex)
             {
@@ -1347,6 +1348,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             ContentRendered -= MainWindow_ContentRendered;
             UpdateAgentPanelWidths();
+            UpdateRosterHeightCap();
             SquadDashTrace.Write(
                 "Startup",
                 $"ContentRendered: ActiveH={ActiveAgentItemsControl.ActualHeight:F0} ActiveViewport={ActiveAgentsScrollViewer.ActualHeight:F0} " +
@@ -23007,6 +23009,13 @@ public partial class MainWindow : Window, ILiveElementLocator
         var maxActiveWidth = Math.Max(360, Math.Floor(availableWidth * 0.8));
         ActiveAgentsPanelBorder.MaxWidth = maxActiveWidth;
         ActiveAgentsColumnDefinition.Width = GridLength.Auto;
+    }
+
+    private void UpdateRosterHeightCap()
+    {
+        StatusAgentPanelsGrid.MaxHeight = ActualHeight < 900
+            ? Math.Floor(ActualHeight / 3)
+            : double.PositiveInfinity;
     }
 
     private void ScheduleAgentPanelLayoutRefresh()
