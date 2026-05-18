@@ -475,13 +475,15 @@ internal sealed class PreferencesWindow : Window {
         // ── Build pages ───────────────────────────────────────────────────
 
         var pageList = new List<(string label, UIElement page)> {
-            ("General",       BuildGeneralPage()),
-            ("Speech",        BuildSpeechPage()),
-            ("Remote Access", BuildRemoteAccessPage()),
-            ("Custom Model",  BuildByokPage()),
-            ("Notifications", BuildNotificationsPage(currentSettings)),
-            ("Sounds",        BuildSoundsPage(currentSettings)),
-            ("AI",            BuildAiPage()),
+            ("General",           BuildGeneralPage()),
+            ("Provider",          BuildSpeechProviderPage()),
+            ("Push to Talk",      BuildPushToTalkPage()),
+            ("Text Replacements", BuildTextReplacementsPage()),
+            ("Remote Access",     BuildRemoteAccessPage()),
+            ("Custom Model",      BuildByokPage()),
+            ("Notifications",     BuildNotificationsPage(currentSettings)),
+            ("Sounds",            BuildSoundsPage(currentSettings)),
+            ("AI",                BuildAiPage()),
         };
         if (showDevOptions)
             pageList.Add(("Dev / Diag.", BuildDevPage()));
@@ -549,12 +551,17 @@ internal sealed class PreferencesWindow : Window {
             return groupItem;
         }
 
-        tree.Items.Add(MakeGroup("Voice & Speech", "Speech"));
+        // General always first; Dev / Diag. always last
+        foreach (var standalone in new[] { "General" })
+            if (pageIndex.ContainsKey(standalone))
+                tree.Items.Add(MakeLeaf(standalone));
+
+        tree.Items.Add(MakeGroup("Voice & Speech", "Provider", "Push to Talk", "Text Replacements"));
         tree.Items.Add(MakeGroup("Sound",          "Sounds"));
         tree.Items.Add(MakeGroup("AI",             "AI", "Custom Model"));
         tree.Items.Add(MakeGroup("Connectivity",   "Remote Access", "Notifications"));
 
-        foreach (var standalone in new[] { "General", "Dev / Diag." })
+        foreach (var standalone in new[] { "Dev / Diag." })
             if (pageIndex.ContainsKey(standalone))
                 tree.Items.Add(MakeLeaf(standalone));
 
@@ -563,6 +570,7 @@ internal sealed class PreferencesWindow : Window {
 
     private static Style CreateGroupItemStyle() {
         var style = new Style(typeof(TreeViewItem));
+        style.Setters.Add(new Setter(FrameworkElement.OverridesDefaultStyleProperty, true));
         style.Setters.Add(new Setter(FrameworkElement.FocusVisualStyleProperty, null));
         style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
         style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(0)));
@@ -622,6 +630,7 @@ internal sealed class PreferencesWindow : Window {
 
     private static Style CreateLeafItemStyle() {
         var style = new Style(typeof(TreeViewItem));
+        style.Setters.Add(new Setter(FrameworkElement.OverridesDefaultStyleProperty, true));
         style.Setters.Add(new Setter(FrameworkElement.FocusVisualStyleProperty, null));
         style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
         style.Setters.Add(new Setter(Control.CursorProperty, Cursors.Hand));
@@ -665,10 +674,10 @@ internal sealed class PreferencesWindow : Window {
         return WrapInScrollViewer(form);
     }
 
-    private UIElement BuildSpeechPage() {
+    private UIElement BuildSpeechProviderPage() {
         var form = new StackPanel { Margin = new Thickness(20, 16, 20, 20) };
 
-        AddSectionHeader(form, "Speech");
+        AddSectionHeader(form, "Speech Provider");
 
         AddLabel(form, "Provider");
         form.Children.Add(_azureSpeechRadio);
@@ -748,8 +757,14 @@ internal sealed class PreferencesWindow : Window {
 
         _openAiSpeechKeyPasswordBox.PasswordChanged += (_, _) => SaveSpeechProviderNow();
 
+        return WrapInScrollViewer(form);
+    }
+
+    private UIElement BuildPushToTalkPage() {
+        var form = new StackPanel { Margin = new Thickness(20, 16, 20, 20) };
+
         // ── Push-to-talk ──────────────────────────────────────────────────
-        AddSectionHeader(form, "Push-to-talk", topMargin: 24);
+        AddSectionHeader(form, "Push-to-talk");
 
         var pttHint = new TextBlock { FontSize = (double)Application.Current.Resources["FontSizeSmall"], Margin = new Thickness(0, 4, 0, 4), TextWrapping = TextWrapping.Wrap };
         pttHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
@@ -787,8 +802,14 @@ internal sealed class PreferencesWindow : Window {
         _pttAutoSendRadio.Checked += (_, _) => _settingsStore.SavePttAutoSend(true);
         _pttDoNothingRadio.Checked += (_, _) => _settingsStore.SavePttAutoSend(false);
 
+        return WrapInScrollViewer(form);
+    }
+
+    private UIElement BuildTextReplacementsPage() {
+        var form = new StackPanel { Margin = new Thickness(20, 16, 20, 20) };
+
         // ── Voice Text Replacements ───────────────────────────────────────
-        AddSectionHeader(form, "Voice Text Replacements", topMargin: 24);
+        AddSectionHeader(form, "Voice Text Replacements");
         AddLabel(form, "Pattern (regex) → Replacement — applied to every voice phrase in order.", topMargin: 4);
 
         var gridHint = new TextBlock {
