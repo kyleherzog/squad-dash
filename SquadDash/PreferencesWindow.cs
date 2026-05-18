@@ -482,8 +482,9 @@ internal sealed class PreferencesWindow : Window {
             ("Remote Access",     BuildRemoteAccessPage()),
             ("Custom Model",      BuildByokPage()),
             ("Notifications",     BuildNotificationsPage(currentSettings)),
-            ("Sounds",            BuildSoundsPage(currentSettings)),
-            ("AI",                BuildAiPage()),
+            ("Sound Alerts",      BuildSoundsPage(currentSettings)),
+            ("TTS Provider",      BuildTtsProviderPage(currentSettings)),
+            ("Commands",          BuildAiPage()),
         };
         if (showDevOptions)
             pageList.Add(("Dev / Diag.", BuildDevPage()));
@@ -564,8 +565,8 @@ internal sealed class PreferencesWindow : Window {
                 tree.Items.Add(MakeLeaf(standalone));
 
         tree.Items.Add(MakeGroup("Voice & Speech", "Provider", "Push to Talk", "Text Replacements"));
-        tree.Items.Add(MakeGroup("Sound",          "Sounds"));
-        tree.Items.Add(MakeGroup("AI",             "AI", "Custom Model"));
+        tree.Items.Add(MakeGroup("Sound",          "Sound Alerts", "TTS Provider"));
+        tree.Items.Add(MakeGroup("AI",             "Commands", "Custom Model"));
         tree.Items.Add(MakeGroup("Connectivity",   "Remote Access", "Notifications"));
 
         foreach (var standalone in new[] { "Dev / Diag." })
@@ -1190,8 +1191,13 @@ internal sealed class PreferencesWindow : Window {
         _soundCommitMadePathBox.ToolTip            = ttsPathTip;
         _soundQuickRepliesShownPathBox.ToolTip     = ttsPathTip;
 
-        // ── TTS Configuration ─────────────────────────────────────────────────────
-        AddSectionHeader(form, "Text-to-Speech", topMargin: 24);
+        return WrapInScrollViewer(form);
+    }
+
+    private UIElement BuildTtsProviderPage(ApplicationSettingsSnapshot currentSettings) {
+        var form = new StackPanel { Margin = new Thickness(20, 16, 20, 20) };
+
+        AddSectionHeader(form, "Text-to-Speech");
 
         var ttsHint = new TextBlock {
             Text = "When a sound-event path is a quoted phrase like \"Done!\", SquadDash speaks it aloud using the TTS provider below.",
@@ -1583,7 +1589,7 @@ internal sealed class PreferencesWindow : Window {
     private UIElement BuildAiPage() {
         var form = new StackPanel { Margin = new Thickness(20, 16, 20, 20) };
 
-        AddSectionHeader(form, "AI");
+        AddSectionHeader(form, "Commands");
 
         AddLabel(form, "Quick Cleanup prompt (Ctrl+Shift+C):", wrap: true);
         form.Children.Add(_cleanupPromptBox);
