@@ -1931,7 +1931,16 @@
                                            VerticalAlignment="Center"
                                            Padding="4,2"
                                            Margin="0,0,6,0"
-                                           Foreground="{DynamicResource SubtleText}" />
+                                           Foreground="{DynamicResource SubtleText}"
+                                           ToolTip="Right-click to copy diagnostics">
+                                    <TextBlock.ContextMenu>
+                                        <ContextMenu Style="{StaticResource ThemedContextMenuStyle}">
+                                            <MenuItem Header="📋 Copy Diagnostics"
+                                                      Click="QueueStatusCopyDiagnostics_Click"
+                                                      Style="{StaticResource ThemedMenuItemStyle}" />
+                                        </ContextMenu>
+                                    </TextBlock.ContextMenu>
+                                </TextBlock>
                                 <Button x:Name="QueuePlayPauseButton"
                                         Width="24"
                                         Height="24"
@@ -2072,24 +2081,7 @@
                                    Foreground="{DynamicResource ToastText}"
                                    TextWrapping="Wrap" />
                     </Border>
-                    <Border x:Name="BridgeStallBanner"
-                            Margin="0,8,0,0"
-                            Padding="10,6"
-                            Background="{DynamicResource AlertSurface}"
-                            BorderBrush="{DynamicResource AlertBorder}"
-                            BorderThickness="1"
-                            CornerRadius="10"
-                            Visibility="Collapsed">
-                        <Border.ContextMenu>
-                            <ContextMenu>
-                                <MenuItem Header="📋 Copy diagnostic info" Click="BridgeStallCopyDiagnostics_Click" />
-                            </ContextMenu>
-                        </Border.ContextMenu>
-                        <TextBlock x:Name="BridgeStallTextBlock"
-                                   Foreground="{DynamicResource AlertBodyText}"
-                                   FontWeight="SemiBold"
-                                   TextWrapping="Wrap" />
-                    </Border>
+
                 </StackPanel>
 
                 <Border x:Name="ExceptionPanelBorder"

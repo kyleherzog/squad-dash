@@ -24355,12 +24355,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             var idleFor = now - _pec.LastPromptActivityAt!.Value;
             var msg = $"⚠ Bridge not responding ({idleFor.TotalSeconds:0}s)";
 
-            BridgeStallTextBlock.Text = msg;
-            if (!_bridgeStallShowing)
-            {
-                _bridgeStallShowing = true;
-                BridgeStallBanner.Visibility = Visibility.Visible;
-            }
+            _bridgeStallShowing = true;
 
             if (QueueTabBorder.Visibility == Visibility.Visible)
             {
@@ -24372,14 +24367,13 @@ public partial class MainWindow : Window, ILiveElementLocator
         else if (_bridgeStallShowing)
         {
             _bridgeStallShowing = false;
-            BridgeStallBanner.Visibility = Visibility.Collapsed;
 
             if (QueueTabBorder.Visibility == Visibility.Visible)
                 SetQueuePaused(_queueManuallyPaused);
         }
     }
 
-    private void BridgeStallCopyDiagnostics_Click(object sender, RoutedEventArgs e)
+    private void QueueStatusCopyDiagnostics_Click(object sender, RoutedEventArgs e)
     {
         var now = DateTimeOffset.Now;
         var idleSeconds = _pec.LastPromptActivityAt is not null
@@ -24387,26 +24381,97 @@ public partial class MainWindow : Window, ILiveElementLocator
             : 0.0;
 
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine("=== SquadDash Bridge Stall Diagnostics ===");
-        sb.AppendLine($"Copied at:       {now:yyyy-MM-dd HH:mm:ss zzz}");
-        sb.AppendLine($"Idle duration:   {idleSeconds:0.0}s");
+
+        // === Header ===
+        sb.AppendLine("=== SquadDash Diagnostics ===");
+        sb.AppendLine($"Timestamp:       {now:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine($"Bridge Status:   Not responding for {idleSeconds:0} seconds");
         sb.AppendLine($"Last activity:   {_pec.LastPromptActivityName ?? "(unknown)"}");
         sb.AppendLine($"Active tool:     {_pec.ActiveToolName ?? "(none)"}");
-        sb.AppendLine($"Stall warning:   {_pec.PromptStallWarningShown}");
         sb.AppendLine($"Workspace:       {_currentWorkspace?.FolderPath ?? "(none)"}");
         sb.AppendLine($"Model:           {_settingsSnapshot.LastUsedModel ?? "(unknown)"}");
         sb.AppendLine($"App version:     {AppVersion.Full}");
 
+        // === Active Agents ===
+        sb.AppendLine();
+        sb.AppendLine("=== Active Agents ===");
+        var activeAgents = _activeAgentCards.ToList();
+        if (activeAgents.Count == 0)
+        {
+            sb.AppendLine("No active agents");
+        }
+        else
+        {
+            foreach (var agent in activeAgents)
+                sb.AppendLine($"  {agent.Name} | {agent.RoleText} | {agent.StatusText}");
+        }
+
+        // === Recent Transcript ===
+        sb.AppendLine();
+        sb.AppendLine("=== Recent Transcript (last 20 entries) ===");
+        try
+        {
+            var turns = CoordinatorThread.SavedTurns
+                .Where(t => !t.IsSessionBoundary)
+                .TakeLast(20)
+                .ToList();
+            if (turns.Count == 0)
+            {
+                sb.AppendLine("No transcript entries");
+            }
+            else
+            {
+                foreach (var turn in turns)
+                {
+                    var prompt = turn.Prompt?.Trim() ?? string.Empty;
+                    if (prompt.Length > 100) prompt = prompt[..100] + "…";
+                    if (!string.IsNullOrEmpty(prompt))
+                        sb.AppendLine($"  User:      {prompt}");
+
+                    var response = turn.ResponseText?.Trim() ?? string.Empty;
+                    if (response.Length > 100) response = response[..100] + "…";
+                    if (!string.IsNullOrEmpty(response))
+                        sb.AppendLine($"  Assistant: {response}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            sb.AppendLine($"  (error reading transcript: {ex.Message})");
+        }
+
+        // === Trace Log ===
+        sb.AppendLine();
+        sb.AppendLine("=== Trace Log (last 50 lines) ===");
+        try
+        {
+            var logPath = SquadDashTrace.CurrentLogPath;
+            if (File.Exists(logPath))
+            {
+                var lines = File.ReadLines(logPath).TakeLast(50).ToList();
+                foreach (var line in lines)
+                    sb.AppendLine(line);
+            }
+            else
+            {
+                sb.AppendLine("  (trace log not found)");
+            }
+        }
+        catch (Exception ex)
+        {
+            sb.AppendLine($"  (error reading trace log: {ex.Message})");
+        }
+
         Clipboard.SetText(sb.ToString());
 
-        var original = BridgeStallTextBlock.Text;
-        BridgeStallTextBlock.Text = original + " (copied)";
+        var original = QueueStatusLabel.Text;
+        QueueStatusLabel.Text = original + " (copied)";
         var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         timer.Tick += (_, _) =>
         {
             timer.Stop();
-            if (BridgeStallTextBlock.Text == original + " (copied)")
-                BridgeStallTextBlock.Text = original;
+            if (QueueStatusLabel.Text == original + " (copied)")
+                QueueStatusLabel.Text = original;
         };
         timer.Start();
     }
