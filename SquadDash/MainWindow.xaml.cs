@@ -1690,63 +1690,78 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 try
                 {
-                    // Allow WPF to finish any pending layout/rendering before capturing.
-                    Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Render);
-
-                    var dpi = VisualTreeHelper.GetDpi(this);
-                    var pxW = (int)Math.Round(ActualWidth * dpi.DpiScaleX);
-                    var pxH = (int)Math.Round(ActualHeight * dpi.DpiScaleY);
-
-                    var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(
-                        pxW, pxH,
-                        dpi.PixelsPerInchX, dpi.PixelsPerInchY,
-                        System.Windows.Media.PixelFormats.Pbgra32);
-                    rtb.Render(this);
-                    rtb.Freeze();
-
-                    // If the definition specified a sub-region, crop the RTB to that area.
-                    // Prefer live anchor-based bounds so that panel moves are handled correctly;
-                    // fall back to the stored CaptureBounds when live resolution fails.
-                    BitmapSource bitmapToSave = rtb;
-                    var liveBounds = TryResolveLiveBounds(e);
-                    var cropBounds = liveBounds ?? e.CaptureBounds;
-                    if (cropBounds is { } bounds)
+                    // Switch to Natural tint (stop 0) so all doc screenshots have a
+                    // consistent baseline appearance, then restore the user's tint after.
+                    int savedTintStop = _activeTintStop;
+                    try
                     {
-                        // Always convert the logical-pixel bounds using the *current* runtime DPI
-                        // scale — NOT the DPI stored in CaptureBounds.  The RTB was rendered at
-                        // the current dpi.PixelsPerInchX/Y, so pixel coordinates must use the
-                        // same scale.  Using the stored bounds.DpiX/Y would produce the wrong
-                        // crop on any machine whose DPI differs from the original capture machine.
-                        var pixelX = (int)Math.Round(bounds.X * dpi.DpiScaleX);
-                        var pixelY = (int)Math.Round(bounds.Y * dpi.DpiScaleY);
-                        var pixelW = (int)Math.Round(bounds.Width * dpi.DpiScaleX);
-                        var pixelH = (int)Math.Round(bounds.Height * dpi.DpiScaleY);
+                        if (savedTintStop != 0)
+                            SetWorkspaceTintStop(0);
 
-                        // Clamp to the RTB dimensions so we never request an out-of-bounds rect.
-                        pixelX = Math.Max(0, Math.Min(pixelX, rtb.PixelWidth - 1));
-                        pixelY = Math.Max(0, Math.Min(pixelY, rtb.PixelHeight - 1));
-                        pixelW = Math.Max(1, Math.Min(pixelW, rtb.PixelWidth - pixelX));
-                        pixelH = Math.Max(1, Math.Min(pixelH, rtb.PixelHeight - pixelY));
+                        // Allow WPF to finish any pending layout/rendering before capturing,
+                        // including the tint change applied above.
+                        Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Render);
 
-                        bitmapToSave = new CroppedBitmap(
-                            rtb, new System.Windows.Int32Rect(pixelX, pixelY, pixelW, pixelH));
+                        var dpi = VisualTreeHelper.GetDpi(this);
+                        var pxW = (int)Math.Round(ActualWidth * dpi.DpiScaleX);
+                        var pxH = (int)Math.Round(ActualHeight * dpi.DpiScaleY);
+
+                        var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                            pxW, pxH,
+                            dpi.PixelsPerInchX, dpi.PixelsPerInchY,
+                            System.Windows.Media.PixelFormats.Pbgra32);
+                        rtb.Render(this);
+                        rtb.Freeze();
+
+                        // If the definition specified a sub-region, crop the RTB to that area.
+                        // Prefer live anchor-based bounds so that panel moves are handled correctly;
+                        // fall back to the stored CaptureBounds when live resolution fails.
+                        BitmapSource bitmapToSave = rtb;
+                        var liveBounds = TryResolveLiveBounds(e);
+                        var cropBounds = liveBounds ?? e.CaptureBounds;
+                        if (cropBounds is { } bounds)
+                        {
+                            // Always convert the logical-pixel bounds using the *current* runtime DPI
+                            // scale — NOT the DPI stored in CaptureBounds.  The RTB was rendered at
+                            // the current dpi.PixelsPerInchX/Y, so pixel coordinates must use the
+                            // same scale.  Using the stored bounds.DpiX/Y would produce the wrong
+                            // crop on any machine whose DPI differs from the original capture machine.
+                            var pixelX = (int)Math.Round(bounds.X * dpi.DpiScaleX);
+                            var pixelY = (int)Math.Round(bounds.Y * dpi.DpiScaleY);
+                            var pixelW = (int)Math.Round(bounds.Width * dpi.DpiScaleX);
+                            var pixelH = (int)Math.Round(bounds.Height * dpi.DpiScaleY);
+
+                            // Clamp to the RTB dimensions so we never request an out-of-bounds rect.
+                            pixelX = Math.Max(0, Math.Min(pixelX, rtb.PixelWidth - 1));
+                            pixelY = Math.Max(0, Math.Min(pixelY, rtb.PixelHeight - 1));
+                            pixelW = Math.Max(1, Math.Min(pixelW, rtb.PixelWidth - pixelX));
+                            pixelH = Math.Max(1, Math.Min(pixelH, rtb.PixelHeight - pixelY));
+
+                            bitmapToSave = new CroppedBitmap(
+                                rtb, new System.Windows.Int32Rect(pixelX, pixelY, pixelW, pixelH));
+                        }
+
+                        // Normalise DPI metadata to 96 DPI so the saved PNG has a consistent,
+                        // predictable size in documentation viewers regardless of the monitor's
+                        // physical DPI.  Physical pixels are copied 1:1 — no resampling.
+                        bitmapToSave = DpiHelper.NormalizeTo96Dpi(bitmapToSave);
+
+                        var dir = Path.GetDirectoryName(e.OutputPath);
+                        if (!string.IsNullOrEmpty(dir))
+                            Directory.CreateDirectory(dir);
+
+                        using var stream = File.Create(e.OutputPath);
+                        var encoder = new PngBitmapEncoder();
+                        encoder.Frames.Add(BitmapFrame.Create(bitmapToSave));
+                        encoder.Save(stream);
+
+                        e.SignalSaved();
                     }
-
-                    // Normalise DPI metadata to 96 DPI so the saved PNG has a consistent,
-                    // predictable size in documentation viewers regardless of the monitor's
-                    // physical DPI.  Physical pixels are copied 1:1 — no resampling.
-                    bitmapToSave = DpiHelper.NormalizeTo96Dpi(bitmapToSave);
-
-                    var dir = Path.GetDirectoryName(e.OutputPath);
-                    if (!string.IsNullOrEmpty(dir))
-                        Directory.CreateDirectory(dir);
-
-                    using var stream = File.Create(e.OutputPath);
-                    var encoder = new PngBitmapEncoder();
-                    encoder.Frames.Add(BitmapFrame.Create(bitmapToSave));
-                    encoder.Save(stream);
-
-                    e.SignalSaved();
+                    finally
+                    {
+                        if (savedTintStop != 0)
+                            SetWorkspaceTintStop(savedTintStop);
+                    }
                 }
                 catch (Exception ex)
                 {
