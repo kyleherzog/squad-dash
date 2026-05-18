@@ -350,8 +350,8 @@
               SizeChanged="TitlebarGrid_SizeChanged">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" MinWidth="120" MaxWidth="320" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
             <!-- Left: menu bar -->
@@ -469,19 +469,26 @@
             </Menu>
 
             <!-- Center: search box + find navigation (Phase 2) -->
-            <StackPanel x:Name="SearchStackPanel"
-                        Grid.Column="1"
-                        Orientation="Horizontal"
-                        HorizontalAlignment="Left"
-                        VerticalAlignment="Center"
-                        Margin="8,2,0,0"
-                        shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <Grid x:Name="SearchStackPanel"
+                  Grid.Column="1"
+                  HorizontalAlignment="Stretch"
+                  VerticalAlignment="Center"
+                  Margin="8,2,0,0"
+                  shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
                 <TextBox x:Name="SearchBox"
-                         Width="110"
+                         Grid.Column="0"
+                         HorizontalAlignment="Stretch"
                          Height="26"
                          VerticalAlignment="Center"
                          Padding="6,4,6,4"
-                         FontSize="{DynamicResource FontSizeBody}"
+                         FontSize="{DynamicResource FontSizeNormal}"
                          Background="{DynamicResource InputSurface}"
                          Foreground="{DynamicResource LabelText}"
                          BorderBrush="{DynamicResource InputBorder}"
@@ -499,7 +506,7 @@
                                                 CornerRadius="3">
                                             <Grid>
                                                 <TextBlock x:Name="Placeholder"
-                                                           Text="Search transcript..."
+                                                           Text="Search transcript"
                                                            Foreground="{DynamicResource SubtleText}"
                                                            FontSize="{TemplateBinding FontSize}"
                                                            Margin="1,0,0,0"
@@ -526,6 +533,7 @@
                     </TextBox.Style>
                 </TextBox>
                 <Button x:Name="FindPrevButton"
+                        Grid.Column="1"
                         Width="24"
                         Height="26"
                         Margin="2,0,0,0"
@@ -544,6 +552,7 @@
                     </Viewbox>
                 </Button>
                 <Button x:Name="FindNextButton"
+                        Grid.Column="2"
                         Width="24"
                         Height="26"
                         Margin="2,0,0,0"
@@ -562,12 +571,14 @@
                     </Viewbox>
                 </Button>
                 <TextBlock x:Name="SearchMatchCountText"
+                           Grid.Column="3"
                            Margin="6,0,0,0"
                            FontSize="{DynamicResource FontSizeSmall}"
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource SubtleText}"
                            Visibility="Collapsed" />
                 <Button x:Name="ClearSearchButton"
+                        Grid.Column="4"
                         Width="18"
                         Height="18"
                         Margin="4,0,0,0"
@@ -589,7 +600,7 @@
                         </Canvas>
                     </Viewbox>
                 </Button>
-            </StackPanel>
+            </Grid>
 
         </Grid>  <!-- end TitlebarGrid -->
 
