@@ -934,6 +934,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 var source = System.Windows.Interop.HwndSource.FromHwnd(
                     new System.Windows.Interop.WindowInteropHelper(this).Handle);
                 source?.AddHook(NativeMethods.MaximizeWorkAreaHook);
+                source?.AddHook(TitlebarNcMouseWheelHook);
             }
             catch (Exception ex)
             {
@@ -5588,6 +5589,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                     Margin     = new Thickness(0, 6, 0, 2),
                 };
                 header.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
+                header.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBody");
                 LoopOptionsPanel.Children.Add(header);
                 inGroup = true;
                 continue;
@@ -5621,6 +5623,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             Margin    = new Thickness(0, 0, 0, 4),
         };
         cb.SetResourceReference(Control.ForegroundProperty, "LabelText");
+        cb.SetResourceReference(Control.FontSizeProperty, "FontSizeBody");
 
         var capturedPath = _selectedLoopMdPath;
         var capturedKey  = opt.Key;
@@ -5643,6 +5646,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             Margin            = new Thickness(0, 0, 6, 0),
         };
         label.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
+        label.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBody");
 
         var tb = new TextBox
         {
@@ -5653,6 +5657,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         tb.SetResourceReference(Control.BackgroundProperty, "InputSurface");
         tb.SetResourceReference(Control.BorderBrushProperty, "InputBorder");
         tb.SetResourceReference(Control.ForegroundProperty, "LabelText");
+        tb.SetResourceReference(Control.FontSizeProperty, "FontSizeBody");
 
         var capturedPath = _selectedLoopMdPath;
         var capturedKey  = opt.Key;
@@ -5697,6 +5702,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 Margin  = new Thickness(0, 0, 0, 2),
             };
             label.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
+            label.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBody");
             stack.Children.Add(label);
 
             foreach (var choice in opt.Choices)
@@ -5710,6 +5716,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 };
                 rb.SetResourceReference(Control.StyleProperty, "ThemedRadioButtonStyle");
                 rb.SetResourceReference(Control.ForegroundProperty, "LabelText");
+                rb.SetResourceReference(Control.FontSizeProperty, "FontSizeBody");
 
                 var capturedChoice = choice;
                 rb.Checked += (_, _) =>
@@ -5737,6 +5744,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             Margin            = new Thickness(0, 0, 6, 0),
         };
         comboLabel.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
+        comboLabel.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBody");
 
         var combo = new ComboBox
         {
@@ -5744,6 +5752,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             MaxWidth            = 90,
         };
         combo.SetResourceReference(Control.StyleProperty, "ThemedComboBoxStyle");
+        combo.SetResourceReference(Control.FontSizeProperty, "FontSizeBody");
 
         if (opt.Choices is not null)
             foreach (var choice in opt.Choices)
@@ -7485,6 +7494,20 @@ public partial class MainWindow : Window, ILiveElementLocator
                 : LogicalTreeHelper.GetParent(current);
         }
         return false;
+    }
+
+    // WM_NCMOUSEWHEEL is sent when the wheel is rotated over the non-client caption area,
+    // which WindowChrome uses for the empty title-bar background. WPF's routed events never
+    // fire there, so we hook the raw message and route it to SetFontSizeScale ourselves.
+    private const int WM_NCMOUSEWHEEL = 0x02A3;
+    private nint TitlebarNcMouseWheelHook(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
+    {
+        if (msg != WM_NCMOUSEWHEEL) return nint.Zero;
+        if (!NativeMethods.IsCtrlPhysicallyDown()) return nint.Zero;
+        var delta = (short)((uint)wParam >> 16);
+        Dispatcher.BeginInvoke(() => SetFontSizeScale(_fontScaleLevel + (delta > 0 ? 1 : -1)));
+        handled = true;
+        return nint.Zero;
     }
 
     private void Window_PreviewMouseWheel(object sender, MouseWheelEventArgs e)

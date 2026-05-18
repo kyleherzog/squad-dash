@@ -881,6 +881,7 @@
                                               Margin="8,0,6,0"
                                               VerticalAlignment="Center"
                                               Visibility="Collapsed"
+                                              FontSize="{DynamicResource FontSizeNormal}"
                                               Style="{StaticResource ThemedComboBoxStyle}"
                                               ToolTip="Select which loop file to run"
                                               SelectionChanged="LoopFilePicker_SelectionChanged" />
