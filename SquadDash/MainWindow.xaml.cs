@@ -23216,7 +23216,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             }
             return;
         }
-        string[] labels = ["Natural", "Amber", "Gold", "Sage", "Aqua", "Sky", "Lavender", "Blush"];
+        string[] labels = ["Natural", "Amber", "Gold", "Sage", "Aqua", "Sky", "Plum", "Blush"];
         for (int i = 0; i < labels.Length; i++)
         {
             var stop = i;
