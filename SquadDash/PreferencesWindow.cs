@@ -74,7 +74,7 @@ internal sealed class PreferencesWindow : Window {
     private readonly ObservableCollection<VoiceReplacementRuleViewModel> _voiceReplacementRules;
 
     private readonly UIElement[] _pages;
-    private readonly Button[] _navButtons;
+    private readonly Dictionary<int, TreeViewItem> _leafItems;
     private int _currentPage;
     private readonly ContentControl _pageHost;
 
@@ -455,7 +455,7 @@ internal sealed class PreferencesWindow : Window {
 
         // Body: 130 px nav strip + content host
         var body = new Grid();
-        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(165) });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         root.Children.Add(body);
 
@@ -465,8 +465,6 @@ internal sealed class PreferencesWindow : Window {
         };
         navStrip.SetResourceReference(Border.BackgroundProperty, "SidebarPanelSurface");
         navStrip.SetResourceReference(Border.BorderBrushProperty, "SidebarPanelBorder");
-        var navStack = new StackPanel();
-        navStrip.Child = navStack;
         Grid.SetColumn(navStrip, 0);
         body.Children.Add(navStrip);
 
@@ -474,7 +472,7 @@ internal sealed class PreferencesWindow : Window {
         Grid.SetColumn(_pageHost, 1);
         body.Children.Add(_pageHost);
 
-        // ── Build pages and wire nav buttons ─────────────────────────────
+        // ── Build pages ───────────────────────────────────────────────────
 
         var pageList = new List<(string label, UIElement page)> {
             ("General",       BuildGeneralPage()),
@@ -489,17 +487,14 @@ internal sealed class PreferencesWindow : Window {
             pageList.Add(("Dev / Diag.", BuildDevPage()));
 
         _pages = new UIElement[pageList.Count];
-        _navButtons = new Button[pageList.Count];
-        for (int i = 0; i < pageList.Count; i++) {
-            var (label, page) = pageList[i];
-            _pages[i] = page;
-            var btn = new Button { Content = label };
-            btn.SetResourceReference(Control.StyleProperty, "PrefsNavItemStyle");
-            var idx = i;
-            btn.Click += (_, _) => NavigateTo(idx);
-            navStack.Children.Add(btn);
-            _navButtons[i] = btn;
-        }
+        for (int i = 0; i < pageList.Count; i++)
+            _pages[i] = pageList[i].page;
+
+        // ── Build grouped TreeView nav ────────────────────────────────────
+
+        var (navTree, leafItems) = BuildNavTree(pageList);
+        _leafItems = leafItems;
+        navStrip.Child = navTree;
 
         NavigateTo(Math.Min(currentSettings.Preferences_LastPage, _pages.Length - 1));
         UpdateQrCode();
@@ -508,9 +503,157 @@ internal sealed class PreferencesWindow : Window {
     private void NavigateTo(int index) {
         _currentPage = index;
         _pageHost.Content = _pages[index];
-        for (int i = 0; i < _navButtons.Length; i++)
-            _navButtons[i].Tag = i == index ? "selected" : null;
+        if (_leafItems.TryGetValue(index, out var leafItem) && !leafItem.IsSelected)
+            leafItem.IsSelected = true;
         _settingsStore.SavePreferencesLastPage(index);
+    }
+
+    // ── TreeView nav ──────────────────────────────────────────────────────
+
+    private (TreeView tree, Dictionary<int, TreeViewItem> leafItems) BuildNavTree(
+        List<(string label, UIElement page)> pageList) {
+
+        var tree = new TreeView {
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            FocusVisualStyle = null,
+        };
+        // Suppress the TreeView's own focus border
+        tree.SetValue(VirtualizingStackPanel.IsVirtualizingProperty, false);
+
+        var leafItems = new Dictionary<int, TreeViewItem>();
+        var pageIndex = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int i = 0; i < pageList.Count; i++)
+            pageIndex[pageList[i].label] = i;
+
+        var groupStyle = CreateGroupItemStyle();
+        var leafStyle  = CreateLeafItemStyle();
+
+        TreeViewItem MakeLeaf(string label) {
+            if (!pageIndex.TryGetValue(label, out int idx))
+                return new TreeViewItem();          // placeholder — never reached
+            var item = new TreeViewItem { Style = leafStyle };
+            item.Header = label;
+            item.Selected += (_, _) => NavigateTo(idx);
+            leafItems[idx] = item;
+            return item;
+        }
+
+        TreeViewItem MakeGroup(string label, params string[] children) {
+            var groupItem = new TreeViewItem { Style = groupStyle, IsExpanded = true };
+            groupItem.Header = label;
+            groupItem.Selected += (s, _) => ((TreeViewItem)s).IsSelected = false;
+            foreach (var child in children)
+                if (pageIndex.ContainsKey(child))
+                    groupItem.Items.Add(MakeLeaf(child));
+            return groupItem;
+        }
+
+        tree.Items.Add(MakeGroup("Voice & Speech", "Speech"));
+        tree.Items.Add(MakeGroup("Sound",          "Sounds"));
+        tree.Items.Add(MakeGroup("AI",             "AI", "Custom Model"));
+        tree.Items.Add(MakeGroup("Connectivity",   "Remote Access", "Notifications"));
+
+        foreach (var standalone in new[] { "General", "Dev / Diag." })
+            if (pageIndex.ContainsKey(standalone))
+                tree.Items.Add(MakeLeaf(standalone));
+
+        return (tree, leafItems);
+    }
+
+    private static Style CreateGroupItemStyle() {
+        var style = new Style(typeof(TreeViewItem));
+        style.Setters.Add(new Setter(FrameworkElement.FocusVisualStyleProperty, null));
+        style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
+        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(0)));
+
+        var tpl = new ControlTemplate(typeof(TreeViewItem));
+
+        // Root: vertical stack — header row then children
+        var root = new FrameworkElementFactory(typeof(StackPanel));
+        root.SetValue(StackPanel.OrientationProperty, Orientation.Vertical);
+
+        // Header border
+        var headerBorder = new FrameworkElementFactory(typeof(Border));
+        headerBorder.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+        headerBorder.SetValue(Border.PaddingProperty, new Thickness(10, 8, 10, 5));
+        headerBorder.SetValue(Border.CursorProperty, Cursors.Arrow);
+
+        // Arrow + label in a horizontal panel
+        var headerRow = new FrameworkElementFactory(typeof(StackPanel));
+        headerRow.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+
+        var arrow = new FrameworkElementFactory(typeof(TextBlock));
+        arrow.Name = "ArrowGlyph";
+        arrow.SetValue(TextBlock.TextProperty, "▾");
+        arrow.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+        arrow.SetValue(TextBlock.MarginProperty, new Thickness(0, 0, 5, 0));
+        arrow.SetValue(TextBlock.FontSizeProperty, 10.0);
+        arrow.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+
+        var cp = new FrameworkElementFactory(typeof(ContentPresenter));
+        cp.SetValue(ContentPresenter.ContentSourceProperty, "Header");
+        cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+        cp.SetValue(TextElement.FontWeightProperty, FontWeights.SemiBold);
+        cp.SetResourceReference(TextElement.ForegroundProperty, "LabelText");
+        cp.SetResourceReference(TextElement.FontSizeProperty, "FontSizeNormal");
+
+        headerRow.AppendChild(arrow);
+        headerRow.AppendChild(cp);
+        headerBorder.AppendChild(headerRow);
+
+        // Children area
+        var itemsHost = new FrameworkElementFactory(typeof(ItemsPresenter));
+        itemsHost.Name = "ItemsHost";
+
+        root.AppendChild(headerBorder);
+        root.AppendChild(itemsHost);
+        tpl.VisualTree = root;
+
+        // Collapsed: hide items + flip arrow to ▸
+        var collapseTrigger = new Trigger { Property = TreeViewItem.IsExpandedProperty, Value = false };
+        collapseTrigger.Setters.Add(new Setter(VisibilityProperty, Visibility.Collapsed, "ItemsHost"));
+        collapseTrigger.Setters.Add(new Setter(TextBlock.TextProperty, "▸", "ArrowGlyph"));
+        tpl.Triggers.Add(collapseTrigger);
+
+        style.Setters.Add(new Setter(TreeViewItem.TemplateProperty, tpl));
+        return style;
+    }
+
+    private static Style CreateLeafItemStyle() {
+        var style = new Style(typeof(TreeViewItem));
+        style.Setters.Add(new Setter(FrameworkElement.FocusVisualStyleProperty, null));
+        style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
+        style.Setters.Add(new Setter(Control.CursorProperty, Cursors.Hand));
+
+        var tpl = new ControlTemplate(typeof(TreeViewItem));
+
+        var border = new FrameworkElementFactory(typeof(Border));
+        border.Name = "Bd";
+        border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+        border.SetValue(Border.PaddingProperty, new Thickness(24, 9, 14, 9));
+
+        var cp = new FrameworkElementFactory(typeof(ContentPresenter));
+        cp.SetValue(ContentPresenter.ContentSourceProperty, "Header");
+        cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+        cp.SetResourceReference(TextElement.ForegroundProperty, "BodyText");
+        cp.SetResourceReference(TextElement.FontSizeProperty, "FontSizeNormal");
+
+        border.AppendChild(cp);
+        tpl.VisualTree = border;
+
+        var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+        hoverTrigger.Setters.Add(new Setter(Border.BackgroundProperty, new DynamicResourceExtension("HoverSurface"), "Bd"));
+        tpl.Triggers.Add(hoverTrigger);
+
+        var selectedTrigger = new Trigger { Property = TreeViewItem.IsSelectedProperty, Value = true };
+        selectedTrigger.Setters.Add(new Setter(Border.BackgroundProperty, new DynamicResourceExtension("AppSurface"), "Bd"));
+        selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension("ImportantText")));
+        selectedTrigger.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
+        tpl.Triggers.Add(selectedTrigger);
+
+        style.Setters.Add(new Setter(TreeViewItem.TemplateProperty, tpl));
+        return style;
     }
 
     private UIElement BuildGeneralPage() {
