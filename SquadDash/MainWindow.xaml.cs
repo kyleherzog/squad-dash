@@ -4815,11 +4815,16 @@ public partial class MainWindow : Window, ILiveElementLocator
             _loopOutputWindow.Owner = this;
         }
 
-        // Position upper-right of the main window
+        // Position upper-right of the main window (use actual bounds, correct when maximized)
+        var mainBounds = NativeMethods.GetActualWindowBoundsLogical(this);
+        double mainLeft  = mainBounds.Width > 0 ? mainBounds.Left  : Left;
+        double mainTop   = mainBounds.Width > 0 ? mainBounds.Top   : Top;
+        double mainWidth = mainBounds.Width > 0 ? mainBounds.Width : (ActualWidth > 0 ? ActualWidth : Width);
         var w = _loopOutputWindow.Width;
         var margin = 20;
-        _loopOutputWindow.Left = Left + Width - w - margin;
-        _loopOutputWindow.Top  = Top + margin;
+        _loopOutputWindow.Left = mainLeft + mainWidth - w - margin;
+        _loopOutputWindow.Top  = mainTop + margin;
+        WindowPlacementHelper.EnsureOnScreen(_loopOutputWindow, this);
 
         _loopOutputWindow.Show();
         _loopOutputWindow.Activate();
@@ -5045,6 +5050,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (!string.IsNullOrWhiteSpace(_rcTunnelUrl))
             _rcPanel.SetTunnelUrl(_rcTunnelUrl);
 
+        WindowPlacementHelper.CenterOnOwnerAndEnsureOnScreen(_rcPanel, this);
         _rcPanel.Show();
     }
 
@@ -11440,6 +11446,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             _loopMergedViewWindow.Owner = CanShowOwnedWindow() ? this : null;
             LoopPanelShowMergedMenuItem.Header = "Close preview";
             RefreshLoopMergedView();
+            WindowPlacementHelper.CenterOnOwnerAndEnsureOnScreen(_loopMergedViewWindow, this);
             _loopMergedViewWindow.Show();
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(LoopPanelShowMergedMenuItem_Click), ex); }
@@ -13029,6 +13036,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 {
                     // Fallback: show in separate window if document was edited
                     var win = new RevisionResultWindow(revised) { Owner = this };
+                    WindowPlacementHelper.CenterOnOwnerAndEnsureOnScreen(win, this);
                     win.Show();
                 }
             }),
@@ -13256,6 +13264,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         // Text not found or found in multiple places — show the manual-copy fallback.
         var win = new RevisionResultWindow(revised) { Owner = this };
+        WindowPlacementHelper.CenterOnOwnerAndEnsureOnScreen(win, this);
         win.Show();
     }
 
@@ -13291,6 +13300,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
 
         var win = new RevisionResultWindow(revised) { Owner = this };
+        WindowPlacementHelper.CenterOnOwnerAndEnsureOnScreen(win, this);
         win.Show();
     }
 
@@ -13466,6 +13476,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                         else
                         {
                             var win = new RevisionResultWindow(revised) { Owner = this };
+                            WindowPlacementHelper.CenterOnOwnerAndEnsureOnScreen(win, this);
                             win.Show();
                         }
                     });
@@ -24220,6 +24231,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         textBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
         window.Content = textBox;
 
+        WindowPlacementHelper.CenterOnOwnerAndEnsureOnScreen(window, this);
         window.Show();
     }
 
@@ -26480,9 +26492,14 @@ public partial class MainWindow : Window, ILiveElementLocator
     private (double left, double top) DefaultFloatingWindowSnap(Window floater, double topOffset = 0)
     {
         const double margin = 18;
-        var ownerWidth = ActualWidth > 0 ? ActualWidth : Width;
-        double left = Left + Math.Max(margin, ownerWidth - floater.Width - margin);
-        double top = Top + SystemParameters.WindowCaptionHeight + margin + topOffset;
+        // Use actual on-screen bounds so the snap is correct even when the main window is maximized.
+        // WPF's Left/Top return the restore position when maximized, which would produce wrong coords.
+        var mainBounds = NativeMethods.GetActualWindowBoundsLogical(this);
+        double mainLeft  = mainBounds.Width > 0 ? mainBounds.Left  : Left;
+        double mainTop   = mainBounds.Width > 0 ? mainBounds.Top   : Top;
+        double mainWidth = mainBounds.Width > 0 ? mainBounds.Width : (ActualWidth > 0 ? ActualWidth : Width);
+        double left = mainLeft + Math.Max(margin, mainWidth - floater.Width - margin);
+        double top  = mainTop  + SystemParameters.WindowCaptionHeight + margin + topOffset;
         return (left, top);
     }
 
@@ -26495,9 +26512,14 @@ public partial class MainWindow : Window, ILiveElementLocator
         double newLeft, newTop;
         if (offset is { } off)
         {
-            double mainRight = Left + (ActualWidth > 0 ? ActualWidth : Width);
+            // Use actual on-screen bounds: WPF Left/Top return restore coords when maximized.
+            var mainBounds = NativeMethods.GetActualWindowBoundsLogical(this);
+            double mainRight = mainBounds.Width > 0
+                ? mainBounds.Left + mainBounds.Width
+                : Left + (ActualWidth > 0 ? ActualWidth : Width);
+            double mainTop = mainBounds.Width > 0 ? mainBounds.Top : Top;
             newLeft = mainRight + off.X;
-            newTop = Top + off.Y;
+            newTop  = mainTop   + off.Y;
 
             // Guard: if the saved offset was computed on a different monitor layout (e.g.
             // a narrower display before the user switched to an ultra-wide), the window
@@ -26516,7 +26538,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         try
         {
             floater.Left = newLeft;
-            floater.Top = newTop;
+            floater.Top  = newTop;
+            // Final safety clamp: ensure the entire window is within a monitor's work area.
+            WindowPlacementHelper.EnsureOnScreen(floater, this);
         }
         finally
         {
