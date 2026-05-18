@@ -199,7 +199,7 @@ internal sealed class PushToTalkController : IDisposable {
 
         try {
             var phraseHints = _phraseHintsProvider?.Invoke();
-            await _speechService.StartAsync(key, region, phraseHints).ConfigureAwait(false);
+            await _speechService.StartAsync(key, region, phraseHints, settings.SpeechLanguage).ConfigureAwait(false);
         }
         catch (Exception ex) {
             _dispatcher.Invoke(() => {

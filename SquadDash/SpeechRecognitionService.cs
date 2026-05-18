@@ -17,13 +17,15 @@ internal sealed class AzureSpeechRecognitionService : ISpeechRecognitionService 
     public event EventHandler<double>? VolumeChanged;
     public event EventHandler<string>? RecognitionError;
 
-    public async Task StartAsync(string subscriptionKey, string region, IEnumerable<string>? phraseHints = null) {
+    public async Task StartAsync(string subscriptionKey, string region, IEnumerable<string>? phraseHints = null, string? language = null) {
         _stopping = false;
 
         var format = AudioStreamFormat.GetWaveFormatPCM(16000, 16, 1);
         _pushStream = AudioInputStream.CreatePushStream(format);
 
         var speechConfig = SpeechConfig.FromSubscription(subscriptionKey, region);
+        if (!string.IsNullOrWhiteSpace(language))
+            speechConfig.SpeechRecognitionLanguage = language.Trim();
         var audioConfig = AudioConfig.FromStreamInput(_pushStream);
 
         _recognizer = new SpeechRecognizer(speechConfig, audioConfig);
@@ -66,11 +68,14 @@ internal sealed class AzureSpeechRecognitionService : ISpeechRecognitionService 
         string subscriptionKey,
         string region,
         PushAudioInputStream pushStream,
-        IEnumerable<string>? phraseHints = null) {
+        IEnumerable<string>? phraseHints = null,
+        string? language = null) {
         _stopping = false;
         _pushStream = pushStream;
 
         var speechConfig = SpeechConfig.FromSubscription(subscriptionKey, region);
+        if (!string.IsNullOrWhiteSpace(language))
+            speechConfig.SpeechRecognitionLanguage = language.Trim();
         var audioConfig = AudioConfig.FromStreamInput(_pushStream);
 
         _recognizer = new SpeechRecognizer(speechConfig, audioConfig);

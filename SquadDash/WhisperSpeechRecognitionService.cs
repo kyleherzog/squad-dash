@@ -24,6 +24,7 @@ internal sealed class WhisperSpeechRecognitionService : ISpeechRecognitionServic
     private MemoryStream? _buffer;
     private WaveFileWriter? _writer;
     private string _apiKey = "";
+    private string? _language;
     private CancellationTokenSource? _cts;
     private volatile bool _stopping;
 
@@ -36,10 +37,11 @@ internal sealed class WhisperSpeechRecognitionService : ISpeechRecognitionServic
     public event EventHandler<double>? VolumeChanged;
     public event EventHandler<string>? RecognitionError;
 
-    public Task StartAsync(string apiKey, string regionOrEndpoint, IEnumerable<string>? phraseHints = null)
+    public Task StartAsync(string apiKey, string regionOrEndpoint, IEnumerable<string>? phraseHints = null, string? language = null)
     {
         _stopping = false;
         _apiKey = apiKey;
+        _language = string.IsNullOrWhiteSpace(language) ? null : language.Trim();
         _cts = new CancellationTokenSource();
 
         ResetBuffer();
@@ -137,6 +139,13 @@ internal sealed class WhisperSpeechRecognitionService : ISpeechRecognitionServic
             audioContent.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
             content.Add(audioContent, "file", "audio.wav");
             content.Add(new StringContent("whisper-1"), "model");
+
+            // Pass language hint if configured; Whisper uses ISO-639-1 (e.g. "fr" from "fr-FR").
+            if (_language is not null)
+            {
+                var iso = _language.Contains('-') ? _language[.._language.IndexOf('-')] : _language;
+                content.Add(new StringContent(iso.ToLowerInvariant()), "language");
+            }
 
             using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/audio/transcriptions");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);

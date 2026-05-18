@@ -34,7 +34,8 @@ internal sealed class RemoteSpeechSession : IAsyncDisposable {
         string connectionId,
         string subscriptionKey,
         string region,
-        string[]? phraseHints = null) {
+        string[]? phraseHints = null,
+        string? language = null) {
 
         var format = AudioStreamFormat.GetWaveFormatPCM(16000, 16, 1);
         var pushStream = AudioInputStream.CreatePushStream(format);
@@ -43,7 +44,7 @@ internal sealed class RemoteSpeechSession : IAsyncDisposable {
         session._service.PhraseRecognized += (_, text) => session.PhraseRecognized?.Invoke(session, text);
         session._service.RecognitionError += (_, msg) => session.RecognitionError?.Invoke(session, msg);
 
-        await session._service.StartFromStreamAsync(subscriptionKey, region, pushStream, phraseHints)
+        await session._service.StartFromStreamAsync(subscriptionKey, region, pushStream, phraseHints, language)
             .ConfigureAwait(false);
 
         return session;

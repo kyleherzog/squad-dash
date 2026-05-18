@@ -10,7 +10,7 @@ internal interface ISpeechRecognitionService : IDisposable
     event EventHandler<double>? VolumeChanged;
     event EventHandler<string>? RecognitionError;
 
-    Task StartAsync(string key, string regionOrEndpoint, IEnumerable<string>? phraseHints = null);
+    Task StartAsync(string key, string regionOrEndpoint, IEnumerable<string>? phraseHints = null, string? language = null);
     Task StopAsync();
     void WriteAudioData(byte[] buffer, int count);
 }

@@ -22,6 +22,7 @@ internal sealed class PreferencesWindow : Window {
     private readonly PasswordBox _apiKeyPasswordBox;
     private readonly TextBox _apiKeyRevealBox;
     private readonly TextBox _speechRegionBox;
+    private readonly ComboBox _speechLanguageComboBox;
     private readonly RadioButton _azureSpeechRadio;
     private readonly RadioButton _openAiSpeechRadio;
     private readonly RadioButton _pttAutoSendRadio;
@@ -138,6 +139,21 @@ internal sealed class PreferencesWindow : Window {
         _speechRegionBox.SetResourceReference(TextBox.BackgroundProperty, "TextBoxBackground");
         _speechRegionBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
         _speechRegionBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
+
+        _speechLanguageComboBox = new ComboBox { Height = 30, Margin = new Thickness(0, 4, 0, 0) };
+        _speechLanguageComboBox.SetResourceReference(ComboBox.BackgroundProperty, "TextBoxBackground");
+        _speechLanguageComboBox.SetResourceReference(ComboBox.BorderBrushProperty, "InputBorder");
+        _speechLanguageComboBox.SetResourceReference(ComboBox.ForegroundProperty, "LabelText");
+        foreach (var (display, locale) in SpeechLanguageOptions)
+        {
+            var item = new ComboBoxItem { Content = display, Tag = locale };
+            item.SetResourceReference(ComboBoxItem.ForegroundProperty, "LabelText");
+            _speechLanguageComboBox.Items.Add(item);
+        }
+        var savedLocale = currentSettings.SpeechLanguage;
+        var matchingItem = _speechLanguageComboBox.Items.Cast<ComboBoxItem>()
+            .FirstOrDefault(i => string.Equals(i.Tag as string, savedLocale, StringComparison.OrdinalIgnoreCase));
+        _speechLanguageComboBox.SelectedItem = matchingItem ?? _speechLanguageComboBox.Items[0];
 
         var isOpenAi = currentSettings.SpeechProvider == SpeechProvider.OpenAI;
         _azureSpeechRadio = new RadioButton {
@@ -526,6 +542,19 @@ internal sealed class PreferencesWindow : Window {
         openAiSection.Children.Add(openAiRevealLink);
 
         form.Children.Add(openAiSection);
+
+        // ── Recognition Language ───────────────────────────────────────────
+        AddSectionHeader(form, "Recognition Language", topMargin: 24);
+
+        var langHint = new TextBlock {
+            Text = "Select the spoken language. Azure uses the full locale (e.g. fr-FR); Whisper uses the language prefix (e.g. fr). Auto-detect works for both providers but is slightly slower.",
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
+            Margin = new Thickness(0, 0, 0, 6),
+            TextWrapping = TextWrapping.Wrap
+        };
+        langHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+        form.Children.Add(langHint);
+        form.Children.Add(_speechLanguageComboBox);
 
         // Wire radio buttons to toggle sections and auto-save
         _azureSpeechRadio.Checked += (_, _) => {
@@ -1420,6 +1449,8 @@ internal sealed class PreferencesWindow : Window {
         updated = _settingsStore.SaveSpeechProvider(
             _openAiSpeechRadio.IsChecked == true ? SpeechProvider.OpenAI : SpeechProvider.Azure,
             string.IsNullOrWhiteSpace(_openAiSpeechKeyPasswordBox.Password.Trim()) ? null : _openAiSpeechKeyPasswordBox.Password.Trim());
+        var speechLocale = (_speechLanguageComboBox.SelectedItem as ComboBoxItem)?.Tag as string;
+        updated = _settingsStore.SaveSpeechLanguage(speechLocale);
         updated = _settingsStore.SaveDeveloperIssueSimulation(startupIssueSimulation, runtimeIssueSimulation);
         var notifEnabled = _notificationsEnabledCheckBox.IsChecked == true;
         var notifTopic = _notificationTopicBox.Text.Trim();
@@ -1511,6 +1542,30 @@ internal sealed class PreferencesWindow : Window {
         label.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
         parent.Children.Add(label);
     }
+
+    private static readonly (string Display, string? Locale)[] SpeechLanguageOptions = [
+        ("Auto-detect",              null),
+        ("English (US) — en-US",    "en-US"),
+        ("English (UK) — en-GB",    "en-GB"),
+        ("French — fr-FR",          "fr-FR"),
+        ("German — de-DE",          "de-DE"),
+        ("Spanish (Spain) — es-ES", "es-ES"),
+        ("Spanish (Mexico) — es-MX","es-MX"),
+        ("Italian — it-IT",         "it-IT"),
+        ("Portuguese (Brazil) — pt-BR", "pt-BR"),
+        ("Portuguese (Portugal) — pt-PT", "pt-PT"),
+        ("Dutch — nl-NL",           "nl-NL"),
+        ("Russian — ru-RU",         "ru-RU"),
+        ("Japanese — ja-JP",        "ja-JP"),
+        ("Korean — ko-KR",          "ko-KR"),
+        ("Chinese (Simplified) — zh-CN", "zh-CN"),
+        ("Chinese (Traditional) — zh-TW", "zh-TW"),
+        ("Arabic — ar-SA",          "ar-SA"),
+        ("Hindi — hi-IN",           "hi-IN"),
+        ("Polish — pl-PL",          "pl-PL"),
+        ("Swedish — sv-SE",         "sv-SE"),
+        ("Turkish — tr-TR",         "tr-TR"),
+    ];
 
     private static void AddSectionHeader(Panel parent, string text, double topMargin = 0) {
         var header = new TextBlock {

@@ -5328,7 +5328,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         try
         {
             var phraseHints = Dispatcher.Invoke(BuildSpeechPhraseHints);
-            var session = await RemoteSpeechSession.StartAsync(connId, key, region, [.. phraseHints])
+            var session = await RemoteSpeechSession.StartAsync(connId, key, region, [.. phraseHints], _settingsSnapshot.SpeechLanguage)
                 .ConfigureAwait(false);
 
             session.PhraseRecognized += (_, text) =>

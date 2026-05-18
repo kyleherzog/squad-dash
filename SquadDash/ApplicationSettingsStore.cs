@@ -279,6 +279,16 @@ internal sealed class ApplicationSettingsStore {
         return updated.Normalize();
     }
 
+    public ApplicationSettingsSnapshot SaveSpeechLanguage(string? language) {
+        using var mutex = AcquireMutex();
+        var current = LoadCore();
+        var updated = current with {
+            SpeechLanguage = string.IsNullOrWhiteSpace(language) ? null : language.Trim()
+        };
+        SaveCore(updated);
+        return updated.Normalize();
+    }
+
     public ApplicationSettingsSnapshot SavePreferencesLastPage(int page) {
         using var mutex = AcquireMutex();
         var current = LoadCore();
@@ -920,6 +930,11 @@ internal sealed record ApplicationSettingsSnapshot(
     public string? SpeechRegion { get; init; }
     public SpeechProvider SpeechProvider { get; init; } = SpeechProvider.Azure;
     public string? OpenAiSpeechApiKey { get; init; }
+    /// <summary>
+    /// BCP-47 locale for speech recognition (e.g. "fr-FR", "de-DE").
+    /// <c>null</c> means auto-detect (Azure) / auto-detect (Whisper).
+    /// </summary>
+    public string? SpeechLanguage { get; init; }
     public bool PttAutoSend { get; init; } = true;
 
     /// <summary>
@@ -1420,6 +1435,7 @@ internal sealed record ApplicationSettingsSnapshot(
             SpeechProvider = SpeechProvider,
             PttAutoSend = PttAutoSend,
             OpenAiSpeechApiKey = string.IsNullOrWhiteSpace(OpenAiSpeechApiKey) ? null : OpenAiSpeechApiKey.Trim(),
+            SpeechLanguage = string.IsNullOrWhiteSpace(SpeechLanguage) ? null : SpeechLanguage.Trim(),
             VoiceReplacementRules = VoiceReplacementRules
                 .Where(r => !string.IsNullOrWhiteSpace(r?.Pattern))
                 .ToArray(),
