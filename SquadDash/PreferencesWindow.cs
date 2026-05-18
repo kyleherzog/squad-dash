@@ -601,7 +601,7 @@ internal sealed class PreferencesWindow : Window {
 
         var arrow = new FrameworkElementFactory(typeof(TextBlock));
         arrow.Name = "ArrowGlyph";
-        arrow.SetValue(TextBlock.TextProperty, "▾");
+        arrow.SetValue(TextBlock.TextProperty, "▼");
         arrow.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
         arrow.SetValue(TextBlock.MarginProperty, new Thickness(0, 0, 5, 0));
         arrow.SetValue(TextBlock.FontSizeProperty, 10.0);
@@ -629,7 +629,7 @@ internal sealed class PreferencesWindow : Window {
         // Collapsed: hide items + flip arrow to ▸
         var collapseTrigger = new Trigger { Property = TreeViewItem.IsExpandedProperty, Value = false };
         collapseTrigger.Setters.Add(new Setter(VisibilityProperty, Visibility.Collapsed, "ItemsHost"));
-        collapseTrigger.Setters.Add(new Setter(TextBlock.TextProperty, "▸", "ArrowGlyph"));
+        collapseTrigger.Setters.Add(new Setter(TextBlock.TextProperty, "▶", "ArrowGlyph"));
         tpl.Triggers.Add(collapseTrigger);
 
         // Header hover highlight
@@ -659,7 +659,7 @@ internal sealed class PreferencesWindow : Window {
         var border = new FrameworkElementFactory(typeof(Border));
         border.Name = "Bd";
         border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
-        border.SetValue(Border.PaddingProperty, new Thickness(24, 9, 14, 9));
+        border.SetValue(Border.PaddingProperty, new Thickness(28, 9, 14, 9));
 
         var cp = new FrameworkElementFactory(typeof(ContentPresenter));
         cp.SetValue(ContentPresenter.ContentSourceProperty, "Header");
