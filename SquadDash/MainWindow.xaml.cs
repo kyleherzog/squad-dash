@@ -23157,11 +23157,33 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
     }
 
+    private Color ComputeTintSwatch(int stop)
+    {
+        var fallback = Color.FromRgb(128, 128, 128);
+        if (_tintBaseline is null || !_tintBaseline.TryGetValue("TranscriptSurface", out var baseColor))
+            return fallback;
+        return stop == 0 ? baseColor : RotateHue(baseColor, stop * 45.0);
+    }
+
+    private void ApplyTintSwatchToItem(MenuItem item, int stop)
+    {
+        var swatch = ComputeTintSwatch(stop);
+        ColorUtilities.RgbToHsl(swatch.R, swatch.G, swatch.B, out _, out _, out double l);
+        var fg = l < 0.5 ? Colors.White : Colors.Black;
+        item.Background = new SolidColorBrush(swatch);
+        item.Foreground = new SolidColorBrush(fg);
+    }
+
     private void EnsureTintMenuItems()
     {
         if (TintMenuItem.Items.Count > 0)
         {
             UpdateTintMenuState();
+            for (int i = 0; i < TintMenuItem.Items.Count; i++)
+            {
+                if (TintMenuItem.Items[i] is MenuItem existing)
+                    ApplyTintSwatchToItem(existing, i);
+            }
             return;
         }
         string[] labels = ["Natural", "Warm+", "Yellow", "Lime", "Cool", "Blue", "Violet", "Rose"];
@@ -23175,6 +23197,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 IsChecked   = _activeTintStop == stop,
                 Style       = (Style)FindResource("ThemedMenuItemStyle")
             };
+            ApplyTintSwatchToItem(item, stop);
             item.Click += (_, _) =>
             {
                 try { SetWorkspaceTintStop(stop); }
