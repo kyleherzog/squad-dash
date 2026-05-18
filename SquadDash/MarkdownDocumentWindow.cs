@@ -156,6 +156,7 @@ internal sealed class MarkdownDocumentWindow : Window {
             Margin = new Thickness(0, 0, 8, 0)
         };
         _showSourceButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
+        _showSourceButton.SetResourceReference(TextElement.FontSizeProperty, "FontSizeNormal");
         _showSourceButton.Click += ShowSourceButton_Click;
         actionPanel.Children.Add(_showSourceButton);
 

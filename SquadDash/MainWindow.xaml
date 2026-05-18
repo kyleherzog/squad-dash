@@ -1688,6 +1688,7 @@
                                 Padding="12,0,12,0"
                                 Visibility="Collapsed"
                                 Style="{StaticResource ThemedButtonStyle}"
+                                FontSize="{DynamicResource FontSizeNormal}"
                                 Click="ViewPagesButton_Click">
                             Pages
                         </Button>
@@ -1698,6 +1699,7 @@
                                 Padding="12,0,12,0"
                                 Visibility="Collapsed"
                                 Style="{StaticResource ThemedButtonStyle}"
+                                FontSize="{DynamicResource FontSizeNormal}"
                                 Click="ApproveDocButton_Click">
                             &#10003; Approve
                         </Button>
@@ -1706,6 +1708,7 @@
                                 Height="28"
                                 Padding="12,0,12,0"
                                 Style="{StaticResource ThemedButtonStyle}"
+                                FontSize="{DynamicResource FontSizeNormal}"
                                 Click="ViewSourceButton_Click">
                             View Source
                         </Button>
