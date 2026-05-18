@@ -4,6 +4,30 @@
 
 ---
 
+### 2026-05-18 — Process rule: never silently defer spec requirements without a visible checkpoint
+
+**Context:** During the Preferences grouped-TreeView implementation, the original spec called for splitting the Speech page into three separate pages: **Provider**, **Push to Talk**, and **Text Replacements**. The implementing agent deferred this split as a "later task" without flagging it visibly or offering a quick-reply choice to the user. The user noticed, and was rightly unhappy: the deferral was invisible and violated the spec without consent.
+
+**Decision:**
+
+> **Agents must never silently defer a requirement from the user's original spec.** If a full implementation is judged impractical in a single pass (e.g., it would substantially increase scope beyond the current task), the agent MUST:
+>
+> 1. **Implement everything it can** within the current task.
+> 2. **Clearly state** what was deferred and why, in the visible response — not buried in a report.
+> 3. **Report the deferral back to the Coordinator** in the agent's result summary, with a suggested quick-reply label and target agent.
+>
+> The **Coordinator** is solely responsible for deciding whether to surface a quick-reply button to the user. Launched agents do not emit `QUICK_REPLIES_JSON` — only the Coordinator does. An agent that deferred work communicates that to the Coordinator; the Coordinator reads the summary, states the deferral visibly in its own response, and offers the quick reply.
+>
+> Example correct phrasing (from Coordinator): *"✅ Done. **Note: one spec item was deferred** — the Speech page split (Provider / Push to Talk / Text Replacements) was not yet implemented because [reason]. Click below to do it now."*
+>
+> The quick reply must be actionable (routes to the right agent to complete the deferred item), not just informational.
+
+**Scope:** All agents. Applies to any task where the user has provided a specification (written or spoken) and the agent cannot fully implement it in one pass.
+
+**Why this matters:** Silent deferrals erode trust and create invisible technical debt. A visible, immediately-actionable checkpoint respects the user's intent and keeps them in control of scope decisions.
+
+---
+
 ### 2026-04-30 — `squad cross-squad` integration architecture
 
 **Context:** The task asked how SquadDash should surface cross-workspace agent interactions. `squad cross-squad` does NOT exist as a CLI command in the 0.9.5-insider release. The functionality lives entirely in the `@bradygaster/squad-sdk` module `runtime/cross-squad.js`.

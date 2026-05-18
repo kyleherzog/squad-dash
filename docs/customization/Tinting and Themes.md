@@ -6,7 +6,7 @@ parent: Customization
 
 # Tinting and Themes
 
-SquadDash ships with light and dark base themes, plus an eight-stop tint system, an accent colour control, and a UI font scale — all saved per workspace.
+SquadDash ships with light and dark base themes, plus an eight-stop tint system, an accent colour control, and a UI font scaling — all saved per workspace.
 
 ---
 
