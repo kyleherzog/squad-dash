@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Threading.Tasks;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Shell;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -92,9 +93,18 @@ internal sealed class PreferencesWindow : Window {
         Height = 1000;
         MinWidth = 540;
         MinHeight = 560;
+        WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.CanResize;
         this.SetResourceReference(BackgroundProperty, "AppSurface");
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+
+        WindowChrome.SetWindowChrome(this, new WindowChrome {
+            CaptionHeight = 32,
+            ResizeBorderThickness = new Thickness(4),
+            CornerRadius = new CornerRadius(0),
+            GlassFrameThickness = new Thickness(0),
+            UseAeroCaptionButtons = false
+        });
         KeyDown += (_, e) => {
             if (e.Key == Key.Enter)
                 SaveButton_Click(this, new RoutedEventArgs());
@@ -396,6 +406,33 @@ internal sealed class PreferencesWindow : Window {
 
         var root = new DockPanel();
         Content = root;
+
+        // Title bar
+        var titleBar = new Grid { Height = 32 };
+        titleBar.SetResourceReference(Grid.BackgroundProperty, "ChromeSurface");
+        DockPanel.SetDock(titleBar, Dock.Top);
+
+        var titleLayout = new DockPanel();
+        titleBar.Children.Add(titleLayout);
+
+        var closeBtn = new Button { Width = 46, Height = 32, FontSize = 13, Content = "✕" };
+        closeBtn.SetResourceReference(Button.StyleProperty, "CaptionCloseButtonStyle");
+        closeBtn.Click += (_, _) => Close();
+        WindowChrome.SetIsHitTestVisibleInChrome(closeBtn, true);
+        DockPanel.SetDock(closeBtn, Dock.Right);
+        titleLayout.Children.Add(closeBtn);
+
+        var titleText = new TextBlock {
+            Text = "Preferences",
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(12, 0, 0, 0)
+        };
+        titleText.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
+        titleText.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBody");
+        titleLayout.Children.Add(titleText);
+
+        titleBar.MouseLeftButtonDown += (_, _) => DragMove();
+        root.Children.Add(titleBar);
 
         // Footer: Save button + status text
         var footer = new DockPanel { Margin = new Thickness(16, 8, 16, 12) };
