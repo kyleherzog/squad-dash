@@ -23198,8 +23198,10 @@ public partial class MainWindow : Window, ILiveElementLocator
         // and flip luminance so each stop gets richly-colored, hue-matched text.
         var textL = l > 0.5 ? 0.25 : 0.82;
         ColorUtilities.HslToRgb(h, 0.60, textL, out byte r, out byte g, out byte b);
-        item.Background = new SolidColorBrush(swatch);
-        item.Foreground = new SolidColorBrush(Color.FromRgb(r, g, b));
+        var foregroundBrush = new SolidColorBrush(Color.FromRgb(r, g, b));
+        item.Background  = new SolidColorBrush(swatch);
+        item.Foreground  = foregroundBrush;
+        item.BorderBrush = foregroundBrush;
     }
 
     private void EnsureTintMenuItems()
@@ -23223,7 +23225,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 Header    = labels[i],
                 IsCheckable = true,
                 IsChecked   = _activeTintStop == stop,
-                Style       = (Style)FindResource("ThemedMenuItemStyle")
+                Style       = (Style)FindResource("TintMenuItemStyle")
             };
             ApplyTintSwatchToItem(item, stop);
             item.Click += (_, _) =>
