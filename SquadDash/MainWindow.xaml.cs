@@ -23115,7 +23115,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (_tintBaseline is null) return;
         var resources = Application.Current.Resources;
         // Subtract 35° to compensate for the ~34° baseline hue of the theme surfaces,
-        // so stop 1 (Warm+) lands near orange rather than yellow-green.
+        // so stop 1 (Amber) lands near orange rather than yellow-green.
         // Stop 0 is always unmodified (natural theme colours).
         const double baselineHueOffset = 35.0;
         var hueDelta = stop * (360.0 / 8) - baselineHueOffset; // adjusted steps
@@ -23214,7 +23214,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             }
             return;
         }
-        string[] labels = ["Natural", "Warm+", "Yellow", "Lime", "Cool", "Blue", "Violet", "Rose"];
+        string[] labels = ["Natural", "Amber", "Gold", "Sage", "Aqua", "Sky", "Lavender", "Blush"];
         for (int i = 0; i < labels.Length; i++)
         {
             var stop = i;
