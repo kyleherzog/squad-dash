@@ -10417,24 +10417,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         // Accent Color submenu
         var accentSubmenu = MakeItem("Accent Color");
 
-        if (agentCard.IsLeadAgent)
-        {
-            var hasOverride = false;
-            if (_currentWorkspace is not null &&
-                _settingsSnapshot.AgentAccentColorsByWorkspace.TryGetValue(_currentWorkspace.FolderPath, out var wc))
-            {
-                hasOverride = (wc.TryGetValue(agentCard.AccentStorageKey, out var s1) && !string.IsNullOrWhiteSpace(s1))
-                           || (wc.TryGetValue(agentCard.Name, out var s2) && !string.IsNullOrWhiteSpace(s2));
-            }
-            var defaultItem = MakeItem("Default (follows tint)");
-            defaultItem.Tag = agentCard;
-            defaultItem.IsChecked = !hasOverride;
-            defaultItem.Click += AgentDefaultAccentMenuItem_Click;
-            accentSubmenu.Items.Add(defaultItem);
-            accentSubmenu.Items.Add(MakeSep());
-        }
-
-        for (var index = 0; index < AgentAccentPalette.Length; index++)
+        for(var index = 0; index < AgentAccentPalette.Length; index++)
         {
             if (index == 8)
                 accentSubmenu.Items.Add(MakeSep());
@@ -10594,28 +10577,6 @@ public partial class MainWindow : Window, ILiveElementLocator
         catch (Exception ex)
         {
             HandleUiCallbackException(nameof(AgentAccentColorMenuItem_Click), ex);
-        }
-    }
-
-    private void AgentDefaultAccentMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            if (sender is not MenuItem { Tag: AgentStatusCard agentCard })
-                return;
-
-            if (_currentWorkspace is not null)
-            {
-                _settingsSnapshot = _settingsStore.SaveAgentAccentColor(
-                    _currentWorkspace.FolderPath,
-                    agentCard.AccentStorageKey,
-                    string.Empty);
-            }
-            ApplyAgentAccent(agentCard, ResolveAgentAccentHex(agentCard, isLeadAgent: true), persist: false);
-        }
-        catch (Exception ex)
-        {
-            HandleUiCallbackException(nameof(AgentDefaultAccentMenuItem_Click), ex);
         }
     }
 
@@ -23137,21 +23098,6 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         UpdateThemeMenuState();
 
-        // Re-apply coordinator accent in default mode so it reflects the new theme's vivid color.
-        // ApplyTintStop above ran with notify:false to avoid double-work, so we handle it here
-        // after _activeThemeName is updated and theme resources are fully loaded.
-        if (_leadAgent is not null)
-        {
-            var hasAccentOverride = false;
-            if (_currentWorkspace is not null &&
-                _settingsSnapshot.AgentAccentColorsByWorkspace.TryGetValue(_currentWorkspace.FolderPath, out var wc))
-            {
-                hasAccentOverride = (wc.TryGetValue(_leadAgent.AccentStorageKey, out var s1) && !string.IsNullOrWhiteSpace(s1))
-                                 || (wc.TryGetValue(_leadAgent.Name, out var s2) && !string.IsNullOrWhiteSpace(s2));
-            }
-            if (!hasAccentOverride)
-                ApplyAgentAccent(_leadAgent, ResolveAgentAccentHex(_leadAgent, isLeadAgent: true), persist: false);
-        }
     }
 
     private void CaptureTintBaseline()
@@ -23210,18 +23156,6 @@ public partial class MainWindow : Window, ILiveElementLocator
             SyncThreadChip(thread);
         Dispatcher.InvokeAsync(SyncQueuePanel, DispatcherPriority.Render);
 
-        if (_leadAgent is not null)
-        {
-            var hasOverride = false;
-            if (_currentWorkspace is not null &&
-                _settingsSnapshot.AgentAccentColorsByWorkspace.TryGetValue(_currentWorkspace.FolderPath, out var wc))
-            {
-                hasOverride = (wc.TryGetValue(_leadAgent.AccentStorageKey, out var s1) && !string.IsNullOrWhiteSpace(s1))
-                           || (wc.TryGetValue(_leadAgent.Name, out var s2) && !string.IsNullOrWhiteSpace(s2));
-            }
-            if (!hasOverride)
-                ApplyAgentAccent(_leadAgent, ResolveAgentAccentHex(_leadAgent, isLeadAgent: true), persist: false);
-        }
     }
 
     private void ApplyWorkspaceTint(string? folderPath)
@@ -26695,20 +26629,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             return DynamicAgentDefaultAccentHex;
 
         if (isLeadAgent)
-        {
-            if (Application.Current.Resources["ActivePanelBorder"] is SolidColorBrush activeBrush)
-            {
-                var c = activeBrush.Color;
-                ColorUtilities.RgbToHsl(c.R, c.G, c.B, out double h, out double s, out double l);
-                var isDark = string.Equals(_activeThemeName, "Dark", StringComparison.OrdinalIgnoreCase);
-                // Push toward vivid: bright in dark theme, deep/saturated in light theme.
-                l = isDark ? 0.70 : 0.35;
-                s = Math.Max(s, 0.85);
-                ColorUtilities.HslToRgb(h, s, l, out byte r, out byte g, out byte b);
-                return $"#{c.A:X2}{r:X2}{g:X2}{b:X2}";
-            }
             return LeadAgentDefaultAccentHex;
-        }
 
         return ObservedAgentDefaultAccentHex;
     }
