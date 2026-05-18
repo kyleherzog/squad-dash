@@ -11092,8 +11092,19 @@ public partial class MainWindow : Window, ILiveElementLocator
                 var hwnd   = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                 var physWa = NativeMethods.GetWorkAreaForWindow(hwnd);
                 var dpi    = System.Windows.Media.VisualTreeHelper.GetDpi(this);
-                Top    = physWa.Top    / dpi.DpiScaleY;
-                Height = physWa.Height / dpi.DpiScaleY;
+
+                // Don't change height if the window is snapped to the top or bottom
+                // half of the screen (Windows 11 Snap Layouts). Detect this by
+                // checking whether the window's physical height is less than 75% of
+                // the work area — a snapped half/third zone is always shorter.
+                var physWindowHeight = Height * dpi.DpiScaleY;
+                var isSnappedVertically = physWindowHeight < physWa.Height * 0.75;
+
+                if (!isSnappedVertically)
+                {
+                    Top    = physWa.Top    / dpi.DpiScaleY;
+                    Height = physWa.Height / dpi.DpiScaleY;
+                }
             }
         }
         else
