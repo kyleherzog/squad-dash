@@ -68,12 +68,6 @@ internal static class NativeMethods {
     [DllImport("user32.dll")]
     private static extern bool IsIconic(nint hWnd);
 
-    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
-    private static extern nint GetWindowLongPtr(nint hWnd, int nIndex);
-
-    private const int  GWL_STYLE   = -16;
-    private const uint WS_MAXIMIZE = 0x01000000;
-
     [DllImport("user32.dll")]
     private static extern bool AllowSetForegroundWindow(uint dwProcessId);
 
@@ -142,47 +136,32 @@ internal static class NativeMethods {
     }
 
     /// <summary>
-    /// Returns <c>true</c> when the window is in a Windows 11 Snap Layout zone
-    /// (snapped left/right/top/bottom) as opposed to being freely resized or
-    /// fully maximised.
+    /// Returns <c>true</c> when the window's physical height is measurably less
+    /// than the monitor work area height — indicating the window is in a constrained
+    /// layout (Windows 11 Snap zone, top/bottom split, quadrant grid, etc.).
     /// <para>
-    /// For <c>WindowStyle=None</c> + <c>WindowChrome</c> windows, WPF's
-    /// <see cref="System.Windows.Window.WindowState"/> stays <c>Normal</c> even
-    /// when snapped (a known WPF/WindowChrome limitation).  This method bypasses
-    /// that by reading the Win32 <c>WS_MAXIMIZE</c> style flag directly and then
-    /// comparing the actual window rect against the monitor work area:
-    /// <list type="bullet">
-    ///   <item>No <c>WS_MAXIMIZE</c> → freely placed window → <c>false</c></item>
-    ///   <item><c>WS_MAXIMIZE</c> + fills work area → fully maximised → <c>false</c></item>
-    ///   <item><c>WS_MAXIMIZE</c> + partial rect → Snap zone → <c>true</c></item>
-    /// </list>
+    /// This geometry-only approach is used instead of checking <c>WS_MAXIMIZE</c>
+    /// because <c>WindowStyle=None + WindowChrome</c> windows do not receive
+    /// <c>WS_MAXIMIZE</c> reliably from the snap system, and dragging the divider
+    /// between two snapped windows clears <c>WS_MAXIMIZE</c> even though the window
+    /// remains in a partial-screen position.
+    /// </para>
+    /// <para>
+    /// The threshold is 90 % of work-area height.  This catches half-height snap
+    /// zones (≈ 50 %) and quadrant zones (≈ 50 %) while leaving full-height left/
+    /// right snaps (≈ 100 %) unaffected — those windows are already at full height
+    /// so the no-change path produces the same result.
     /// </para>
     /// </summary>
-    public static bool IsWindowSnapped(nint hwnd)
+    /// <param name="hwnd">The window's HWND.</param>
+    /// <param name="physWa">Physical-pixel work area for the window's monitor
+    /// (from <see cref="GetWorkAreaForWindow"/>).</param>
+    public static bool IsHeightConstrained(nint hwnd, Rect physWa)
     {
         if (hwnd == nint.Zero) return false;
-
-        var style = (uint)GetWindowLongPtr(hwnd, GWL_STYLE);
-        if ((style & WS_MAXIMIZE) == 0)
-            return false; // Freely placed — not in any snap or maximise state.
-
-        // WS_MAXIMIZE is set. Check whether the window fills the work area.
-        // Snap layout = partial coverage; full maximise = full coverage.
         if (!GetWindowRect(hwnd, out RECT win)) return false;
-
-        var hMon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-        var info  = new MONITORINFO { cbSize = (uint)Marshal.SizeOf<MONITORINFO>() };
-        if (hMon == nint.Zero || !GetMonitorInfo(hMon, ref info)) return false;
-
-        var wa = info.rcWork;
-        // Allow ±10 px for DWM shadow extensions and sub-pixel rounding.
-        const int t = 10;
-        bool fillsWorkArea = win.Left   <= wa.Left   + t &&
-                             win.Top    <= wa.Top    + t &&
-                             win.Right  >= wa.Right  - t &&
-                             win.Bottom >= wa.Bottom - t;
-
-        return !fillsWorkArea; // Partial coverage while maximised = snapped.
+        int physWindowH = win.Bottom - win.Top;
+        return physWindowH < physWa.Height * 0.90;
     }
 
     public static void AllowSetForegroundWindow(int processId) {

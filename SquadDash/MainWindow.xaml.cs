@@ -11093,11 +11093,13 @@ public partial class MainWindow : Window, ILiveElementLocator
                 var physWa = NativeMethods.GetWorkAreaForWindow(hwnd);
                 var dpi    = System.Windows.Media.VisualTreeHelper.GetDpi(this);
 
-                // Skip height change when the window is in a Windows 11 Snap
-                // Layout zone (Win32 WS_MAXIMIZE set + partial work-area coverage).
-                // WPF's WindowState stays Normal for custom-chrome windows, so we
-                // must query Win32 directly via NativeMethods.IsWindowSnapped.
-                if (!NativeMethods.IsWindowSnapped(hwnd))
+                // Skip height/top change when the window is in any kind of constrained
+                // layout (Windows 11 Snap zone, top/bottom split, 4-way grid, etc.).
+                // We use actual physical height from GetWindowRect rather than relying
+                // on WS_MAXIMIZE, which is unreliable for WindowStyle=None + WindowChrome
+                // windows and is cleared when the user drags the divider between snapped
+                // windows even though the window remains partially sized.
+                if (!NativeMethods.IsHeightConstrained(hwnd, physWa))
                 {
                     Top    = physWa.Top    / dpi.DpiScaleY;
                     Height = physWa.Height / dpi.DpiScaleY;
