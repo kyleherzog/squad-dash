@@ -7473,17 +7473,31 @@ public partial class MainWindow : Window, ILiveElementLocator
         _settingsSnapshot = _settingsStore.SaveFontSizeScaleLevel(_fontScaleLevel);
     }
 
-    private void TitlebarGrid_MouseWheel(object sender, MouseWheelEventArgs e)
+    private bool IsInExcludedScrollArea(DependencyObject element)
+    {
+        var current = element;
+        while (current != null)
+        {
+            if (current is RichTextBox) return true;
+            if (current == PromptTextBox) return true;
+            current = VisualTreeHelper.GetParent(current);
+        }
+        return false;
+    }
+
+    private void Window_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         try
         {
             if (Keyboard.Modifiers != ModifierKeys.Control) return;
+            if (Mouse.DirectlyOver is DependencyObject hovered && IsInExcludedScrollArea(hovered))
+                return;
             SetFontSizeScale(_fontScaleLevel + (e.Delta > 0 ? 1 : -1));
             e.Handled = true;
         }
         catch (Exception ex)
         {
-            HandleUiCallbackException(nameof(TitlebarGrid_MouseWheel), ex);
+            HandleUiCallbackException(nameof(Window_PreviewMouseWheel), ex);
         }
     }
 

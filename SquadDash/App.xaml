@@ -371,6 +371,7 @@
             <Style x:Key="ThemedMenuItemStyle" TargetType="MenuItem">
                 <Setter Property="Background" Value="{DynamicResource ChromeSurface}"/>
                 <Setter Property="Foreground" Value="{DynamicResource LabelText}"/>
+                <Setter Property="FontSize" Value="{DynamicResource FontSizeNormal}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="MenuItem">
@@ -452,6 +453,7 @@
             <Style x:Key="TintMenuItemStyle" TargetType="MenuItem">
                 <Setter Property="Background" Value="{DynamicResource ChromeSurface}"/>
                 <Setter Property="Foreground" Value="{DynamicResource LabelText}"/>
+                <Setter Property="FontSize" Value="{DynamicResource FontSizeNormal}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="MenuItem">
