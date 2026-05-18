@@ -141,9 +141,7 @@ internal sealed class PreferencesWindow : Window {
         _speechRegionBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
 
         _speechLanguageComboBox = new ComboBox { Height = 30, Margin = new Thickness(0, 4, 0, 0) };
-        _speechLanguageComboBox.SetResourceReference(ComboBox.BackgroundProperty, "TextBoxBackground");
-        _speechLanguageComboBox.SetResourceReference(ComboBox.BorderBrushProperty, "InputBorder");
-        _speechLanguageComboBox.SetResourceReference(ComboBox.ForegroundProperty, "LabelText");
+        _speechLanguageComboBox.SetResourceReference(StyleProperty, "ThemedComboBoxStyle");
         foreach (var (display, locale) in SpeechLanguageOptions)
         {
             var item = new ComboBoxItem { Content = display, Tag = locale };
@@ -1001,6 +999,7 @@ internal sealed class PreferencesWindow : Window {
             Height = 28,
             ToolTip = "Which service to use when a sound event path is a quoted phrase like \"Done!\"."
         };
+        ttsProviderCombo.SetResourceReference(StyleProperty, "ThemedComboBoxStyle");
         ttsProviderCombo.Items.Add("Azure Speech");
         ttsProviderCombo.Items.Add("OpenAI TTS");
         ttsProviderCombo.SelectedIndex = currentSettings.Tts_Provider == TtsProvider.OpenAI ? 1 : 0;
@@ -1030,9 +1029,7 @@ internal sealed class PreferencesWindow : Window {
             Height = 28,
             ToolTip = "Azure Neural voice name, e.g. en-US-JennyNeural. Type manually or select from the list once loaded."
         };
-        azureVoiceCombo.SetResourceReference(ComboBox.BackgroundProperty, "TextBoxBackground");
-        azureVoiceCombo.SetResourceReference(ComboBox.BorderBrushProperty, "InputBorder");
-        azureVoiceCombo.SetResourceReference(ComboBox.ForegroundProperty, "LabelText");
+        azureVoiceCombo.SetResourceReference(StyleProperty, "ThemedComboBoxStyle");
         Grid.SetColumn(azureVoiceCombo, 1);
 
         azureVoiceRow.Children.Add(azureVoiceLabel);
@@ -1061,6 +1058,7 @@ internal sealed class PreferencesWindow : Window {
             Margin = new Thickness(0, 0, 16, 0),
             ToolTip = "OpenAI TTS voice."
         };
+        openAiVoiceCombo.SetResourceReference(StyleProperty, "ThemedComboBoxStyle");
         foreach (var v in new[] { "alloy", "echo", "fable", "onyx", "nova", "shimmer" })
             openAiVoiceCombo.Items.Add(v);
         openAiVoiceCombo.SelectedItem = currentSettings.Tts_OpenAi_Voice ?? "alloy";
@@ -1076,6 +1074,7 @@ internal sealed class PreferencesWindow : Window {
         Grid.SetColumn(openAiModelLabel, 2);
 
         var openAiModelCombo = new ComboBox { Height = 28 };
+        openAiModelCombo.SetResourceReference(StyleProperty, "ThemedComboBoxStyle");
         openAiModelCombo.Items.Add("tts-1 (fast)");
         openAiModelCombo.Items.Add("tts-1-hd (quality)");
         openAiModelCombo.SelectedIndex = currentSettings.Tts_OpenAi_Model == OpenAiTtsModel.HD ? 1 : 0;
@@ -1132,7 +1131,7 @@ internal sealed class PreferencesWindow : Window {
             Padding = new Thickness(12, 4, 12, 4),
             MinWidth = 120
         };
-        testButton.SetResourceReference(Button.StyleProperty, "ThemedButton");
+        testButton.SetResourceReference(Button.StyleProperty, "ThemedButtonStyle");
 
         var ttsErrorText = new TextBlock {
             TextWrapping = TextWrapping.Wrap,
@@ -1146,7 +1145,7 @@ internal sealed class PreferencesWindow : Window {
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 4, 0, 0)
         };
-        copyErrorButton.SetResourceReference(Button.StyleProperty, "ThemedButton");
+        copyErrorButton.SetResourceReference(Button.StyleProperty, "ThemedButtonStyle");
         copyErrorButton.Click += (_, _) => Clipboard.SetText(ttsErrorText.Text);
 
         var ttsErrorPanel = new StackPanel {
