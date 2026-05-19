@@ -453,6 +453,20 @@ internal sealed class SquadSdkProcessTests {
         await sut.DisposeAsync();
     }
 
+    [Test]
+    public async Task ForceStopRunningWork_NoActiveProcess_ReturnsHadActiveFalse() {
+        // No process started — ForceStop should report nothing was running.
+        await using var sut = new SquadSdkProcess(BuildStartInfo("@echo off"));
+
+        var result = sut.ForceStopRunningWork("unit-test");
+
+        Assert.Multiple(() => {
+            Assert.That(result.HadActiveProcess,   Is.False);
+            Assert.That(result.PendingPromptCount, Is.EqualTo(0));
+            Assert.That(result.PendingCancelCount, Is.EqualTo(0));
+        });
+    }
+
     // ------------------------------------------------------------------
     // Error event
     // ------------------------------------------------------------------

@@ -229,6 +229,123 @@ internal sealed class BackgroundTaskPresenterTests {
         });
     }
 
+    [Test]
+    public void RecoverStaleBackgroundThreads_DoesNotRecover_WhenSilenceIsUnderThreshold() {
+        // Silence is 9 minutes — just under the 10-minute BackgroundFallbackMaxSilence.
+        var registry = MakeRegistry();
+        var now = new DateTimeOffset(2026, 5, 19, 18, 30, 0, TimeSpan.Zero);
+        var presenter = MakePresenter(registry);
+        var thread = registry.GetOrCreateAgentThread(
+            toolCallId: "tool-talia",
+            agentId: "talia-rune",
+            agentName: "talia-rune",
+            agentDisplayName: "Talia Rune",
+            agentDescription: null,
+            status: "running",
+            prompt: "Background task",
+            startedAt: now.AddMinutes(-30).ToString("O"));
+        thread.WasObservedAsBackgroundTask = true;
+        thread.IsCurrentBackgroundRun = true;
+        thread.StatusText = "Running";
+        thread.LastObservedActivityAt = now.AddMinutes(-9);  // under 10-min threshold
+
+        var recovered = presenter.RecoverStaleBackgroundThreads(now, "test");
+
+        Assert.That(recovered, Is.EqualTo(0));
+        Assert.That(thread.StatusText, Is.EqualTo("Running"));
+    }
+
+    [Test]
+    public void RecoverStaleBackgroundThreads_DoesNotRecover_WhenThreadStatusIsTerminal() {
+        var registry = MakeRegistry();
+        var now = new DateTimeOffset(2026, 5, 19, 18, 30, 0, TimeSpan.Zero);
+        var presenter = MakePresenter(registry);
+        var thread = registry.GetOrCreateAgentThread(
+            toolCallId: "tool-done",
+            agentId: "lyra-done",
+            agentName: "lyra-done",
+            agentDisplayName: "Lyra Done",
+            agentDescription: null,
+            status: "completed",
+            prompt: "Completed task",
+            startedAt: now.AddMinutes(-30).ToString("O"));
+        thread.WasObservedAsBackgroundTask = true;
+        thread.IsCurrentBackgroundRun = true;
+        thread.StatusText = "Completed";
+        thread.LastObservedActivityAt = now.AddMinutes(-20);  // over threshold but terminal
+
+        var recovered = presenter.RecoverStaleBackgroundThreads(now, "test");
+
+        Assert.That(recovered, Is.EqualTo(0));
+        Assert.That(thread.StatusText, Is.EqualTo("Completed"));
+    }
+
+    [Test]
+    public void RecoverStaleBackgroundThreads_DoesNotRecover_WhenCompletedAtAlreadySet() {
+        var registry = MakeRegistry();
+        var now = new DateTimeOffset(2026, 5, 19, 18, 30, 0, TimeSpan.Zero);
+        var presenter = MakePresenter(registry);
+        var thread = registry.GetOrCreateAgentThread(
+            toolCallId: "tool-pre-completed",
+            agentId: "lyra-pre",
+            agentName: "lyra-pre",
+            agentDisplayName: "Lyra Pre",
+            agentDescription: null,
+            status: "running",
+            prompt: "Pre-completed task",
+            startedAt: now.AddMinutes(-30).ToString("O"));
+        thread.WasObservedAsBackgroundTask = true;
+        thread.IsCurrentBackgroundRun = true;
+        thread.StatusText = "Running";
+        thread.LastObservedActivityAt = now.AddMinutes(-20);
+        thread.CompletedAt = now.AddMinutes(-15);  // already has CompletedAt
+
+        var recovered = presenter.RecoverStaleBackgroundThreads(now, "test");
+
+        Assert.That(recovered, Is.EqualTo(0));
+        Assert.That(thread.StatusText, Is.EqualTo("Running"));
+    }
+
+    [Test]
+    public void RecoverStaleBackgroundThreads_DoesNotRecover_WhenBackedByLiveSnapshotAgent() {
+        // Thread is stale by time, but the background-agent snapshot still shows it live.
+        var registry = MakeRegistry();
+        var now = new DateTimeOffset(2026, 5, 19, 18, 30, 0, TimeSpan.Zero);
+        var persistedThreads = new List<TranscriptThreadState>();
+        var presenter = MakePresenter(registry, persistedThreads: persistedThreads);
+        var thread = registry.GetOrCreateAgentThread(
+            toolCallId: "call-orion",
+            agentId: "orion-vale",
+            agentName: "orion-vale",
+            agentDisplayName: "Orion Vale",
+            agentDescription: null,
+            status: "running",
+            prompt: "Live snapshot task",
+            startedAt: now.AddMinutes(-30).ToString("O"));
+        thread.WasObservedAsBackgroundTask = true;
+        thread.IsCurrentBackgroundRun = true;
+        thread.StatusText = "Running";
+        thread.LastObservedActivityAt = now.AddMinutes(-20);
+
+        // Matching live snapshot agent — prevents recovery.
+        presenter.BackgroundAgents = [
+            new SquadBackgroundAgentInfo {
+                AgentId    = "orion-vale",
+                ToolCallId = "call-orion",
+                Status     = "running",
+                StartedAt  = now.AddMinutes(-30).ToString("O")
+            }
+        ];
+
+        var recovered = presenter.RecoverStaleBackgroundThreads(now, "test");
+
+        Assert.Multiple(() => {
+            Assert.That(recovered, Is.EqualTo(0));
+            Assert.That(thread.StatusText, Is.EqualTo("Running"));
+            Assert.That(persistedThreads, Is.Empty);
+        });
+    }
+
     // ── Instance: ClearState ─────────────────────────────────────────────────
 
     [Test]

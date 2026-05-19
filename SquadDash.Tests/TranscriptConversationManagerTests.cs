@@ -345,6 +345,103 @@ internal sealed class TranscriptConversationManagerTests {
         Assert.That(manager.ConversationState.QueueLastChangedAt!.Value, Is.GreaterThan(before));
     }
 
+    // ── UpdateQueuedPromptsState — image attachment preservation (411e34f) ────
+
+    [Test, Apartment(ApartmentState.STA)]
+    public void UpdateQueuedPromptsState_PreservesImagePath_OnAttachment() {
+        var manager = MakeManager();
+        var item = new PromptQueueItem { Text = "prompt with image", SequenceNumber = 1 };
+        var attachment = new FollowUpAttachment(
+            CommitSha:    "abc123",
+            Description:  "screenshot",
+            OriginalPrompt: null,
+            ImagePath:    @"C:\screenshots\shot.png");
+
+        manager.UpdateQueuedPromptsState(
+            [item],
+            new Dictionary<string, List<FollowUpAttachment>> {
+                [item.Id] = [attachment]
+            });
+
+        var dto = manager.ConversationState.QueuedPromptEntries![0].Attachments![0];
+        Assert.That(dto.ImagePath, Is.EqualTo(@"C:\screenshots\shot.png"));
+    }
+
+    [Test, Apartment(ApartmentState.STA)]
+    public void UpdateQueuedPromptsState_PreservesImageSubmittedAt_AsIso8601() {
+        var manager = MakeManager();
+        var item = new PromptQueueItem { Text = "prompt", SequenceNumber = 1 };
+        var capturedAt = new DateTime(2026, 5, 19, 14, 0, 0, DateTimeKind.Utc);
+        var attachment = new FollowUpAttachment(
+            CommitSha:       "abc123",
+            Description:     "screenshot",
+            OriginalPrompt:  null,
+            ImagePath:       @"C:\screenshots\shot.png",
+            ImageSubmittedAt: capturedAt);
+
+        manager.UpdateQueuedPromptsState(
+            [item],
+            new Dictionary<string, List<FollowUpAttachment>> {
+                [item.Id] = [attachment]
+            });
+
+        var dto = manager.ConversationState.QueuedPromptEntries![0].Attachments![0];
+        Assert.That(dto.ImageSubmittedAt, Is.EqualTo("2026-05-19T14:00:00.0000000Z"));
+    }
+
+    [Test, Apartment(ApartmentState.STA)]
+    public void UpdateQueuedPromptsState_ImageSubmittedAt_IsNull_WhenAttachmentHasNoImage() {
+        var manager = MakeManager();
+        var item = new PromptQueueItem { Text = "prompt", SequenceNumber = 1 };
+        var attachment = new FollowUpAttachment(
+            CommitSha:    "abc123",
+            Description:  "no image attachment",
+            OriginalPrompt: null);
+
+        manager.UpdateQueuedPromptsState(
+            [item],
+            new Dictionary<string, List<FollowUpAttachment>> {
+                [item.Id] = [attachment]
+            });
+
+        var dto = manager.ConversationState.QueuedPromptEntries![0].Attachments![0];
+        Assert.Multiple(() => {
+            Assert.That(dto.ImagePath, Is.Null);
+            Assert.That(dto.ImageSubmittedAt, Is.Null);
+        });
+    }
+
+    [Test, Apartment(ApartmentState.STA)]
+    public void UpdateQueuedPromptsState_PreservesAllFieldsAlongWithImagePath() {
+        var manager = MakeManager();
+        var item = new PromptQueueItem { Text = "prompt", SequenceNumber = 1 };
+        var attachment = new FollowUpAttachment(
+            CommitSha:       "sha-feed1",
+            Description:     "full attachment",
+            OriginalPrompt:  "original prompt text",
+            TranscriptQuote: "quoted text",
+            ContentBlock:    "code block",
+            ImagePath:       @"C:\screenshots\shot.png",
+            ImageSubmittedAt: new DateTime(2026, 5, 1, 12, 0, 0, DateTimeKind.Utc));
+
+        manager.UpdateQueuedPromptsState(
+            [item],
+            new Dictionary<string, List<FollowUpAttachment>> {
+                [item.Id] = [attachment]
+            });
+
+        var dto = manager.ConversationState.QueuedPromptEntries![0].Attachments![0];
+        Assert.Multiple(() => {
+            Assert.That(dto.CommitSha,       Is.EqualTo("sha-feed1"));
+            Assert.That(dto.Description,     Is.EqualTo("full attachment"));
+            Assert.That(dto.OriginalPrompt,  Is.EqualTo("original prompt text"));
+            Assert.That(dto.TranscriptQuote, Is.EqualTo("quoted text"));
+            Assert.That(dto.ContentBlock,    Is.EqualTo("code block"));
+            Assert.That(dto.ImagePath,       Is.EqualTo(@"C:\screenshots\shot.png"));
+            Assert.That(dto.ImageSubmittedAt, Is.EqualTo("2026-05-01T12:00:00.0000000Z"));
+        });
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static T InvokePrivate<T>(TranscriptConversationManager manager, string methodName, params object?[] args) {

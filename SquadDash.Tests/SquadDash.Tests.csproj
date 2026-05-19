@@ -156,6 +156,7 @@
     <Compile Include="..\SquadDash\HostCommandParser.cs" Link="Source\HostCommandParser.cs" />
     <Compile Include="..\SquadDash\PostedUiActionTracker.cs" Link="Source\PostedUiActionTracker.cs" />
     <Compile Include="..\SquadDash\AgentStatusCard.cs" Link="Source\AgentStatusCard.cs" />
+    <Compile Include="..\SquadDash\ActivitySpinner.cs" Link="Source\ActivitySpinner.cs" />
     <Compile Include="..\SquadDash\TranscriptSelectionController.cs" Link="Source\TranscriptSelectionController.cs" />
     <Compile Include="..\SquadDash\AgentThreadRegistry.cs" Link="Source\AgentThreadRegistry.cs" />
     <Compile Include="..\SquadDash\BackgroundTaskPresenter.cs" Link="Source\BackgroundTaskPresenter.cs" />
