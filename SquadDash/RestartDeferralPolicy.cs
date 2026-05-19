@@ -19,8 +19,12 @@ internal static class RestartDeferralPolicy {
         bool hasPendingDirectQuickReplyHandoff,
         bool isVoiceInputActiveOrDraining,
         bool hasDocRevisionInFlight,
-        bool isClipboardEditorOpen) {
-        if (isPromptRunning)
+        bool isClipboardEditorOpen,
+        // When true the bridge has been silent for ≥5 min and is assumed dead.
+        // We lift the restart gate so a pending build-restart can proceed without
+        // requiring the user to manually cancel the unresponsive prompt first.
+        bool promptAppearsStalled = false) {
+        if (isPromptRunning && !promptAppearsStalled)
             return RestartDeferralReason.PromptRunning;
         if (isLoopRunning)
             return RestartDeferralReason.LoopRunning;

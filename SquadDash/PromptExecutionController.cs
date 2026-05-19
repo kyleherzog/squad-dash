@@ -132,6 +132,10 @@ internal sealed class PromptExecutionController {
 
     private static readonly TimeSpan PromptNoActivityWarningThreshold = TimeSpan.FromSeconds(45);
     private static readonly TimeSpan PromptNoActivityStallThreshold   = TimeSpan.FromMinutes(2);
+    // After 5 minutes of silence the prompt is considered dead: the restart-deferral gate
+    // is lifted so a pending build-restart can proceed, and the "Cancel stalled agent"
+    // recovery button becomes visible in the Queue tab.
+    private static readonly TimeSpan PromptNoActivityDeadThreshold    = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan PromptHealthDeltaTraceInterval   = TimeSpan.FromSeconds(1);
 
     // ── Injected — Bridge ─────────────────────────────────────────────────
@@ -269,6 +273,7 @@ internal sealed class PromptExecutionController {
     private int              _toolCompleteCount;
     private bool             _promptNoActivityWarningShown;
     private bool             _promptStallWarningShown;
+    private bool             _promptDeadWarningShown;
 
     // ── Silent-completion watchdog ────────────────────────────────────────
     private record SilentCompletionCandidate(SilentCompletionFollowUpReport Report, int ResponseCharsAtArrival);
@@ -323,6 +328,9 @@ internal sealed class PromptExecutionController {
     // ── Exposed read-only health state (BackgroundTaskPresenter forward-ref) ──
     internal bool            PromptNoActivityWarningShown => _promptNoActivityWarningShown;
     internal bool            PromptStallWarningShown      => _promptStallWarningShown;
+    // True once the prompt has been silent for PromptNoActivityDeadThreshold (5 min).
+    // When this is set the restart-deferral gate is lifted and the recovery button appears.
+    internal bool            PromptAppearsDeadShown       => _promptDeadWarningShown;
     internal DateTimeOffset? CurrentPromptStartedAt       => _currentPromptStartedAt;
     internal DateTimeOffset? LastPromptActivityAt         => _lastPromptActivityAt;
     internal string?         LastPromptActivityName       => _lastPromptActivityName;
@@ -531,6 +539,13 @@ internal sealed class PromptExecutionController {
             _updateLeadAgent("Waiting", string.Empty, "Still waiting for Squad to finish this turn.");
             _updateSessionState("Waiting");
         }
+
+        if (!_promptDeadWarningShown && idleFor >= PromptNoActivityDeadThreshold) {
+            _promptDeadWarningShown = true;
+            SquadDashTrace.Write(
+                "PromptHealth",
+                $"Prompt assumed dead after {idleFor.TotalSeconds:0}s without bridge activity. Restart gate lifted; recovery button visible.");
+        }
     }
 
     private void StartPromptHealthMonitoring() {
@@ -580,12 +595,13 @@ internal sealed class PromptExecutionController {
     }
 
     private void RecordPromptActivity(string activityName, DateTimeOffset now, bool writeActivityTrace) {
-        if (_promptNoActivityWarningShown || _promptStallWarningShown) {
+        if (_promptNoActivityWarningShown || _promptStallWarningShown || _promptDeadWarningShown) {
             SquadDashTrace.Write(
                 "PromptHealth",
                 $"Prompt activity resumed after quiet period. activity={activityName} idleMs={(now - (_lastPromptActivityAt ?? now)).TotalMilliseconds:0}");
             _promptNoActivityWarningShown = false;
             _promptStallWarningShown      = false;
+            _promptDeadWarningShown       = false;
         }
 
         _lastPromptActivityAt = now;
@@ -790,6 +806,7 @@ internal sealed class PromptExecutionController {
         _toolCompleteCount            = 0;
         _promptNoActivityWarningShown = false;
         _promptStallWarningShown      = false;
+        _promptDeadWarningShown       = false;
         _lastSessionReadyEvent        = null;
         _currentPromptContextDiagnostics = null;
     }

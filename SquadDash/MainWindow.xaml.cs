@@ -22725,7 +22725,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             hasPendingDirectQuickReplyHandoff: HasPendingDirectQuickReplyAgentFollowUp(),
             isVoiceInputActiveOrDraining:    _pttState == PttState.Active || _pttDraining,
             hasDocRevisionInFlight:          MarkdownDocumentWindow.AnyRevisionInFlight,
-            isClipboardEditorOpen:           _clipboardEditorOpen);
+            isClipboardEditorOpen:           _clipboardEditorOpen,
+            promptAppearsStalled:            _pec.PromptAppearsDeadShown);
 
     private bool DeferPendingRestartIfBlocked(string reason)
     {
@@ -24440,6 +24441,20 @@ public partial class MainWindow : Window, ILiveElementLocator
                 QueueStatusLabel.Text = msg;
                 QueueStatusLabel.Background = Brushes.DarkRed;
                 QueueStatusLabel.Foreground = Brushes.White;
+
+                // After 5 min silence show the "Cancel stalled agent" recovery button.
+                ForceAbortStalledAgentButton.Visibility = _pec.PromptAppearsDeadShown
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            }
+
+            // When the prompt is assumed dead and a build-restart is waiting, let it through.
+            // RestartDeferralPolicy already ignores PromptRunning at this point, so calling
+            // TryCompletePendingRestart will actually close and relaunch the app.
+            if (_pec.PromptAppearsDeadShown && _restartPending)
+            {
+                SquadDashTrace.Write("Shutdown", "Prompt assumed dead — auto-completing deferred restart.");
+                TryCompletePendingRestart("prompt-assumed-dead", emergencySaveBeforeClose: true);
             }
         }
         else if (_bridgeStallShowing)
@@ -24447,8 +24462,19 @@ public partial class MainWindow : Window, ILiveElementLocator
             _bridgeStallShowing = false;
 
             if (QueueTabBorder.Visibility == Visibility.Visible)
+            {
+                ForceAbortStalledAgentButton.Visibility = Visibility.Collapsed;
                 SetQueuePaused(_queueManuallyPaused);
+            }
         }
+    }
+
+    private void ForceAbortStalledAgent_Click(object sender, RoutedEventArgs e)
+    {
+        SquadDashTrace.Write("UI", "ForceAbortStalledAgent: user requested force-cancel of stalled prompt after bridge silence.");
+        ForceCoordinatorAbortCleanup();
+        // If a build-restart was waiting behind the now-cleared PromptRunning gate, complete it.
+        TryCompletePendingRestart("stalled-agent-cancelled", emergencySaveBeforeClose: true);
     }
 
     private void QueueStatusCopyDiagnostics_Click(object sender, RoutedEventArgs e)
