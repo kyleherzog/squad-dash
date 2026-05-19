@@ -153,6 +153,25 @@ internal static class AttachmentBlockFormatter
     }
 
     /// <summary>
+    /// Counts the number of typed XML attachment blocks (<c>&lt;attachment …&gt;</c>) in
+    /// <paramref name="text"/>.  Used to display the correct "📎 N attachments" count when
+    /// re-rendering persisted turns where the live <see cref="FollowUpAttachment"/> list is
+    /// no longer available.
+    /// </summary>
+    internal static int CountAttachmentBlocks(string text)
+    {
+        const string AttachOpenTag = "<attachment ";
+        int count = 0;
+        int pos   = 0;
+        while ((pos = text.IndexOf(AttachOpenTag, pos, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            pos += AttachOpenTag.Length;
+        }
+        return count;
+    }
+
+    /// <summary>
     /// Strips the outer <c>&lt;attachment …&gt;…&lt;/attachment&gt;</c> wrapper from a typed
     /// attachment block and returns the inner content with any escaped close tags restored.
     /// Falls back to returning the original string unchanged if the format is not recognised

@@ -16968,6 +16968,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         string displayPrompt = prompt;
         IReadOnlyList<FollowUpAttachment>? attachmentsForViewer = pendingAttachments;
         bool hasAttachments = pendingAttachments?.Count > 0;
+        // Overrides the count for historical turns where attachmentsForViewer is null but we
+        // can still infer the count from the prompt's attachment header.
+        int? historicalAttachmentCount = null;
 
         if (hasAttachments)
         {
@@ -17008,6 +17011,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                 if (bodyStart >= 0)
                     displayPrompt = displayPrompt[bodyStart..];
                 // Content is not reconstructed for historical turns; the 📎 link is shown.
+                // SQUADCLIP is always a single clipboard attachment.
+                historicalAttachmentCount = 1;
                 attachmentsForViewer = null;
             }
             else if (displayPrompt.StartsWith("The user has attached", StringComparison.Ordinal) ||
@@ -17016,6 +17021,11 @@ public partial class MainWindow : Window, ILiveElementLocator
                 // New typed-attachment format used by recent prompts.
                 hasAttachments = true;
                 var bodyStart = StripTypedAttachmentHeaders(displayPrompt);
+                // Count attachment blocks in the header before stripping so we can show the
+                // correct "📎 N attachments" count even though content isn't reconstructed.
+                var headerPart = bodyStart >= 0 ? displayPrompt[..bodyStart] : displayPrompt;
+                var blockCount = AttachmentBlockFormatter.CountAttachmentBlocks(headerPart);
+                historicalAttachmentCount = blockCount > 0 ? blockCount : 1;
                 if (bodyStart >= 0)
                     displayPrompt = displayPrompt[bodyStart..];
                 attachmentsForViewer = null;
@@ -17102,7 +17112,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 if (hasAttachments)
                 {
                     var capturedAttachments = attachmentsForViewer ?? Array.Empty<FollowUpAttachment>();
-                    var count    = capturedAttachments.Count;
+                    var count    = historicalAttachmentCount ?? capturedAttachments.Count;
                     var linkText = count == 1 ? "📎 1 attachment" : $"📎 {count} attachments";
                     var link     = new System.Windows.Documents.Hyperlink(new Run(linkText))
                     {
