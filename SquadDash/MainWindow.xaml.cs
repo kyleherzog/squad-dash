@@ -16468,10 +16468,10 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             Text = titleText,
             ToolTip = BuildGpaTooltip(baseDisplayName),
-            FontSize = (double)Application.Current.Resources["FontSizeSubtitle"],
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
         };
+        titleBlock.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeSubtitle");
         titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
 
         var navUp = CreateSecondaryNavButton(up: true);
@@ -26231,8 +26231,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                 {
                     VerticalAlignment = VerticalAlignment.Center,
                     TextTrimming      = TextTrimming.CharacterEllipsis,
-                    FontSize = (double)Application.Current.Resources["FontSizeSmall"],
                 };
+                label.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeSmall");
                 label.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
 
                 if (att.ImagePath != null)
