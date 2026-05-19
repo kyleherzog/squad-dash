@@ -23443,7 +23443,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         // so stop 1 (Amber) lands near orange rather than yellow-green.
         // Stop 0 is always unmodified (natural theme colours).
         const double baselineHueOffset = 35.0;
-        const double naturalTintShift = -15.0; // shift Natural stop slightly toward red
+        const double naturalTintShift = -30.0; // shift Natural stop toward red
         var hueDelta = stop * (360.0 / 8) - baselineHueOffset; // adjusted steps
         foreach (var (key, baseColor) in _tintBaseline)
         {
