@@ -539,6 +539,25 @@ function backgroundTasksContainTask(tasks: BackgroundTaskSnapshot, taskId: strin
         tasks.shells.some(shell => shell.shellId === taskId);
 }
 
+function backgroundTaskCancelIds(tasks: BackgroundTaskSnapshot, taskId: string): string[] {
+    const ids: string[] = [];
+    const add = (value?: string) => {
+        const normalized = value?.trim();
+        if (normalized && !ids.includes(normalized))
+            ids.push(normalized);
+    };
+
+    add(taskId);
+    for (const agent of tasks.agents) {
+        if (agent.agentId === taskId || agent.toolCallId === taskId) {
+            add(agent.toolCallId);
+            add(agent.agentId);
+        }
+    }
+
+    return ids;
+}
+
 function agentInfoEqual(left: BackgroundAgentInfo, right: BackgroundAgentInfo): boolean {
     return left.agentId === right.agentId &&
         left.toolCallId === right.toolCallId &&
@@ -1065,10 +1084,12 @@ export class SquadBridgeService {
             if (!backgroundTaskSession.cancelBackgroundTask)
                 continue;
 
-            const cancelled = await backgroundTaskSession.cancelBackgroundTask(normalizedTaskId).catch(() => false);
-            await this.refreshBackgroundTasks(state).catch(() => undefined);
-            if (cancelled)
-                return true;
+            for (const cancelId of backgroundTaskCancelIds(state.backgroundTasks, normalizedTaskId)) {
+                const cancelled = await backgroundTaskSession.cancelBackgroundTask(cancelId).catch(() => false);
+                await this.refreshBackgroundTasks(state).catch(() => undefined);
+                if (cancelled)
+                    return true;
+            }
         }
 
         return false;

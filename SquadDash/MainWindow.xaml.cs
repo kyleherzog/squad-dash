@@ -3725,9 +3725,16 @@ public partial class MainWindow : Window, ILiveElementLocator
                 SquadDashTrace.Write(
                     "UI",
                     $"AbortButton background cancel result taskKind={target.TaskKind} task={target.TaskId} cancelled={cancelled}");
-                // Gap 2: don't wait for the SDK event — force-finalize the thread now so
-                // tool spinners stop and the transcript gets an "Aborted" terminal marker.
-                ForceFinalizeCancelledBackgroundThread(target.TaskId);
+                if (BackgroundCancelCompletionPolicy.ShouldForceFinalize(cancelled)) {
+                    // Gap 2: don't wait for the SDK event — force-finalize the thread now so
+                    // tool spinners stop and the transcript gets an "Aborted" terminal marker.
+                    ForceFinalizeCancelledBackgroundThread(target.TaskId);
+                }
+                else {
+                    SquadDashTrace.Write(
+                        "UI",
+                        $"AbortButton left background {target.TaskKind} task={target.TaskId} live because cancel was not acknowledged.");
+                }
             })
             .ToArray();
 

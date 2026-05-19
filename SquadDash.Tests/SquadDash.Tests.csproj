@@ -65,6 +65,7 @@
     <Compile Include="..\SquadDash\SquadDashRuntimeStamp.cs" Link="Source\SquadDashRuntimeStamp.cs" />
     <Compile Include="..\SquadDash\BackgroundAgentLaunchInfoResolver.cs" Link="Source\BackgroundAgentLaunchInfoResolver.cs" />
     <Compile Include="..\SquadDash\BackgroundAgentReportAnnouncementBuilder.cs" Link="Source\BackgroundAgentReportAnnouncementBuilder.cs" />
+    <Compile Include="..\SquadDash\BackgroundCancelCompletionPolicy.cs" Link="Source\BackgroundCancelCompletionPolicy.cs" />
     <Compile Include="..\SquadDash\BackgroundTaskStateResolver.cs" Link="Source\BackgroundTaskStateResolver.cs" />
     <Compile Include="..\SquadDash\BackgroundWorkClassifier.cs" Link="Source\BackgroundWorkClassifier.cs" />
     <Compile Include="..\SquadDash\CurrentTurnStatusPresentation.cs" Link="Source\CurrentTurnStatusPresentation.cs" />

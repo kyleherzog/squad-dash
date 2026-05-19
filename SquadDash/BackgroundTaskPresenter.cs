@@ -909,6 +909,8 @@ internal sealed class BackgroundTaskPresenter {
                 !seenTaskIds.Add(taskId))
                 continue;
 
+            AddIfPresent(seenTaskIds, agent.ToolCallId);
+
             candidates.Add(new BackgroundAbortTarget(
                 taskId,
                 "agent",
@@ -931,12 +933,14 @@ internal sealed class BackgroundTaskPresenter {
         }
 
         foreach (var thread in GetFallbackLiveBackgroundThreads()) {
-            var taskId = !string.IsNullOrWhiteSpace(thread.AgentId)
-                ? thread.AgentId.Trim()
-                : thread.ToolCallId?.Trim();
+            var taskId = !string.IsNullOrWhiteSpace(thread.ToolCallId)
+                ? thread.ToolCallId.Trim()
+                : thread.AgentId?.Trim();
             if (string.IsNullOrWhiteSpace(taskId) ||
                 !seenTaskIds.Add(taskId))
                 continue;
+
+            AddIfPresent(seenTaskIds, thread.AgentId);
 
             candidates.Add(new BackgroundAbortTarget(
                 taskId,
@@ -1080,6 +1084,11 @@ internal sealed class BackgroundTaskPresenter {
             "killed" => true,
             _ => false
         };
+
+    private static void AddIfPresent(HashSet<string> values, string? value) {
+        if (!string.IsNullOrWhiteSpace(value))
+            values.Add(value.Trim());
+    }
 }
 
 internal sealed record PendingBackgroundReportPromotion(

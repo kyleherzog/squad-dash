@@ -4,7 +4,8 @@ import {
     approvePermissionRequest,
     buildNamedAgentExecutionPrompt,
     resolvePermissionApprovalKind,
-    resolvePermissionApprovalKindFromSchema
+    resolvePermissionApprovalKindFromSchema,
+    SquadBridgeService
 } from "./squadService.js";
 
 test("permission approval supports legacy Copilot runtime response shape", () => {
@@ -86,4 +87,33 @@ test("named-agent quick-reply prompt includes handoff in the submitted prompt", 
     assert.match(prompt, /OpenWorkspace - profile conversation load/);
     assert.match(prompt, /Mutex timeout on settings save during shutdown/);
     assert.match(prompt, /# Sorin Pyre/);
+});
+
+test("background task cancellation retries paired tool call id when agent id is rejected", async () => {
+    const service = new SquadBridgeService();
+    const attempts = [];
+    service.sessions.set("session-1", {
+        session: {
+            sessionId: "session-1",
+            cancelBackgroundTask: async taskId => {
+                attempts.push(taskId);
+                return taskId === "tool-call-1";
+            },
+            getBackgroundTasks: async () => []
+        },
+        backgroundTasks: {
+            agents: [
+                {
+                    agentId: "agent-1",
+                    toolCallId: "tool-call-1"
+                }
+            ],
+            shells: []
+        }
+    });
+
+    const cancelled = await service.cancelBackgroundTask("agent-1");
+
+    assert.equal(cancelled, true);
+    assert.deepEqual(attempts, ["agent-1", "tool-call-1"]);
 });

@@ -263,7 +263,7 @@ internal sealed class BackgroundTaskPresenterTests {
         var targets = presenter.GetAbortTargets();
 
         Assert.Multiple(() => {
-            Assert.That(targets.Select(target => target.TaskId), Is.EqualTo(new[] { "lyra-live" }));
+            Assert.That(targets.Select(target => target.TaskId), Is.EqualTo(new[] { "call-lyra" }));
             Assert.That(targets.Single().DisplayLabel, Is.EqualTo("Lyra (lyra-live)"));
             Assert.That(targets.Single().StartedAt, Is.EqualTo(startedAt));
         });
@@ -292,9 +292,42 @@ internal sealed class BackgroundTaskPresenterTests {
         var targets = presenter.GetAbortTargets();
 
         Assert.Multiple(() => {
-            Assert.That(targets.Select(target => target.TaskId), Is.EqualTo(new[] { "lyra-live" }));
+            Assert.That(targets.Select(target => target.TaskId), Is.EqualTo(new[] { "call-lyra" }));
             Assert.That(targets.Single().DisplayLabel, Is.EqualTo("Lyra (lyra-live)"));
         });
+    }
+
+    [Test]
+    public void GetAbortTargets_DeduplicatesSnapshotAndFallbackThreadByToolCallId() {
+        var registry = MakeRegistry();
+        var startedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        var thread = registry.GetOrCreateAgentThread(
+            toolCallId: "call-lyra",
+            agentId: "lyra-live",
+            agentName: "lyra-morn",
+            agentDisplayName: "Lyra",
+            agentDescription: "Writing tests",
+            status: "running",
+            prompt: "Write tests",
+            startedAt: startedAt.ToString("O"));
+        thread.WasObservedAsBackgroundTask = true;
+        thread.IsCurrentBackgroundRun = true;
+        thread.StatusText = "Running";
+
+        var presenter = MakePresenter(registry, isPromptRunning: true);
+        presenter.BackgroundAgents = [
+            new SquadBackgroundAgentInfo {
+                AgentId = "lyra-live",
+                ToolCallId = "call-lyra",
+                AgentDisplayName = "Lyra",
+                Status = "running",
+                StartedAt = startedAt.ToString("O")
+            }
+        ];
+
+        var targets = presenter.GetAbortTargets();
+
+        Assert.That(targets.Select(target => target.TaskId), Is.EqualTo(new[] { "lyra-live" }));
     }
 
     [Test]
