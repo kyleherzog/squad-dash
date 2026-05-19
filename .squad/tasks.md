@@ -138,7 +138,7 @@
   in the installer manifest YAML, open PR to `microsoft/winget-pkgs`.
   **Blocked by:** GitHub Release v1.0.0 existing with a stable download URL.
 
-- [ ] **WinGet — document Node.js prerequisite** *(Owner: Jae Min)*
+- [x] **WinGet — document Node.js prerequisite** *(Owner: Jae Min)*
   `runPrompt.js` calls `node` from PATH — Node.js is required but not bundled.
   Update `README.md` to document this prerequisite clearly. The WinGet manifest will list
   `OpenJS.NodeJS` as a dependency but a README callout helps users who install manually.
