@@ -478,7 +478,7 @@ internal sealed class PreferencesWindow : Window {
             ("General",           BuildGeneralPage()),
             ("Provider",          BuildSpeechProviderPage()),
             ("Push to Talk",      BuildPushToTalkPage()),
-            ("Text Replacements", BuildTextReplacementsPage()),
+            ("Replacements",      BuildTextReplacementsPage()),
             ("Remote Access",     BuildRemoteAccessPage()),
             ("Custom Model",      BuildByokPage()),
             ("Notifications",     BuildNotificationsPage(currentSettings)),
@@ -564,7 +564,7 @@ internal sealed class PreferencesWindow : Window {
             if (pageIndex.ContainsKey(standalone))
                 tree.Items.Add(MakeLeaf(standalone));
 
-        tree.Items.Add(MakeGroup("Voice & Speech", "Provider", "Push to Talk", "Text Replacements"));
+        tree.Items.Add(MakeGroup("Voice & Speech", "Provider", "Push to Talk", "Replacements"));
         tree.Items.Add(MakeGroup("Sound",          "Sound Alerts", "TTS Provider"));
         tree.Items.Add(MakeGroup("AI",             "Commands", "Custom Model"));
         tree.Items.Add(MakeGroup("Connectivity",   "Remote Access", "Notifications"));
@@ -1011,6 +1011,16 @@ internal sealed class PreferencesWindow : Window {
         };
         hint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
         form.Children.Add(hint);
+
+        var byokDevWarning = new TextBlock {
+            Text = "Note: this feature is still in development and is not yet functional.",
+            TextWrapping = TextWrapping.Wrap,
+            FontWeight = FontWeights.Bold,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
+            Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x8C, 0x00)),
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        form.Children.Add(byokDevWarning);
 
         AddLabel(form, "Provider URL:");
         form.Children.Add(_byokProviderUrlBox);
