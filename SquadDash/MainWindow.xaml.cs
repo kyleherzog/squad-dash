@@ -14476,6 +14476,12 @@ public partial class MainWindow : Window, ILiveElementLocator
                 // item's tab so the user must explicitly Send or switch away before it dispatches.
                 _ = Dispatcher.InvokeAsync(() => OnQueueTabClicked(_promptQueue.Items[0].Id),
                     System.Windows.Threading.DispatcherPriority.Background);
+                // OnQueueTabClicked → SyncQueuePanel renders "Queue is draining (active tab pausing
+                // dispatch)". If the queue was ALSO manually paused at shutdown, re-apply the pause
+                // styling at a lower priority so it wins over the tab-derived label.
+                if (savedQueuePaused)
+                    _ = Dispatcher.InvokeAsync(() => SetQueuePaused(true),
+                        System.Windows.Threading.DispatcherPriority.ContextIdle);
             }
             else
             {
@@ -14534,6 +14540,10 @@ public partial class MainWindow : Window, ILiveElementLocator
                 // item's tab so the user must explicitly Send or switch away before it dispatches.
                 _ = Dispatcher.InvokeAsync(() => OnQueueTabClicked(_promptQueue.Items[0].Id),
                     System.Windows.Threading.DispatcherPriority.Background);
+                // Re-apply manual pause label after tab-derived "Queue is draining" label fires.
+                if (savedQueuePaused)
+                    _ = Dispatcher.InvokeAsync(() => SetQueuePaused(true),
+                        System.Windows.Threading.DispatcherPriority.ContextIdle);
             }
             else
             {
