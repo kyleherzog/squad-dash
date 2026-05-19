@@ -24486,10 +24486,14 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         // === Recent Transcript ===
         sb.AppendLine();
-        sb.AppendLine("=== Recent Transcript (last 20 entries) ===");
+        var transcriptThread = _selectedTranscriptThread ?? CoordinatorThread;
+        var transcriptThreadLabel = ReferenceEquals(transcriptThread, CoordinatorThread)
+            ? "Coordinator"
+            : (transcriptThread.AgentDisplayName ?? transcriptThread.AgentName ?? transcriptThread.ThreadId ?? "Agent");
+        sb.AppendLine($"=== Recent Transcript (last 20 entries — {transcriptThreadLabel}) ===");
         try
         {
-            var turns = CoordinatorThread.SavedTurns
+            var turns = transcriptThread.SavedTurns
                 .Where(t => !t.IsSessionBoundary)
                 .TakeLast(20)
                 .ToList();
