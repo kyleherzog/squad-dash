@@ -1125,7 +1125,16 @@ internal sealed class TranscriptConversationManager {
                     attachments.TryGetValue(i.Id, out var list) && list.Count > 0)
                 {
                     dtos = list
-                        .Select(a => new FollowUpAttachmentDto(a.CommitSha, a.Description, a.OriginalPrompt, a.TranscriptQuote, a.ContentBlock))
+                        .Select(a => new FollowUpAttachmentDto
+                        {
+                            CommitSha        = a.CommitSha,
+                            Description      = a.Description,
+                            OriginalPrompt   = a.OriginalPrompt,
+                            TranscriptQuote  = a.TranscriptQuote,
+                            ContentBlock     = a.ContentBlock,
+                            ImagePath        = a.ImagePath,
+                            ImageSubmittedAt = a.ImageSubmittedAt?.ToString("O"),
+                        })
                         .ToList();
                 }
                 return new QueuedPromptEntry(i.Text, i.IsDictated, i.IsSystemInjected, dtos, i.IsSimEntry, i.SimResponse, i.SimDelaySeconds);
