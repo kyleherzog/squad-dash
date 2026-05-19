@@ -1083,19 +1083,9 @@ public partial class MainWindow : Window, ILiveElementLocator
                     }
                     else if (_restartPending)
                     {
-                        // Rebuild-triggered restart: close immediately after the current turn so
-                        // the launcher can reload the new binary. Queue items will resume in the
-                        // reloaded instance (they are persisted).
-                        // Do not close if PTT is still active, draining, an AI doc revision is
-                        // in flight, or a modal image editor is open. The deferral callbacks
-                        // will call Close() once those complete.
-                        if (_pttState != PttState.Active && !_pttDraining
-                            && !MarkdownDocumentWindow.AnyRevisionInFlight
-                            && !_clipboardEditorOpen)
-                        {
-                            ShowRestartingOverlay();
-                            Close();
-                        }
+                        // Rebuild-triggered restart: close only after every in-flight activity
+                        // that can mutate transcript/agent state is safely idle.
+                        TryCompletePendingRestart("prompt-finished");
                     }
                     else
                     {
@@ -1128,7 +1118,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             },
             getIsClosing: () => _isClosing,
             getRestartPending: () => _restartPending,
-            close: () => Close(),
+            close: () => TryCompletePendingRestart("prompt-controller-finally"),
             clearPromptTextBox: () => ClearPromptTextBoxLogicalBuffer("prompt-executed"),
             focusPromptTextBox: () => PromptTextBox.Focus(),
             isPromptTextBoxEnabled: () => PromptTextBox.IsEnabled,
@@ -4369,6 +4359,9 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         UpdateInteractiveControlState();
         DrainQueueAfterBackgroundWorkChanged("background-tasks-changed");
+        if (!_restartPending)
+            ApplyPendingBridgeSettingsRestartIfIdle("background-tasks-changed");
+        TryCompletePendingRestart("background-tasks-changed");
     }
 
     private void HandleTaskComplete(SquadSdkEvent evt)
@@ -4574,16 +4567,25 @@ public partial class MainWindow : Window, ILiveElementLocator
         var needsDirectQuickReplyFollowUp = CompleteDirectQuickReplyAgentThread(thread, "subagent_completed");
 
         var promoted = _backgroundTaskPresenter.PromoteBackgroundAgentReportNow(thread, "subagent_completed");
-        if (promoted && _isPromptRunning)
-            _pec.NotifySubagentCompletedDuringTurn(thread, thread.Title ?? evt.AgentDisplayName ?? evt.AgentName ?? "Unknown agent");
-        else if (promoted && needsDirectQuickReplyFollowUp)
-            EnqueueDirectQuickReplyAgentFollowUp(thread);
+        switch (DirectQuickReplyCompletionPolicy.Decide(
+                    needsDirectQuickReplyFollowUp,
+                    _isPromptRunning,
+                    promoted))
+        {
+            case DirectQuickReplyCompletionAction.RegisterSilentWatchdog:
+                _pec.NotifySubagentCompletedDuringTurn(thread, thread.Title ?? evt.AgentDisplayName ?? evt.AgentName ?? "Unknown agent");
+                break;
+            case DirectQuickReplyCompletionAction.EnqueueCoordinatorFollowUp:
+                EnqueueDirectQuickReplyAgentFollowUp(thread);
+                break;
+        }
         _backgroundTaskPresenter.SkipNextBackgroundCompletionFallback = true;
         _backgroundTaskPresenter.RecordBackgroundCompletion(summary, BackgroundTaskPresenter.BuildThreadAnnouncementKey(thread), appendNotice: !promoted);
         SyncAgentCardsWithThreads();
         _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, "subagent_completed");
         _conversationManager.SaveAgentThreadToConversation(thread, DateTimeOffset.UtcNow);
         DrainQueueAfterBackgroundWorkChanged("subagent-completed");
+        TryCompletePendingRestart("subagent-completed");
     }
 
     private void HandleSubagentFailed(SquadSdkEvent evt)
@@ -4608,6 +4610,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, "subagent_failed");
         _conversationManager.SaveAgentThreadToConversation(thread, DateTimeOffset.UtcNow);
         DrainQueueAfterBackgroundWorkChanged("subagent-failed");
+        TryCompletePendingRestart("subagent-failed");
     }
 
     private void HandleSubagentCancelled(SquadSdkEvent evt)
@@ -4633,6 +4636,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, "subagent_cancelled");
         _conversationManager.SaveAgentThreadToConversation(thread, DateTimeOffset.UtcNow);
         DrainQueueAfterBackgroundWorkChanged("subagent-cancelled");
+        TryCompletePendingRestart("subagent-cancelled");
     }
 
     private void HandleLoopStarted(SquadSdkEvent evt)
@@ -9388,20 +9392,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             _pttTargetTextBox = null;  // Clear after all Normal-priority phrase callbacks have run.
             _pttTargetRichTextBox = null;
             _pttDraining = false;
-            if (_restartPending && !_isPromptRunning && !MarkdownDocumentWindow.AnyRevisionInFlight)
-            {
-                if (_clipboardEditorOpen)
-                {
-                    SetInstallStatus("Build finished. Restart will happen after the image editor closes.");
-                    UpdateSessionState("Restart pending");
-                }
-                else
-                {
-                    ShowRestartingOverlay();
-                    EmergencySaveAfterDrainingBridgeEvents("ptt-restart-after-drain");
-                    Close();
-                }
-            }
+            TryCompletePendingRestart("ptt-restart-after-drain", emergencySaveBeforeClose: true);
         }, System.Windows.Threading.DispatcherPriority.Background);
 
         if (_restartPending && !_isPromptRunning)
@@ -21420,7 +21411,19 @@ public partial class MainWindow : Window, ILiveElementLocator
                 return;
             }
 
-            bool isBusy = _isPromptRunning || IsNativeLoopRunning || _promptQueue.Count > 0;
+            if (_restartPending && DeferPendingRestartIfBlocked("window-closing"))
+            {
+                e.Cancel = true;
+                EmergencySaveAfterDrainingBridgeEvents("restart-close-deferred");
+                _mainWindowClosingInProgress = false;
+                return;
+            }
+
+            bool isBusy = _isPromptRunning ||
+                          IsNativeLoopRunning ||
+                          _backgroundTaskPresenter.HasRestartBlockingBackgroundWork() ||
+                          HasPendingDirectQuickReplyAgentFollowUp() ||
+                          _promptQueue.Count > 0;
             if (isBusy && !isDeferredClose)
             {
                 e.Cancel = true;
@@ -22515,12 +22518,12 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void RestartBridgeForSettingsWhenIdle(string reason)
     {
-        if (_isPromptRunning || IsLoopRunning)
+        if (_isPromptRunning || IsLoopRunning || _backgroundTaskPresenter.HasRestartBlockingBackgroundWork())
         {
             _bridgeRestartForSettingsPending = true;
             SquadDashTrace.Write(
                 "Bridge",
-                $"Deferring bridge restart for settings reason={reason} promptRunning={_isPromptRunning} loopRunning={IsLoopRunning}");
+                $"Deferring bridge restart for settings reason={reason} promptRunning={_isPromptRunning} loopRunning={IsLoopRunning} background={_backgroundTaskPresenter.HasRestartBlockingBackgroundWork()}");
             return;
         }
 
@@ -22533,11 +22536,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (!_bridgeRestartForSettingsPending)
             return;
 
-        if (_isPromptRunning || IsLoopRunning)
+        if (_isPromptRunning || IsLoopRunning || _backgroundTaskPresenter.HasRestartBlockingBackgroundWork())
         {
             SquadDashTrace.Write(
                 "Bridge",
-                $"Bridge settings restart remains pending reason={reason} promptRunning={_isPromptRunning} loopRunning={IsLoopRunning}");
+                $"Bridge settings restart remains pending reason={reason} promptRunning={_isPromptRunning} loopRunning={IsLoopRunning} background={_backgroundTaskPresenter.HasRestartBlockingBackgroundWork()}");
             return;
         }
 
@@ -22670,36 +22673,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _lastHandledRestartRequestId = request.RequestId;
         _restartPending = true;
 
-        if (_isPromptRunning)
-        {
-            SetInstallStatus("Build finished. Restart will happen after the current Squad turn completes.");
-            UpdateSessionState("Restart pending");
-            return;
-        }
-
-        if (MarkdownDocumentWindow.AnyRevisionInFlight)
-        {
-            SetInstallStatus("Build finished. Restart will happen after in-flight AI revisions complete.");
-            UpdateSessionState("Restart pending");
-            return;
-        }
-
-        if (_pttState == PttState.Active || _pttDraining)
-        {
-            SetInstallStatus("Build finished. Restart will happen after voice recording completes.");
-            UpdateSessionState("Restart pending");
-            return;
-        }
-
-        if (_clipboardEditorOpen)
-        {
-            SetInstallStatus("Build finished. Restart will happen after the image editor closes.");
-            UpdateSessionState("Restart pending");
-            return;
-        }
-
-        ShowRestartingOverlay();
-        Close();
+        TryCompletePendingRestart("restart-request");
     }
 
     private void TryAdoptPendingRestartRequestForClose()
@@ -22743,6 +22717,48 @@ public partial class MainWindow : Window, ILiveElementLocator
         RestartingOverlay.Visibility = Visibility.Collapsed;
     }
 
+    private RestartDeferralReason GetRestartDeferralReason() =>
+        RestartDeferralPolicy.GetDeferralReason(
+            isPromptRunning:                 _isPromptRunning,
+            isLoopRunning:                   IsLoopRunning,
+            hasBackgroundWork:               _backgroundTaskPresenter.HasRestartBlockingBackgroundWork(),
+            hasPendingDirectQuickReplyHandoff: HasPendingDirectQuickReplyAgentFollowUp(),
+            isVoiceInputActiveOrDraining:    _pttState == PttState.Active || _pttDraining,
+            hasDocRevisionInFlight:          MarkdownDocumentWindow.AnyRevisionInFlight,
+            isClipboardEditorOpen:           _clipboardEditorOpen);
+
+    private bool DeferPendingRestartIfBlocked(string reason)
+    {
+        var blocker = GetRestartDeferralReason();
+        if (blocker == RestartDeferralReason.None)
+            return false;
+
+        HideRestartingOverlay();
+        var message = RestartDeferralPolicy.BuildStatusMessage(blocker);
+        SetInstallStatus(message);
+        UpdateSessionState("Restart pending");
+        SquadDashTrace.Write(
+            "Shutdown",
+            $"Restart deferred reason={reason} blocker={blocker} promptRunning={_isPromptRunning} loop={IsLoopRunning} background={_backgroundTaskPresenter.HasRestartBlockingBackgroundWork()} directQuickReply={HasPendingDirectQuickReplyAgentFollowUp()} ptt={_pttState}/{_pttDraining} docRevision={MarkdownDocumentWindow.AnyRevisionInFlight} clipboard={_clipboardEditorOpen}");
+        return true;
+    }
+
+    private bool TryCompletePendingRestart(string reason, bool emergencySaveBeforeClose = false)
+    {
+        if (!_restartPending || _isClosing || _mainWindowClosingInProgress)
+            return false;
+
+        if (DeferPendingRestartIfBlocked(reason))
+            return false;
+
+        SquadDashTrace.Write("Shutdown", $"Completing pending restart reason={reason} emergencySave={emergencySaveBeforeClose}.");
+        ShowRestartingOverlay();
+        if (emergencySaveBeforeClose)
+            EmergencySaveAfterDrainingBridgeEvents(reason);
+        Close();
+        return true;
+    }
+
     /// <summary>
     /// Called when an AI doc-revision lock is released. If a restart was deferred waiting
     /// for all in-flight revisions to complete, and none remain, trigger the restart now.
@@ -22750,15 +22766,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void OnDocRevisionCompleted()
     {
         if (_isClosing || _mainWindowClosingInProgress) return;
-        if (!_restartPending) return;
-        if (_isPromptRunning) return;
-        if (_pttState == PttState.Active || _pttDraining) return;
-        if (MarkdownDocumentWindow.AnyRevisionInFlight) return;
-        if (_clipboardEditorOpen) return;
-
-        ShowRestartingOverlay();
-        EmergencySaveAfterDrainingBridgeEvents("doc-revision-completed");
-        Close();
+        TryCompletePendingRestart("doc-revision-completed", emergencySaveBeforeClose: true);
     }
 
     /// <summary>
@@ -22776,21 +22784,16 @@ public partial class MainWindow : Window, ILiveElementLocator
             _pendingShutdown = false;
             if (_restartPending)
             {
-                ShowRestartingOverlay();
-                EmergencySaveAfterDrainingBridgeEvents("clipboard-editor-closed-pending-shutdown");
+                TryCompletePendingRestart(
+                    "clipboard-editor-closed-pending-shutdown",
+                    emergencySaveBeforeClose: true);
+                return;
             }
             Close();
             return;
         }
 
-        if (!_restartPending) return;
-        if (_isPromptRunning) return;
-        if (_pttState == PttState.Active || _pttDraining) return;
-        if (MarkdownDocumentWindow.AnyRevisionInFlight) return;
-
-        ShowRestartingOverlay();
-        EmergencySaveAfterDrainingBridgeEvents("clipboard-editor-closed-restart");
-        Close();
+        TryCompletePendingRestart("clipboard-editor-closed-restart", emergencySaveBeforeClose: true);
     }
 
     private void EmergencySaveAfterDrainingBridgeEvents(string reason)

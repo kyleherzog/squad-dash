@@ -13,6 +13,7 @@ internal sealed class AgentThreadRegistryTests {
     [TestCase("Completed",  ExpectedResult = true)]
     [TestCase("Failed",     ExpectedResult = true)]
     [TestCase("Cancelled",  ExpectedResult = true)]
+    [TestCase("Interrupted", ExpectedResult = true)]
     [TestCase("Running",    ExpectedResult = false)]
     [TestCase("",           ExpectedResult = false)]
     [TestCase(null,         ExpectedResult = false)]
@@ -26,6 +27,7 @@ internal sealed class AgentThreadRegistryTests {
     [TestCase("failed",     ExpectedResult = "Failed")]
     [TestCase("killed",     ExpectedResult = "Cancelled")]
     [TestCase("cancelled",  ExpectedResult = "Cancelled")]
+    [TestCase("interrupted", ExpectedResult = "Interrupted")]
     [TestCase("idle",       ExpectedResult = "Waiting")]
     [TestCase(null,         ExpectedResult = "")]
     [TestCase("",           ExpectedResult = "")]
@@ -384,7 +386,7 @@ internal sealed class AgentThreadRegistryTests {
                 null,
                 Array.Empty<string>(),
                 null,
-                "Running",
+                string.Empty,
                 string.Empty,
                 startedAt,
                 null,
@@ -396,6 +398,55 @@ internal sealed class AgentThreadRegistryTests {
             Assert.That(thread.StartedAt, Is.EqualTo(startedAt));
             Assert.That(thread.LastObservedActivityAt, Is.EqualTo(startedAt));
             Assert.That(thread.StatusText, Is.EqualTo(string.Empty));
+        });
+    }
+
+    [Test, Apartment(ApartmentState.STA)]
+    public void RestorePersistedAgentThreads_MarksSnapshotTurnInterrupted_WhenThreadMissedTerminalEvent() {
+        var registry = MakeRegistry();
+        var startedAt = new DateTimeOffset(2026, 5, 19, 12, 38, 19, TimeSpan.Zero);
+        var snapshotAt = startedAt.AddMinutes(24);
+
+        registry.RestorePersistedAgentThreads([
+            new TranscriptThreadRecord(
+                "thread-restarted",
+                "Bruce Banner",
+                "brucebanner",
+                "tool-bruce",
+                "brucebanner",
+                "Bruce Banner",
+                null,
+                "agent",
+                "brucebanner",
+                "Fix both remaining failures",
+                "Partial transcript text",
+                null,
+                null,
+                Array.Empty<string>(),
+                null,
+                "Running",
+                string.Empty,
+                startedAt,
+                null,
+                [
+                    new TranscriptTurnRecord(
+                        startedAt,
+                        snapshotAt,
+                        "Fix both remaining failures",
+                        "Thinking through the final fix",
+                        "Partial transcript text",
+                        true,
+                        Array.Empty<TranscriptToolRecord>())
+                ])
+        ]);
+
+        var thread = registry.ThreadOrder.Single();
+        Assert.Multiple(() => {
+            Assert.That(thread.StatusText, Is.EqualTo("Interrupted"));
+            Assert.That(thread.CompletedAt, Is.EqualTo(snapshotAt));
+            Assert.That(thread.LastObservedActivityAt, Is.EqualTo(snapshotAt));
+            Assert.That(thread.IsCurrentBackgroundRun, Is.False);
+            Assert.That(thread.DetailText, Does.Contain("Interrupted by restart"));
         });
     }
 

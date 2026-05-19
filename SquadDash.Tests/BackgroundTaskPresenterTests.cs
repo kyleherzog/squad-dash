@@ -132,6 +132,47 @@ internal sealed class BackgroundTaskPresenterTests {
         Assert.That(presenter.HasBackgroundTasks(), Is.True);
     }
 
+    [Test]
+    public void HasRestartBlockingBackgroundWork_ReturnsTrue_ForCurrentNonTerminalAgentThread() {
+        var registry = MakeRegistry();
+        var presenter = MakePresenter(registry);
+        var thread = registry.GetOrCreateAgentThread(
+            toolCallId: "tool-bruce",
+            agentId: "brucebanner",
+            agentName: "brucebanner",
+            agentDisplayName: "Bruce Banner",
+            agentDescription: null,
+            status: "running",
+            prompt: "Fix both remaining failures",
+            startedAt: DateTimeOffset.UtcNow.ToString("O"));
+        thread.WasObservedAsBackgroundTask = true;
+        thread.IsCurrentBackgroundRun = true;
+        thread.StatusText = "Running";
+
+        Assert.That(presenter.HasRestartBlockingBackgroundWork(), Is.True);
+    }
+
+    [Test]
+    public void HasRestartBlockingBackgroundWork_ReturnsFalse_ForTerminalAgentThread() {
+        var registry = MakeRegistry();
+        var presenter = MakePresenter(registry);
+        var thread = registry.GetOrCreateAgentThread(
+            toolCallId: "tool-bruce",
+            agentId: "brucebanner",
+            agentName: "brucebanner",
+            agentDisplayName: "Bruce Banner",
+            agentDescription: null,
+            status: "completed",
+            prompt: "Fix both remaining failures",
+            startedAt: DateTimeOffset.UtcNow.ToString("O"));
+        thread.WasObservedAsBackgroundTask = true;
+        thread.IsCurrentBackgroundRun = false;
+        thread.StatusText = "Completed";
+        thread.CompletedAt = DateTimeOffset.UtcNow;
+
+        Assert.That(presenter.HasRestartBlockingBackgroundWork(), Is.False);
+    }
+
     // ── Instance: ClearState ─────────────────────────────────────────────────
 
     [Test]

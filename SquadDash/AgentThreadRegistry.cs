@@ -529,6 +529,7 @@ internal sealed class AgentThreadRegistry {
             "Completed" => true,
             "Failed" => false,
             "Cancelled" => false,
+            "Interrupted" => false,
             _ => (bool?)null
         };
         if (!success.HasValue)
@@ -734,8 +735,9 @@ internal sealed class AgentThreadRegistry {
             };
 
             thread.SavedTurns.AddRange(record.Turns);
+            RecoverInterruptedRestoredThread(thread);
             if (IsTerminalBackgroundStatus(thread.StatusText)) {
-                thread.LastObservedActivityAt = record.CompletedAt ?? record.StartedAt;
+                thread.LastObservedActivityAt = thread.CompletedAt ?? record.CompletedAt ?? record.StartedAt;
             }
             else {
                 thread.LastObservedActivityAt = record.CompletedAt ?? record.StartedAt;
@@ -757,6 +759,38 @@ internal sealed class AgentThreadRegistry {
                 pendingRenders.Add((thread, record.Turns));
         }
         return pendingRenders;
+    }
+
+    private static void RecoverInterruptedRestoredThread(TranscriptThreadState thread) {
+        if (thread.CompletedAt is not null || IsTerminalBackgroundStatus(thread.StatusText))
+            return;
+
+        var latestCompletedTurnAt = GetLatestSavedTurnCompletedAt(thread.SavedTurns);
+        if (latestCompletedTurnAt is null)
+            return;
+
+        thread.StatusText = "Interrupted";
+        thread.CompletedAt = latestCompletedTurnAt.Value;
+        thread.IsCurrentBackgroundRun = false;
+        if (string.IsNullOrWhiteSpace(thread.DetailText))
+            thread.DetailText = "Interrupted by restart before SquadDash received the agent completion event.";
+
+        SquadDashTrace.Write(
+            "Threads",
+            $"Recovered interrupted restored agent thread={thread.ThreadId} completedAt={thread.CompletedAt:O} title={thread.Title ?? "(unknown)"}");
+    }
+
+    private static DateTimeOffset? GetLatestSavedTurnCompletedAt(IEnumerable<TranscriptTurnRecord> turns) {
+        DateTimeOffset? latest = null;
+        foreach (var turn in turns) {
+            if (turn.CompletedAt is not { } completedAt)
+                continue;
+
+            if (latest is null || completedAt > latest.Value)
+                latest = completedAt;
+        }
+
+        return latest;
     }
 
     // ── Static helpers (used here and by BackgroundTaskPresenter) ────────────
@@ -829,6 +863,7 @@ internal sealed class AgentThreadRegistry {
             "failed" => "Failed",
             "cancelled" => "Cancelled",
             "killed" => "Cancelled",
+            "interrupted" => "Interrupted",
             _ => HumanizeAgentName(status)
         };
     }
@@ -841,6 +876,7 @@ internal sealed class AgentThreadRegistry {
             "Completed" => true,
             "Failed" => true,
             "Cancelled" => true,
+            "Interrupted" => true,
             _ => false
         };
     }

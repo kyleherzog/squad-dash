@@ -107,6 +107,7 @@ internal static class BackgroundTaskStateResolver {
             "Completed" => true,
             "Failed" => true,
             "Cancelled" => true,
+            "Interrupted" => true,
             _ => false
         };
     }

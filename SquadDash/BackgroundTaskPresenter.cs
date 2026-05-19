@@ -165,6 +165,14 @@ internal sealed class BackgroundTaskPresenter {
     internal bool HasBackgroundTasks() =>
         _backgroundAgents.Count > 0 || _backgroundShells.Count > 0 || GetFallbackLiveBackgroundThreads().Count > 0;
 
+    internal bool HasRestartBlockingBackgroundWork() =>
+        _backgroundAgents.Count > 0 ||
+        _backgroundShells.Count > 0 ||
+        _agentThreadRegistry.ThreadOrder.Any(thread =>
+            !thread.IsPlaceholderThread &&
+            !AgentThreadRegistry.IsTerminalBackgroundStatus(thread.StatusText) &&
+            (thread.IsCurrentBackgroundRun || thread.WasObservedAsBackgroundTask));
+
     internal BackgroundAbortTarget? TryResolveAbortTarget(TranscriptThreadState? selectedThread, bool allowSingleFallback = true) {
         if (selectedThread is { Kind: TranscriptThreadKind.Agent, IsPlaceholderThread: false }) {
             var matchingAgent = TryFindLiveBackgroundAgentForThread(selectedThread);
