@@ -11103,7 +11103,16 @@ public partial class MainWindow : Window, ILiveElementLocator
                         RestartBridgeForSettingsWhenIdle("preferences-byok-changed");
                     else
                         SquadDashTrace.Write("Bridge", "Preferences saved; BYOK bridge settings unchanged, no bridge restart needed.");
-                });
+                },
+                startPtt: (tb) => {
+                    _pttTargetTextBox = tb;
+                    _sessionCaretIndex = tb.SelectionStart;
+                    _sessionSelectionLength = tb.SelectionLength;
+                    _voiceStartedWithSendEnabled = false;
+                    _pttState = PttState.Active;
+                    _ = StartPushToTalkAsync();
+                },
+                stopPtt: () => _ = StopPushToTalkAsync(send: false));
         }
         catch (Exception ex)
         {

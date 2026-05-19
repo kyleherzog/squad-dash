@@ -78,15 +78,26 @@ internal sealed class PreferencesWindow : Window {
     private int _currentPage;
     private readonly ContentControl _pageHost;
 
+    // ── Push-to-talk support ──────────────────────────────────────────────
+    private readonly Action<TextBox>? _startPtt;
+    private readonly Action?          _stopPtt;
+    private readonly CtrlDoubleTapGestureTracker _pttGesture =
+        new CtrlDoubleTapGestureTracker(maxTapHoldMs: 250, doubleTapGapMs: 350);
+    private bool _pttActive;
+
     private PreferencesWindow(
         ApplicationSettingsStore settingsStore,
         ApplicationSettingsSnapshot currentSettings,
         PushNotificationService pushNotificationService,
         Action<ApplicationSettingsSnapshot> onSaved,
-        bool showDevOptions = false) {
+        bool showDevOptions = false,
+        Action<TextBox>? startPtt = null,
+        Action? stopPtt = null) {
         _settingsStore = settingsStore;
         _pushNotificationService = pushNotificationService;
         _onSaved = onSaved;
+        _startPtt = startPtt;
+        _stopPtt  = stopPtt;
 
         Title = "Preferences";
         Width = 640;
@@ -108,6 +119,31 @@ internal sealed class PreferencesWindow : Window {
         KeyDown += (_, e) => {
             if (e.Key == Key.Enter)
                 SaveButton_Click(this, new RoutedEventArgs());
+        };
+
+        // ── Push-to-talk: double-tap Ctrl routes speech to the focused TextBox ──
+        PreviewKeyDown += (_, e) => {
+            if (_startPtt is null) return;
+            var action = _pttGesture.HandleKeyDown(e.Key, e.IsRepeat, DateTime.UtcNow);
+            if (action != CtrlDoubleTapGestureAction.Triggered) return;
+            if (Keyboard.FocusedElement is not TextBox tb) return;
+            _pttActive = true;
+            _startPtt(tb);
+        };
+        PreviewKeyUp += (_, e) => {
+            if (!CtrlDoubleTapGestureTracker.IsCtrlKey(e.Key)) return;
+            if (_pttActive) {
+                _pttActive = false;
+                _stopPtt?.Invoke();
+                return;
+            }
+            _pttGesture.HandleKeyUp(e.Key, DateTime.UtcNow);
+        };
+        Closed += (_, _) => {
+            if (_pttActive) {
+                _pttActive = false;
+                _stopPtt?.Invoke();
+            }
         };
 
         // ── Initialize all field controls ─────────────────────────────────
@@ -1730,8 +1766,10 @@ internal sealed class PreferencesWindow : Window {
         ApplicationSettingsSnapshot currentSettings,
         PushNotificationService pushNotificationService,
         bool showDevOptions,
-        Action<ApplicationSettingsSnapshot> onSaved) {
-        var window = new PreferencesWindow(settingsStore, currentSettings, pushNotificationService, onSaved, showDevOptions);
+        Action<ApplicationSettingsSnapshot> onSaved,
+        Action<TextBox>? startPtt = null,
+        Action? stopPtt = null) {
+        var window = new PreferencesWindow(settingsStore, currentSettings, pushNotificationService, onSaved, showDevOptions, startPtt, stopPtt);
         if (owner != null)
             window.Owner = owner;
         window.Show();
