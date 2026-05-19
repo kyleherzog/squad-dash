@@ -24832,6 +24832,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (string.IsNullOrEmpty(filePath) || _docStatusStore is null)
         {
             ApproveDocButton.Visibility = Visibility.Collapsed;
+            UpdateDocPublishedToggle(null);
             return;
         }
 
@@ -24847,6 +24848,71 @@ public partial class MainWindow : Window, ILiveElementLocator
             ApproveDocButton.Content = "✓ Approve";
             ApproveDocButton.Opacity = 1.0;
         }
+
+        UpdateDocPublishedToggle(filePath);
+    }
+
+    private void UpdateDocPublishedToggle(string? filePath)
+    {
+        if (DocPublishedToggle is null) return;
+
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+        {
+            DocPublishedToggle.Visibility = Visibility.Collapsed;
+            DocPublishedToggle.IsEnabled  = false;
+            return;
+        }
+
+        DocPublishedToggle.Visibility = Visibility.Visible;
+        DocPublishedToggle.IsEnabled  = true;
+        DocPublishedToggle.IsChecked  = !DocTopicsLoader.IsNavExcluded(filePath);
+    }
+
+    private void DocPublishedToggle_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var filePath = _currentDocPath;
+            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return;
+
+            var isPublished = DocPublishedToggle?.IsChecked == true;
+            var newFrontMatter = DocumentUtilities.SetNavExclude(_currentDocFrontMatter, excluded: !isPublished);
+
+            string bodyText;
+            if (DocSourcePanel?.Visibility == Visibility.Visible && DocSourceTextBox is not null)
+            {
+                _docSourceSaveTimer?.Stop();
+                _docPreviewRefreshTimer?.Stop();
+                bodyText = DocSourceTextBox.GetPlainText();
+            }
+            else
+            {
+                var raw = File.ReadAllText(filePath);
+                bodyText = DocumentUtilities.StripDocFrontMatter(raw, out _);
+            }
+
+            _currentDocFrontMatter = newFrontMatter;
+            _docSaveSuppressionUntil = DateTime.UtcNow.AddSeconds(2);
+            File.WriteAllText(filePath, _currentDocFrontMatter + bodyText);
+
+            RefreshCurrentDocTopicHeader();
+        }
+        catch (Exception ex)
+        {
+            HandleUiCallbackException(nameof(DocPublishedToggle_Click), ex);
+        }
+    }
+
+    private void RefreshCurrentDocTopicHeader()
+    {
+        if (DocTopicsTreeView is null || _currentDocPath is null) return;
+
+        var item = FindDocNodeByTag(DocTopicsTreeView.Items, _currentDocPath);
+        if (item is null) return;
+
+        var title = DocTopicsLoader.ExtractMarkdownTitle(_currentDocPath)
+                    ?? Path.GetFileNameWithoutExtension(_currentDocPath);
+        item.Header = DocTopicsLoader.BuildItemHeaderPublic(title, _currentDocPath, _docStatusStore);
     }
 
     private void ApproveDocButton_Click(object sender, RoutedEventArgs e)

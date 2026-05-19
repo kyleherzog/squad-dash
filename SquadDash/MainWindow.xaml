@@ -1701,6 +1701,17 @@
                                 Click="ViewPagesButton_Click">
                             Pages
                         </Button>
+                        <CheckBox x:Name="DocPublishedToggle"
+                                  DockPanel.Dock="Left"
+                                  Content="Published"
+                                  Margin="10,0,0,0"
+                                  Visibility="Collapsed"
+                                  IsEnabled="False"
+                                  FontSize="{DynamicResource FontSizeNormal}"
+                                  Foreground="{DynamicResource LabelText}"
+                                  VerticalAlignment="Center"
+                                  ToolTip="Uncheck to set nav_exclude: true — hides from GitHub Pages navigation"
+                                  Click="DocPublishedToggle_Click" />
                         <Button x:Name="ApproveDocButton"
                                 DockPanel.Dock="Left"
                                 Height="28"

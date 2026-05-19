@@ -65,4 +65,58 @@ internal static class DocumentUtilities
         }
         return false;
     }
+
+    /// <summary>Returns true if the given front matter contains <c>nav_exclude: true</c>.</summary>
+    internal static bool ReadNavExclude(string frontMatter)
+    {
+        if (string.IsNullOrEmpty(frontMatter)) return false;
+        return Regex.IsMatch(frontMatter, @"^\s*nav_exclude\s*:\s*true\s*$",
+            RegexOptions.Multiline | RegexOptions.IgnoreCase);
+    }
+
+    /// <summary>
+    /// Returns a new front matter string with <c>nav_exclude</c> and <c>search_exclude</c>
+    /// added (when <paramref name="excluded"/> is true) or removed (when false).
+    /// Creates a minimal front matter block if none existed and exclusion is requested.
+    /// </summary>
+    internal static string SetNavExclude(string currentFrontMatter, bool excluded)
+    {
+        if (excluded)
+        {
+            if (string.IsNullOrEmpty(currentFrontMatter))
+                return "---\nnav_exclude: true\nsearch_exclude: true\n---\n";
+            var fm = UpdateOrAddFrontMatterKey(currentFrontMatter, "nav_exclude", "true");
+            fm     = UpdateOrAddFrontMatterKey(fm, "search_exclude", "true");
+            return fm;
+        }
+        else
+        {
+            if (string.IsNullOrEmpty(currentFrontMatter)) return string.Empty;
+            var fm = RemoveFrontMatterKey(currentFrontMatter, "nav_exclude");
+            fm     = RemoveFrontMatterKey(fm, "search_exclude");
+            return fm;
+        }
+    }
+
+    private static string UpdateOrAddFrontMatterKey(string frontMatter, string key, string value)
+    {
+        var pattern = new Regex($@"^({Regex.Escape(key)}\s*:).*$",
+            RegexOptions.Multiline | RegexOptions.IgnoreCase);
+        if (pattern.IsMatch(frontMatter))
+            return pattern.Replace(frontMatter, $"$1 {value}");
+
+        // Key not present — insert before the closing ---
+        var closingDash = frontMatter.LastIndexOf("\n---", StringComparison.Ordinal);
+        if (closingDash >= 0)
+            return frontMatter.Insert(closingDash, $"\n{key}: {value}");
+
+        return frontMatter;
+    }
+
+    private static string RemoveFrontMatterKey(string frontMatter, string key)
+    {
+        var pattern = new Regex($@"^{Regex.Escape(key)}\s*:.*(\r?\n)?",
+            RegexOptions.Multiline | RegexOptions.IgnoreCase);
+        return pattern.Replace(frontMatter, string.Empty);
+    }
 }

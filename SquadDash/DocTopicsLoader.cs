@@ -172,8 +172,23 @@ internal static class DocTopicsLoader
     }
 
     private static FrameworkElement BuildItemHeader(string title, string filePath, DocStatusStore? statusStore)
+        => BuildItemHeaderCore(title, filePath, statusStore);
+
+    internal static FrameworkElement BuildItemHeaderPublic(string title, string filePath, DocStatusStore? statusStore)
+        => BuildItemHeaderCore(title, filePath, statusStore);
+
+    private static FrameworkElement BuildItemHeaderCore(string title, string filePath, DocStatusStore? statusStore)
     {
         var panel = new StackPanel { Orientation = Orientation.Horizontal };
+
+        // Dim row and show eye-slash icon when nav_exclude: true is set in front matter
+        var isNavExcluded = IsNavExcluded(filePath);
+        if (isNavExcluded)
+        {
+            panel.Children.Add(MakeEyeSlashIcon());
+            panel.Opacity = 0.55;
+        }
+
         var label = new TextBlock { Text = title, VerticalAlignment = VerticalAlignment.Center };
         panel.Children.Add(label);
 
@@ -197,6 +212,64 @@ internal static class DocTopicsLoader
         }
 
         return panel;
+    }
+
+    internal static bool IsNavExcluded(string filePath)
+    {
+        try
+        {
+            var raw = File.ReadAllText(filePath);
+            DocumentUtilities.StripDocFrontMatter(raw, out var fm);
+            return DocumentUtilities.ReadNavExclude(fm);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static UIElement MakeEyeSlashIcon()
+    {
+        var canvas = new Canvas { Width = 16, Height = 12 };
+
+        // Eye outline: bezier approximating the lens shape
+        var eyePath = new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse("M 1,6 C 4,1 12,1 15,6 C 12,11 4,11 1,6 Z"),
+            Fill = Brushes.Transparent,
+            StrokeThickness = 1.4,
+        };
+        eyePath.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "LabelText");
+        canvas.Children.Add(eyePath);
+
+        // Pupil
+        var pupil = new System.Windows.Shapes.Ellipse { Width = 4, Height = 4, Fill = Brushes.Transparent, StrokeThickness = 1.2 };
+        pupil.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "LabelText");
+        Canvas.SetLeft(pupil, 6);
+        Canvas.SetTop(pupil, 4);
+        canvas.Children.Add(pupil);
+
+        // Diagonal slash across the eye
+        var slash = new System.Windows.Shapes.Line
+        {
+            X1 = 2, Y1 = 11,
+            X2 = 14, Y2 = 1,
+            StrokeThickness = 1.6,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap   = PenLineCap.Round,
+        };
+        slash.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "LabelText");
+        canvas.Children.Add(slash);
+
+        return new Viewbox
+        {
+            Width  = 13,
+            Height = 10,
+            Stretch = Stretch.Uniform,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 3, 0),
+            Child  = canvas,
+        };
     }
 
     private static TextBlock MakeStatusIcon(string text, Brush? foreground, string tooltip, double opacity = 1.0)
