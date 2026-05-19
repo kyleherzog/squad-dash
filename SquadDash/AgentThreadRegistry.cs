@@ -574,6 +574,8 @@ internal sealed class AgentThreadRegistry {
                 agent.StartedAt);
 
             thread.WasObservedAsBackgroundTask = true;
+            if (!string.IsNullOrWhiteSpace(agent.AgentId))
+                thread.BackgroundTaskId = agent.AgentId.Trim();
             thread.AgentType = agent.AgentType ?? thread.AgentType;
             thread.Prompt ??= agent.Prompt;
             thread.LatestIntent = agent.LatestIntent ?? thread.LatestIntent;
@@ -640,8 +642,17 @@ internal sealed class AgentThreadRegistry {
 
     internal void ApplyBackgroundLaunchInfo(TranscriptThreadState thread, BackgroundAgentLaunchInfo launchInfo) {
         if (!string.IsNullOrWhiteSpace(launchInfo.TaskName)) {
+            var previousBackgroundTaskId = thread.BackgroundTaskId;
+            thread.BackgroundTaskId = launchInfo.TaskName.Trim();
+            if (!string.Equals(previousBackgroundTaskId, thread.BackgroundTaskId, StringComparison.OrdinalIgnoreCase)) {
+                SquadDashTrace.Write(
+                    "Threads",
+                    $"Mapped background task id thread={thread.ThreadId} toolCallId={launchInfo.ToolCallId} backgroundTaskId={thread.BackgroundTaskId} mode={launchInfo.Mode ?? "(none)"} previous={previousBackgroundTaskId ?? "(none)"}");
+            }
+
             if (string.IsNullOrWhiteSpace(thread.AgentId) ||
-                AgentThreadIdentityPolicy.IsGenericLooseIdentity(thread.AgentId)) {
+                AgentThreadIdentityPolicy.IsGenericLooseIdentity(thread.AgentId) ||
+                IsTransientToolCallIdentity(thread.AgentId, thread.ToolCallId)) {
                 thread.AgentId = launchInfo.TaskName;
             }
 
@@ -667,6 +678,16 @@ internal sealed class AgentThreadRegistry {
         NormalizeThreadAgentIdentity(thread);
         AliasThreadKeys(thread, thread.ToolCallId, thread.AgentId, thread.AgentName, thread.AgentDisplayName);
         _syncTaskToolTranscriptLink(thread);
+    }
+
+    private static bool IsTransientToolCallIdentity(string? agentId, string? toolCallId) {
+        if (string.IsNullOrWhiteSpace(agentId))
+            return false;
+
+        var normalizedAgentId = agentId.Trim();
+        return normalizedAgentId.StartsWith("toolu_", StringComparison.OrdinalIgnoreCase) ||
+               (!string.IsNullOrWhiteSpace(toolCallId) &&
+                string.Equals(normalizedAgentId, toolCallId.Trim(), StringComparison.OrdinalIgnoreCase));
     }
 
     internal void ApplyOriginMetadata(

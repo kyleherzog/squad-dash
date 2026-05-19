@@ -14,6 +14,7 @@ internal sealed record TeamAgentDescriptor(
 internal sealed record BackgroundAgentLaunchInfo(
     string ToolCallId,
     string? TaskName,
+    string? Mode,
     string DisplayName,
     string? AccentKey,
     string? RoleText,
@@ -43,6 +44,7 @@ internal static class BackgroundAgentLaunchInfoResolver {
             return null;
 
         var taskName = TryGetString(args, "name");
+        var mode = TryGetString(args, "mode");
         var description = TryGetString(args, "description");
         var agentType = TryGetString(args, "agent_type");
         var prompt = TryGetString(args, "prompt");
@@ -62,6 +64,7 @@ internal static class BackgroundAgentLaunchInfoResolver {
         return new BackgroundAgentLaunchInfo(
             toolCallId.Trim(),
             Normalize(taskName),
+            Normalize(mode),
             displayName.Trim(),
             Normalize(rosterMatch?.AccentKey),
             Normalize(rosterMatch?.RoleText),

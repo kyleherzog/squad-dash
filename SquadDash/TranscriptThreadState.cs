@@ -59,6 +59,7 @@ internal sealed class TranscriptThreadState : INotifyPropertyChanged {
     public Paragraph? TransientFooterParagraph { get; set; }
     public Paragraph? CompletedTimeParagraph { get; set; }
     public string? AgentId { get; set; }
+    public string? BackgroundTaskId { get; set; }
     public string? ToolCallId { get; set; }
     public string? AgentName { get; set; }
     public string? AgentDisplayName { get; set; }

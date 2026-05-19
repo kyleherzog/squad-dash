@@ -263,7 +263,8 @@ internal sealed class BackgroundTaskPresenterTests {
         var targets = presenter.GetAbortTargets();
 
         Assert.Multiple(() => {
-            Assert.That(targets.Select(target => target.TaskId), Is.EqualTo(new[] { "call-lyra" }));
+            Assert.That(targets.Select(target => target.TaskId), Is.EqualTo(new[] { "lyra-live" }));
+            Assert.That(targets.Single().TaskIdSource, Is.EqualTo("thread:agentId"));
             Assert.That(targets.Single().DisplayLabel, Is.EqualTo("Lyra (lyra-live)"));
             Assert.That(targets.Single().StartedAt, Is.EqualTo(startedAt));
         });
@@ -292,8 +293,66 @@ internal sealed class BackgroundTaskPresenterTests {
         var targets = presenter.GetAbortTargets();
 
         Assert.Multiple(() => {
-            Assert.That(targets.Select(target => target.TaskId), Is.EqualTo(new[] { "call-lyra" }));
+            Assert.That(targets.Select(target => target.TaskId), Is.EqualTo(new[] { "lyra-live" }));
+            Assert.That(targets.Single().TaskIdSource, Is.EqualTo("thread:agentId"));
             Assert.That(targets.Single().DisplayLabel, Is.EqualTo("Lyra (lyra-live)"));
+        });
+    }
+
+    [Test]
+    public void GetAbortTargets_PrefersBackgroundTaskId_ForFallbackAgentThreads() {
+        var registry = MakeRegistry();
+        var startedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        var thread = registry.GetOrCreateAgentThread(
+            toolCallId: "toolu_bdrk_014NnSZxJapiCigA8z7DfSS3",
+            agentId: "toolu_bdrk_014NnSZxJapiCigA8z7DfSS3",
+            agentName: "general-purpose",
+            agentDisplayName: "Talia Rune",
+            agentDescription: "Writing tests",
+            status: "running",
+            prompt: "Write tests",
+            startedAt: startedAt.ToString("O"));
+        thread.BackgroundTaskId = "queue-held-restart-bug";
+        thread.WasObservedAsBackgroundTask = true;
+        thread.IsCurrentBackgroundRun = true;
+        thread.StatusText = "Running";
+
+        var presenter = MakePresenter(registry, isPromptRunning: true);
+
+        var targets = presenter.GetAbortTargets();
+
+        Assert.Multiple(() => {
+            Assert.That(targets.Select(target => target.TaskId), Is.EqualTo(new[] { "queue-held-restart-bug" }));
+            Assert.That(targets.Single().TaskIdSource, Is.EqualTo("thread:backgroundTaskId"));
+            Assert.That(targets.Single().AgentId, Is.EqualTo("toolu_bdrk_014NnSZxJapiCigA8z7DfSS3"));
+            Assert.That(targets.Single().ToolCallId, Is.EqualTo("toolu_bdrk_014NnSZxJapiCigA8z7DfSS3"));
+        });
+    }
+
+    [Test]
+    public void GetAbortTargets_FallsBackToToolCallId_ForTransientAgentIdWithoutTaskId() {
+        var registry = MakeRegistry();
+        var startedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        var thread = registry.GetOrCreateAgentThread(
+            toolCallId: "toolu_bdrk_01N6Pgma8Mqqgu34DzQBMt2U",
+            agentId: "toolu_bdrk_01N6Pgma8Mqqgu34DzQBMt2U",
+            agentName: "general-purpose",
+            agentDisplayName: "Explore Held State",
+            agentDescription: "Exploring",
+            status: "running",
+            prompt: "Explore",
+            startedAt: startedAt.ToString("O"));
+        thread.WasObservedAsBackgroundTask = true;
+        thread.IsCurrentBackgroundRun = true;
+        thread.StatusText = "Running";
+
+        var presenter = MakePresenter(registry, isPromptRunning: true);
+
+        var targets = presenter.GetAbortTargets();
+
+        Assert.Multiple(() => {
+            Assert.That(targets.Select(target => target.TaskId), Is.EqualTo(new[] { "toolu_bdrk_01N6Pgma8Mqqgu34DzQBMt2U" }));
+            Assert.That(targets.Single().TaskIdSource, Is.EqualTo("thread:toolCallId"));
         });
     }
 

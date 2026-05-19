@@ -181,7 +181,10 @@ internal sealed class BackgroundTaskPresenter {
                     matchingAgent.AgentId.Trim(),
                     "agent",
                     ResolveBackgroundAgentDisplayLabel(matchingAgent),
-                    TryParseTimestamp(matchingAgent.StartedAt) ?? DateTimeOffset.Now);
+                    TryParseTimestamp(matchingAgent.StartedAt) ?? DateTimeOffset.Now,
+                    matchingAgent.AgentId?.Trim(),
+                    matchingAgent.ToolCallId?.Trim(),
+                    "background-snapshot:agentId");
             }
         }
 
@@ -915,7 +918,10 @@ internal sealed class BackgroundTaskPresenter {
                 taskId,
                 "agent",
                 ResolveBackgroundAgentDisplayLabel(agent),
-                TryParseTimestamp(agent.StartedAt) ?? DateTimeOffset.Now));
+                TryParseTimestamp(agent.StartedAt) ?? DateTimeOffset.Now,
+                agent.AgentId?.Trim(),
+                agent.ToolCallId?.Trim(),
+                "background-snapshot:agentId"));
         }
 
         foreach (var shell in _backgroundShells) {
@@ -929,27 +935,62 @@ internal sealed class BackgroundTaskPresenter {
                 taskId,
                 "shell",
                 BuildBackgroundShellLabel(shell),
-                TryParseTimestamp(shell.StartedAt) ?? DateTimeOffset.Now));
+                TryParseTimestamp(shell.StartedAt) ?? DateTimeOffset.Now,
+                null,
+                null,
+                "background-snapshot:shellId"));
         }
 
         foreach (var thread in GetFallbackLiveBackgroundThreads()) {
-            var taskId = !string.IsNullOrWhiteSpace(thread.ToolCallId)
-                ? thread.ToolCallId.Trim()
-                : thread.AgentId?.Trim();
+            var (taskId, taskIdSource) = ResolveFallbackAbortTaskId(thread);
             if (string.IsNullOrWhiteSpace(taskId) ||
                 !seenTaskIds.Add(taskId))
                 continue;
 
+            AddIfPresent(seenTaskIds, thread.BackgroundTaskId);
             AddIfPresent(seenTaskIds, thread.AgentId);
+            AddIfPresent(seenTaskIds, thread.ToolCallId);
 
             candidates.Add(new BackgroundAbortTarget(
                 taskId,
                 "agent",
                 BuildBackgroundAgentLabel(thread),
-                thread.StartedAt));
+                thread.StartedAt,
+                thread.AgentId?.Trim(),
+                thread.ToolCallId?.Trim(),
+                taskIdSource));
         }
 
         return candidates;
+    }
+
+    private static (string? taskId, string source) ResolveFallbackAbortTaskId(TranscriptThreadState thread) {
+        if (!string.IsNullOrWhiteSpace(thread.BackgroundTaskId))
+            return (thread.BackgroundTaskId.Trim(), "thread:backgroundTaskId");
+
+        if (!string.IsNullOrWhiteSpace(thread.AgentId) &&
+            !AgentThreadIdentityPolicy.IsGenericLooseIdentity(thread.AgentId) &&
+            !IsTransientToolCallIdentity(thread.AgentId, thread.ToolCallId)) {
+            return (thread.AgentId.Trim(), "thread:agentId");
+        }
+
+        if (!string.IsNullOrWhiteSpace(thread.ToolCallId))
+            return (thread.ToolCallId.Trim(), "thread:toolCallId");
+
+        if (!string.IsNullOrWhiteSpace(thread.AgentId))
+            return (thread.AgentId.Trim(), "thread:agentId-fallback");
+
+        return (null, "thread:none");
+    }
+
+    private static bool IsTransientToolCallIdentity(string? agentId, string? toolCallId) {
+        if (string.IsNullOrWhiteSpace(agentId))
+            return false;
+
+        var normalizedAgentId = agentId.Trim();
+        return normalizedAgentId.StartsWith("toolu_", StringComparison.OrdinalIgnoreCase) ||
+               (!string.IsNullOrWhiteSpace(toolCallId) &&
+                string.Equals(normalizedAgentId, toolCallId.Trim(), StringComparison.OrdinalIgnoreCase));
     }
 
     // ── Fallback-thread report line ──────────────────────────────────────────
@@ -1099,4 +1140,7 @@ internal sealed record BackgroundAbortTarget(
     string TaskId,
     string TaskKind,
     string DisplayLabel,
-    DateTimeOffset StartedAt);
+    DateTimeOffset StartedAt,
+    string? AgentId = null,
+    string? ToolCallId = null,
+    string TaskIdSource = "unknown");

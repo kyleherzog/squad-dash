@@ -117,3 +117,60 @@ test("background task cancellation retries paired tool call id when agent id is 
     assert.equal(cancelled, true);
     assert.deepEqual(attempts, ["agent-1", "tool-call-1"]);
 });
+
+test("background task cancellation retries remembered task name for tool call id", async () => {
+    const service = new SquadBridgeService();
+    const attempts = [];
+    service.sessions.set("session-1", {
+        session: {
+            sessionId: "session-1",
+            cancelBackgroundTask: async taskId => {
+                attempts.push(taskId);
+                return taskId === "queue-held-restart-bug";
+            },
+            getBackgroundTasks: async () => []
+        },
+        backgroundTasks: {
+            agents: [],
+            shells: []
+        },
+        backgroundTaskIdsByToolCallId: new Map([
+            ["toolu_bdrk_014NnSZxJapiCigA8z7DfSS3", "queue-held-restart-bug"]
+        ])
+    });
+
+    const cancelled = await service.cancelBackgroundTask("toolu_bdrk_014NnSZxJapiCigA8z7DfSS3");
+
+    assert.equal(cancelled, true);
+    assert.deepEqual(attempts, [
+        "toolu_bdrk_014NnSZxJapiCigA8z7DfSS3",
+        "queue-held-restart-bug"
+    ]);
+});
+
+test("background task cancel diagnostics include remembered mapping and snapshot matches", () => {
+    const service = new SquadBridgeService();
+    service.sessions.set("session-1", {
+        session: {
+            sessionId: "session-1"
+        },
+        backgroundTasks: {
+            agents: [
+                {
+                    agentId: "queue-held-restart-bug",
+                    toolCallId: "toolu_bdrk_014NnSZxJapiCigA8z7DfSS3"
+                }
+            ],
+            shells: []
+        },
+        backgroundTaskIdsByToolCallId: new Map([
+            ["toolu_bdrk_014NnSZxJapiCigA8z7DfSS3", "queue-held-restart-bug"]
+        ])
+    });
+
+    const diagnostics = service.describeBackgroundCancelState("toolu_bdrk_014NnSZxJapiCigA8z7DfSS3");
+
+    assert.match(diagnostics, /requested=toolu_bdrk_014NnSZxJapiCigA8z7DfSS3/);
+    assert.match(diagnostics, /mappedTaskId=queue-held-restart-bug/);
+    assert.match(diagnostics, /matchingAgents=queue-held-restart-bug\/toolu_bdrk_014NnSZxJapiCigA8z7DfSS3/);
+});

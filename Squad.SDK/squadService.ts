@@ -216,6 +216,7 @@ type SessionState = {
     activeTools: Map<string, ActiveToolContext>;
     backgroundTasks: BackgroundTaskSnapshot;
     subagentsByToolCallId: Map<string, SubagentLifecycleInfo>;
+    backgroundTaskIdsByToolCallId: Map<string, string>;
     currentRequest?: RequestContext;
     lastAssistantMessageContent: string;
     createdAt: number;
@@ -539,7 +540,11 @@ function backgroundTasksContainTask(tasks: BackgroundTaskSnapshot, taskId: strin
         tasks.shells.some(shell => shell.shellId === taskId);
 }
 
-function backgroundTaskCancelIds(tasks: BackgroundTaskSnapshot, taskId: string): string[] {
+function backgroundTaskCancelIds(
+    tasks: BackgroundTaskSnapshot,
+    taskId: string,
+    backgroundTaskIdsByToolCallId?: Map<string, string>
+): string[] {
     const ids: string[] = [];
     const add = (value?: string) => {
         const normalized = value?.trim();
@@ -548,6 +553,7 @@ function backgroundTaskCancelIds(tasks: BackgroundTaskSnapshot, taskId: string):
     };
 
     add(taskId);
+    add(backgroundTaskIdsByToolCallId?.get(taskId));
     for (const agent of tasks.agents) {
         if (agent.agentId === taskId || agent.toolCallId === taskId) {
             add(agent.toolCallId);
@@ -662,6 +668,20 @@ function extractErrorMessage(error: unknown): string {
 
 function normalizeAgentHandle(value: string): string {
     return value.trim().replace(/^@+/, "").toLowerCase();
+}
+
+function rememberTaskToolLaunch(
+    state: SessionState,
+    toolCallId: string,
+    toolName: string,
+    args: unknown
+) {
+    if (!toolCallId || toolName !== "task")
+        return;
+
+    const taskName = getStringValue(args, "name");
+    if (taskName)
+        state.backgroundTaskIdsByToolCallId.set(toolCallId, taskName);
 }
 
 function buildNamedAgentHiddenContext(targetAgent: string, charterContent?: string): string {
@@ -1084,7 +1104,10 @@ export class SquadBridgeService {
             if (!backgroundTaskSession.cancelBackgroundTask)
                 continue;
 
-            for (const cancelId of backgroundTaskCancelIds(state.backgroundTasks, normalizedTaskId)) {
+            for (const cancelId of backgroundTaskCancelIds(
+                state.backgroundTasks,
+                normalizedTaskId,
+                state.backgroundTaskIdsByToolCallId)) {
                 const cancelled = await backgroundTaskSession.cancelBackgroundTask(cancelId).catch(() => false);
                 await this.refreshBackgroundTasks(state).catch(() => undefined);
                 if (cancelled)
@@ -1093,6 +1116,54 @@ export class SquadBridgeService {
         }
 
         return false;
+    }
+
+    public describeBackgroundCancelState(taskId: string, sessionId?: string): string {
+        const normalizedTaskId = taskId.trim();
+        if (!normalizedTaskId)
+            return "requested=(empty)";
+
+        const allStates = Array.from(this.sessions.values());
+        const preferredState = sessionId ? this.sessions.get(sessionId) : undefined;
+        const matchingStates = allStates.filter(value =>
+            value !== preferredState &&
+            backgroundTasksContainTask(value.backgroundTasks, normalizedTaskId));
+        const fallbackStates = allStates.filter(value =>
+            value !== preferredState &&
+            !matchingStates.includes(value));
+        const candidates = [
+            ...(preferredState ? [preferredState] : []),
+            ...matchingStates,
+            ...fallbackStates
+        ];
+
+        const stateSummaries = candidates.map(state => {
+            const mappedTaskId = state.backgroundTaskIdsByToolCallId?.get(normalizedTaskId);
+            const matchingAgents = state.backgroundTasks.agents
+                .filter(agent => agent.agentId === normalizedTaskId || agent.toolCallId === normalizedTaskId)
+                .map(agent => `${agent.agentId || "(no-agent-id)"}/${agent.toolCallId || "(no-tool-call-id)"}`)
+                .join(",");
+            const matchingShells = state.backgroundTasks.shells
+                .filter(shell => shell.shellId === normalizedTaskId)
+                .map(shell => shell.shellId)
+                .join(",");
+
+            return [
+                `session=${state.session.sessionId ?? "(unknown)"}`,
+                `agents=${state.backgroundTasks.agents.length}`,
+                `shells=${state.backgroundTasks.shells.length}`,
+                `mappedTaskId=${mappedTaskId ?? "(none)"}`,
+                `matchingAgents=${matchingAgents || "(none)"}`,
+                `matchingShells=${matchingShells || "(none)"}`
+            ].join(" ");
+        });
+
+        return [
+            `requested=${normalizedTaskId}`,
+            `preferred=${sessionId?.trim() || "(auto)"}`,
+            `candidateSessions=${candidates.length}`,
+            ...stateSummaries
+        ].join("; ");
     }
 
     public async shutdown(): Promise<void> {
@@ -1360,6 +1431,7 @@ export class SquadBridgeService {
             activeTools: new Map<string, ActiveToolContext>(),
             backgroundTasks: EmptyBackgroundTasks(),
             subagentsByToolCallId: new Map<string, SubagentLifecycleInfo>(),
+            backgroundTaskIdsByToolCallId: new Map<string, string>(),
             lastAssistantMessageContent: "",
             createdAt: Date.now(),
             completedPromptCount: 0
@@ -1560,6 +1632,7 @@ export class SquadBridgeService {
                 getObjectValue(event, "arguments"),
                 extractParentToolCallId(event));
             state.activeTools.set(toolCallId, context);
+            rememberTaskToolLaunch(state, toolCallId, toolName, context.args);
 
             if (emitSubagentToolEvent("onSubagentToolStart", event, {
                 startedAt: context.startedAt,

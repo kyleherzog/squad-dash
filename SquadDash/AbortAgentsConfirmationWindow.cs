@@ -14,7 +14,10 @@ internal sealed record AbortAgentsConfirmationTarget(
     string TaskKind,
     string DisplayLabel,
     DateTimeOffset StartedAt,
-    bool IsCoordinator);
+    bool IsCoordinator,
+    string? AgentId = null,
+    string? ToolCallId = null,
+    string TaskIdSource = "unknown");
 
 internal sealed class AbortAgentsConfirmationWindow : Window {
     private readonly List<(CheckBox CheckBox, AbortAgentsConfirmationTarget Target)> _items = [];

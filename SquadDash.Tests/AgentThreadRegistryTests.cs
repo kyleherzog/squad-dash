@@ -334,6 +334,47 @@ internal sealed class AgentThreadRegistryTests {
             Assert.That(thread.AgentCardKey, Is.EqualTo("scribe"));
             Assert.That(thread.AgentDisplayName, Is.EqualTo("Scribe"));
             Assert.That(thread.Title, Is.EqualTo("Scribe"));
+            Assert.That(thread.BackgroundTaskId, Is.EqualTo("scribe-docs-panel-log"));
+        });
+    }
+
+    [Test, Apartment(ApartmentState.STA)]
+    public void CaptureBackgroundAgentLaunchInfo_MapsToolCallIdentityToCancellableTaskId() {
+        var registry = MakeRegistry(getKnownTeamAgentDescriptors: () => [
+            new TeamAgentDescriptor("Talia Rune", "talia-rune", "Diagnostics")
+        ]);
+
+        using var document = System.Text.Json.JsonDocument.Parse("""
+            {
+              "agent_type": "general-purpose",
+              "description": "Fix queue held state lost + draining shown on restart",
+              "mode": "background",
+              "name": "queue-held-restart-bug",
+              "prompt": "You are Talia Rune. Investigate the queue bug."
+            }
+            """);
+
+        registry.CaptureBackgroundAgentLaunchInfo(new SquadSdkEvent {
+            ToolName = "task",
+            ToolCallId = "toolu_bdrk_014NnSZxJapiCigA8z7DfSS3",
+            Args = document.RootElement.Clone()
+        });
+
+        var thread = registry.GetOrCreateAgentThread(
+            toolCallId: "toolu_bdrk_014NnSZxJapiCigA8z7DfSS3",
+            agentId: "toolu_bdrk_014NnSZxJapiCigA8z7DfSS3",
+            agentName: "General Purpose Agent",
+            agentDisplayName: "General Purpose Agent",
+            agentDescription: "Full-capability agent running in a subprocess.",
+            status: "running",
+            prompt: null,
+            startedAt: null);
+
+        Assert.Multiple(() => {
+            Assert.That(thread.ToolCallId, Is.EqualTo("toolu_bdrk_014NnSZxJapiCigA8z7DfSS3"));
+            Assert.That(thread.BackgroundTaskId, Is.EqualTo("queue-held-restart-bug"));
+            Assert.That(thread.AgentId, Is.EqualTo("queue-held-restart-bug"));
+            Assert.That(thread.AgentDisplayName, Is.EqualTo("Talia Rune"));
         });
     }
 

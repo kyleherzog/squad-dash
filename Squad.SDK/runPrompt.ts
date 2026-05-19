@@ -1598,7 +1598,23 @@ async function main() {
             }
 
             try {
+                emit({
+                    type: "sdk_diagnostics",
+                    diagnosticPhase: "background_cancel_requested",
+                    requestId: request.requestId,
+                    sessionId: request.sessionId,
+                    taskId: request.taskId,
+                    message: bridge.describeBackgroundCancelState(request.taskId, request.sessionId)
+                });
                 const cancelled = await bridge.cancelBackgroundTask(request.taskId, request.sessionId);
+                emit({
+                    type: "sdk_diagnostics",
+                    diagnosticPhase: "background_cancel_completed",
+                    requestId: request.requestId,
+                    sessionId: request.sessionId,
+                    taskId: request.taskId,
+                    message: `cancelled=${cancelled} ${bridge.describeBackgroundCancelState(request.taskId, request.sessionId)}`
+                });
                 emit({
                     type: "background_task_cancelled",
                     requestId: request.requestId,
