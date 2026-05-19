@@ -327,7 +327,25 @@ internal sealed class AgentStatusCard : INotifyPropertyChanged, IHaveUniqueName 
 
     public void NotifyThemeChanged() => OnPropertyChanged(nameof(EffectiveAccentBrush));
 
-    public static void SetTheme(bool isDark) { _isDarkTheme = isDark; }
+    // ── Spinner activity ──────────────────────────────────────────────────
+
+    /// <summary>Fired when there is agent activity that should spin the spinner.</summary>
+    public event EventHandler<SpinnerActivityKind>? ActivityPulsed;
+
+    /// <summary>Call from the UI thread when a new activity event arrives for this agent.</summary>
+    public void FireActivityPulse(SpinnerActivityKind kind) =>
+        ActivityPulsed?.Invoke(this, kind);
+
+    // ── Theme ─────────────────────────────────────────────────────────────
+
+    /// <summary>Raised (on any thread) when the app theme changes.</summary>
+    public static event EventHandler? ThemeChanged;
+
+    public static void SetTheme(bool isDark)
+    {
+        _isDarkTheme = isDark;
+        ThemeChanged?.Invoke(null, EventArgs.Empty);
+    }
 
     public static bool IsDarkTheme => _isDarkTheme;
 

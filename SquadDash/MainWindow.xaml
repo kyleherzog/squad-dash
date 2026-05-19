@@ -206,16 +206,24 @@
                                        TextWrapping="Wrap" />
                         </Border>
 
-                        <TextBlock x:Name="StatusTextBlock"
-                                   Grid.Row="2"
-                                   Margin="0,12,0,0"
-                                   Text="{Binding StatusText}"
-                                   Visibility="{Binding StatusVisibility}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   FontWeight="SemiBold"
-                                   TextWrapping="NoWrap"
-                                   TextTrimming="CharacterEllipsis"
-                                   Foreground="{DynamicResource AgentStatusText}" />
+                        <StackPanel x:Name="StatusRow"
+                                    Grid.Row="2"
+                                    Margin="0,12,0,0"
+                                    Orientation="Horizontal"
+                                    Visibility="{Binding StatusVisibility}">
+                            <local:ActivitySpinner Width="18"
+                                                   Height="18"
+                                                   Margin="0,0,4,0"
+                                                   VerticalAlignment="Center" />
+                            <TextBlock x:Name="StatusTextBlock"
+                                       Text="{Binding StatusText}"
+                                       FontSize="{DynamicResource FontSizeBody}"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="NoWrap"
+                                       TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource AgentStatusText}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
 
                         <TextBlock x:Name="DetailTextBlock"
                                    Grid.Row="3"
@@ -312,7 +320,7 @@
                     <Setter TargetName="HeaderStack" Property="Margin" Value="0" />
                     <Setter TargetName="AgentNameText" Property="FontSize" Value="{DynamicResource FontSizeSmall}" />
                     <Setter TargetName="RoleBorder" Property="Visibility" Value="Collapsed" />
-                    <Setter TargetName="StatusTextBlock" Property="Margin" Value="0,8,0,0" />
+                    <Setter TargetName="StatusRow" Property="Margin" Value="0,8,0,0" />
                     <Setter TargetName="StatusTextBlock" Property="FontSize" Value="{DynamicResource FontSizeSmall}" />
                     <Setter TargetName="DetailTextBlock" Property="Visibility" Value="Collapsed" />
                     <Setter TargetName="SelectedIndicator" Property="Height" Value="4" />

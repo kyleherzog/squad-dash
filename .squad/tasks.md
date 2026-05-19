@@ -153,6 +153,39 @@
   Document the full release checklist: bump version, tag, let automation run, verify winget PR.
   Include manual fallback steps. Useful for the first few releases before automation is trusted.
 
+- [x] **Physics-based activity spinner on agent cards** *(Owner: Lyra Morn)*
+  Add a small spinning circle (fits in ~18×18px) to the left of each agent card's status text
+  (e.g. "Running", "Waiting", "Stalled"). The spinner uses physics (momentum + friction) driven
+  by a `DispatcherTimer` with a `RotateTransform` + `SolidColorBrush` animated via HSV math.
+
+  **Size & placement:**
+  - Max diameter: 18px (writing/red state). Min diameter: ~12px (~2/3, thinking/blue state).
+  - Placed immediately left of the status text label, occupying ~1 character width.
+  - Fits in an 18×18 bounding square.
+
+  **Physics:**
+  - Speed driven by agent activity (tool calls, token stream). Each event adds momentum.
+  - Friction decay: 20–30 seconds coast-to-stop during silence (not 10s).
+  - Fade out only AFTER the spinner has slowed to a complete stop (~2s fade).
+
+  **Color — thinking vs writing:**
+  - Blue = thinking/reading (default). Red = actively writing/streaming output.
+  - Transition to red when write activity detected; fade back to blue after 5–10s of no writes.
+  - Color transitions are smooth (animated, not instant).
+
+  **Saturation/lightness pulse at max speed** (speed perception ceiling):
+  - At max spin speed, hue stays fixed; instead oscillate saturation+lightness for visibility.
+  - Dark theme: oscillate toward brighter (higher contrast). Light theme: oscillate toward darker.
+  - Creates a pulsing "maxed out" look as a second dimension of activity signal.
+  - If theme changes while the spinner is running, update the oscillation direction accordingly.
+
+  **Accessibility (colorblind):**
+  - Shape/size difference: red state = larger diameter (18px), blue state = smaller (12px).
+  - This gives a non-color cue for writing vs thinking.
+
+  **When to show:** only while an agent turn is active (`isCurrentRunThread` true).
+  Hide (or fade out after stop) when idle/waiting with no active turn.
+
 ---
 
 ## 🟡 Mid Priority — Annotation Editor (Paste Image Window)

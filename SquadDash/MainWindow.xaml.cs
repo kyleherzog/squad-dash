@@ -4533,6 +4533,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             thread.DetailText = BuildThreadPreview(thread.LatestResponse!);
 
         SyncThreadChip(thread);
+        FindAgentCardForThread(thread)?.FireActivityPulse(SpinnerActivityKind.Writing);
         UpdateAgentCardFromThread(thread, syncBuckets: false);
         _conversationManager.SchedulePersistAgentThreadSnapshot(thread);
     }
@@ -4554,6 +4555,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         AppendThinkingText(thread, thought, thread.Title);
         thread.DetailText = FormatThinkingText(thought);
         SyncThreadChip(thread);
+        FindAgentCardForThread(thread)?.FireActivityPulse(SpinnerActivityKind.Thinking);
         UpdateAgentCardFromThread(thread, syncBuckets: false);
         _conversationManager.SchedulePersistAgentThreadSnapshot(thread);
     }
@@ -4601,6 +4603,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         thread.IsCurrentBackgroundRun = true;
         thread.DetailText = ToolTranscriptFormatter.BuildRunningText(CreateToolDescriptor(evt), evt.ProgressMessage);
         SyncThreadChip(thread);
+        FindAgentCardForThread(thread)?.FireActivityPulse(SpinnerActivityKind.Thinking);
         UpdateAgentCardFromThread(thread, syncBuckets: false);
         _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, "subagent_tool_start");
         _conversationManager.SchedulePersistAgentThreadSnapshot(thread);
@@ -4618,6 +4621,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         thread.IsCurrentBackgroundRun = true;
         thread.DetailText = ToolTranscriptFormatter.BuildRunningText(CreateToolDescriptor(evt), evt.ProgressMessage);
         SyncThreadChip(thread);
+        FindAgentCardForThread(thread)?.FireActivityPulse(SpinnerActivityKind.Thinking);
         UpdateAgentCardFromThread(thread, syncBuckets: false);
         _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, "subagent_tool_progress");
         _conversationManager.SchedulePersistAgentThreadSnapshot(thread);
@@ -4643,6 +4647,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
 
         SyncThreadChip(thread);
+        FindAgentCardForThread(thread)?.FireActivityPulse(SpinnerActivityKind.Thinking);
         UpdateAgentCardFromThread(thread, syncBuckets: false);
         _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, "subagent_tool_complete");
         _conversationManager.SchedulePersistAgentThreadSnapshot(thread);
