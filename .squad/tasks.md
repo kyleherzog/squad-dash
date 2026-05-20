@@ -419,7 +419,7 @@
   fires if ntfy is configured in workspace settings (mirrors existing notification guard pattern).
   Obeys the existing rate-limiter in `PushNotificationService` (digest if too frequent).
 
-- [ ] **[Maintenance] Tests — Phase 2 panel + report integration** *(Owner: Vesper Knox)*
+- [x] **[Maintenance] Tests — Phase 2 panel + report integration** *(Owner: Vesper Knox)*
   Integration tests for: `MaintenanceReportWriter` (correct file naming, auto-prune to 30 files,
   push notification call). `MaintenancePanelController.Refresh()` (checkbox state reflects config,
   last-run data from store, running/idle state header text). Banner show/dismiss lifecycle.
@@ -566,6 +566,7 @@
 
 > Full details in `.squad/completed-tasks.md`. This section is a compact AI-recall index only.
 
+- [x] **[Maintenance] Phase 2 tests — ReportWriter + PanelController** — ✅ Implemented (commit 0117326; 7 ReportWriter tests: file naming, content sections, duration format, prune-to-30, no-prune-under-30, newest-first sort, absent-dir safe; 8 PanelController WPF tests: idle/running header text, checkbox state from config, empty config, last-run info, null store, first-run no-throw, Run Now button lifecycle)
 - [x] **[Maintenance] Phase 1 + Phase 2 + partial Phase 3 — full Maintenance Mode implementation** — ✅ Implemented (commits 8d4582b, 5030b6f, 8173256, 07ac04a, ff53624, f248b80, ed04918; IdleDetectionService, parser, state store, runner, report writer, default maintenance.md, prompt injection, WPF panel, banner, ntfy event, Argus Weld lazy registration, thread routing, Run Now button, agent roster)
 - [x] Loop — multi-turn iterations (auto-pause on quick replies, resume on user input) — ✅ Implemented (commit 26ead85; `ExecuteLoopIterationAsync`; `_loopFollowUpTcs`; `CanAutoDispatchPromptQueue` guard; 10 new tests in `LoopMultiTurnTests.cs`; 1637 pass)
 - [x] Loop — `LoopController` harden `onBeforeIteration` exceptions — ✅ Fixed (commit 7932ea8; try/catch around `await _onBeforeIteration()`; break on stop/cancel, continue otherwise; test 9 updated)
