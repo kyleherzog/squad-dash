@@ -73,7 +73,7 @@ internal sealed class MaintenanceRunner {
 
                 var taskStart = Stopwatch.GetTimestamp();
                 try {
-                    var prompt = BuildPrompt(task);
+                    var prompt = BuildPrompt(task, config.Safety, startedAt);
                     await _executePromptAsync(prompt, ct).ConfigureAwait(false);
 
                     var elapsed = Stopwatch.GetElapsedTime(taskStart);
@@ -119,19 +119,28 @@ internal sealed class MaintenanceRunner {
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
-    private static string BuildPrompt(MaintenanceTask task) {
-        var safetyPrefix = task.Safety switch {
-            "report-only" =>
-                "REPORT ONLY: You are running in read-only, reporting mode. " +
-                "Do not make any changes to files, branches, or commits. " +
-                "Only observe and report what you find.\n\n",
-            "branch" =>
-                "Create a new branch before making any changes. " +
-                "Do not commit directly to the default branch.\n\n",
-            _ => string.Empty,
+    private static string BuildPrompt(MaintenanceTask task, string globalSafety, DateTimeOffset runDate) {
+        var effectiveSafety = ApplySafetyFloor(globalSafety, task.Safety);
+        var branchName      = $"maintenance/{runDate:yyyyMMdd}-{task.Id}";
+
+        var safetyPrefix = effectiveSafety switch {
+            "report-only" => "Do not modify any source files. Generate a report only.\n\n",
+            "branch"      => $"Create branch `{branchName}` before making any code changes. Commit to that branch only.\n\n",
+            "direct"      => "You may commit directly to the current branch.\n\n",
+            _             => string.Empty,
         };
 
         return safetyPrefix + task.Instructions;
+    }
+
+    private static string ApplySafetyFloor(string globalSafety, string taskSafety) {
+        static int Rank(string s) => s switch {
+            "report-only" => 2,
+            "branch"      => 1,
+            "direct"      => 0,
+            _             => 0,
+        };
+        return Rank(globalSafety) >= Rank(taskSafety) ? globalSafety : taskSafety;
     }
 
     private static string? TryGetCommitSha(string workspacePath) {

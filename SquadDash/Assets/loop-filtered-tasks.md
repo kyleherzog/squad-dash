@@ -44,7 +44,7 @@ commands: [stop_loop]
 
 # Filtered Task Loop
 
-You are running as part of a SquadDash autonomous loop. **Each iteration must complete exactly one task** from `.squad/tasks.md`, then stop. The next iteration will pick up the next task.
+You are running as part of a SquadDash autonomous loop. **Each iteration must complete exactly one task** from `.squad/tasks.md`, then end this iteration's response. Do **not** stop the loop after a successful task; the next iteration will pick up the next task.
 
 > Iteration: {{iteration}}
 
@@ -65,7 +65,8 @@ No unchecked tasks remain (or all remaining tasks are Owner: User). Do the follo
      { "command": "stop_loop" }
    ]
    ```
-2. Do not attempt any further work this iteration.
+2. Only emit `stop_loop` in this no-actionable-task case. Do not emit it after successfully completing a task.
+3. Do not attempt any further work this iteration.
 
 ## Step 3 — If a task IS found, implement it fully
 
@@ -85,6 +86,7 @@ No unchecked tasks remain (or all remaining tasks are Owner: User). Do the follo
    {{/if}}
 5. After work is complete, mark the task `[x]` in `.squad/tasks.md` and move it to the "Recently Completed" section at the bottom.
 6. Report a one-line summary of what was done.
+7. Do **not** append `HOST_COMMAND_JSON` after completing a task. Simply finish your response and let SquadDash schedule the next iteration.
 
 ## Step 4 — Write tests (if applicable)
 

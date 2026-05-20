@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using NUnit.Framework;
 
 namespace SquadDash.Tests;
@@ -23,6 +24,23 @@ internal sealed class LoopTemplatePreprocessingTests
 
     private static LoopOption GroupOpt(string key)
         => new(key, RawValue: "", Type: "group", Label: null, Hint: null, Choices: null);
+
+    private static string FindRepoFile(params string[] pathSegments)
+    {
+        var dir = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
+        while (dir is not null)
+        {
+            var candidate = dir.FullName;
+            foreach (var segment in pathSegments)
+                candidate = Path.Combine(candidate, segment);
+            if (File.Exists(candidate))
+                return candidate;
+            dir = dir.Parent;
+        }
+
+        Assert.Fail($"Could not find repo file: {string.Join(Path.DirectorySeparatorChar, pathSegments)}");
+        return string.Empty;
+    }
 
     // ── Task 1: plain {{key}} substitution ───────────────────────────────────
 
@@ -176,6 +194,18 @@ internal sealed class LoopTemplatePreprocessingTests
         var extra  = new Dictionary<string, string> { ["iteration"] = "1" };
         Assert.That(LoopMdParser.BuildMergedBody(config, extra),
             Is.EqualTo("Task filter: [**FILTER**]"));
+    }
+
+    [Test]
+    public void FilteredTasksTemplate_StopLoopOnlyForNoActionableTasks()
+    {
+        var template = File.ReadAllText(
+            FindRepoFile("SquadDash", "Assets", "loop-filtered-tasks.md"));
+
+        Assert.That(template, Does.Contain("Do **not** stop the loop after a successful task"));
+        Assert.That(template, Does.Contain("Only emit `stop_loop` in this no-actionable-task case"));
+        Assert.That(template, Does.Contain("Do **not** append `HOST_COMMAND_JSON` after completing a task"));
+        Assert.That(template, Does.Not.Contain("then stop. The next iteration"));
     }
 
     // ── BuildFilterInstruction ────────────────────────────────────────────────

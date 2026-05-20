@@ -307,6 +307,103 @@ internal sealed class MaintenanceRunnerTests {
             "branch safety must inject a branch-creation instruction into the prompt");
     }
 
+    // ── Safety prompt injection — direct ──────────────────────────────────────
+
+    [Test]
+    public async Task StartAsync_DirectTask_PromptContainsDirectCommitInstruction() {
+        var capturedPrompt = string.Empty;
+        var config = MakeConfig(
+            tasks: [MakeTask("cleanup", safety: "direct", instructions: "Clean up logs.")],
+            safety: "direct");
+
+        var runner = MakeRunner(
+            executePromptAsync: (prompt, _) => { capturedPrompt = prompt; return Task.CompletedTask; });
+
+        await runner.StartAsync(config, _workspaceDir, CancellationToken.None);
+
+        Assert.That(capturedPrompt, Does.Contain("commit directly").IgnoreCase,
+            "direct safety must inject a 'commit directly' instruction into the prompt");
+    }
+
+    // ── Safety floor — global report-only overrides per-task branch ───────────
+
+    [Test]
+    public async Task StartAsync_SafetyFloor_GlobalReportOnlyOverridesPerTaskBranch() {
+        var capturedPrompt = string.Empty;
+        var config = MakeConfig(
+            tasks: [MakeTask("analysis", safety: "branch", instructions: "Analyse the diff.")],
+            safety: "report-only");
+
+        var runner = MakeRunner(
+            executePromptAsync: (prompt, _) => { capturedPrompt = prompt; return Task.CompletedTask; });
+
+        await runner.StartAsync(config, _workspaceDir, CancellationToken.None);
+
+        Assert.That(capturedPrompt, Does.Contain("report").IgnoreCase,
+            "global report-only must override per-task branch and inject report prefix");
+        Assert.That(capturedPrompt, Does.Not.Contain("Create branch").IgnoreCase,
+            "report-only floor must suppress the branch-creation instruction");
+    }
+
+    // ── Safety floor — global report-only overrides per-task direct ───────────
+
+    [Test]
+    public async Task StartAsync_SafetyFloor_GlobalReportOnlyOverridesPerTaskDirect() {
+        var capturedPrompt = string.Empty;
+        var config = MakeConfig(
+            tasks: [MakeTask("scan", safety: "direct", instructions: "Scan for issues.")],
+            safety: "report-only");
+
+        var runner = MakeRunner(
+            executePromptAsync: (prompt, _) => { capturedPrompt = prompt; return Task.CompletedTask; });
+
+        await runner.StartAsync(config, _workspaceDir, CancellationToken.None);
+
+        Assert.That(capturedPrompt, Does.Contain("report").IgnoreCase,
+            "global report-only must override per-task direct and inject report prefix");
+    }
+
+    // ── Safety floor — global branch overrides per-task direct ───────────────
+
+    [Test]
+    public async Task StartAsync_SafetyFloor_GlobalBranchOverridesPerTaskDirect() {
+        var capturedPrompt = string.Empty;
+        var config = MakeConfig(
+            tasks: [MakeTask("refactor", safety: "direct", instructions: "Refactor module.")],
+            safety: "branch");
+
+        var runner = MakeRunner(
+            executePromptAsync: (prompt, _) => { capturedPrompt = prompt; return Task.CompletedTask; });
+
+        await runner.StartAsync(config, _workspaceDir, CancellationToken.None);
+
+        Assert.That(capturedPrompt, Does.Contain("branch").IgnoreCase,
+            "global branch must override per-task direct and inject branch instruction");
+    }
+
+    // ── Branch name includes date and task slug ───────────────────────────────
+
+    [Test]
+    public async Task StartAsync_BranchTask_PromptContainsBranchNameWithDateAndSlug() {
+        var capturedPrompt = string.Empty;
+        var config = MakeConfig(
+            tasks: [MakeTask("my-task", safety: "branch", instructions: "Do the work.")],
+            safety: "branch");
+
+        var runner = MakeRunner(
+            executePromptAsync: (prompt, _) => { capturedPrompt = prompt; return Task.CompletedTask; });
+
+        await runner.StartAsync(config, _workspaceDir, CancellationToken.None);
+
+        var expectedDate = DateTimeOffset.UtcNow.ToString("yyyyMMdd");
+        Assert.That(capturedPrompt, Does.Contain("maintenance/").IgnoreCase,
+            "branch prompt must contain the 'maintenance/' prefix");
+        Assert.That(capturedPrompt, Does.Contain("my-task"),
+            "branch prompt must contain the task slug");
+        Assert.That(capturedPrompt, Does.Contain(expectedDate),
+            "branch prompt must contain today's date in yyyyMMdd format");
+    }
+
     // ── IsRunning ────────────────────────────────────────────────────────────
 
     [Test]
