@@ -19,6 +19,7 @@ How to decide who handles what.
 | Scope & priorities | Orion Vale | What to build next, trade-offs, decomposing epics into phases |
 | Session logging | Scribe | Automatic — never needs routing |
 | Maintenance orchestration (idle tasks) | Argus Weld | maintenance.md tasks, idle-window execution, maintenance reports |
+| Squad markdown files & configuration | Malik Graves | `.squad/*.md` files, `maintenance.md` task blocks, `loop*.md` options, `tasks.md` structure, frontmatter correctness |
 
 ## Issue Routing
 

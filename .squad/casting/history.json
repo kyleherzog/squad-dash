@@ -20,6 +20,13 @@
       "role": "Mac & Cross-Platform Specialist",
       "project": "SquadUI",
       "hired_at": "2026-05-15"
+    },
+    {
+      "universe": "SquadDash Universe",
+      "character": "Malik Graves",
+      "role": "Markdown Specialist",
+      "project": "SquadUI",
+      "hired_at": "2026-05-20"
     }
   ],
   "assignment_cast_snapshots": {
@@ -34,6 +41,9 @@
     },
     "2026-05-15": {
       "SquadDash Universe": ["Orion Vale", "Lyra Morn", "Arjun Sen", "Talia Rune", "Jae Min Kade", "Vesper Knox", "Mira Quill", "Sorin Pyre", "Atlas Wren"]
+    },
+    "2026-05-20": {
+      "SquadDash Universe": ["Orion Vale", "Lyra Morn", "Arjun Sen", "Talia Rune", "Jae Min Kade", "Vesper Knox", "Mira Quill", "Sorin Pyre", "Atlas Wren", "Malik Graves"]
     }
   }
 }

@@ -23,6 +23,14 @@
       "charter": "agents/atlas-wren/charter.md",
       "status": "active",
       "hired_at": "2026-05-15"
+    },
+    "malik-graves": {
+      "display_name": "Malik Graves",
+      "universe": "SquadDash Universe",
+      "role": "Markdown Specialist",
+      "charter": "agents/malik-graves/charter.md",
+      "status": "active",
+      "hired_at": "2026-05-20"
     }
   }
 }
