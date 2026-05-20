@@ -530,11 +530,8 @@
 
 
 
-- [ ] **[maintenance.md] S7 — Shorten the 100-line header comment to a concise reference card** *(Owner: arjun-sen)*
-  The HTML comment block at the top of `maintenance.md` is ~100 lines covering frontmatter keys,
-  safety model, frequency values, and task block format. Condense it to a 10–15 line reference card
-  with the essential fields and values. Full documentation lives in `docs/features/maintenance-mode.md`
-  — point to that file for details. File-only change.
+
+
 
 - [ ] **[maintenance.md] S8 — Move `configured: false` to bottom of frontmatter with annotation** *(Owner: arjun-sen)*
   In the global config frontmatter block, relocate `configured: false` to the very last line of the
@@ -585,6 +582,8 @@
 ## ✅ Recently Completed
 
 > Full details in `.squad/completed-tasks.md`. This section is a compact AI-recall index only.
+
+- [x] **[maintenance.md] S7 — Shorten the 100-line header comment to a concise reference card** — ✅ Already resolved. S1's rewrite replaced the original ~100-line HTML comment block with 5 concise `#` comment lines at the top of the frontmatter. No further changes needed.
 
 - [x] **[maintenance.md] S6 — Fix backtick fence in `code-smells` task** — ✅ Already resolved. S1's complete rewrite of `maintenance.md` to YAML list format naturally eliminated all stray backtick code fences. No-op; no file changes needed.
 
