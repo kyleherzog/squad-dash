@@ -59,6 +59,9 @@ internal sealed class HireAgentWindow : Window {
     private bool _suppressTabHandling;
     private bool _advancedOptionsVisible;
 
+    // ── PTT voice dictation ───────────────────────────────────────────────────
+    private readonly PttTextBoxAttachment _pttAttachment;
+
     internal sealed record HireAgentSubmission(
         string UniverseName,
         string AgentName,
@@ -408,6 +411,19 @@ internal sealed class HireAgentWindow : Window {
         PopulateUniverseTabs(activeUniverseName);
         Loaded += HireAgentWindow_Loaded;
         UpdatePreviewState();
+
+        _pttAttachment = new PttTextBoxAttachment(() => new ApplicationSettingsStore().Load(), this, Dispatcher);
+        Closed += (_, _) => _pttAttachment.Dispose();
+
+        PreviewKeyDown += (_, e) => {
+            var focused = GetFocusedPttTextBox();
+            if (focused is not null && _pttAttachment.HandlePreviewKeyDown(e, focused))
+                e.Handled = true;
+        };
+        PreviewKeyUp += (_, e) => {
+            if (GetFocusedPttTextBox() is not null && _pttAttachment.HandlePreviewKeyUp(e))
+                e.Handled = true;
+        };
     }
 
     public static HireAgentSubmission? Show(
@@ -499,6 +515,16 @@ internal sealed class HireAgentWindow : Window {
         }
 
         return candidates;
+    }
+
+    private TextBox? GetFocusedPttTextBox() {
+        if (_nameBox.IsKeyboardFocusWithin)            return _nameBox;
+        if (_modelPreferenceBox.IsKeyboardFocusWithin) return _modelPreferenceBox;
+        if (_extraGuidanceBox.IsKeyboardFocusWithin)   return _extraGuidanceBox;
+        if (_bestForBox.IsKeyboardFocusWithin)         return _bestForBox;
+        if (_avoidBox.IsKeyboardFocusWithin)           return _avoidBox;
+        if (_whatIOwnBox.IsKeyboardFocusWithin)        return _whatIOwnBox;
+        return null;
     }
 
     private static TextBlock BuildFieldLabel(string text) {
