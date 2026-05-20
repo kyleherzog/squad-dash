@@ -87,9 +87,9 @@ public sealed class ActivitySpinner : FrameworkElement
     private const double VelocityRampSeconds = 0.5;   // time to ramp from current to target
 
     // Opacity targets per state
-    private const double ThinkingTargetOpacity = 0.50;
-    private const double ReadingTargetOpacity  = 0.65;
-    private const double WritingTargetOpacity  = 0.80;
+    private const double ThinkingTargetOpacity = 0.72;
+    private const double ReadingTargetOpacity  = 0.82;
+    private const double WritingTargetOpacity  = 0.95;
 
     // Write-dot constants
     private const double MaxDotRadiusFraction = 0.425;  // 0.5 × 0.85 — dot max reduced to 85% of prior

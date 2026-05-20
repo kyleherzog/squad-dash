@@ -15,7 +15,7 @@ internal static class ColorUtilities {
     internal static SolidColorBrush CreateDarkAccentBrush(string hex) {
         var color = (Color)ColorConverter.ConvertFromString(hex);
         RgbToHsl(color.R, color.G, color.B, out double h, out double s, out double l);
-        var boostedL = Math.Max(0.15, l - 0.10);
+        var boostedL = Math.Min(0.85, l + 0.18);
         var boostedS  = Math.Min(1.0, s * 1.15);
         HslToRgb(h, boostedS, boostedL, out byte r, out byte g, out byte b);
         return new SolidColorBrush(Color.FromRgb(r, g, b));
