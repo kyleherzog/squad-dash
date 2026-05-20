@@ -216,6 +216,7 @@
                                                    FontSize="{DynamicResource FontSizeBody}" />
                             <TextBlock x:Name="StatusTextBlock"
                                        Text="{Binding StatusText}"
+                                       ToolTip="{Binding StatusText}"
                                        FontSize="{DynamicResource FontSizeBody}"
                                        FontWeight="SemiBold"
                                        TextWrapping="NoWrap"
