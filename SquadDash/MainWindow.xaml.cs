@@ -7437,6 +7437,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try
         {
+            // During PTT voice recording, don't zoom — allow normal scroll
+            if (_pttState == PttState.Active) return;
             var rtb = (sender as RichTextBox) ?? OutputTextBox;
             if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
             {
@@ -7665,6 +7667,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         if (msg != WM_NCMOUSEWHEEL) return nint.Zero;
         if (!NativeMethods.IsCtrlPhysicallyDown()) return nint.Zero;
+        // During PTT voice recording, let wheel events pass through as normal scroll
+        if (_pttState == PttState.Active) return nint.Zero;
         var delta = (short)((uint)wParam >> 16);
         Dispatcher.BeginInvoke(() => SetFontSizeScale(_fontScaleLevel + (delta > 0 ? 1 : -1)));
         handled = true;
@@ -7675,6 +7679,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try
         {
+            // During PTT voice recording, let wheel events pass through as normal scroll
+            if (_pttState == PttState.Active) return;
             if (Keyboard.Modifiers != ModifierKeys.Control) return;
             if (Mouse.DirectlyOver is DependencyObject hovered && IsInExcludedScrollArea(hovered))
                 return;
