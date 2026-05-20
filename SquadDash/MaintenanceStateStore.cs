@@ -51,7 +51,11 @@ internal sealed class MaintenanceStateStore {
                 return true;
 
             case "per-commit":
-                if (commitSha is null) goto case "daily";
+                if (commitSha is null) {
+                    SquadDashTrace.Write(TraceCategory.General,
+                        $"MaintenanceStateStore: per-commit git fallback — commit SHA unavailable, treating task '{taskId}' as daily");
+                    goto case "daily";
+                }
                 if (!_tasks.TryGetValue(taskId, out var commitState))
                     return true;
                 return !string.Equals(commitState.LastCommitSha, commitSha,

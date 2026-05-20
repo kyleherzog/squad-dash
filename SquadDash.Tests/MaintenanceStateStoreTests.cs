@@ -75,6 +75,49 @@ internal sealed class MaintenanceStateStoreTests {
         Assert.That(eligible, Is.True, "per-commit task must be eligible when the commit SHA changes");
     }
 
+    // ── IsEligible — per-commit git fallback (null SHA) ──────────────────────
+
+    [Test]
+    public void IsEligible_PerCommitFrequency_NullCommitSha_FallsBackToDaily_NotEligibleAfterRunToday() {
+        // git unavailable → commitSha is null → must behave like daily (same day = not eligible).
+        _store.RecordRun("per-commit-task", commitSha: null);
+        var eligible = _store.IsEligible("per-commit-task", "per-commit", commitSha: null);
+        Assert.That(eligible, Is.False,
+            "per-commit task with null SHA must fall back to daily — not eligible again on the same day");
+    }
+
+    [Test]
+    public void IsEligible_PerCommitFrequency_NullCommitSha_FallsBackToDaily_EligibleAfterRunYesterday() {
+        // git unavailable → commitSha is null → daily fallback means eligible after a day gap.
+        WriteStateWithLastRunAt("per-commit-task", lastRunAt: DateTime.UtcNow.AddDays(-1), lastSha: "sha1");
+        _store.Reload();
+
+        var eligible = _store.IsEligible("per-commit-task", "per-commit", commitSha: null);
+        Assert.That(eligible, Is.True,
+            "per-commit task with null SHA must fall back to daily — eligible after a full-day gap");
+    }
+
+    [Test]
+    public void IsEligible_PerCommitFrequency_NullCommitSha_WritesTraceEntry() {
+        // Capture live trace entries so we can assert the fallback message was emitted.
+        var captured = new System.Collections.Generic.List<(TraceCategory Category, string Message)>();
+        var target = new CapturingTraceTarget(captured);
+        SquadDashTrace.TraceTarget = target;
+
+        try {
+            _store.IsEligible("trace-task", "per-commit", commitSha: null);
+        }
+        finally {
+            SquadDashTrace.TraceTarget = null;
+        }
+
+        Assert.That(captured, Has.Count.GreaterThan(0),
+            "A trace entry must be written when per-commit falls back due to null commit SHA");
+        Assert.That(captured[0].Category, Is.EqualTo(TraceCategory.General));
+        Assert.That(captured[0].Message, Does.Contain("per-commit git fallback"),
+            "Trace message must identify this as a per-commit git fallback");
+    }
+
     // ── IsEligible — frequency: always ────────────────────────────────────────
 
     [Test]
@@ -163,6 +206,13 @@ internal sealed class MaintenanceStateStoreTests {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private sealed class CapturingTraceTarget(
+        System.Collections.Generic.List<(TraceCategory Category, string Message)> sink)
+        : ILiveTraceTarget {
+        public void AddEntry(TraceCategory category, string detail) =>
+            sink.Add((category, detail));
+    }
 
     /// <summary>
     /// Writes a minimal state JSON file into <see cref="_stateDir"/> so tests can

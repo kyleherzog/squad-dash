@@ -472,13 +472,9 @@
   task has `safety: direct` declared. Chip text: "⚠ direct commits". The indicator is per-task
   (appears inline with that task row). Does not block execution — purely informational.
 
-- [ ] **[Maintenance] Auto-add `maintenance-state.json` to `.gitignore` on first run** *(Owner: arjun-sen)*
-  On the first maintenance run (or on `WorkspaceOpenCoordinator` first-run install), check whether
-  `.gitignore` already contains an entry for `maintenance-state.json`. If not, append it. Mirrors
-  the pattern used for other auto-managed ignore entries in the workspace. Write a trace entry
-  confirming the addition.
+- [x] **[Maintenance] Auto-add `maintenance-state.json` to `.gitignore` on first run** *(Owner: arjun-sen)*
 
-- [ ] **[Maintenance] `per-commit` frequency — git fallback tracing** *(Owner: arjun-sen)*
+- [x] **[Maintenance] `per-commit` frequency — git fallback tracing** *(Owner: arjun-sen)*
   In `MaintenanceStateStore`, when `git rev-parse HEAD` fails (e.g. repo not initialised, git not
   on PATH), fall back to `daily` frequency behavior for any `per-commit` tasks. Write a
   `SquadDashTrace.Write` entry recording the fallback so it is visible in the trace log. Do not
@@ -553,7 +549,8 @@
 
 > Full details in `.squad/completed-tasks.md`. This section is a compact AI-recall index only.
 
-- [x] **[Maintenance] Safety model enforcement — `branch` and `direct` modes** — ✅ Implemented (BuildPrompt now enforces global safety floor via ApplySafetyFloor; branch injects named `maintenance/YYYYMMDD-<slug>` branch; direct injects commit-directly message; report-only overrides more-permissive per-task safety; 5 new tests in MaintenanceRunnerTests.cs; all 17 tests pass)
+- [x] **[Maintenance] `per-commit` frequency — git fallback tracing** — ✅ Implemented (`MaintenanceStateStore.IsEligible` now calls `SquadDashTrace.Write(TraceCategory.General, ...)` when `commitSha` is null for a `per-commit` task before falling back to daily logic; 3 new NUnit tests: null-SHA falls back to daily (eligible/not-eligible), trace entry captured via `CapturingTraceTarget`; 14/14 tests pass)
+- [x] **[Maintenance] Safety model enforcement — `branch` and `direct` modes**— ✅ Implemented (BuildPrompt now enforces global safety floor via ApplySafetyFloor; branch injects named `maintenance/YYYYMMDD-<slug>` branch; direct injects commit-directly message; report-only overrides more-permissive per-task safety; 5 new tests in MaintenanceRunnerTests.cs; all 17 tests pass)
 - [x] **[Maintenance] Phase 2 tests— ReportWriter + PanelController** — ✅ Implemented (commit 0117326; 7 ReportWriter tests: file naming, content sections, duration format, prune-to-30, no-prune-under-30, newest-first sort, absent-dir safe; 8 PanelController WPF tests: idle/running header text, checkbox state from config, empty config, last-run info, null store, first-run no-throw, Run Now button lifecycle)
 - [x] **[Maintenance] Phase 1 + Phase 2 + partial Phase 3 — full Maintenance Mode implementation** — ✅ Implemented (commits 8d4582b, 5030b6f, 8173256, 07ac04a, ff53624, f248b80, ed04918; IdleDetectionService, parser, state store, runner, report writer, default maintenance.md, prompt injection, WPF panel, banner, ntfy event, Argus Weld lazy registration, thread routing, Run Now button, agent roster)
 - [x] Loop — multi-turn iterations (auto-pause on quick replies, resume on user input) — ✅ Implemented (commit 26ead85; `ExecuteLoopIterationAsync`; `_loopFollowUpTcs`; `CanAutoDispatchPromptQueue` guard; 10 new tests in `LoopMultiTurnTests.cs`; 1637 pass)
