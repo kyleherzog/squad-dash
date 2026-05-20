@@ -236,9 +236,71 @@
 
 ---
 
+## 🟡 Mid Priority — MainWindow.xaml.cs Refactoring
+
+> Tracked from Orion + Lyra review (2026-05-19). Full details in session files.
+> Full report: `mainwindow-refactor-review.md` (Orion) + `mainwindow-xaml-review.md` (Lyra).
+> Current file: ~28,687 lines. Goal: extract cohesive domains into separate classes.
+
+- [ ] **[Refactor Phase 1a] Extract `TranscriptSearchController`** *(Owner: Lyra Morn)*
+  ~930 lines of transcript search logic (find-in-transcript, Shift+F3 cycling, highlight adorner
+  management). `SearchWalker` is already embedded. Minimal `this` dependencies — easy to inject
+  via constructor. Fixes the Shift+F3 duplication that currently exists in 2 separate search paths.
+  Full line ranges in `mainwindow-refactor-review.md`.
+
+- [ ] **[Refactor Phase 1b] Extract `PromptKeyboardController`** *(Owner: Lyra Morn)*
+  ~700 lines of KeyDown/KeyUp handlers for the prompt input area. Pure input routing with no deep
+  WPF visual-tree dependencies. Easy to inject Dispatcher + action callbacks.
+  Full line ranges in `mainwindow-refactor-review.md`.
+
+- [ ] **[Refactor Phase 1c] Extract `WatchPanelPresenter`** *(Owner: Lyra Morn)*
+  ~85 lines — smallest extraction candidate. Self-contained watch-panel sync logic.
+  Good pattern-setter for the larger extractions that follow.
+
+- [ ] **[Refactor Phase 1d] Quick XAML wins — constructor lambdas + SyncWatchPanel + ContextMenuOpening** *(Owner: Lyra Morn)*
+  Three zero-risk code-behind cleanups identified in Lyra's XAML review:
+  1. 650-line constructor packed with inline lambdas → extract to named event handlers (~200 lines)
+  2. `SyncWatchPanel` Clear+loop+Add → `ItemsControl` + `DataTemplate` (~80 lines)
+  3. `ContextMenuOpening` builds ContextMenu in C# → move to static XAML `<ContextMenu>` resource (~50 lines)
+
+- [ ] **[Refactor Phase 2a] Extract `QueueTabController`** *(Owner: Lyra Morn)*
+  ~1,600 lines — tab drag state machine, queue tab click handling, active-tab logic.
+  Needs `_promptQueue` reference + a few UI callbacks. Medium risk.
+  Full line ranges + dependency list in `mainwindow-refactor-review.md`.
+
+- [ ] **[Refactor Phase 2b] Extract `AgentCardController`** *(Owner: Lyra Morn)*
+  ~1,500 lines — agent card building, coloring, sync logic. References `_agents` collections.
+  Coordinate with any concurrent AgentStatusCard changes. Medium risk.
+
+- [ ] **[Refactor Phase 2c] Extract `RemoteAccessController`** *(Owner: Arjun Sen)*
+  ~475 lines — RC-session state + bridge calls. Two divergent restart paths that should be unified
+  as part of extraction. Arjun owns backend services; RC state is a backend concern.
+
+- [ ] **[Refactor Phase 2d] Extract `DismissOnMovementHelper`** *(Owner: Lyra Morn)*
+  Fade-popup dismiss-after-10px gesture duplicated in **5 places** in MainWindow.xaml.cs.
+  Extract to a shared helper. Low-risk deduplication, high signal-to-noise.
+
+- [ ] **[Refactor Phase 3a] Extract `DocsTreeController`** *(Owner: Lyra Morn)*
+  ~2,500 lines — docs tree expand/rename/filter logic. Largest single LOC win.
+  Well-clustered but moderate dependencies on workspace state. Medium risk.
+
+- [ ] **[Refactor Phase 3b] Extract `ToolEntryPresenter`** *(Owner: Lyra Morn)*
+  ~2,500 lines — tool-result card rendering, repeating `MakeItem`/`MakeSep` locals duplicated
+  in 2+ context menu builders. High LOC win + deduplication. Medium risk.
+
+- [ ] **[Refactor Phase 3c] Extract `DocScreenshotController`** *(Owner: Lyra Morn)*
+  ~960 lines — screenshot attach/preview on docs panel. Needs `_pastedImageStore` reference.
+
+- [ ] **[Refactor Phase 4] Extract `TranscriptPanelLayoutController`** *(Owner: Lyra Morn)*
+  ~1,900 lines — layout/sizing logic for the transcript panel. Deeply entangled with
+  `RichTextBox` visual tree. High risk — do last, after Phase 3 is complete and patterns
+  are established. Do NOT start until Phase 3 is done.
+
+---
+
 ## 🔵 Low Priority
 
-- [ ] **OpenAI Whisper speech provider — customer request** *(Owner: Orion Vale → Lyra Morn)*
+- [ ] **OpenAI Whisper speech provider — customer request***(Owner: Orion Vale → Lyra Morn)*
   Customer request: support OpenAI speech API as an alternative to Azure Cognitive Speech, for users
   without an Azure subscription. Impact: ~5 modified files + 2 new files.
   Required changes:
