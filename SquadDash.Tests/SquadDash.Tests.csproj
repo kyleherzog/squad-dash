@@ -195,13 +195,16 @@
     <Compile Include="..\SquadDash\TextCaseHelper.cs" Link="TextCaseHelper.cs" />
 
     <!-- Maintenance Mode — Phase 1 -->
-    <Compile Include="..\SquadDash\MaintenanceMdConfig.cs"    Link="Source\MaintenanceMdConfig.cs" />
-    <Compile Include="..\SquadDash\MaintenanceMdParser.cs"    Link="Source\MaintenanceMdParser.cs" />
-    <Compile Include="..\SquadDash\MaintenanceModels.cs"      Link="Source\MaintenanceModels.cs" />
-    <Compile Include="..\SquadDash\MaintenanceStateStore.cs"  Link="Source\MaintenanceStateStore.cs" />
-    <Compile Include="..\SquadDash\MaintenanceRunner.cs"      Link="Source\MaintenanceRunner.cs" />
-    <Compile Include="..\SquadDash\MaintenanceReportWriter.cs" Link="Source\MaintenanceReportWriter.cs" />
-    <Compile Include="..\SquadDash\IdleDetectionService.cs"   Link="Source\IdleDetectionService.cs" />
+    <Compile Include="..\SquadDash\MaintenanceMdConfig.cs"        Link="Source\MaintenanceMdConfig.cs" />
+    <Compile Include="..\SquadDash\MaintenanceMdParser.cs"        Link="Source\MaintenanceMdParser.cs" />
+    <Compile Include="..\SquadDash\MaintenanceModels.cs"          Link="Source\MaintenanceModels.cs" />
+    <Compile Include="..\SquadDash\MaintenanceStateStore.cs"      Link="Source\MaintenanceStateStore.cs" />
+    <Compile Include="..\SquadDash\MaintenanceRunner.cs"          Link="Source\MaintenanceRunner.cs" />
+    <Compile Include="..\SquadDash\MaintenanceReportWriter.cs"    Link="Source\MaintenanceReportWriter.cs" />
+    <Compile Include="..\SquadDash\MaintenancePanelController.cs" Link="Source\MaintenancePanelController.cs" />
+    <Compile Include="..\SquadDash\IdleDetectionService.cs"       Link="Source\IdleDetectionService.cs" />
+
+    <!-- Maintenance Mode — Phase 2 tests (auto-included by SDK glob) -->
   </ItemGroup>
 
 </Project>
