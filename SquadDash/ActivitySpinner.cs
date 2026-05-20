@@ -165,12 +165,9 @@ public sealed class ActivitySpinner : FrameworkElement
         _currentKind = kind;
 
         var impulse = kind == SpinnerActivityKind.Writing ? WritingImpulse : ThinkingImpulse;
-        var newTarget = Math.Min(_angularVelocity + impulse, MaxAngularVelocity);
-        if (newTarget > _velocityTarget)
-        {
-            _velocityTarget = newTarget;
-            _velocityAccelPhase = VelocityRampSeconds;  // restart ramp
-        }
+        var rawTarget = _angularVelocity + impulse;
+        _velocityTarget = Math.Min(Math.Max(_velocityTarget, rawTarget), MaxAngularVelocity);
+        _velocityAccelPhase = VelocityRampSeconds;   // always restart ramp on any pulse
 
         // Snap target opacity immediately; _spinnerOpacity lerps toward it each frame
         _targetOpacity = kind switch
