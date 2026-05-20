@@ -28,6 +28,14 @@ public sealed class ActivitySpinner : FrameworkElement
     private double _dotGlowPhase;       // 0..2π oscillation phase
     private SpinnerActivityKind _currentKind = SpinnerActivityKind.Thinking;
 
+    // Scale animation (0 = invisible, 1 = fully visible)
+    private double _scaleTarget = 0.0;
+    private double _currentScale = 0.0;
+
+    // Animated layout width (drives smooth text slide)
+    private double _animatedWidth = 0.0;
+    private double _widthTarget = 0.0;
+
     // Dynamic sizing
     private double _lineHeight = 16.0;
 
@@ -76,11 +84,11 @@ public sealed class ActivitySpinner : FrameworkElement
     private const double WritingTargetOpacity  = 0.80;
 
     // Write-dot constants
-    private const double MaxDotRadiusFraction = 0.5;   // dot max = spinner_radius * 0.5 = diameter/4
+    private const double MaxDotRadiusFraction = 0.425;  // 0.5 × 0.85 — dot max reduced to 85% of prior
     private const double DotGrowRate = 6.0;             // lerp speed when growing (units/sec)
     private const double DotShrinkRate = 2.0;           // lerp speed when shrinking (units/sec)
     private const double PulseIncrement = 1.5;          // px added per write pulse
-    private const double DotGlowHz = 0.833;              // glow oscillation frequency (~3× slower)
+    private const double DotGlowHz = 0.4165;            // glow oscillation frequency (~2× slower than before)
     private const double DotBorderFraction = 0.15;      // white border = radius * 0.15
 
     // Accent color — set from the agent's card; fallback to SteelBlue
@@ -186,6 +194,10 @@ public sealed class ActivitySpinner : FrameworkElement
 
         Visibility = Visibility.Visible;
 
+        // Animate scale and layout width in on activation
+        _scaleTarget = 1.0;
+        _widthTarget = Diameter + 4;
+
         if (!_physicsTimer.IsEnabled)
         {
             _lastTick = DateTime.UtcNow;
@@ -253,14 +265,35 @@ public sealed class ActivitySpinner : FrameworkElement
         if (_writeDotRadius > 0.5)
             _dotGlowPhase += 2.0 * Math.PI * DotGlowHz * dt;
 
+        // ── Scale animation (ease-out lerp, ~400 ms) ────────────────────────
+        if (_angularVelocity < FadeOutThreshold)
+            _scaleTarget = 0.0;
+
+        _currentScale += (_scaleTarget - _currentScale) * Math.Min(1.0, dt / 0.4);
+
+        // ── Animated layout width ────────────────────────────────────────────
+        // Collapse the layout footprint only after the visual has nearly vanished
+        // and the write-dot is also gone — prevents the dot from losing its space.
+        if (_scaleTarget == 0.0 && _currentScale < 0.01 && _writeDotRadius < 0.5)
+            _widthTarget = 0.0;
+
+        var prevAnimatedWidth = _animatedWidth;
+        _animatedWidth += (_widthTarget - _animatedWidth) * Math.Min(1.0, dt / 0.4);
+        if (Math.Abs(_animatedWidth - prevAnimatedWidth) > 0.05)
+            InvalidateMeasure();
+
         // ────────────────────────────────────────────────────────────────────
 
-        if (_spinnerOpacity <= 0.0 && _targetOpacity <= 0.0 && _writeDotRadius <= 0.5)
+        if (_spinnerOpacity <= 0.0 && _targetOpacity <= 0.0 && _writeDotRadius <= 0.5
+            && _currentScale < 0.01 && _animatedWidth < 0.5)
         {
             _spinnerOpacity = 0;
             _writeDotRadius = 0;
+            _currentScale = 0.0;
+            _animatedWidth = 0.0;
             _physicsTimer.Stop();
             Visibility = Visibility.Collapsed;
+            InvalidateMeasure();
             return;
         }
 
@@ -271,14 +304,13 @@ public sealed class ActivitySpinner : FrameworkElement
 
     protected override Size MeasureOverride(Size availableSize)
     {
-        var s = Diameter + 4; // 2px padding each side
-        return new(s, s);
+        var h = Diameter + 4; // 2px padding each side
+        return new(_animatedWidth, h);
     }
 
     protected override Size ArrangeOverride(Size finalSize)
     {
-        var s = Diameter + 4;
-        return new(s, s);
+        return finalSize;
     }
 
     // ── Rendering ───────────────────────────────────────────────────────────
@@ -290,6 +322,15 @@ public sealed class ActivitySpinner : FrameworkElement
 
         if (!renderSpinner && !renderDot)
             return;
+
+        // Fixed drawing center — independent of AnimatedWidth so the spinner stays
+        // centred in its full-size slot even while the layout width is animating.
+        var fullSize = Diameter + 4;
+        var centerX  = fullSize / 2.0;
+        var centerY  = fullSize / 2.0;
+
+        // Wrap all drawing in the scale-in/out transform (visual only, not layout).
+        dc.PushTransform(new ScaleTransform(_currentScale, _currentScale, centerX, centerY));
 
         if (renderSpinner)
         {
@@ -306,8 +347,8 @@ public sealed class ActivitySpinner : FrameworkElement
             // Scale so the 1957-unit shape fits in Diameter × Diameter, centred in element
             var diameter = Diameter;
             var scale    = diameter / OriginalCanvasSize;
-            var offsetX  = (ActualWidth  - diameter) / 2.0;
-            var offsetY  = (ActualHeight - diameter) / 2.0;
+            var offsetX  = (fullSize - diameter) / 2.0;
+            var offsetY  = (fullSize - diameter) / 2.0;
 
             dc.PushTransform(new TranslateTransform(offsetX, offsetY));
             dc.PushTransform(new ScaleTransform(scale, scale));
@@ -320,7 +361,7 @@ public sealed class ActivitySpinner : FrameworkElement
 
         if (renderDot)
         {
-            var center      = new Point(ActualWidth / 2.0, ActualHeight / 2.0);
+            var center      = new Point(centerX, centerY);
             var border      = Math.Max(_writeDotRadius * DotBorderFraction, 0.8);
             var glowOpacity = 0.75 + 0.25 * Math.Sin(_dotGlowPhase);
 
@@ -336,6 +377,8 @@ public sealed class ActivitySpinner : FrameworkElement
             redBrush.Freeze();
             dc.DrawEllipse(redBrush, null, center, _writeDotRadius, _writeDotRadius);
         }
+
+        dc.Pop(); // pop scale transform
     }
 
     // ── Geometry ────────────────────────────────────────────────────────────
