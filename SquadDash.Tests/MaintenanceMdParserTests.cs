@@ -1105,4 +1105,101 @@ internal sealed class MaintenanceMdParserTests {
         }
         finally { DeleteTempFile(path); }
     }
+
+    // ── EnabledOnIdle ─────────────────────────────────────────────────────────
+
+    [Test]
+    public void Parse_EnabledOnIdle_True() {
+        var path = WriteTempFile(
+            """
+            ---
+            idle_timeout: 15
+            enabled_on_idle: true
+            configured: false
+            tasks:
+            ---
+            """);
+        try {
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config,                  Is.Not.Null);
+            Assert.That(config!.EnabledOnIdle,    Is.True, "EnabledOnIdle should be true");
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void Parse_EnabledOnIdle_False() {
+        var path = WriteTempFile(
+            """
+            ---
+            idle_timeout: 15
+            enabled_on_idle: false
+            configured: true
+            tasks:
+            ---
+            """);
+        try {
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config,                  Is.Not.Null);
+            Assert.That(config!.EnabledOnIdle,    Is.False, "EnabledOnIdle should be false");
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void Parse_EnabledOnIdle_Missing_DefaultsFalse() {
+        var path = WriteTempFile(
+            """
+            ---
+            idle_timeout: 15
+            configured: true
+            tasks:
+            ---
+            """);
+        try {
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config,                  Is.Not.Null);
+            Assert.That(config!.EnabledOnIdle,    Is.False, "EnabledOnIdle must default to false when key absent");
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void UpdateEnabledOnIdle_WritesTrue() {
+        var path = WriteTempFile(
+            """
+            ---
+            idle_timeout: 15
+            enabled_on_idle: false
+            configured: false
+            tasks:
+            ---
+            """);
+        try {
+            MaintenanceMdParser.UpdateEnabledOnIdle(path, true);
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config,                  Is.Not.Null);
+            Assert.That(config!.EnabledOnIdle,    Is.True, "EnabledOnIdle should be true after UpdateEnabledOnIdle(true)");
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void UpdateEnabledOnIdle_InsertsWhenMissing() {
+        var path = WriteTempFile(
+            """
+            ---
+            idle_timeout: 15
+            configured: false
+            tasks:
+            ---
+            """);
+        try {
+            MaintenanceMdParser.UpdateEnabledOnIdle(path, true);
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config,                  Is.Not.Null);
+            Assert.That(config!.EnabledOnIdle,    Is.True, "EnabledOnIdle should be inserted and set to true");
+        }
+        finally { DeleteTempFile(path); }
+    }
 }

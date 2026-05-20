@@ -18,6 +18,7 @@ internal sealed class MaintenancePanelController {
     private readonly StackPanel           _listPanel;
     private readonly TextBlock            _statusLabel;
     private readonly Button               _runNowButton;
+    private readonly CheckBox             _enabledOnIdleCheckBox;
     private readonly Func<string?>        _getWorkspacePath;
     private readonly Action               _runNow;
     private readonly Action<string, bool> _toggleTaskEnabled;
@@ -28,6 +29,7 @@ internal sealed class MaintenancePanelController {
     private string?                _runningTaskTitle;
     private DispatcherTimer?       _countdownTimer;
     private DateTimeOffset         _nextMaintenanceAt = DateTimeOffset.MaxValue;
+    private bool                   _suppressEnabledOnIdleEvent;
 
     // ── Construction ─────────────────────────────────────────────────────────
 
@@ -35,18 +37,22 @@ internal sealed class MaintenancePanelController {
         StackPanel           listPanel,
         TextBlock            statusLabel,
         Button               runNowButton,
+        CheckBox             enabledOnIdleCheckBox,
         Func<string?>        getWorkspacePath,
         Action               runNow,
         Action<string, bool> toggleTaskEnabled) {
 
-        _listPanel          = listPanel;
-        _statusLabel        = statusLabel;
-        _runNowButton       = runNowButton;
-        _getWorkspacePath   = getWorkspacePath;
-        _runNow             = runNow;
-        _toggleTaskEnabled  = toggleTaskEnabled;
+        _listPanel              = listPanel;
+        _statusLabel            = statusLabel;
+        _runNowButton           = runNowButton;
+        _enabledOnIdleCheckBox  = enabledOnIdleCheckBox;
+        _getWorkspacePath       = getWorkspacePath;
+        _runNow                 = runNow;
+        _toggleTaskEnabled      = toggleTaskEnabled;
 
         _runNowButton.Click += (_, _) => _runNow();
+        _enabledOnIdleCheckBox.Checked   += (_, _) => SetEnabledOnIdle(true);
+        _enabledOnIdleCheckBox.Unchecked += (_, _) => SetEnabledOnIdle(false);
         WireListPanelContextMenu();
     }
 
@@ -87,6 +93,11 @@ internal sealed class MaintenancePanelController {
     internal void Refresh(MaintenanceMdConfig? config, MaintenanceStateStore? stateStore) {
         _config     = config;
         _stateStore = stateStore;
+
+        _suppressEnabledOnIdleEvent = true;
+        _enabledOnIdleCheckBox.IsChecked = config?.EnabledOnIdle ?? false;
+        _suppressEnabledOnIdleEvent = false;
+
         RebuildList();
     }
 
@@ -130,6 +141,13 @@ internal sealed class MaintenancePanelController {
     private string? GetMaintenanceMdPath() {
         var workspacePath = _getWorkspacePath();
         return workspacePath is null ? null : Path.Combine(workspacePath, ".squad", "maintenance.md");
+    }
+
+    private void SetEnabledOnIdle(bool value) {
+        if (_suppressEnabledOnIdleEvent) return;
+        var mdPath = GetMaintenanceMdPath();
+        if (mdPath is null) return;
+        MaintenanceMdParser.UpdateEnabledOnIdle(mdPath, value);
     }
 
     /// <summary>
@@ -228,9 +246,9 @@ internal sealed class MaintenancePanelController {
     private void RebuildList() {
         _listPanel.Children.Clear();
 
-        if (_config?.Configured == false) {
+        if (_config?.EnabledOnIdle == false) {
             var banner = new TextBlock {
-                Text         = "Maintenance is disabled. Set configured: true in maintenance.md to activate.",
+                Text         = "Maintenance will not run on idle. Check \"Enable (on idle)\" to activate.",
                 TextWrapping = TextWrapping.Wrap,
                 Margin       = new Thickness(0, 0, 0, 8),
             };
@@ -365,6 +383,9 @@ internal sealed class MaintenancePanelController {
             Background = Brushes.Transparent,
         };
 
+        if (!string.IsNullOrWhiteSpace(task.Instructions))
+            row.ToolTip = MakeInstructionsToolTip(task.Instructions);
+
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -496,6 +517,26 @@ internal sealed class MaintenancePanelController {
             Content         = tb,
         };
         tip.SetResourceReference(ToolTip.BackgroundProperty, "InputSurface");
+        tip.SetResourceReference(ToolTip.BorderBrushProperty, "InputBorder");
+        return tip;
+    }
+
+    private static ToolTip MakeInstructionsToolTip(string instructions) {
+        if (string.IsNullOrWhiteSpace(instructions)) return null!;
+        var tb = new TextBlock {
+            Text         = instructions.Trim(),
+            TextWrapping = TextWrapping.Wrap,
+            MaxWidth     = 380,
+        };
+        tb.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+        tb.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
+        var tip = new ToolTip {
+            BorderThickness = new Thickness(1),
+            Padding         = new Thickness(8, 6, 8, 6),
+            Content         = tb,
+            MaxWidth        = 400,
+        };
+        tip.SetResourceReference(ToolTip.BackgroundProperty,  "InputSurface");
         tip.SetResourceReference(ToolTip.BorderBrushProperty, "InputBorder");
         return tip;
     }

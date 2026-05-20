@@ -5,6 +5,7 @@ namespace SquadDash;
 /// <summary>Parsed global configuration from a maintenance.md file.</summary>
 internal sealed record MaintenanceMdConfig(
     bool                           Configured         = false,
+    bool                           EnabledOnIdle      = false,
     double                         IdleTimeout        = 15,
     int                            MaxTasksPerSession = 5,
     string                         Safety             = "branch",

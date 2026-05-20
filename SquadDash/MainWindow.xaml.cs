@@ -26846,12 +26846,13 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (_maintenancePanel is null)
         {
             _maintenancePanel = new MaintenancePanelController(
-                listPanel:         MaintenanceTaskListPanel,
-                statusLabel:       MaintenanceStatusLabel,
-                runNowButton:      MaintenanceRunNowButton,
-                getWorkspacePath:  () => _currentWorkspace?.FolderPath,
-                runNow:            () => _ = StartMaintenanceCycleAsync(),
-                toggleTaskEnabled: (taskId, enabled) => OnMaintenanceTaskToggled(taskId, enabled));
+                listPanel:              MaintenanceTaskListPanel,
+                statusLabel:            MaintenanceStatusLabel,
+                runNowButton:           MaintenanceRunNowButton,
+                enabledOnIdleCheckBox:  MaintenanceEnabledOnIdleCheckBox,
+                getWorkspacePath:       () => _currentWorkspace?.FolderPath,
+                runNow:                 () => _ = StartMaintenanceCycleAsync(),
+                toggleTaskEnabled:      (taskId, enabled) => OnMaintenanceTaskToggled(taskId, enabled));
         }
 
         var config = MaintenanceMdParser.Parse(Path.Combine(workspacePath, ".squad", "maintenance.md"));
@@ -26919,7 +26920,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             return;
 
         var config = MaintenanceMdParser.Parse(Path.Combine(workspacePath, ".squad", "maintenance.md"));
-        if (config is null || !config.Configured) return;
+        if (config is null || !config.EnabledOnIdle) return;
         if (config.Tasks is not { Count: > 0 } tasks || !tasks.Any(task => task.Enabled))
             return;
 

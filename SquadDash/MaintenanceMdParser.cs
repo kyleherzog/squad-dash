@@ -37,10 +37,11 @@ internal static class MaintenanceMdParser {
         if (i >= lines.Length) return null;
         i++;
 
-        bool   configured  = false;
-        double idleTimeout = 15;
-        int    maxTasks    = 5;
-        string safety      = "branch";
+        bool   configured    = false;
+        bool   enabledOnIdle = false;
+        double idleTimeout   = 15;
+        int    maxTasks      = 5;
+        string safety        = "branch";
 
         var tasks                      = new List<MaintenanceTaskBuilder>();
         bool inTasksList               = false;
@@ -90,7 +91,7 @@ internal static class MaintenanceMdParser {
                     continue;
                 }
 
-                ParseGlobalKV(trimmed, ref configured, ref idleTimeout, ref maxTasks, ref safety);
+                ParseGlobalKV(trimmed, ref configured, ref enabledOnIdle, ref idleTimeout, ref maxTasks, ref safety);
                 continue;
             }
 
@@ -217,7 +218,7 @@ internal static class MaintenanceMdParser {
             .Select(t => t.Build(safety))
             .ToList();
 
-        return new MaintenanceMdConfig(configured, idleTimeout, maxTasks, safety, builtTasks);
+        return new MaintenanceMdConfig(configured, enabledOnIdle, idleTimeout, maxTasks, safety, builtTasks);
     }
 
     // ── Safety floor enforcement ───────────────────────────────────────────────
@@ -262,7 +263,7 @@ internal static class MaintenanceMdParser {
 
     private static void ParseGlobalKV(
         string line,
-        ref bool configured, ref double idleTimeout, ref int maxTasks, ref string safety) {
+        ref bool configured, ref bool enabledOnIdle, ref double idleTimeout, ref int maxTasks, ref string safety) {
 
         var colonIdx = line.IndexOf(':');
         if (colonIdx < 0) return;
@@ -272,6 +273,9 @@ internal static class MaintenanceMdParser {
         switch (key) {
             case "configured":
                 configured = string.Equals(val, "true", System.StringComparison.OrdinalIgnoreCase);
+                break;
+            case "enabled_on_idle":
+                enabledOnIdle = string.Equals(val, "true", System.StringComparison.OrdinalIgnoreCase);
                 break;
             case "idle_timeout":
                 if (double.TryParse(val,
@@ -427,6 +431,53 @@ internal static class MaintenanceMdParser {
                 return;
             }
         }
+    }
+
+    /// <summary>Updates the <c>enabled_on_idle:</c> value in the frontmatter.</summary>
+    internal static void UpdateEnabledOnIdle(string mdPath, bool value) {
+        if (!File.Exists(mdPath)) return;
+        var raw      = File.ReadAllText(mdPath);
+        var le       = raw.Contains("\r\n") ? "\r\n" : "\n";
+        var lines    = raw.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+        bool found   = false;
+        bool inFm    = false, pastFirst = false;
+        for (int i = 0; i < lines.Length; i++) {
+            var t = lines[i].TrimStart();
+            if (t == "---") {
+                if (!pastFirst) { pastFirst = true; inFm = true; }
+                else            { inFm = false; }
+                continue;
+            }
+            if (!inFm) continue;
+            if (t.StartsWith("enabled_on_idle:")) {
+                lines[i] = "enabled_on_idle: " + (value ? "true" : "false");
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            inFm = false; pastFirst = false;
+            for (int i = 0; i < lines.Length; i++) {
+                var t = lines[i].TrimStart();
+                if (t == "---") {
+                    if (!pastFirst) { pastFirst = true; inFm = true; }
+                    else {
+                        lines[i] = "enabled_on_idle: " + (value ? "true" : "false") + le + lines[i];
+                        break;
+                    }
+                    continue;
+                }
+                if (inFm && (t.StartsWith("tasks:") || t.StartsWith("configured:"))) {
+                    var newLines = new string[lines.Length + 1];
+                    Array.Copy(lines, 0, newLines, 0, i);
+                    newLines[i] = "enabled_on_idle: " + (value ? "true" : "false");
+                    Array.Copy(lines, i, newLines, i + 1, lines.Length - i);
+                    lines = newLines;
+                    break;
+                }
+            }
+        }
+        File.WriteAllText(mdPath, string.Join(le, lines));
     }
 
     private static int CountLeadingSpaces(string line) {

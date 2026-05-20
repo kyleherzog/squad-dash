@@ -1500,6 +1500,13 @@
                                         Style="{StaticResource ThemedButtonStyle}"
                                         ToolTip="Start a maintenance cycle immediately"
                                         Click="MaintenanceRunNowButton_Click" />
+                                <CheckBox x:Name="MaintenanceEnabledOnIdleCheckBox"
+                                          DockPanel.Dock="Right"
+                                          Content="Enable (on idle)"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,8,0"
+                                          FontSize="{DynamicResource FontSizeSmall}"
+                                          Style="{StaticResource ThemedCheckBoxStyle}" />
                                 <TextBlock x:Name="MaintenanceStatusLabel"
                                            Text=""
                                            Visibility="Collapsed"

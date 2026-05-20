@@ -39,13 +39,15 @@ internal sealed class MaintenancePanelControllerTests {
                     TextBlock  statusLabel,
                     Button     runNowButton)
         CreateController() {
-        var listPanel    = new StackPanel();
-        var statusLabel  = new TextBlock();
-        var runNowButton = new Button();
+        var listPanel              = new StackPanel();
+        var statusLabel            = new TextBlock();
+        var runNowButton           = new Button();
+        var enabledOnIdleCheckBox  = new CheckBox();
         var controller   = new MaintenancePanelController(
             listPanel,
             statusLabel,
             runNowButton,
+            enabledOnIdleCheckBox,
             getWorkspacePath:  () => null,
             runNow:            () => { },
             toggleTaskEnabled: (_, _) => { });
@@ -305,13 +307,15 @@ internal sealed class MaintenancePanelControllerTests {
                     TextBlock  statusLabel,
                     Button     runNowButton)
         CreateControllerWithWorkspace(string? workspacePath) {
-        var listPanel    = new StackPanel();
-        var statusLabel  = new TextBlock();
-        var runNowButton = new Button();
+        var listPanel             = new StackPanel();
+        var statusLabel           = new TextBlock();
+        var runNowButton          = new Button();
+        var enabledOnIdleCheckBox = new CheckBox();
         var controller   = new MaintenancePanelController(
             listPanel,
             statusLabel,
             runNowButton,
+            enabledOnIdleCheckBox,
             getWorkspacePath:  () => workspacePath,
             runNow:            () => { },
             toggleTaskEnabled: (_, _) => { });
@@ -536,14 +540,16 @@ internal sealed class MaintenancePanelControllerTests {
     private static (MaintenancePanelController controller,
                     List<(string taskId, bool enabled)> toggleCalls)
         CreateControllerWithTracking(string workspacePath) {
-        var listPanel    = new StackPanel();
-        var statusLabel  = new TextBlock();
-        var runNowButton = new Button();
+        var listPanel             = new StackPanel();
+        var statusLabel           = new TextBlock();
+        var runNowButton          = new Button();
+        var enabledOnIdleCheckBox = new CheckBox();
         var toggleCalls  = new List<(string, bool)>();
         var controller   = new MaintenancePanelController(
             listPanel,
             statusLabel,
             runNowButton,
+            enabledOnIdleCheckBox,
             getWorkspacePath:  () => workspacePath,
             runNow:            () => { },
             toggleTaskEnabled: (id, en) => toggleCalls.Add((id, en)));
