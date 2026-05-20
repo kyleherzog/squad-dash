@@ -518,12 +518,9 @@
 
 
 
-- [ ] **[maintenance.md] S3b — Extend parser to support `instructions: |` block scalars** *(Owner: arjun-sen)*
-  Update `MaintenanceMdParser` to correctly parse and reassemble YAML block scalar multi-line values
-  for the `instructions:` key (the `|` literal block scalar syntax). The instructions in every task
-  currently use `instructions: |` with indented multi-line text. Without this fix, instruction text
-  may be parsed as a raw string including the `|` character or truncated. Requires parser change only;
-  no file format change needed beyond what S1 establishes.
+
+
+
 
 - [ ] **[maintenance.md] S4 — Rename `default:` → `value:` and implement write-back** *(Owner: arjun-sen)*
   The option blocks in `maintenance.md` currently have `default: report` which the parser ignores.
@@ -607,6 +604,8 @@
 ## ✅ Recently Completed
 
 > Full details in `.squad/completed-tasks.md`. This section is a compact AI-recall index only.
+
+- [x] **[maintenance.md] S3b — Extend parser to support `instructions: |` block scalars** — ✅ Already implemented. `MaintenanceMdParser` lines 64-78 & 128-135 handle YAML block scalar accumulation at indent ≥ 6; `inMultiLineInstructions` flag; finalize-at-EOF at lines 203-205. Three passing tests: `AllLinesJoined`, `FollowedByOptions`, `RunsToClosingFrontmatter`. No code changes needed.
 
 - [x] **[maintenance.md] S2 — Convert choices to YAML list with `value:` and `tooltip:`** — ✅ `MaintenanceOptionChoice` model added; `MaintenanceMdParser` extended to parse YAML list choices at indent 10/12 (backward-compat with bracket format); `MaintenancePanelController` sets `ToolTip` on each radio button; all 7 option blocks in `maintenance.md` updated with meaningful tooltips; 6 new tests; 1862 total pass. Commit `ad1c5f7`.
 
