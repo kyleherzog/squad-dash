@@ -22,7 +22,7 @@ internal sealed record MaintenanceOption(
     string RawValue,
     string Type,
     string? Label,
-    string? Hint,
+    string? Tooltip,
     IReadOnlyList<MaintenanceOptionChoice>? Choices);
 
 /// <summary>

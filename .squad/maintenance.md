@@ -27,6 +27,7 @@ tasks:
       if_failing:
         type: radio
         label: If failing tests are found
+        tooltip: "Fix failures or only report them"
         value: report
         choices:
           - value: fix
@@ -54,6 +55,7 @@ tasks:
       if_found:
         type: radio
         label: If duplication is found
+        tooltip: "Refactor now, create a branch, or just report"
         value: report
         choices:
           - value: fix
@@ -82,6 +84,7 @@ tasks:
       if_found:
         type: radio
         label: If architectural issues are found
+        tooltip: "Implement improvements or produce a report"
         value: report
         choices:
           - value: branch
@@ -108,6 +111,7 @@ tasks:
       if_found:
         type: radio
         label: If code smells are found
+        tooltip: "Fix inline, use a branch, or report only"
         value: report
         choices:
           - value: fix
@@ -138,6 +142,7 @@ tasks:
       if_found:
         type: radio
         label: If performance opportunities are found
+        tooltip: "Implement optimisations or report opportunities"
         value: report
         choices:
           - value: fix
@@ -221,6 +226,7 @@ tasks:
       if_found:
         type: radio
         label: If magic numbers or hardcoded strings are found
+        tooltip: "Extract to constants or report them"
         value: report
         choices:
           - value: extract
@@ -279,6 +285,7 @@ tasks:
       if_found:
         type: radio
         label: If naming inconsistencies are found
+        tooltip: "Rename inconsistencies or produce a report"
         value: report
         choices:
           - value: fix

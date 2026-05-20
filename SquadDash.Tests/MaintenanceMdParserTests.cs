@@ -651,6 +651,152 @@ internal sealed class MaintenanceMdParserTests {
         finally { DeleteTempFile(path); }
     }
 
+    // ── Option group tooltip ────────────────────────────────────────────────────
+
+    [Test]
+    public void Parse_OptionTooltip_ParsedCorrectly() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            tasks:
+              - id: run-tests
+                enabled: true
+                frequency: daily
+                safety: branch
+                title: "Run Tests"
+                instructions: "Run all tests."
+                options:
+                  if_failing:
+                    type: radio
+                    label: If failing tests are found
+                    tooltip: "Fix failures or only report them"
+                    value: report
+                    choices:
+                      - value: fix
+                        tooltip: Fix each failing test
+                      - value: report
+                        tooltip: Report failures only
+            ---
+            """);
+        try {
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            var opt = config!.Tasks[0].Options!.Single(o => o.Key == "if_failing");
+            Assert.That(opt.Tooltip, Is.EqualTo("Fix failures or only report them"));
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void Parse_OptionHint_BackwardCompatibility() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            tasks:
+              - id: run-tests
+                enabled: true
+                frequency: daily
+                safety: branch
+                title: "Run Tests"
+                instructions: "Run all tests."
+                options:
+                  if_failing:
+                    type: radio
+                    label: If failing tests are found
+                    hint: "Legacy hint text"
+                    value: report
+                    choices:
+                      - value: fix
+                        tooltip: Fix each failing test
+                      - value: report
+                        tooltip: Report failures only
+            ---
+            """);
+        try {
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            var opt = config!.Tasks[0].Options!.Single(o => o.Key == "if_failing");
+            Assert.That(opt.Tooltip, Is.EqualTo("Legacy hint text"),
+                "hint: key should populate the Tooltip field for backward compatibility");
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void Parse_OptionTooltip_AbsentByDefault() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            tasks:
+              - id: run-tests
+                enabled: true
+                frequency: daily
+                safety: branch
+                title: "Run Tests"
+                instructions: "Run all tests."
+                options:
+                  if_failing:
+                    type: radio
+                    label: If failing tests are found
+                    value: report
+                    choices:
+                      - value: fix
+                        tooltip: Fix each failing test
+                      - value: report
+                        tooltip: Report failures only
+            ---
+            """);
+        try {
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            var opt = config!.Tasks[0].Options!.Single(o => o.Key == "if_failing");
+            Assert.That(string.IsNullOrEmpty(opt.Tooltip), Is.True,
+                "Tooltip should be null or empty when neither tooltip: nor hint: is present");
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void Parse_OptionTooltip_TooltipOverridesHint() {
+        // If both hint: and tooltip: appear, the last one wins (tooltip: follows hint: in this case)
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            tasks:
+              - id: run-tests
+                enabled: true
+                frequency: daily
+                safety: branch
+                title: "Run Tests"
+                instructions: "Run all tests."
+                options:
+                  if_failing:
+                    type: radio
+                    label: If failing tests are found
+                    hint: "Old hint"
+                    tooltip: "New tooltip"
+                    value: report
+                    choices:
+                      - value: fix
+                        tooltip: Fix each failing test
+                      - value: report
+                        tooltip: Report failures only
+            ---
+            """);
+        try {
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            var opt = config!.Tasks[0].Options!.Single(o => o.Key == "if_failing");
+            Assert.That(opt.Tooltip, Is.EqualTo("New tooltip"),
+                "tooltip: key should overwrite the value set by hint:");
+        }
+        finally { DeleteTempFile(path); }
+    }
+
     // ── UpdateOptionValue ──────────────────────────────────────────────────────
 
     [Test]

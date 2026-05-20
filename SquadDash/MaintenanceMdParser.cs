@@ -252,7 +252,7 @@ internal static class MaintenanceMdParser {
                 .Select(k => {
                     var b = optionBuilders[k];
                     return new MaintenanceOption(b.Key, b.RawValue ?? "", b.Type ?? "string",
-                        b.Label, b.Hint, b.Choices.Count > 0 ? b.Choices : null);
+                        b.Label, b.Tooltip, b.Choices.Count > 0 ? b.Choices : null);
                 })
                 .ToList();
         }
@@ -322,7 +322,8 @@ internal static class MaintenanceMdParser {
         switch (key) {
             case "type":    opt.Type     = val;                     break;
             case "label":   opt.Label    = val.Trim('"', '\'');     break;
-            case "hint":    opt.Hint     = val.Trim('"', '\'');     break;
+            case "hint":    opt.Tooltip  = val.Trim('"', '\'');     break;  // backward compat
+        case "tooltip": opt.Tooltip  = val.Trim('"', '\'');     break;
             case "value":   opt.RawValue = val;                     break;
             case "default": opt.RawValue = val;                     break;
             case "choices":
@@ -461,7 +462,7 @@ internal static class MaintenanceMdParser {
         public string? RawValue { get; set; }
         public string? Type     { get; set; }
         public string? Label    { get; set; }
-        public string? Hint     { get; set; }
+        public string? Tooltip  { get; set; }
         public List<MaintenanceOptionChoice> Choices { get; } = new();
     }
 }

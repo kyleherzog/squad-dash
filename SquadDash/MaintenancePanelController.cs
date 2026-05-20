@@ -422,6 +422,8 @@ internal sealed class MaintenancePanelController {
                     };
                     labelBlock.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
                     labelBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+                    if (!string.IsNullOrEmpty(opt.Tooltip))
+                        labelBlock.ToolTip = MakeThemedToolTip(opt.Tooltip);
                     optionsPanel.Children.Add(labelBlock);
                 }
                 if (opt.Choices is { Count: > 0 }) {
