@@ -498,7 +498,7 @@
   Cover: what `maintenance.md` is, how to enable/disable tasks, the safety model, where reports
   live, how to reset state (`maintenance-state.json`), and how to test the idle trigger locally.
 
-- [ ] **[Maintenance] End-to-end maintenance cycle test** *(Owner: vesper-knox)*
+- [x] **[Maintenance] End-to-end maintenance cycle test** *(Owner: vesper-knox)*
   Single integration test that exercises the full pipeline: force idle threshold → `MaintenanceRunner`
   picks first enabled eligible task → `executePromptAsync` stub called with correct prompt →
   `MaintenanceTaskResult` recorded → `MaintenanceReportWriter` writes report file → banner-triggered
@@ -548,6 +548,8 @@
 ## ✅ Recently Completed
 
 > Full details in `.squad/completed-tasks.md`. This section is a compact AI-recall index only.
+
+- [x] **[Maintenance] End-to-end maintenance cycle test** — ✅ Implemented (`MaintenanceCycleIntegrationTests.cs`; single `[Test]` exercises full pipeline: `IdleDetectionService.ForceIdle()` fires `IdleThresholdReached` → `MaintenanceRunner.StartAsync` picks enabled eligible task → `executePromptAsync` stub called with correct prompt → `MaintenanceTaskResult.Completed` recorded → `MaintenanceReportWriter.WriteReport` writes `.md` file → `onCompleted` banner-event fires; asserts report file on disk, banner event raised with correct `RanTaskIds`, state store `GetLastRunAt` non-null for today, prompt contains task instructions; 1 new test passes)
 
 - [x] **[Maintenance] Maintenance panel in-place task editing** — ✅ Implemented (`MaintenancePanelController.ToggleTaskEnabled` reads `.squad/maintenance.md`, flips `enabled: false ↔ true` for the target task ID, writes back preserving all other content, traces via `SquadDashTrace.Write`, then calls the reload callback; checkbox in `BuildTaskRow` wired to `ToggleTaskEnabled`; `OnMaintenanceTaskToggled` in `MainWindow` updated to re-parse and call `Refresh`; 4 new NUnit tests: enabled→disabled, disabled→enabled, preserves other content, invokes reload callback; all 1850 tests pass)
 - [x] **[Maintenance] RELEASING.md / runbook — document Maintenance Mode** — ✅ Documented (`docs/features/maintenance-mode.md` created; covers `maintenance.md` structure and frontmatter, enabling/disabling tasks via file and in-panel checkbox, safety model with floor table, frequency values, report format and location, `maintenance-state.json` location/format/reset, `trigger_idle_cycle` local test workflow; `docs/SUMMARY.md` updated)
