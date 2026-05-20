@@ -207,3 +207,65 @@ internal sealed class SquadInstallerServiceTests {
         }
     }
 }
+
+[TestFixture]
+internal sealed class GitIgnoreMaintenanceStateTests {
+    private string _tempDir = string.Empty;
+
+    [SetUp]
+    public void SetUp() {
+        _tempDir = Path.Combine(TestContext.CurrentContext.WorkDirectory, Guid.NewGuid().ToString());
+        Directory.CreateDirectory(_tempDir);
+    }
+
+    [TearDown]
+    public void TearDown() {
+        if (Directory.Exists(_tempDir))
+            Directory.Delete(_tempDir, recursive: true);
+    }
+
+    [Test]
+    public void EnsureMaintenanceStateInGitIgnore_AppendsEntry_WhenGitIgnoreExists_AndEntryAbsent() {
+        var gitIgnorePath = Path.Combine(_tempDir, ".gitignore");
+        File.WriteAllText(gitIgnorePath, "node_modules\n");
+
+        var result = SquadInstallerService.EnsureMaintenanceStateInGitIgnore(_tempDir);
+
+        Assert.That(result, Is.True);
+        Assert.That(File.ReadAllText(gitIgnorePath), Does.Contain("maintenance-state.json"));
+    }
+
+    [Test]
+    public void EnsureMaintenanceStateInGitIgnore_NoChange_WhenEntryAlreadyPresent() {
+        var gitIgnorePath = Path.Combine(_tempDir, ".gitignore");
+        File.WriteAllText(gitIgnorePath, "node_modules\nmaintenance-state.json\n");
+        var originalLineCount = File.ReadAllLines(gitIgnorePath).Length;
+
+        var result = SquadInstallerService.EnsureMaintenanceStateInGitIgnore(_tempDir);
+
+        Assert.That(result, Is.False);
+        Assert.That(File.ReadAllLines(gitIgnorePath).Length, Is.EqualTo(originalLineCount));
+    }
+
+    [Test]
+    public void EnsureMaintenanceStateInGitIgnore_CreatesGitIgnore_WhenFileAbsent() {
+        var gitIgnorePath = Path.Combine(_tempDir, ".gitignore");
+        Assert.That(File.Exists(gitIgnorePath), Is.False);
+
+        var result = SquadInstallerService.EnsureMaintenanceStateInGitIgnore(_tempDir);
+
+        Assert.That(result, Is.True);
+        Assert.That(File.Exists(gitIgnorePath), Is.True);
+        Assert.That(File.ReadAllText(gitIgnorePath), Does.Contain("maintenance-state.json"));
+    }
+
+    [Test]
+    public void EnsureMaintenanceStateInGitIgnore_CaseInsensitive_ExistingEntry() {
+        var gitIgnorePath = Path.Combine(_tempDir, ".gitignore");
+        File.WriteAllText(gitIgnorePath, "MAINTENANCE-STATE.JSON\n");
+
+        var result = SquadInstallerService.EnsureMaintenanceStateInGitIgnore(_tempDir);
+
+        Assert.That(result, Is.False);
+    }
+}

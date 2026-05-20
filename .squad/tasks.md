@@ -594,5 +594,4 @@
 - [x] Contributing docs removed
 - [x] Abandoned tool runs / charter menu / version context menu fixes
 - [x] **[Maintenance] Report history log in Maintenance panel** — ✅ Implemented (collapsible Recent Reports section below task list; scans .squad/maintenance-reports/, shows date/time and task count, opens file on click, 'No reports yet' placeholder; 5 new tests)
-
-
+- [x] **[Maintenance] Auto-add `maintenance-state.json` to `.gitignore` on first run** — ✅ Implemented (EnsureMaintenanceStateInGitIgnore in SquadInstallerService; called from WriteSquadDashUniverseFiles and MaintenanceRunner.StartAsync; trace entry on write; 4 new tests)

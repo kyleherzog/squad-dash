@@ -192,6 +192,7 @@ internal sealed class SquadInstallerService {
             EnsureLoopFiles(activeDirectory);
             EnsureCastingStateFiles(activeDirectory);
             PatchCastingPolicy(activeDirectory);
+            EnsureMaintenanceStateInGitIgnore(activeDirectory);
         }
         catch {
             // Non-fatal — Squad installed successfully; user can add universe files manually.
@@ -267,6 +268,44 @@ internal sealed class SquadInstallerService {
             capacity[SquadDashUniverseName] = SquadDashUniverseCapacity;
 
         File.WriteAllText(policyPath, json.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }), Encoding.UTF8);
+    }
+
+    /// <summary>
+    /// Ensures <c>maintenance-state.json</c> has an entry in the workspace
+    /// <c>.gitignore</c>. Creates the file if absent. Returns <c>true</c>
+    /// if the file was modified, <c>false</c> if the entry was already present.
+    /// </summary>
+    internal static bool EnsureMaintenanceStateInGitIgnore(string workspaceFolder) {
+        const string entry = "maintenance-state.json";
+        var gitIgnorePath = Path.Combine(workspaceFolder, ".gitignore");
+
+        try {
+            if (File.Exists(gitIgnorePath)) {
+                var lines = File.ReadAllLines(gitIgnorePath);
+                if (lines.Any(line => string.Equals(line.Trim(), entry, StringComparison.OrdinalIgnoreCase)))
+                    return false;   // already present
+
+                File.AppendAllText(
+                    gitIgnorePath,
+                    $"{Environment.NewLine}# SquadDash — maintenance state (auto-managed){Environment.NewLine}{entry}{Environment.NewLine}",
+                    Encoding.UTF8);
+            }
+            else {
+                File.WriteAllText(
+                    gitIgnorePath,
+                    $"# SquadDash — maintenance state (auto-managed){Environment.NewLine}{entry}{Environment.NewLine}",
+                    Encoding.UTF8);
+            }
+
+            SquadDashTrace.Write(TraceCategory.General,
+                $"SquadInstallerService: appended '{entry}' to {gitIgnorePath}");
+            return true;
+        }
+        catch (Exception ex) {
+            SquadDashTrace.Write(TraceCategory.General,
+                $"SquadInstallerService: failed to update .gitignore at {gitIgnorePath}: {ex.Message}");
+            return false;
+        }
     }
 
     private static void EnsureCastingStateFiles(string activeDirectory) {

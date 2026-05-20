@@ -41,6 +41,7 @@ internal sealed class MaintenanceRunner {
         string               workspacePath,
         CancellationToken    ct) {
 
+        SquadInstallerService.EnsureMaintenanceStateInGitIgnore(workspacePath);
         _isRunning = true;
         var startedAt = DateTimeOffset.UtcNow;
         var ranIds     = new List<string>();
