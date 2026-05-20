@@ -92,6 +92,99 @@ internal sealed class MaintenancePanelController {
         }
     }
 
+    // ── In-place task enable/disable ──────────────────────────────────────────
+
+    /// <summary>
+    /// Reads <c>.squad/maintenance.md</c>, locates the <paramref name="taskId"/> entry,
+    /// flips its <c>enabled:</c> value, writes the file back preserving all other content,
+    /// then invokes the host's reload callback so the panel refreshes.
+    /// </summary>
+    internal void ToggleTaskEnabled(string taskId) {
+        var workspacePath = _getWorkspacePath();
+        if (workspacePath is null) return;
+
+        var mdPath = Path.Combine(workspacePath, ".squad", "maintenance.md");
+        if (!File.Exists(mdPath)) return;
+
+        try {
+            var rawContent = File.ReadAllText(mdPath);
+            var lineEnding = rawContent.Contains("\r\n") ? "\r\n" : "\n";
+            var lines = rawContent.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+
+            bool? newEnabled     = null;
+            bool  inFrontmatter  = false;
+            bool  pastFirst      = false;
+            bool  inTasksList    = false;
+            bool  inTargetTask   = false;
+
+            for (int i = 0; i < lines.Length; i++) {
+                var line    = lines[i];
+                var trimmed = line.TrimStart();
+                int indent  = line.Length - trimmed.Length;
+
+                // Track frontmatter boundaries (first pair of --- markers only)
+                if (trimmed == "---") {
+                    if (!pastFirst) { pastFirst = true; inFrontmatter = true; }
+                    else            { inFrontmatter = false; }
+                    continue;
+                }
+
+                if (!inFrontmatter) continue;
+
+                // tasks: list start at indent 0
+                if (indent == 0 && trimmed == "tasks:") {
+                    inTasksList = true;
+                    continue;
+                }
+
+                if (!inTasksList) continue;
+
+                // Any indent-0 key other than tasks: closes the tasks block
+                if (indent == 0) { inTargetTask = false; inTasksList = false; continue; }
+
+                // New task item at indent 2: "  - id: <id>"
+                if (indent == 2 && trimmed.StartsWith("- ")) {
+                    var rest = trimmed[2..];
+                    if (rest.StartsWith("id:")) {
+                        var idVal = rest["id:".Length..].Trim().Trim('"', '\'');
+                        inTargetTask = string.Equals(idVal, taskId, StringComparison.Ordinal);
+                    } else {
+                        inTargetTask = false;
+                    }
+                    continue;
+                }
+
+                if (!inTargetTask) continue;
+
+                // Task field "    enabled: true/false" at indent 4
+                if (indent == 4 && trimmed.StartsWith("enabled:")) {
+                    var val     = trimmed["enabled:".Length..].Trim().Trim('"', '\'');
+                    bool cur    = string.Equals(val, "true", StringComparison.OrdinalIgnoreCase);
+                    newEnabled  = !cur;
+                    lines[i]    = "    enabled: " + (newEnabled.Value ? "true" : "false");
+                    break;
+                }
+            }
+
+            if (newEnabled is null) {
+                SquadDashTrace.Write(TraceCategory.General,
+                    $"MaintenancePanelController: task '{taskId}' not found in {mdPath}");
+                return;
+            }
+
+            File.WriteAllText(mdPath, string.Join(lineEnding, lines));
+
+            SquadDashTrace.Write(TraceCategory.General,
+                $"MaintenancePanelController: task '{taskId}' toggled → enabled={newEnabled.Value}");
+
+            _toggleTaskEnabled(taskId, newEnabled.Value);
+        }
+        catch (Exception ex) {
+            SquadDashTrace.Write(TraceCategory.General,
+                $"MaintenancePanelController: failed to toggle task '{taskId}': {ex.Message}");
+        }
+    }
+
     // ── List construction ─────────────────────────────────────────────────────
 
     private void RebuildList() {
@@ -235,8 +328,8 @@ internal sealed class MaintenancePanelController {
         check.SetResourceReference(CheckBox.FontSizeProperty, "FontSizeBody");
         check.SetResourceReference(CheckBox.ForegroundProperty, "LabelText");
         Grid.SetColumn(check, 0);
-        check.Checked   += (_, _) => _toggleTaskEnabled(task.Id, true);
-        check.Unchecked += (_, _) => _toggleTaskEnabled(task.Id, false);
+        check.Checked   += (_, _) => ToggleTaskEnabled(task.Id);
+        check.Unchecked += (_, _) => ToggleTaskEnabled(task.Id);
         grid.Children.Add(check);
 
         // ── Right column: title + chips + options ─────────────────────────────

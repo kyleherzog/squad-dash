@@ -26862,7 +26862,10 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void OnMaintenanceTaskToggled(string taskId, bool enabled)
     {
-        // Persisted via maintenance.md edit — currently a no-op placeholder.
+        var workspacePath = _currentWorkspace?.FolderPath;
+        if (workspacePath is null || _maintenancePanel is null) return;
+        var config = MaintenanceMdParser.Parse(Path.Combine(workspacePath, ".squad", "maintenance.md"));
+        _maintenancePanel.Refresh(config, _maintenanceStateStore);
     }
 
     private async Task StartMaintenanceCycleAsync()

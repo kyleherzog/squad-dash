@@ -522,4 +522,103 @@ internal sealed class MaintenancePanelControllerTests {
                 "No warning chip must appear for a non-direct, non-branch safety level");
         });
     }
+
+    // ── ToggleTaskEnabled ─────────────────────────────────────────────────────
+
+    private static string WriteMaintFile(string workspacePath, string content) {
+        var squadDir = Path.Combine(workspacePath, ".squad");
+        Directory.CreateDirectory(squadDir);
+        var mdPath = Path.Combine(squadDir, "maintenance.md");
+        File.WriteAllText(mdPath, content);
+        return mdPath;
+    }
+
+    private static (MaintenancePanelController controller,
+                    List<(string taskId, bool enabled)> toggleCalls)
+        CreateControllerWithTracking(string workspacePath) {
+        var listPanel    = new StackPanel();
+        var statusLabel  = new TextBlock();
+        var runNowButton = new Button();
+        var toggleCalls  = new List<(string, bool)>();
+        var controller   = new MaintenancePanelController(
+            listPanel,
+            statusLabel,
+            runNowButton,
+            getWorkspacePath:  () => workspacePath,
+            runNow:            () => { },
+            toggleTaskEnabled: (id, en) => toggleCalls.Add((id, en)));
+        return (controller, toggleCalls);
+    }
+
+    [Test]
+    public void ToggleTaskEnabled_WhenEnabled_WritesDisabledToFile() {
+        WpfTestContext.Run(() => {
+            var workspacePath = Path.Combine(_stateDir, "ws_toggle_e2d");
+            var mdPath = WriteMaintFile(workspacePath,
+                "---\nconfigured: true\ntasks:\n  - id: my-task\n    enabled: true\n    frequency: daily\n    title: My Task\n    instructions: Do work.\n---\n");
+
+            var (controller, _) = CreateControllerWithTracking(workspacePath);
+            controller.ToggleTaskEnabled("my-task");
+
+            var content = File.ReadAllText(mdPath);
+            Assert.That(content, Does.Contain("enabled: false"),
+                "enabled flag must be flipped to false");
+            Assert.That(content, Does.Not.Contain("enabled: true"),
+                "enabled: true must not remain in file");
+        });
+    }
+
+    [Test]
+    public void ToggleTaskEnabled_WhenDisabled_WritesEnabledToFile() {
+        WpfTestContext.Run(() => {
+            var workspacePath = Path.Combine(_stateDir, "ws_toggle_d2e");
+            var mdPath = WriteMaintFile(workspacePath,
+                "---\nconfigured: true\ntasks:\n  - id: my-task\n    enabled: false\n    frequency: daily\n    title: My Task\n    instructions: Do work.\n---\n");
+
+            var (controller, _) = CreateControllerWithTracking(workspacePath);
+            controller.ToggleTaskEnabled("my-task");
+
+            var content = File.ReadAllText(mdPath);
+            Assert.That(content, Does.Contain("enabled: true"),
+                "enabled flag must be flipped to true");
+        });
+    }
+
+    [Test]
+    public void ToggleTaskEnabled_PreservesOtherFileContent() {
+        WpfTestContext.Run(() => {
+            var workspacePath = Path.Combine(_stateDir, "ws_toggle_preserve");
+            var mdPath = WriteMaintFile(workspacePath,
+                "---\nconfigured: true\nidle_timeout: 20\ntasks:\n  - id: task-a\n    enabled: false\n    frequency: daily\n    title: Task A\n    instructions: Do A.\n  - id: task-b\n    enabled: true\n    frequency: per-commit\n    title: Task B\n    instructions: Do B.\n---\n");
+
+            var (controller, _) = CreateControllerWithTracking(workspacePath);
+            controller.ToggleTaskEnabled("task-a");
+
+            var after = File.ReadAllText(mdPath);
+            Assert.That(after, Does.Contain("idle_timeout: 20"),      "Global config line preserved");
+            Assert.That(after, Does.Contain("id: task-b"),             "task-b still present");
+            Assert.That(after, Does.Contain("frequency: per-commit"),  "task-b frequency preserved");
+            Assert.That(after, Does.Contain("title: Task B"),          "task-b title preserved");
+            Assert.That(after, Does.Contain("  - id: task-a"),         "task-a still present");
+        });
+    }
+
+    [Test]
+    public void ToggleTaskEnabled_InvokesReloadCallback() {
+        WpfTestContext.Run(() => {
+            var workspacePath = Path.Combine(_stateDir, "ws_toggle_cb");
+            WriteMaintFile(workspacePath,
+                "---\nconfigured: true\ntasks:\n  - id: my-task\n    enabled: false\n    frequency: daily\n    title: My Task\n    instructions: Do work.\n---\n");
+
+            var (controller, toggleCalls) = CreateControllerWithTracking(workspacePath);
+            controller.ToggleTaskEnabled("my-task");
+
+            Assert.That(toggleCalls, Has.Count.EqualTo(1),
+                "Reload callback must be invoked exactly once after toggle");
+            Assert.That(toggleCalls[0].taskId, Is.EqualTo("my-task"),
+                "Callback must receive the correct task ID");
+            Assert.That(toggleCalls[0].enabled, Is.True,
+                "Task was disabled; toggle must enable it and report enabled=true");
+        });
+    }
 }

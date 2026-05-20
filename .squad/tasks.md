@@ -480,7 +480,7 @@
   `SquadDashTrace.Write` entry recording the fallback so it is visible in the trace log. Do not
   silently swallow the error.
 
-- [ ] **[Maintenance] Maintenance panel in-place task editing** *(Owner: lyra-morn)*
+- [x] **[Maintenance] Maintenance panel in-place task editing** *(Owner: lyra-morn)*
   Allow the user to toggle task enabled/disabled state directly in the Maintenance panel UI and
   write the change back to `maintenance.md` (flip `- [ ]` ↔ `- [x]` for the corresponding task).
   Analogous to how Loop Settings popup saves frontmatter values back to `loop.md`. Preserve all
@@ -549,7 +549,8 @@
 
 > Full details in `.squad/completed-tasks.md`. This section is a compact AI-recall index only.
 
-- [x] **[Maintenance] `per-commit` frequency — git fallback tracing** — ✅ Implemented (`MaintenanceStateStore.IsEligible` now calls `SquadDashTrace.Write(TraceCategory.General, ...)` when `commitSha` is null for a `per-commit` task before falling back to daily logic; 3 new NUnit tests: null-SHA falls back to daily (eligible/not-eligible), trace entry captured via `CapturingTraceTarget`; 14/14 tests pass)
+- [x] **[Maintenance] Maintenance panel in-place task editing** — ✅ Implemented (`MaintenancePanelController.ToggleTaskEnabled` reads `.squad/maintenance.md`, flips `enabled: false ↔ true` for the target task ID, writes back preserving all other content, traces via `SquadDashTrace.Write`, then calls the reload callback; checkbox in `BuildTaskRow` wired to `ToggleTaskEnabled`; `OnMaintenanceTaskToggled` in `MainWindow` updated to re-parse and call `Refresh`; 4 new NUnit tests: enabled→disabled, disabled→enabled, preserves other content, invokes reload callback; all 1850 tests pass)
+- [x] **[Maintenance] `per-commit` frequency — git fallback tracing**— ✅ Implemented (`MaintenanceStateStore.IsEligible` now calls `SquadDashTrace.Write(TraceCategory.General, ...)` when `commitSha` is null for a `per-commit` task before falling back to daily logic; 3 new NUnit tests: null-SHA falls back to daily (eligible/not-eligible), trace entry captured via `CapturingTraceTarget`; 14/14 tests pass)
 - [x] **[Maintenance] Safety model enforcement — `branch` and `direct` modes**— ✅ Implemented (BuildPrompt now enforces global safety floor via ApplySafetyFloor; branch injects named `maintenance/YYYYMMDD-<slug>` branch; direct injects commit-directly message; report-only overrides more-permissive per-task safety; 5 new tests in MaintenanceRunnerTests.cs; all 17 tests pass)
 - [x] **[Maintenance] Phase 2 tests— ReportWriter + PanelController** — ✅ Implemented (commit 0117326; 7 ReportWriter tests: file naming, content sections, duration format, prune-to-30, no-prune-under-30, newest-first sort, absent-dir safe; 8 PanelController WPF tests: idle/running header text, checkbox state from config, empty config, last-run info, null store, first-run no-throw, Run Now button lifecycle)
 - [x] **[Maintenance] Phase 1 + Phase 2 + partial Phase 3 — full Maintenance Mode implementation** — ✅ Implemented (commits 8d4582b, 5030b6f, 8173256, 07ac04a, ff53624, f248b80, ed04918; IdleDetectionService, parser, state store, runner, report writer, default maintenance.md, prompt injection, WPF panel, banner, ntfy event, Argus Weld lazy registration, thread routing, Run Now button, agent roster)
