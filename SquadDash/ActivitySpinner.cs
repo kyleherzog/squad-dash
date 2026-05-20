@@ -19,7 +19,8 @@ public sealed class ActivitySpinner : FrameworkElement
     private double _angle;              // radians, current rotation
     private double _spinnerOpacity;     // 0..1
     private double _targetOpacity;      // lerp target for opacity
-    private double _satLightPhase;      // radians, for max-speed pulse oscillation
+    private double _velocityTarget;      // what velocity we want to reach
+    private double _velocityAccelPhase;  // seconds remaining in acceleration ramp (0 = at target)
 
     // Write-dot state
     private double _writeDotRadius;     // current rendered radius (px)
@@ -67,13 +68,12 @@ public sealed class ActivitySpinner : FrameworkElement
     private const double FadeOutThreshold = 0.18;    // rad/s — start fade below this
     private const double OpacityLerpRate = 2.0;      // units/sec — reaches target in ~0.5s
 
-    private const double PulseFrequency = 3.0;       // Hz for max-speed oscillation
-    private const double PulseAmplitude = 0.22;      // ±22% brightness
+    private const double VelocityRampSeconds = 0.5;   // time to ramp from current to target
 
     // Opacity targets per state
-    private const double ThinkingTargetOpacity = 0.60;
-    private const double ReadingTargetOpacity  = 0.80;
-    private const double WritingTargetOpacity  = 1.00;
+    private const double ThinkingTargetOpacity = 0.50;
+    private const double ReadingTargetOpacity  = 0.65;
+    private const double WritingTargetOpacity  = 0.80;
 
     // Write-dot constants
     private const double MaxDotRadiusFraction = 0.5;   // dot max = spinner_radius * 0.5 = diameter/4
@@ -165,7 +165,12 @@ public sealed class ActivitySpinner : FrameworkElement
         _currentKind = kind;
 
         var impulse = kind == SpinnerActivityKind.Writing ? WritingImpulse : ThinkingImpulse;
-        _angularVelocity = Math.Min(_angularVelocity + impulse, MaxAngularVelocity);
+        var newTarget = Math.Min(_angularVelocity + impulse, MaxAngularVelocity);
+        if (newTarget > _velocityTarget)
+        {
+            _velocityTarget = newTarget;
+            _velocityAccelPhase = VelocityRampSeconds;  // restart ramp
+        }
 
         // Snap target opacity immediately; _spinnerOpacity lerps toward it each frame
         _targetOpacity = kind switch
@@ -199,20 +204,22 @@ public sealed class ActivitySpinner : FrameworkElement
         var dt = Math.Clamp((now - _lastTick).TotalSeconds, 0.001, 0.2);
         _lastTick = now;
 
-        // Friction: exponential decay
+        // Smooth acceleration toward target velocity (ramp up), then apply friction
+        if (_velocityAccelPhase > 0)
+        {
+            _velocityAccelPhase = Math.Max(0.0, _velocityAccelPhase - dt);
+            var accelRate = (_velocityTarget - _angularVelocity) / VelocityRampSeconds;
+            _angularVelocity = Math.Min(_angularVelocity + accelRate * dt, _velocityTarget);
+        }
+
+        // Friction: exponential decay (always applied so spinner coasts to stop when idle)
         _angularVelocity *= Math.Exp(-FrictionK * dt);
         if (_angularVelocity < 1e-4) _angularVelocity = 0;
+        if (_angularVelocity == 0) { _velocityTarget = 0; _velocityAccelPhase = 0; }
 
         // Advance rotation angle
         _angle += _angularVelocity * dt;
         if (_angle >= Math.PI * 2) _angle -= Math.PI * 2;
-
-        // Max-speed saturation/lightness pulse
-        var speedRatio = _angularVelocity / MaxAngularVelocity;
-        if (speedRatio >= 0.85)
-            _satLightPhase += 2.0 * Math.PI * PulseFrequency * dt;
-        else
-            _satLightPhase = 0;
 
         // Opacity: drive target toward 0 when coasting to a stop
         if (_angularVelocity < FadeOutThreshold)
@@ -291,15 +298,6 @@ public sealed class ActivitySpinner : FrameworkElement
         {
             var color = AccentColor;
 
-            // Apply max-speed pulse
-            if (_angularVelocity / MaxAngularVelocity >= 0.85)
-            {
-                var isDark = AgentStatusCard.IsDarkTheme;
-                var pulse = Math.Sin(_satLightPhase) * PulseAmplitude;
-                if (!isDark) pulse = -pulse;
-                color = AdjustBrightness(color, pulse);
-            }
-
             // Bake opacity into alpha channel
             color.A = (byte)Math.Round(255 * _spinnerOpacity);
 
@@ -356,12 +354,4 @@ public sealed class ActivitySpinner : FrameworkElement
         return geo;
     }
 
-    // ── Color helpers ────────────────────────────────────────────────────────
-
-    private static Color AdjustBrightness(Color c, double delta)
-    {
-        static byte Clamp(double v) => (byte)Math.Clamp(Math.Round(v), 0, 255);
-        var factor = 1.0 + delta;
-        return Color.FromArgb(c.A, Clamp(c.R * factor), Clamp(c.G * factor), Clamp(c.B * factor));
-    }
 }
