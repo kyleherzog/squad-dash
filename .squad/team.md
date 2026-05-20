@@ -23,6 +23,7 @@
 | Atlas Wren | Mac & Cross-Platform Specialist | agents/atlas-wren/charter.md | active |
 | Scribe | Session Logger | agents/scribe/charter.md | 📋 Silent |
 | Ralph | Work Monitor | — | 🔄 Monitor |
+| Argus Weld | Maintenance Coordinator | agents/argus-weld/charter.md | 🌙 Background |
 
 ## Project Context
 

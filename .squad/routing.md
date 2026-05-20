@@ -18,6 +18,7 @@ How to decide who handles what.
 | Architectural code review | Orion Vale | Staff-level review for architectural governance across all layers |
 | Scope & priorities | Orion Vale | What to build next, trade-offs, decomposing epics into phases |
 | Session logging | Scribe | Automatic — never needs routing |
+| Maintenance orchestration (idle tasks) | Argus Weld | maintenance.md tasks, idle-window execution, maintenance reports |
 
 ## Issue Routing
 
