@@ -4350,7 +4350,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         _pec.MarkActivity("bridge-stderr");
 
         if (text.Contains("ExperimentalWarning: SQLite") ||
-            text.Contains("Use `node --trace-warnings"))
+            text.Contains("Use `node --trace-warnings") ||
+            text.Contains("SquadClient connection took"))
         {
             return;
         }
