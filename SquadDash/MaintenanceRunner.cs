@@ -14,6 +14,7 @@ internal sealed class MaintenanceRunner {
     private readonly Action<string>                         _onTaskStarted;
     private readonly Action<string>                         _onTaskCompleted;
     private readonly Action<MaintenanceReport>              _onCompleted;
+    private readonly Func<string, CancellationToken, Task<string?>> _getCommitShaAsync;
 
     private volatile bool _isRunning;
 
@@ -24,13 +25,15 @@ internal sealed class MaintenanceRunner {
         MaintenanceStateStore                  stateStore,
         Action<string>                         onTaskStarted,
         Action<string>                         onTaskCompleted,
-        Action<MaintenanceReport>              onCompleted) {
+        Action<MaintenanceReport>              onCompleted,
+        Func<string, CancellationToken, Task<string?>>? getCommitShaAsync = null) {
 
         _executePromptAsync = executePromptAsync;
         _stateStore         = stateStore;
         _onTaskStarted      = onTaskStarted;
         _onTaskCompleted    = onTaskCompleted;
         _onCompleted        = onCompleted;
+        _getCommitShaAsync  = getCommitShaAsync ?? TryGetCommitShaAsync;
     }
 
     /// <summary>
@@ -49,12 +52,16 @@ internal sealed class MaintenanceRunner {
         var results    = new List<MaintenanceTaskResult>();
 
         try {
-            // Try to obtain the HEAD commit SHA (best-effort; null if unavailable).
-            string? commitSha = TryGetCommitSha(workspacePath);
+            var tasks = config.Tasks ?? [];
+
+            // Try to obtain the HEAD commit SHA only when an enabled per-commit task needs it.
+            string? commitSha = NeedsCommitSha(tasks)
+                ? await _getCommitShaAsync(workspacePath, ct).ConfigureAwait(false)
+                : null;
 
             int runCount = 0;
 
-            foreach (var task in config.Tasks ?? []) {
+            foreach (var task in tasks) {
                 if (ct.IsCancellationRequested)
                     break;
 
@@ -155,7 +162,12 @@ internal sealed class MaintenanceRunner {
         return Rank(globalSafety) >= Rank(taskSafety) ? globalSafety : taskSafety;
     }
 
-    private static string? TryGetCommitSha(string workspacePath) {
+    private static bool NeedsCommitSha(IEnumerable<MaintenanceTask> tasks) =>
+        tasks.Any(task =>
+            task.Enabled &&
+            string.Equals(task.Frequency, "per-commit", StringComparison.OrdinalIgnoreCase));
+
+    private static async Task<string?> TryGetCommitShaAsync(string workspacePath, CancellationToken ct) {
         try {
             var psi = new System.Diagnostics.ProcessStartInfo("git", "rev-parse HEAD") {
                 WorkingDirectory       = workspacePath,
@@ -166,12 +178,42 @@ internal sealed class MaintenanceRunner {
             };
             using var proc = Process.Start(psi);
             if (proc is null) return null;
-            var sha = proc.StandardOutput.ReadLine()?.Trim();
-            proc.WaitForExit(3000);
-            return string.IsNullOrEmpty(sha) ? null : sha;
+
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(3));
+
+            try {
+                var outputTask = proc.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+                var errorTask  = proc.StandardError.ReadToEndAsync(timeoutCts.Token);
+                await proc.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+
+                var sha = (await outputTask.ConfigureAwait(false)).Trim();
+                _ = await errorTask.ConfigureAwait(false);
+                if (proc.ExitCode != 0)
+                    return null;
+
+                return string.IsNullOrEmpty(sha) ? null : sha;
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
+                TryKillProcess(proc);
+                return null;
+            }
+        }
+        catch (OperationCanceledException) {
+            return null;
         }
         catch {
             return null;
+        }
+    }
+
+    private static void TryKillProcess(Process proc) {
+        try {
+            if (!proc.HasExited)
+                proc.Kill(entireProcessTree: true);
+        }
+        catch {
+            // Best-effort cleanup only; commit SHA lookup must never fail maintenance.
         }
     }
 }

@@ -88,6 +88,7 @@ internal sealed class IdleDetectionService {
         if (!active) {
             _forcedIdle = false;
             Interlocked.Exchange(ref _firedThisIdlePeriod, 0);
+            Interlocked.Exchange(ref _lastActivityTicks, DateTime.UtcNow.Ticks);
             CheckAndFireIfIdle();
         }
     }

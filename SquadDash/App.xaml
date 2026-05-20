@@ -66,6 +66,44 @@
                 </Setter>
             </Style>
 
+            <!-- Flat / link-style button — transparent background, themed hover; use for report rows etc. -->
+            <Style x:Key="FlatButtonStyle" TargetType="Button">
+                <Setter Property="Background"       Value="Transparent"/>
+                <Setter Property="Foreground"       Value="{DynamicResource BodyText}"/>
+                <Setter Property="BorderBrush"      Value="Transparent"/>
+                <Setter Property="BorderThickness"  Value="0"/>
+                <Setter Property="Padding"          Value="4,2"/>
+                <Setter Property="Cursor"           Value="Hand"/>
+                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="border"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="2"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="border" Property="Background" Value="{DynamicResource HoverSurface}"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="border" Property="Background" Value="{DynamicResource InputSurface}"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="border" Property="Opacity" Value="0.5"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- Panel close button (×) — transparent base, clearly-visible CaptionButtonHover
                  background on hover so users can see the button is clickable. -->
             <Style x:Key="PanelCloseButtonStyle" TargetType="Button">
@@ -887,6 +925,60 @@
                                     <Setter TargetName="border" Property="Opacity" Value="0.8"/>
                                     <Setter Property="Foreground"
                                             Value="{DynamicResource CaptionCloseHoverText}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Themed Expander: uses theme tokens for header text, arrow, and background.
+                 Arrow rotates 90° when expanded. -->
+            <Style x:Key="ThemedExpanderStyle" TargetType="Expander">
+                <Setter Property="Foreground" Value="{DynamicResource SubtleText}"/>
+                <Setter Property="Background" Value="{DynamicResource InputSurface}"/>
+                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Expander">
+                            <StackPanel>
+                                <Border x:Name="HeaderBorder"
+                                        Background="Transparent"
+                                        Padding="2,2,2,2"
+                                        Cursor="Hand">
+                                    <DockPanel LastChildFill="True">
+                                        <Path x:Name="Arrow"
+                                              DockPanel.Dock="Left"
+                                              Data="M 1.5,3.5 Q 1.5,1.5 3.25,2.47 L 8.75,5.53 Q 10.5,6.5 8.75,7.47 L 3.25,10.53 Q 1.5,11.5 1.5,9.5 Z"
+                                              Width="7" Height="9"
+                                              Stretch="Fill"
+                                              Opacity="0.6"
+                                              Fill="{DynamicResource SubtleText}"
+                                              VerticalAlignment="Center"
+                                              Margin="0,0,6,0"
+                                              RenderTransformOrigin="0.5,0.5">
+                                            <Path.RenderTransform>
+                                                <RotateTransform Angle="0"/>
+                                            </Path.RenderTransform>
+                                        </Path>
+                                        <ContentPresenter ContentSource="Header"
+                                                          VerticalAlignment="Center"
+                                                          TextElement.FontSize="{DynamicResource FontSizeSmall}"
+                                                          TextElement.Foreground="{DynamicResource LabelText}"/>
+                                    </DockPanel>
+                                </Border>
+                                <ContentPresenter x:Name="ExpandSite"
+                                                  Margin="0,2,0,0"
+                                                  Visibility="Collapsed"/>
+                            </StackPanel>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsExpanded" Value="True">
+                                    <Setter TargetName="ExpandSite" Property="Visibility" Value="Visible"/>
+                                    <Setter TargetName="Arrow" Property="RenderTransform">
+                                        <Setter.Value>
+                                            <RotateTransform Angle="90"/>
+                                        </Setter.Value>
+                                    </Setter>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>

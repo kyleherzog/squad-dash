@@ -63,13 +63,15 @@ internal sealed class MaintenanceRunnerTests {
         MaintenanceStateStore? stateStore = null,
         Action<string>? onTaskStarted = null,
         Action<string>? onTaskCompleted = null,
-        Action<MaintenanceReport>? onCompleted = null) {
+        Action<MaintenanceReport>? onCompleted = null,
+        Func<string, CancellationToken, Task<string?>>? getCommitShaAsync = null) {
         return new MaintenanceRunner(
             executePromptAsync: executePromptAsync ?? ((_, _) => Task.CompletedTask),
             stateStore:         stateStore ?? new MaintenanceStateStore(_stateDir),
             onTaskStarted:      onTaskStarted  ?? (_ => { }),
             onTaskCompleted:    onTaskCompleted ?? (_ => { }),
-            onCompleted:        onCompleted    ?? (_ => { }));
+            onCompleted:        onCompleted    ?? (_ => { }),
+            getCommitShaAsync:  getCommitShaAsync);
     }
 
     // ── Skips disabled tasks ──────────────────────────────────────────────────
@@ -88,6 +90,45 @@ internal sealed class MaintenanceRunnerTests {
         await runner.StartAsync(config, _workspaceDir, CancellationToken.None);
 
         Assert.That(executed, Has.Count.EqualTo(1), "Only the enabled task should be executed");
+    }
+
+    [Test]
+    public async Task StartAsync_DoesNotResolveCommitSha_WhenNoEnabledPerCommitTasks() {
+        var commitShaCalls = 0;
+        var config = MakeConfig([
+            MakeTask("disabled-per-commit", enabled: false, frequency: "per-commit"),
+            MakeTask("daily-task", enabled: true, frequency: "daily"),
+        ]);
+
+        var runner = MakeRunner(
+            getCommitShaAsync: (_, _) => {
+                commitShaCalls++;
+                return Task.FromResult<string?>("abc123");
+            });
+
+        await runner.StartAsync(config, _workspaceDir, CancellationToken.None);
+
+        Assert.That(commitShaCalls, Is.Zero,
+            "Commit SHA lookup should not run unless an enabled per-commit task needs it");
+    }
+
+    [Test]
+    public async Task StartAsync_ResolvesCommitSha_ForEnabledPerCommitTasks() {
+        var commitShaCalls = 0;
+        var config = MakeConfig([
+            MakeTask("per-commit-task", enabled: true, frequency: "per-commit"),
+        ]);
+
+        var runner = MakeRunner(
+            getCommitShaAsync: (_, _) => {
+                commitShaCalls++;
+                return Task.FromResult<string?>("abc123");
+            });
+
+        await runner.StartAsync(config, _workspaceDir, CancellationToken.None);
+
+        Assert.That(commitShaCalls, Is.EqualTo(1),
+            "Enabled per-commit tasks need the current HEAD SHA for eligibility");
     }
 
     // ── Skips ineligible tasks ────────────────────────────────────────────────

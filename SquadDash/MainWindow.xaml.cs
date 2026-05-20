@@ -26872,9 +26872,13 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         var workspacePath = _currentWorkspace?.FolderPath;
         if (workspacePath is null) return;
+        if (ShouldSuppressMaintenanceCycle())
+            return;
 
         var config = MaintenanceMdParser.Parse(Path.Combine(workspacePath, ".squad", "maintenance.md"));
         if (config is null) return;
+        if (config.Tasks is not { Count: > 0 } tasks || !tasks.Any(task => task.Enabled))
+            return;
 
         _maintenanceStateStore ??= new MaintenanceStateStore(Path.Combine(workspacePath, ".squad"));
         _maintenanceReportWriter = new MaintenanceReportWriter(workspacePath);
@@ -26930,6 +26934,26 @@ public partial class MainWindow : Window, ILiveElementLocator
         _maintenancePanel?.OnRunnerStarted("starting…");
 
         await _maintenanceRunner.StartAsync(config, workspacePath, CancellationToken.None);
+    }
+
+    private bool ShouldSuppressMaintenanceCycle()
+    {
+        if (_isPromptRunning)
+            return true;
+
+        if (IsLoopRunning || _loopController.IsRunning || _loopQueued)
+            return true;
+
+        if (_promptQueue.Count > 0 && !_queueManuallyPaused)
+            return true;
+
+        if (_backgroundTaskPresenter.HasBackgroundTasks())
+            return true;
+
+        if (HasPendingDirectQuickReplyAgentFollowUp() || _loopFollowUpTcs is not null)
+            return true;
+
+        return false;
     }
 
     private void EnsureArgusWeldRegistered(string workspacePath) {

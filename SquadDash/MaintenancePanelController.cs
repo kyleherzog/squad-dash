@@ -47,6 +47,39 @@ internal sealed class MaintenancePanelController {
         _toggleTaskEnabled  = toggleTaskEnabled;
 
         _runNowButton.Click += (_, _) => _runNow();
+        WireListPanelContextMenu();
+    }
+
+    // ── Context menu ──────────────────────────────────────────────────────────
+
+    private void WireListPanelContextMenu() {
+        var editItem = new MenuItem { Header = "Edit Maintenance File" };
+        editItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+        editItem.Click += (_, _) => {
+            var workspacePath = _getWorkspacePath();
+            if (workspacePath is null) {
+                SquadDashTrace.Write(TraceCategory.General,
+                    "MaintenancePanelController: workspace path is null; cannot open maintenance file");
+                return;
+            }
+            var mdPath = Path.Combine(workspacePath, ".squad", "maintenance.md");
+            if (!File.Exists(mdPath)) {
+                SquadDashTrace.Write(TraceCategory.General,
+                    $"MaintenancePanelController: maintenance file not found at {mdPath}");
+                return;
+            }
+            try {
+                Process.Start(new ProcessStartInfo(mdPath) { UseShellExecute = true });
+            } catch (Exception ex) {
+                SquadDashTrace.Write(TraceCategory.General,
+                    $"MaintenancePanelController: failed to open maintenance file: {ex.Message}");
+            }
+        };
+
+        var menu = new ContextMenu();
+        menu.SetResourceReference(ContextMenu.StyleProperty, "ThemedContextMenuStyle");
+        menu.Items.Add(editItem);
+        _listPanel.ContextMenu = menu;
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -227,6 +260,7 @@ internal sealed class MaintenancePanelController {
             IsExpanded = false,
             Margin     = new Thickness(0, 0, 0, 4),
         };
+        expander.SetResourceReference(Expander.StyleProperty, "ThemedExpanderStyle");
 
         var contentPanel = new StackPanel { Margin = new Thickness(8, 4, 0, 4) };
 
@@ -287,12 +321,12 @@ internal sealed class MaintenancePanelController {
         var btn = new Button {
             Content                    = label,
             HorizontalContentAlignment = HorizontalAlignment.Left,
-            Background                 = Brushes.Transparent,
             BorderThickness            = new Thickness(0),
             Padding                    = new Thickness(4, 3, 4, 3),
             Margin                     = new Thickness(0, 1, 0, 1),
             Cursor                     = Cursors.Hand,
         };
+        btn.SetResourceReference(Button.StyleProperty, "FlatButtonStyle");
         btn.SetResourceReference(Button.FontSizeProperty, "FontSizeSmall");
         btn.SetResourceReference(Button.ForegroundProperty, "BodyText");
         btn.Click += (_, _) => OpenReport(path);
@@ -382,6 +416,7 @@ internal sealed class MaintenancePanelController {
                 };
                 rb.SetResourceReference(RadioButton.FontSizeProperty, "FontSizeSmall");
                 rb.SetResourceReference(RadioButton.ForegroundProperty, "BodyText");
+                rb.SetResourceReference(RadioButton.StyleProperty, "ThemedRadioButtonStyle");
                 optionsPanel.Children.Add(rb);
             }
             rightPanel.Children.Add(optionsPanel);
@@ -405,8 +440,21 @@ internal sealed class MaintenancePanelController {
         chip.SetResourceReference(Border.BorderBrushProperty, "InputBorder");
         chip.BorderThickness = new Thickness(1);
         if (tooltip is not null)
-            chip.ToolTip = tooltip;
+            chip.ToolTip = MakeThemedToolTip(tooltip);
         return chip;
+    }
+
+    private static ToolTip MakeThemedToolTip(string text) {
+        var tb = new TextBlock { Text = text };
+        tb.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+        var tip = new ToolTip {
+            BorderThickness = new Thickness(1),
+            Padding         = new Thickness(6, 4, 6, 4),
+            Content         = tb,
+        };
+        tip.SetResourceReference(ToolTip.BackgroundProperty, "InputSurface");
+        tip.SetResourceReference(ToolTip.BorderBrushProperty, "InputBorder");
+        return tip;
     }
 
     private static Border BuildWarningChip(string text) {

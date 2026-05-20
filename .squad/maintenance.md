@@ -1,5 +1,5 @@
 ---
-configured: true
+configured: false
 idle_timeout: 15
 max_tasks_per_session: 5
 safety: branch
