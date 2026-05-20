@@ -1928,12 +1928,33 @@ internal sealed class MarkdownDocumentWindow : Window {
             return;
         }
         var strippedNew = MarkdownDocumentTabState.StripFrontMatter(newText, out var newFrontMatter);
-        if (string.Equals(strippedNew, doc.SavedText, StringComparison.Ordinal))
+        bool bodyChanged        = !string.Equals(strippedNew,     doc.SavedText,   StringComparison.Ordinal);
+        bool frontMatterChanged = !string.Equals(newFrontMatter,  doc.FrontMatter, StringComparison.Ordinal);
+        // When "Include front matter" is checked, FrontMatter is merged into WorkingText
+        // (FrontMatter == ""). Detect that the on-disk frontmatter now differs from what
+        // was originally merged in by comparing the full reconstructed text to WorkingText.
+        bool mergedFrontMatterChanged = string.IsNullOrEmpty(doc.FrontMatter)
+                                        && !string.IsNullOrEmpty(newFrontMatter)
+                                        && !string.Equals(newFrontMatter + strippedNew, doc.WorkingText, StringComparison.Ordinal);
+        if (!bodyChanged && !frontMatterChanged && !mergedFrontMatterChanged)
             return;
-        doc.FrontMatter = newFrontMatter;
-        doc.SavedText = strippedNew;
-        doc.WorkingText = strippedNew;
-        doc.EditorTextBox.SetPlainText(strippedNew);
+        if (mergedFrontMatterChanged) {
+            // Front matter is merged into the editor; rebuild the combined text.
+            var newFullText = newFrontMatter + strippedNew;
+            doc.FrontMatter = string.Empty;  // keep in merged state
+            doc.SavedText   = strippedNew;
+            doc.WorkingText = newFullText;
+            doc.EditorTextBox.SetPlainText(newFullText);
+        } else {
+            doc.FrontMatter = newFrontMatter;
+            doc.SavedText   = strippedNew;
+            if (bodyChanged) {
+                doc.WorkingText = strippedNew;
+                doc.EditorTextBox.SetPlainText(strippedNew);
+            }
+            // Front-matter-only change with the editor showing body only: FrontMatter is
+            // now up to date in memory; the next Ctrl+S will write it correctly.
+        }
         RenderPreview(doc, preserveScroll: true);
         UpdateChrome();
         if (doc == _activeDocument)
