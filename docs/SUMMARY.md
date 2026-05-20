@@ -30,6 +30,7 @@
 
   * [Fullscreen Transcript](features/fullscreen-transcript.md)
   * [Text Formatting Shortcuts](features/text-formatting.md)
+  * [Maintenance Mode](features/maintenance-mode.md)
 
 ## Panels
 

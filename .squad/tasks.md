@@ -493,7 +493,7 @@
   orchestration routes to this agent. Coordinate with the thread identity task to ensure the handle
   matches the registered identity key.
 
-- [ ] **[Maintenance] RELEASING.md / runbook — document Maintenance Mode** *(Owner: mira-quill)*
+- [x] **[Maintenance] RELEASING.md / runbook — document Maintenance Mode** *(Owner: mira-quill)*
   Document the Maintenance Mode feature in any developer runbooks (`RELEASING.md` or equivalent).
   Cover: what `maintenance.md` is, how to enable/disable tasks, the safety model, where reports
   live, how to reset state (`maintenance-state.json`), and how to test the idle trigger locally.
@@ -550,6 +550,7 @@
 > Full details in `.squad/completed-tasks.md`. This section is a compact AI-recall index only.
 
 - [x] **[Maintenance] Maintenance panel in-place task editing** — ✅ Implemented (`MaintenancePanelController.ToggleTaskEnabled` reads `.squad/maintenance.md`, flips `enabled: false ↔ true` for the target task ID, writes back preserving all other content, traces via `SquadDashTrace.Write`, then calls the reload callback; checkbox in `BuildTaskRow` wired to `ToggleTaskEnabled`; `OnMaintenanceTaskToggled` in `MainWindow` updated to re-parse and call `Refresh`; 4 new NUnit tests: enabled→disabled, disabled→enabled, preserves other content, invokes reload callback; all 1850 tests pass)
+- [x] **[Maintenance] RELEASING.md / runbook — document Maintenance Mode** — ✅ Documented (`docs/features/maintenance-mode.md` created; covers `maintenance.md` structure and frontmatter, enabling/disabling tasks via file and in-panel checkbox, safety model with floor table, frequency values, report format and location, `maintenance-state.json` location/format/reset, `trigger_idle_cycle` local test workflow; `docs/SUMMARY.md` updated)
 - [x] **[Maintenance] `per-commit` frequency — git fallback tracing**— ✅ Implemented (`MaintenanceStateStore.IsEligible` now calls `SquadDashTrace.Write(TraceCategory.General, ...)` when `commitSha` is null for a `per-commit` task before falling back to daily logic; 3 new NUnit tests: null-SHA falls back to daily (eligible/not-eligible), trace entry captured via `CapturingTraceTarget`; 14/14 tests pass)
 - [x] **[Maintenance] Safety model enforcement — `branch` and `direct` modes**— ✅ Implemented (BuildPrompt now enforces global safety floor via ApplySafetyFloor; branch injects named `maintenance/YYYYMMDD-<slug>` branch; direct injects commit-directly message; report-only overrides more-permissive per-task safety; 5 new tests in MaintenanceRunnerTests.cs; all 17 tests pass)
 - [x] **[Maintenance] Phase 2 tests— ReportWriter + PanelController** — ✅ Implemented (commit 0117326; 7 ReportWriter tests: file naming, content sections, duration format, prune-to-30, no-prune-under-30, newest-first sort, absent-dir safe; 8 PanelController WPF tests: idle/running header text, checkbox state from config, empty config, last-run info, null store, first-run no-throw, Run Now button lifecycle)
