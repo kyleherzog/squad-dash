@@ -187,9 +187,9 @@ internal sealed class MaintenanceMdParserTests {
                 Assert.That(opt.Label,   Is.EqualTo("Update strategy"));
                 Assert.That(opt.Choices, Is.Not.Null);
                 Assert.That(opt.Choices, Has.Count.EqualTo(3));
-                Assert.That(opt.Choices, Does.Contain("patch"));
-                Assert.That(opt.Choices, Does.Contain("minor"));
-                Assert.That(opt.Choices, Does.Contain("major"));
+                Assert.That(opt.Choices!.Select(c => c.Value), Does.Contain("patch"));
+                Assert.That(opt.Choices.Select(c => c.Value),  Does.Contain("minor"));
+                Assert.That(opt.Choices.Select(c => c.Value),  Does.Contain("major"));
             });
         }
         finally { DeleteTempFile(path); }
@@ -411,6 +411,242 @@ internal sealed class MaintenanceMdParserTests {
             var task = config!.Tasks.Single(t => t.Id == "final-task");
             Assert.That(task.Instructions, Does.Contain("Line A"));
             Assert.That(task.Instructions, Does.Contain("Line B"));
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    // ── Choices YAML list format (S2) ─────────────────────────────────────────
+
+    [Test]
+    public void Choices_YAML_list_parsed_correctly() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            tasks:
+              - id: run-tests
+                enabled: true
+                frequency: daily
+                safety: branch
+                title: "Run Tests"
+                instructions: "Run all tests."
+                options:
+                  if_failing:
+                    type: radio
+                    label: If failing tests are found
+                    default: report
+                    choices:
+                      - value: fix
+                        tooltip: Fix each failing test; commit fixes to the branch
+                      - value: report
+                        tooltip: Report failures only — do not change any code
+            ---
+            """);
+        try {
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            var opt = config!.Tasks[0].Options!.Single(o => o.Key == "if_failing");
+            Assert.That(opt.Choices, Is.Not.Null);
+            Assert.That(opt.Choices, Has.Count.EqualTo(2));
+            Assert.Multiple(() => {
+                Assert.That(opt.Choices![0].Value,   Is.EqualTo("fix"));
+                Assert.That(opt.Choices[0].Tooltip,  Is.Not.Empty);
+                Assert.That(opt.Choices[1].Value,    Is.EqualTo("report"));
+                Assert.That(opt.Choices[1].Tooltip,  Is.Not.Empty);
+            });
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void Choices_YAML_list_multiple_items() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            tasks:
+              - id: dup
+                enabled: true
+                frequency: daily
+                safety: branch
+                title: "Dedup"
+                instructions: "Find duplicates."
+                options:
+                  if_found:
+                    type: radio
+                    label: If duplication is found
+                    default: report
+                    choices:
+                      - value: fix
+                        tooltip: Refactor inline on the current branch
+                      - value: branch
+                        tooltip: Create a maintenance branch and refactor there
+                      - value: report
+                        tooltip: List each instance — do not change any code
+            ---
+            """);
+        try {
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            var opt = config!.Tasks[0].Options!.Single(o => o.Key == "if_found");
+            Assert.That(opt.Choices, Has.Count.EqualTo(3));
+            Assert.Multiple(() => {
+                Assert.That(opt.Choices![0].Value, Is.EqualTo("fix"));
+                Assert.That(opt.Choices[1].Value,  Is.EqualTo("branch"));
+                Assert.That(opt.Choices[2].Value,  Is.EqualTo("report"));
+            });
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void Choices_missing_tooltip_defaults_empty() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            tasks:
+              - id: test-task
+                enabled: true
+                frequency: daily
+                safety: branch
+                title: "Test"
+                instructions: "Do stuff."
+                options:
+                  mode:
+                    type: radio
+                    label: Mode
+                    default: fast
+                    choices:
+                      - value: fast
+                      - value: slow
+                        tooltip: Run slow thorough scan
+            ---
+            """);
+        try {
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            var opt = config!.Tasks[0].Options!.Single(o => o.Key == "mode");
+            Assert.That(opt.Choices, Has.Count.EqualTo(2));
+            Assert.Multiple(() => {
+                Assert.That(opt.Choices![0].Value,   Is.EqualTo("fast"));
+                Assert.That(opt.Choices[0].Tooltip,  Is.EqualTo(""),   "missing tooltip should default to empty");
+                Assert.That(opt.Choices[1].Tooltip,  Is.EqualTo("Run slow thorough scan"));
+            });
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void Choices_bracket_format_still_works() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            tasks:
+              - id: legacy
+                enabled: true
+                frequency: daily
+                safety: branch
+                title: "Legacy Task"
+                instructions: "Do something."
+                options:
+                  action:
+                    type: radio
+                    label: Action
+                    choices: [fix, report]
+            ---
+            """);
+        try {
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            var opt = config!.Tasks[0].Options!.Single(o => o.Key == "action");
+            Assert.That(opt.Choices, Has.Count.EqualTo(2));
+            Assert.Multiple(() => {
+                Assert.That(opt.Choices![0].Value,   Is.EqualTo("fix"));
+                Assert.That(opt.Choices[0].Tooltip,  Is.EqualTo(""), "bracket format should have empty tooltip");
+                Assert.That(opt.Choices[1].Value,    Is.EqualTo("report"));
+                Assert.That(opt.Choices[1].Tooltip,  Is.EqualTo(""), "bracket format should have empty tooltip");
+            });
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void Choices_YAML_list_followed_by_next_option_key_parses_both() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            tasks:
+              - id: multi-opt
+                enabled: true
+                frequency: daily
+                safety: branch
+                title: "Multi Option"
+                instructions: "Test."
+                options:
+                  first:
+                    type: radio
+                    label: First option
+                    choices:
+                      - value: a
+                        tooltip: Choice A
+                      - value: b
+                        tooltip: Choice B
+                  second:
+                    type: radio
+                    label: Second option
+                    choices: [x, y]
+            ---
+            """);
+        try {
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            var opts = config!.Tasks[0].Options!;
+            Assert.That(opts, Has.Count.EqualTo(2));
+            Assert.That(opts[0].Choices, Has.Count.EqualTo(2));
+            Assert.That(opts[1].Choices, Has.Count.EqualTo(2));
+            Assert.That(opts[0].Choices![1].Value, Is.EqualTo("b"));
+            Assert.That(opts[1].Choices![0].Value, Is.EqualTo("x"));
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void Choices_YAML_list_tooltips_contain_expected_text() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            tasks:
+              - id: smells
+                enabled: false
+                frequency: daily
+                safety: branch
+                title: "Code Smell Cleanup"
+                instructions: "Scan for code smells."
+                options:
+                  if_found:
+                    type: radio
+                    label: If code smells are found
+                    default: report
+                    choices:
+                      - value: fix
+                        tooltip: Address smells inline on the current branch
+                      - value: branch
+                        tooltip: Create a maintenance branch and address smells there
+                      - value: report
+                        tooltip: List each smell — do not change any code
+            ---
+            """);
+        try {
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            var opt = config!.Tasks[0].Options!.Single(o => o.Key == "if_found");
+            Assert.That(opt.Choices![0].Tooltip, Does.Contain("inline"));
+            Assert.That(opt.Choices[1].Tooltip,  Does.Contain("maintenance branch"));
+            Assert.That(opt.Choices[2].Tooltip,  Does.Contain("do not change"));
         }
         finally { DeleteTempFile(path); }
     }

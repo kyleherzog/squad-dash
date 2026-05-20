@@ -409,16 +409,32 @@ internal sealed class MaintenancePanelController {
         if (task.Options is { Count: > 0 }) {
             var optionsPanel = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
             foreach (var opt in task.Options) {
-                var rb = new RadioButton {
-                    Content         = opt.Label,
-                    GroupName       = $"task-{task.Id}",
-                    IsChecked       = false,
-                    Margin          = new Thickness(0, 1, 0, 1),
-                };
-                rb.SetResourceReference(RadioButton.FontSizeProperty, "FontSizeSmall");
-                rb.SetResourceReference(RadioButton.ForegroundProperty, "BodyText");
-                rb.SetResourceReference(RadioButton.StyleProperty, "ThemedRadioButtonStyle");
-                optionsPanel.Children.Add(rb);
+                if (opt.Label is { Length: > 0 }) {
+                    var labelBlock = new TextBlock {
+                        Text         = opt.Label,
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin       = new Thickness(0, 2, 0, 1),
+                    };
+                    labelBlock.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
+                    labelBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+                    optionsPanel.Children.Add(labelBlock);
+                }
+                if (opt.Choices is { Count: > 0 }) {
+                    foreach (var choice in opt.Choices) {
+                        var rb = new RadioButton {
+                            Content   = choice.Value,
+                            GroupName = $"task-{task.Id}-{opt.Key}",
+                            IsChecked = false,
+                            Margin    = new Thickness(8, 1, 0, 1),
+                        };
+                        rb.SetResourceReference(RadioButton.FontSizeProperty,  "FontSizeSmall");
+                        rb.SetResourceReference(RadioButton.ForegroundProperty, "BodyText");
+                        rb.SetResourceReference(RadioButton.StyleProperty,      "ThemedRadioButtonStyle");
+                        if (!string.IsNullOrEmpty(choice.Tooltip))
+                            rb.ToolTip = MakeThemedToolTip(choice.Tooltip);
+                        optionsPanel.Children.Add(rb);
+                    }
+                }
             }
             rightPanel.Children.Add(optionsPanel);
         }

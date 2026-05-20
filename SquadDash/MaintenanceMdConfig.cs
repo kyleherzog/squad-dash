@@ -17,4 +17,4 @@ internal sealed record MaintenanceTask(
     string                   Safety,
     string                   Title,
     string                   Instructions,
-    IReadOnlyList<LoopOption>? Options = null);
+    IReadOnlyList<MaintenanceOption>? Options = null);

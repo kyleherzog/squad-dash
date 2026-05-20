@@ -46,7 +46,9 @@ internal static class MaintenanceMdParser {
         bool inOptionsBlock            = false;
         string? currentOptionKey       = null;
         var optionKeys                 = new List<string>();
-        var optionBuilders             = new Dictionary<string, LoopOptionBuilder>(StringComparer.Ordinal);
+        var optionBuilders             = new Dictionary<string, MaintenanceOptionBuilder>(StringComparer.Ordinal);
+        bool inChoicesList             = false;
+        MaintenanceOptionChoice? currentChoice = null;
         bool inMultiLineInstructions   = false;
         int  multiLineBaseIndent       = 6;
         var  multiLineAccumulator      = new StringBuilder();
@@ -94,10 +96,17 @@ internal static class MaintenanceMdParser {
 
             // New task item: "  - id: xxx"  (indent 2, followed by "- ")
             if (indent == 2 && trimmed.StartsWith("- ")) {
+                // Commit any pending choice before finalizing the task.
+                if (inChoicesList && currentChoice is not null && currentOptionKey is not null
+                        && optionBuilders.TryGetValue(currentOptionKey, out var pendingChoiceCb))
+                    pendingChoiceCb.Choices.Add(currentChoice);
+
                 FinalizeCurrentTask(current, optionKeys, optionBuilders, tasks);
                 current                = new MaintenanceTaskBuilder();
                 inOptionsBlock         = false;
                 currentOptionKey       = null;
+                inChoicesList          = false;
+                currentChoice          = null;
                 inMultiLineInstructions = false;
                 multiLineAccumulator.Clear();
                 optionKeys.Clear();
@@ -133,20 +142,60 @@ internal static class MaintenanceMdParser {
 
             // Option key: indent == 6  e.g. "strategy:"
             if (inOptionsBlock && indent == 6) {
+                // Commit any choice that was still being built before switching option keys.
+                if (inChoicesList && currentChoice is not null && currentOptionKey is not null
+                        && optionBuilders.TryGetValue(currentOptionKey, out var pendingCb))
+                    pendingCb.Choices.Add(currentChoice);
+
                 if (trimmed.EndsWith(':') && !trimmed.Contains(' ')) {
                     currentOptionKey = trimmed.TrimEnd(':');
+                    inChoicesList = false;
+                    currentChoice = null;
                     if (!optionBuilders.ContainsKey(currentOptionKey)) {
-                        optionBuilders[currentOptionKey] = new LoopOptionBuilder { Key = currentOptionKey };
+                        optionBuilders[currentOptionKey] = new MaintenanceOptionBuilder { Key = currentOptionKey };
                         optionKeys.Add(currentOptionKey);
                     }
                 }
                 continue;
             }
 
+            // Choices list items: indent 10 (- value:) or 12 (tooltip:)
+            if (inOptionsBlock && currentOptionKey is not null && inChoicesList) {
+                if (indent == 10 && trimmed.StartsWith("- ")) {
+                    // Commit previous choice if any
+                    if (currentChoice is not null && optionBuilders.TryGetValue(currentOptionKey, out var cb))
+                        cb.Choices.Add(currentChoice);
+                    currentChoice = new MaintenanceOptionChoice();
+                    // Parse "- value: fix" → value = "fix"
+                    var rest = trimmed[2..]; // strip "- "
+                    var colonIdx2 = rest.IndexOf(':');
+                    if (colonIdx2 >= 0 && rest[..colonIdx2].Trim() == "value")
+                        currentChoice.Value = rest[(colonIdx2 + 1)..].Trim().Trim('"', '\'');
+                    continue;
+                }
+                if (indent == 12 && currentChoice is not null) {
+                    var colonIdx2 = trimmed.IndexOf(':');
+                    if (colonIdx2 >= 0 && trimmed[..colonIdx2].Trim() == "tooltip")
+                        currentChoice.Tooltip = trimmed[(colonIdx2 + 1)..].Trim().Trim('"', '\'');
+                    continue;
+                }
+                // Exiting choices list — commit last choice and fall through.
+                if (currentChoice is not null && optionBuilders.TryGetValue(currentOptionKey, out var cb2))
+                    cb2.Choices.Add(currentChoice);
+                currentChoice = null;
+                inChoicesList = false;
+                // Fall through to normal processing.
+            }
+
             // Option sub-field: indent == 8  e.g. "type: radio"
             if (inOptionsBlock && currentOptionKey is not null && indent == 8) {
-                if (optionBuilders.TryGetValue(currentOptionKey, out var builder))
-                    ParseOptionSubfield(trimmed, builder);
+                if (optionBuilders.TryGetValue(currentOptionKey, out var builder)) {
+                    bool enterChoicesList = ParseOptionSubfield(trimmed, builder);
+                    if (enterChoicesList) {
+                        inChoicesList = true;
+                        currentChoice = null;
+                    }
+                }
                 continue;
             }
         }
@@ -154,6 +203,11 @@ internal static class MaintenanceMdParser {
         // Finalize any pending multi-line block scalar that ran up to the closing ---.
         if (inMultiLineInstructions && current is not null)
             current.Instructions = multiLineAccumulator.ToString().TrimEnd('\n');
+
+        // Finalize any choice still being collected.
+        if (inChoicesList && currentChoice is not null && currentOptionKey is not null
+                && optionBuilders.TryGetValue(currentOptionKey, out var lastCb))
+            lastCb.Choices.Add(currentChoice);
 
         FinalizeCurrentTask(current, optionKeys, optionBuilders, tasks);
 
@@ -188,7 +242,7 @@ internal static class MaintenanceMdParser {
     private static void FinalizeCurrentTask(
         MaintenanceTaskBuilder? current,
         List<string> optionKeys,
-        Dictionary<string, LoopOptionBuilder> optionBuilders,
+        Dictionary<string, MaintenanceOptionBuilder> optionBuilders,
         List<MaintenanceTaskBuilder> tasks) {
 
         if (current is null) return;
@@ -197,8 +251,8 @@ internal static class MaintenanceMdParser {
             current.BuiltOptions = optionKeys
                 .Select(k => {
                     var b = optionBuilders[k];
-                    return new LoopOption(b.Key, b.RawValue ?? "", b.Type ?? "string",
-                        b.Label, b.Hint, b.Choices);
+                    return new MaintenanceOption(b.Key, b.RawValue ?? "", b.Type ?? "string",
+                        b.Label, b.Hint, b.Choices.Count > 0 ? b.Choices : null);
                 })
                 .ToList();
         }
@@ -255,25 +309,35 @@ internal static class MaintenanceMdParser {
         }
     }
 
-    private static void ParseOptionSubfield(string field, LoopOptionBuilder opt) {
+    /// <returns>
+    /// <see langword="true"/> if the <c>choices:</c> key has no inline value, indicating
+    /// the parser should switch to YAML-list collection mode.
+    /// </returns>
+    private static bool ParseOptionSubfield(string field, MaintenanceOptionBuilder opt) {
         var colonIdx = field.IndexOf(':');
-        if (colonIdx < 0) return;
+        if (colonIdx < 0) return false;
         var key = field[..colonIdx].Trim();
         var val = field[(colonIdx + 1)..].Trim();
 
         switch (key) {
-            case "type":    opt.Type    = val;                                              break;
-            case "label":   opt.Label   = val.Trim('"', '\'');                              break;
-            case "hint":    opt.Hint    = val.Trim('"', '\'');                              break;
-            case "value":   opt.RawValue = val;                                             break;
+            case "type":    opt.Type     = val;                     break;
+            case "label":   opt.Label    = val.Trim('"', '\'');     break;
+            case "hint":    opt.Hint     = val.Trim('"', '\'');     break;
+            case "value":   opt.RawValue = val;                     break;
+            case "default": opt.RawValue = val;                     break;
             case "choices":
-                val = val.Trim('[', ']');
-                opt.Choices = val.Split(',')
-                    .Select(s => s.Trim().Trim('"', '\''))
-                    .Where(s => s.Length > 0)
-                    .ToList();
+                if (val.Length == 0)
+                    return true; // signal: enter YAML-list mode
+                // Backward-compat bracket format: choices: [fix, report]
+                var stripped = val.Trim('[', ']');
+                foreach (var s in stripped.Split(',')) {
+                    var v = s.Trim().Trim('"', '\'');
+                    if (v.Length > 0)
+                        opt.Choices.Add(new MaintenanceOptionChoice { Value = v });
+                }
                 break;
         }
+        return false;
     }
 
     private static int CountLeadingSpaces(string line) {
@@ -291,7 +355,7 @@ internal static class MaintenanceMdParser {
         public string  Safety       { get; set; } = "";
         public string  Title        { get; set; } = "";
         public string  Instructions { get; set; } = "";
-        public List<LoopOption>? BuiltOptions { get; set; }
+        public List<MaintenanceOption>? BuiltOptions { get; set; }
 
         public MaintenanceTask Build(string globalSafety) =>
             new(
@@ -302,5 +366,14 @@ internal static class MaintenanceMdParser {
                 Title:        Title.Length > 0 ? Title : Id,
                 Instructions: Instructions,
                 Options:      BuiltOptions);
+    }
+
+    private sealed class MaintenanceOptionBuilder {
+        public string Key      { get; init; } = "";
+        public string? RawValue { get; set; }
+        public string? Type     { get; set; }
+        public string? Label    { get; set; }
+        public string? Hint     { get; set; }
+        public List<MaintenanceOptionChoice> Choices { get; } = new();
     }
 }

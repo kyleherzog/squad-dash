@@ -28,7 +28,11 @@ tasks:
         type: radio
         label: If failing tests are found
         default: report
-        choices: [fix, report]
+        choices:
+          - value: fix
+            tooltip: Fix each failing test; commit fixes to the branch
+          - value: report
+            tooltip: Report failures only — do not change any code
 
   - id: eliminate-duplication
     enabled: false
@@ -51,7 +55,13 @@ tasks:
         type: radio
         label: If duplication is found
         default: report
-        choices: [fix, branch, report]
+        choices:
+          - value: fix
+            tooltip: Refactor inline on the current branch
+          - value: branch
+            tooltip: Create a maintenance branch and refactor there
+          - value: report
+            tooltip: List each instance — do not change any code
 
   - id: architectural-practices
     enabled: false
@@ -73,7 +83,11 @@ tasks:
         type: radio
         label: If architectural issues are found
         default: report
-        choices: [branch, report]
+        choices:
+          - value: branch
+            tooltip: Implement improvements on a maintenance branch
+          - value: report
+            tooltip: Write a report — do not change any code
 
   - id: code-smells
     enabled: false
@@ -95,7 +109,13 @@ tasks:
         type: radio
         label: If code smells are found
         default: report
-        choices: [fix, branch, report]
+        choices:
+          - value: fix
+            tooltip: Address smells inline on the current branch
+          - value: branch
+            tooltip: Create a maintenance branch and address smells there
+          - value: report
+            tooltip: List each smell — do not change any code
 
   - id: speed-improvements
     enabled: false
@@ -119,7 +139,13 @@ tasks:
         type: radio
         label: If performance opportunities are found
         default: report
-        choices: [fix, branch, report]
+        choices:
+          - value: fix
+            tooltip: Implement optimisations inline on the current branch
+          - value: branch
+            tooltip: Create a maintenance branch for the optimisations
+          - value: report
+            tooltip: Describe each opportunity — do not change any code
 
   - id: todo-fixme-scan
     enabled: false
@@ -196,7 +222,11 @@ tasks:
         type: radio
         label: If magic numbers or hardcoded strings are found
         default: report
-        choices: [extract, report]
+        choices:
+          - value: extract
+            tooltip: Extract to named constants; commit to a maintenance branch
+          - value: report
+            tooltip: List each instance — do not change any code
 
   - id: readme-currency
     enabled: false
@@ -250,5 +280,9 @@ tasks:
         type: radio
         label: If naming inconsistencies are found
         default: report
-        choices: [fix, report]
+        choices:
+          - value: fix
+            tooltip: Rename directly on the current branch; update all references
+          - value: report
+            tooltip: List each inconsistency — do not change any code
 ---
