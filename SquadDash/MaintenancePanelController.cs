@@ -2,9 +2,13 @@ namespace SquadDash;
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -103,14 +107,112 @@ internal sealed class MaintenancePanelController {
             empty.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBody");
             empty.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
             _listPanel.Children.Add(empty);
-            SyncStatusLabel();
-            return;
+        } else {
+            foreach (var task in _config.Tasks)
+                _listPanel.Children.Add(BuildTaskRow(task));
         }
 
-        foreach (var task in _config.Tasks)
-            _listPanel.Children.Add(BuildTaskRow(task));
-
         SyncStatusLabel();
+        AppendReportsSection();
+    }
+
+    private void AppendReportsSection() {
+        var workspacePath = _getWorkspacePath();
+        IReadOnlyList<string> reportPaths = workspacePath is null
+            ? []
+            : new MaintenanceReportWriter(workspacePath).GetReportPaths();
+
+        var separator = new Separator { Margin = new Thickness(0, 8, 0, 4) };
+        _listPanel.Children.Add(separator);
+
+        var headerLabel = new TextBlock { Text = "Recent Reports" };
+        headerLabel.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeSmall");
+        headerLabel.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+
+        var expander = new Expander {
+            Header     = "Recent Reports",
+            IsExpanded = false,
+            Margin     = new Thickness(0, 0, 0, 4),
+        };
+
+        var contentPanel = new StackPanel { Margin = new Thickness(8, 4, 0, 4) };
+
+        if (reportPaths.Count == 0) {
+            var noReports = new TextBlock {
+                Text      = "No reports yet.",
+                FontStyle = FontStyles.Italic,
+            };
+            noReports.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeSmall");
+            noReports.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+            contentPanel.Children.Add(noReports);
+        } else {
+            foreach (var path in reportPaths) {
+                var (dt, taskCount) = ParseReportSummary(path);
+                contentPanel.Children.Add(BuildReportRow(path, dt, taskCount));
+            }
+        }
+
+        expander.Content = contentPanel;
+        _listPanel.Children.Add(expander);
+    }
+
+    private static (DateTimeOffset dt, int taskCount) ParseReportSummary(string path) {
+        var baseName = Path.GetFileNameWithoutExtension(path);
+        DateTimeOffset dt = DateTimeOffset.MinValue;
+        if (baseName.Length >= 15 &&
+            DateTime.TryParseExact(baseName[..15], "yyyyMMdd-HHmmss",
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+            dt = new DateTimeOffset(parsed, TimeZoneInfo.Local.GetUtcOffset(parsed));
+
+        int taskCount = 0;
+        try {
+            var lines = File.ReadAllLines(path);
+            bool inTasksSection = false;
+            foreach (var line in lines) {
+                if (line.TrimEnd() == "## Tasks Run") {
+                    inTasksSection = true;
+                    continue;
+                }
+                if (inTasksSection) {
+                    if (line.StartsWith("## ", StringComparison.Ordinal)) break;
+                    if (line.StartsWith("- ", StringComparison.Ordinal) &&
+                        !line.Contains("No tasks were run this session."))
+                        taskCount++;
+                }
+            }
+        } catch { /* ignore read errors */ }
+
+        return (dt, taskCount);
+    }
+
+    private static Button BuildReportRow(string path, DateTimeOffset dt, int taskCount) {
+        var taskWord = taskCount == 1 ? "task" : "tasks";
+        var label = dt != DateTimeOffset.MinValue
+            ? $"{dt.LocalDateTime:yyyy-MM-dd HH:mm}  •  {taskCount} {taskWord}"
+            : $"{Path.GetFileNameWithoutExtension(path)}  •  {taskCount} {taskWord}";
+
+        var btn = new Button {
+            Content                    = label,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            Background                 = Brushes.Transparent,
+            BorderThickness            = new Thickness(0),
+            Padding                    = new Thickness(4, 3, 4, 3),
+            Margin                     = new Thickness(0, 1, 0, 1),
+            Cursor                     = Cursors.Hand,
+        };
+        btn.SetResourceReference(Button.FontSizeProperty, "FontSizeSmall");
+        btn.SetResourceReference(Button.ForegroundProperty, "BodyText");
+        btn.Click += (_, _) => OpenReport(path);
+        return btn;
+    }
+
+    private static void OpenReport(string path) {
+        try {
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        } catch (Exception ex) {
+            SquadDashTrace.Write(TraceCategory.General,
+                $"MaintenancePanelController: failed to open report {path}: {ex.Message}");
+        }
     }
 
     private Border BuildTaskRow(MaintenanceTask task) {

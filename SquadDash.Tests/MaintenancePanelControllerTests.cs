@@ -276,4 +276,174 @@ internal sealed class MaintenancePanelControllerTests {
                 "Run Now button must be re-enabled after runner completes");
         });
     }
+
+    // ── Recent Reports section ────────────────────────────────────────────────
+
+    private static Expander? FindReportsExpander(StackPanel panel) {
+        foreach (UIElement child in panel.Children)
+            if (child is Expander exp && exp.Header is string h && h.Contains("Recent Reports"))
+                return exp;
+        return null;
+    }
+
+    private static List<Button> CollectButtons(DependencyObject parent) {
+        var result = new List<Button>();
+        CollectButtonsCore(parent, result);
+        return result;
+    }
+
+    private static void CollectButtonsCore(DependencyObject parent, List<Button> result) {
+        if (parent is Button btn)
+            result.Add(btn);
+        foreach (object child in LogicalTreeHelper.GetChildren(parent))
+            if (child is DependencyObject dep)
+                CollectButtonsCore(dep, result);
+    }
+
+    private static (MaintenancePanelController controller,
+                    StackPanel listPanel,
+                    TextBlock  statusLabel,
+                    Button     runNowButton)
+        CreateControllerWithWorkspace(string? workspacePath) {
+        var listPanel    = new StackPanel();
+        var statusLabel  = new TextBlock();
+        var runNowButton = new Button();
+        var controller   = new MaintenancePanelController(
+            listPanel,
+            statusLabel,
+            runNowButton,
+            getWorkspacePath:  () => workspacePath,
+            runNow:            () => { },
+            toggleTaskEnabled: (_, _) => { });
+        return (controller, listPanel, statusLabel, runNowButton);
+    }
+
+    [Test]
+    public void ReportsSection_ShowsNoReportsYet_WhenNullWorkspacePath() {
+        WpfTestContext.Run(() => {
+            var (controller, listPanel, _, _) = CreateController(); // getWorkspacePath returns null
+            var config = MakeConfig([MakeTask("t1", "Task One")]);
+
+            controller.Refresh(config, stateStore: null);
+
+            var expander = FindReportsExpander(listPanel);
+            Assert.That(expander, Is.Not.Null, "Recent Reports expander must be present");
+
+            expander!.IsExpanded = true;
+            var textBlocks = CollectTextBlocks((DependencyObject)expander.Content);
+            Assert.That(textBlocks.Any(tb => tb.Text.Contains("No reports yet", StringComparison.OrdinalIgnoreCase)),
+                Is.True, "Should show 'No reports yet' when workspace path is null");
+        });
+    }
+
+    [Test]
+    public void ReportsSection_ShowsNoReportsYet_WhenDirectoryEmpty() {
+        WpfTestContext.Run(() => {
+            var workspacePath = Path.Combine(_stateDir, "ws_empty");
+            var reportsDir = Path.Combine(workspacePath, ".squad", "maintenance-reports");
+            Directory.CreateDirectory(reportsDir);
+
+            var (controller, listPanel, _, _) = CreateControllerWithWorkspace(workspacePath);
+            var config = MakeConfig([MakeTask("t1", "Task One")]);
+
+            controller.Refresh(config, stateStore: null);
+
+            var expander = FindReportsExpander(listPanel);
+            Assert.That(expander, Is.Not.Null, "Recent Reports expander must be present");
+
+            expander!.IsExpanded = true;
+            var textBlocks = CollectTextBlocks((DependencyObject)expander.Content);
+            Assert.That(textBlocks.Any(tb => tb.Text.Contains("No reports yet", StringComparison.OrdinalIgnoreCase)),
+                Is.True, "Should show 'No reports yet' when reports directory is empty");
+        });
+    }
+
+    [Test]
+    public void ReportsSection_ShowsReportItem_WhenReportExists() {
+        WpfTestContext.Run(() => {
+            var workspacePath = Path.Combine(_stateDir, "ws_with_report");
+            var reportsDir = Path.Combine(workspacePath, ".squad", "maintenance-reports");
+            Directory.CreateDirectory(reportsDir);
+
+            var reportContent = """
+                # Maintenance Report — 2026-05-20 14:30
+
+                **Session duration:** 45s
+
+                ## Tasks Run
+
+                - ✅ Code cleanup (cleanup) — 30s
+                - ✅ Lint check (lint) — 15s
+
+                ## Summary
+
+                All tasks completed.
+                """;
+            File.WriteAllText(Path.Combine(reportsDir, "20260520-143000.md"), reportContent);
+
+            var (controller, listPanel, _, _) = CreateControllerWithWorkspace(workspacePath);
+            var config = MakeConfig([MakeTask("t1", "Task One")]);
+
+            controller.Refresh(config, stateStore: null);
+
+            var expander = FindReportsExpander(listPanel);
+            Assert.That(expander, Is.Not.Null, "Recent Reports expander must be present");
+
+            expander!.IsExpanded = true;
+            var buttons = CollectButtons((DependencyObject)expander.Content);
+            Assert.That(buttons, Is.Not.Empty, "At least one report button must be present");
+
+            var content = buttons[0].Content?.ToString() ?? "";
+            Assert.That(content, Does.Contain("2026-05-20"), "Button must show the report date");
+            Assert.That(content, Does.Contain("2 tasks"), "Button must show task count");
+        });
+    }
+
+    [Test]
+    public void ReportsSection_ShowsOneTask_Singular() {
+        WpfTestContext.Run(() => {
+            var workspacePath = Path.Combine(_stateDir, "ws_one_task");
+            var reportsDir = Path.Combine(workspacePath, ".squad", "maintenance-reports");
+            Directory.CreateDirectory(reportsDir);
+
+            var reportContent = """
+                # Maintenance Report — 2026-05-21 10:00
+
+                **Session duration:** 20s
+
+                ## Tasks Run
+
+                - ✅ Code cleanup (cleanup) — 20s
+
+                ## Summary
+
+                Done.
+                """;
+            File.WriteAllText(Path.Combine(reportsDir, "20260521-100000.md"), reportContent);
+
+            var (controller, listPanel, _, _) = CreateControllerWithWorkspace(workspacePath);
+            controller.Refresh(MakeConfig([MakeTask("t1", "Task One")]), stateStore: null);
+
+            var expander = FindReportsExpander(listPanel);
+            expander!.IsExpanded = true;
+            var buttons = CollectButtons((DependencyObject)expander.Content);
+            Assert.That(buttons, Is.Not.Empty);
+
+            var content = buttons[0].Content?.ToString() ?? "";
+            Assert.That(content, Does.Contain("1 task"), "Singular 'task' must be used for count of 1");
+            Assert.That(content, Does.Not.Contain("1 tasks"), "Must not use plural for count of 1");
+        });
+    }
+
+    [Test]
+    public void ReportsSection_CollapsedByDefault() {
+        WpfTestContext.Run(() => {
+            var (controller, listPanel, _, _) = CreateController();
+            controller.Refresh(MakeConfig([MakeTask("t1", "Task One")]), stateStore: null);
+
+            var expander = FindReportsExpander(listPanel);
+            Assert.That(expander, Is.Not.Null, "Recent Reports expander must be present");
+            Assert.That(expander!.IsExpanded, Is.False, "Expander must be collapsed by default");
+        });
+    }
 }
