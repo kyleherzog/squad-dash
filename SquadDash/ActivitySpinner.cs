@@ -17,10 +17,33 @@ public sealed class ActivitySpinner : FrameworkElement
     // Physics state
     private double _angularVelocity;    // rad/s
     private double _angle;              // radians, current rotation
-    private const double FixedDiameter = 16.0;  // fixed size — no interpolation
     private double _spinnerOpacity;     // 0..1
     private double _targetOpacity;      // lerp target for opacity
     private double _satLightPhase;      // radians, for max-speed pulse oscillation
+
+    // Write-dot state
+    private double _writeDotRadius;     // current rendered radius (px)
+    private double _writeDotTarget;     // target radius the dot wants to reach (px)
+    private double _dotGlowPhase;       // 0..2π oscillation phase
+    private SpinnerActivityKind _currentKind = SpinnerActivityKind.Thinking;
+
+    // Dynamic sizing
+    private double _lineHeight = 16.0;
+
+    /// <summary>Line height of the adjacent status label (default 16). Diameter = LineHeight × 0.85.</summary>
+    public double LineHeight
+    {
+        get => _lineHeight;
+        set
+        {
+            if (_lineHeight == value) return;
+            _lineHeight = value;
+            InvalidateMeasure();
+            InvalidateVisual();
+        }
+    }
+
+    private double Diameter => _lineHeight * 0.85;
 
     // Timers
     private readonly DispatcherTimer _physicsTimer;
@@ -51,6 +74,14 @@ public sealed class ActivitySpinner : FrameworkElement
     private const double ThinkingTargetOpacity = 0.60;
     private const double ReadingTargetOpacity  = 0.80;
     private const double WritingTargetOpacity  = 1.00;
+
+    // Write-dot constants
+    private const double MaxDotRadiusFraction = 0.5;   // dot max = spinner_radius * 0.5 = diameter/4
+    private const double DotGrowRate = 6.0;             // lerp speed when growing (units/sec)
+    private const double DotShrinkRate = 2.0;           // lerp speed when shrinking (units/sec)
+    private const double PulseIncrement = 1.5;          // px added per write pulse
+    private const double DotGlowHz = 2.5;               // glow oscillation frequency
+    private const double DotBorderFraction = 0.15;      // white border = radius * 0.15
 
     // Accent color — set from the agent's card; fallback to SteelBlue
     public Color AccentColor { get; set; } = Colors.SteelBlue;
@@ -131,6 +162,8 @@ public sealed class ActivitySpinner : FrameworkElement
 
     private void OnActivityPulsed(object? sender, SpinnerActivityKind kind)
     {
+        _currentKind = kind;
+
         var impulse = kind == SpinnerActivityKind.Writing ? WritingImpulse : ThinkingImpulse;
         _angularVelocity = Math.Min(_angularVelocity + impulse, MaxAngularVelocity);
 
@@ -141,6 +174,13 @@ public sealed class ActivitySpinner : FrameworkElement
             SpinnerActivityKind.Reading  => ReadingTargetOpacity,
             _                            => ThinkingTargetOpacity
         };
+
+        // Accumulate write dot on every Writing pulse
+        if (kind == SpinnerActivityKind.Writing)
+        {
+            var maxDotRadius = Diameter / 2.0 * MaxDotRadiusFraction;
+            _writeDotTarget = Math.Min(_writeDotTarget + PulseIncrement, maxDotRadius);
+        }
 
         Visibility = Visibility.Visible;
 
@@ -183,9 +223,38 @@ public sealed class ActivitySpinner : FrameworkElement
         var opacityStep = Math.Min(Math.Abs(opacityDiff), OpacityLerpRate * dt) * Math.Sign(opacityDiff);
         _spinnerOpacity = Math.Clamp(_spinnerOpacity + opacityStep, 0.0, 1.0);
 
-        if (_spinnerOpacity <= 0.0 && _targetOpacity <= 0.0)
+        // Write-dot physics ──────────────────────────────────────────────────
+        var maxDotRadius = Diameter / 2.0 * MaxDotRadiusFraction;
+
+        // Decay target when writing has stopped (velocity below fade threshold or non-Writing kind)
+        bool writingActive = _currentKind == SpinnerActivityKind.Writing
+                             && _angularVelocity >= FadeOutThreshold;
+        if (!writingActive)
+            _writeDotTarget = Math.Max(0.0, _writeDotTarget - DotShrinkRate * dt);
+
+        // Lerp radius toward target (fast grow, slow shrink)
+        var dotDiff = _writeDotTarget - _writeDotRadius;
+        if (Math.Abs(dotDiff) > 1e-4)
+        {
+            var dotRate = dotDiff > 0 ? DotGrowRate : DotShrinkRate;
+            var dotStep = Math.Sign(dotDiff) * Math.Min(Math.Abs(dotDiff), dotRate * dt);
+            _writeDotRadius = Math.Clamp(_writeDotRadius + dotStep, 0.0, maxDotRadius);
+        }
+        else
+        {
+            _writeDotRadius = Math.Clamp(_writeDotTarget, 0.0, maxDotRadius);
+        }
+
+        // Glow oscillation while dot is visible
+        if (_writeDotRadius > 0.5)
+            _dotGlowPhase += 2.0 * Math.PI * DotGlowHz * dt;
+
+        // ────────────────────────────────────────────────────────────────────
+
+        if (_spinnerOpacity <= 0.0 && _targetOpacity <= 0.0 && _writeDotRadius <= 0.5)
         {
             _spinnerOpacity = 0;
+            _writeDotRadius = 0;
             _physicsTimer.Stop();
             Visibility = Visibility.Collapsed;
             return;
@@ -196,47 +265,82 @@ public sealed class ActivitySpinner : FrameworkElement
 
     // ── Layout ──────────────────────────────────────────────────────────────
 
-    protected override Size MeasureOverride(Size availableSize) => new(18, 18);
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        var s = Diameter + 4; // 2px padding each side
+        return new(s, s);
+    }
 
-    protected override Size ArrangeOverride(Size finalSize) => new(18, 18);
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        var s = Diameter + 4;
+        return new(s, s);
+    }
 
     // ── Rendering ───────────────────────────────────────────────────────────
 
     protected override void OnRender(DrawingContext dc)
     {
-        if (_spinnerOpacity <= 0)
+        var renderSpinner = _spinnerOpacity > 0;
+        var renderDot     = _writeDotRadius > 0.5;
+
+        if (!renderSpinner && !renderDot)
             return;
 
-        var color = AccentColor;
-
-        // Apply max-speed pulse
-        if (_angularVelocity / MaxAngularVelocity >= 0.85)
+        if (renderSpinner)
         {
-            var isDark = AgentStatusCard.IsDarkTheme;
-            var pulse = Math.Sin(_satLightPhase) * PulseAmplitude;
-            if (!isDark) pulse = -pulse;
-            color = AdjustBrightness(color, pulse);
+            var color = AccentColor;
+
+            // Apply max-speed pulse
+            if (_angularVelocity / MaxAngularVelocity >= 0.85)
+            {
+                var isDark = AgentStatusCard.IsDarkTheme;
+                var pulse = Math.Sin(_satLightPhase) * PulseAmplitude;
+                if (!isDark) pulse = -pulse;
+                color = AdjustBrightness(color, pulse);
+            }
+
+            // Bake opacity into alpha channel
+            color.A = (byte)Math.Round(255 * _spinnerOpacity);
+
+            var brush = new SolidColorBrush(color);
+            brush.Freeze();
+
+            var geo = GetShapeGeometry();
+
+            // Scale so the 1957-unit shape fits in Diameter × Diameter, centred in element
+            var diameter = Diameter;
+            var scale    = diameter / OriginalCanvasSize;
+            var offsetX  = (ActualWidth  - diameter) / 2.0;
+            var offsetY  = (ActualHeight - diameter) / 2.0;
+
+            dc.PushTransform(new TranslateTransform(offsetX, offsetY));
+            dc.PushTransform(new ScaleTransform(scale, scale));
+            dc.PushTransform(new RotateTransform(_angle * (180.0 / Math.PI), OriginalCenter, OriginalCenter));
+            dc.DrawGeometry(brush, null, geo);
+            dc.Pop();
+            dc.Pop();
+            dc.Pop();
         }
 
-        // Bake opacity into alpha channel
-        color.A = (byte)Math.Round(255 * _spinnerOpacity);
+        if (renderDot)
+        {
+            var center      = new Point(ActualWidth / 2.0, ActualHeight / 2.0);
+            var border      = Math.Max(_writeDotRadius * DotBorderFraction, 0.8);
+            var glowOpacity = 0.75 + 0.25 * Math.Sin(_dotGlowPhase);
 
-        var brush = new SolidColorBrush(color);
-        brush.Freeze();
+            // White border circle
+            var whiteBrush = new SolidColorBrush(Colors.White);
+            whiteBrush.Freeze();
+            var outerR = _writeDotRadius + border;
+            dc.DrawEllipse(whiteBrush, null, center, outerR, outerR);
 
-        var geo = GetShapeGeometry();
-
-        // Scale so the 1957-unit shape fits in FixedDiameter × FixedDiameter, centred in 18×18
-        var scale  = FixedDiameter / OriginalCanvasSize;
-        var offset = (18.0 - FixedDiameter) / 2.0;
-
-        dc.PushTransform(new TranslateTransform(offset, offset));
-        dc.PushTransform(new ScaleTransform(scale, scale));
-        dc.PushTransform(new RotateTransform(_angle * (180.0 / Math.PI), OriginalCenter, OriginalCenter));
-        dc.DrawGeometry(brush, null, geo);
-        dc.Pop();
-        dc.Pop();
-        dc.Pop();
+            // Red fill circle with glow opacity
+            var redAlpha = (byte)Math.Round(255 * glowOpacity);
+            var redBrush = new SolidColorBrush(Color.FromArgb(redAlpha, 0xFF, 0x22, 0x22));
+            redBrush.Freeze();
+            dc.DrawEllipse(redBrush, null, center, _writeDotRadius, _writeDotRadius);
+        }
     }
 
     // ── Geometry ────────────────────────────────────────────────────────────
