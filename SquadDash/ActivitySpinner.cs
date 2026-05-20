@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -17,8 +18,6 @@ public sealed class ActivitySpinner : FrameworkElement
     private double _angularVelocity;    // rad/s
     private double _angle;              // radians, current rotation
     private const double FixedDiameter = 16.0;  // fixed size — no interpolation
-    private double _readColorBlend;     // 0=yellow(thinking), 1=blue(reading)
-    private double _writeColorBlend;    // 0=blue(reading), 1=red(writing); also drives diameter
     private double _spinnerOpacity;     // 0..1
     private double _targetOpacity;      // lerp target for opacity
     private double _satLightPhase;      // radians, for max-speed pulse oscillation
@@ -26,8 +25,6 @@ public sealed class ActivitySpinner : FrameworkElement
     // Timers
     private readonly DispatcherTimer _physicsTimer;
     private DateTime _lastTick;
-    private DateTime _lastReadEventTime  = DateTime.MinValue;
-    private DateTime _lastWriteEventTime = DateTime.MinValue;
 
     // Geometry cache (not diameter-dependent — scale is handled via transform)
     private Geometry? _cachedShapeGeo;
@@ -44,7 +41,6 @@ public sealed class ActivitySpinner : FrameworkElement
     private const double ThinkingImpulse = 3.5;
     private const double WritingImpulse = 6.0;
 
-    private const double WriteColorDecaySeconds = 7.5;
     private const double FadeOutThreshold = 0.18;    // rad/s — start fade below this
     private const double OpacityLerpRate = 2.0;      // units/sec — reaches target in ~0.5s
 
@@ -56,10 +52,8 @@ public sealed class ActivitySpinner : FrameworkElement
     private const double ReadingTargetOpacity  = 0.80;
     private const double WritingTargetOpacity  = 1.00;
 
-    // Colors: Thinking=yellow, Reading=blue, Writing=red
-    private static readonly Color ThinkingColor = Color.FromRgb(0xFF, 0xDD, 0x00);
-    private static readonly Color ReadingColor  = Color.FromRgb(0x22, 0x88, 0xFF);
-    private static readonly Color WritingColor  = Color.FromRgb(0xFF, 0x44, 0x22);
+    // Accent color — set from the agent's card; fallback to SteelBlue
+    public Color AccentColor { get; set; } = Colors.SteelBlue;
 
     public ActivitySpinner()
     {
@@ -90,13 +84,28 @@ public sealed class ActivitySpinner : FrameworkElement
         if (_subscribedCard is not null)
         {
             _subscribedCard.ActivityPulsed -= OnActivityPulsed;
+            _subscribedCard.PropertyChanged -= OnCardPropertyChanged;
             _subscribedCard = null;
         }
         if (e.NewValue is AgentStatusCard card)
         {
             _subscribedCard = card;
             card.ActivityPulsed += OnActivityPulsed;
+            card.PropertyChanged += OnCardPropertyChanged;
+            SyncAccentColor();
         }
+    }
+
+    private void OnCardPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(AgentStatusCard.AccentColorHex) or nameof(AgentStatusCard.EffectiveAccentBrush))
+            SyncAccentColor();
+    }
+
+    private void SyncAccentColor()
+    {
+        if (_subscribedCard?.EffectiveAccentBrush is SolidColorBrush scb)
+            AccentColor = scb.Color;
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -105,6 +114,7 @@ public sealed class ActivitySpinner : FrameworkElement
         if (_subscribedCard is not null)
         {
             _subscribedCard.ActivityPulsed -= OnActivityPulsed;
+            _subscribedCard.PropertyChanged -= OnCardPropertyChanged;
             _subscribedCard = null;
         }
         AgentStatusCard.ThemeChanged -= OnThemeChanged;
@@ -112,8 +122,7 @@ public sealed class ActivitySpinner : FrameworkElement
 
     private void OnThemeChanged(object? sender, EventArgs e)
     {
-        // Re-subscribe to theme change; just invalidate visual so next render
-        // picks up the correct pulse direction.
+        SyncAccentColor();
         if (_physicsTimer.IsEnabled)
             InvalidateVisual();
     }
@@ -124,12 +133,6 @@ public sealed class ActivitySpinner : FrameworkElement
     {
         var impulse = kind == SpinnerActivityKind.Writing ? WritingImpulse : ThinkingImpulse;
         _angularVelocity = Math.Min(_angularVelocity + impulse, MaxAngularVelocity);
-
-        var now = DateTime.UtcNow;
-        if (kind == SpinnerActivityKind.Reading)
-            _lastReadEventTime = now;
-        else if (kind == SpinnerActivityKind.Writing)
-            _lastWriteEventTime = now;
 
         // Snap target opacity immediately; _spinnerOpacity lerps toward it each frame
         _targetOpacity = kind switch
@@ -163,30 +166,6 @@ public sealed class ActivitySpinner : FrameworkElement
         // Advance rotation angle
         _angle += _angularVelocity * dt;
         if (_angle >= Math.PI * 2) _angle -= Math.PI * 2;
-
-        // Read color blend — decays 1→0 after last reading event
-        if (_lastReadEventTime != DateTime.MinValue)
-        {
-            var secondsSinceRead = (now - _lastReadEventTime).TotalSeconds;
-            _readColorBlend = Math.Clamp(1.0 - secondsSinceRead / WriteColorDecaySeconds, 0.0, 1.0);
-        }
-        else
-        {
-            _readColorBlend = 0;
-        }
-
-        // Write color blend — decays 1→0 after last writing event
-        if (_lastWriteEventTime != DateTime.MinValue)
-        {
-            var secondsSinceWrite = (now - _lastWriteEventTime).TotalSeconds;
-            _writeColorBlend = Math.Clamp(1.0 - secondsSinceWrite / WriteColorDecaySeconds, 0.0, 1.0);
-        }
-        else
-        {
-            _writeColorBlend = 0;
-        }
-
-
 
         // Max-speed saturation/lightness pulse
         var speedRatio = _angularVelocity / MaxAngularVelocity;
@@ -228,9 +207,7 @@ public sealed class ActivitySpinner : FrameworkElement
         if (_spinnerOpacity <= 0)
             return;
 
-        // Three-way color blend: Thinking(yellow) → Reading(blue) → Writing(red)
-        var midColor = LerpColor(ThinkingColor, ReadingColor, _readColorBlend);
-        var color    = LerpColor(midColor, WritingColor, _writeColorBlend);
+        var color = AccentColor;
 
         // Apply max-speed pulse
         if (_angularVelocity / MaxAngularVelocity >= 0.85)
@@ -276,16 +253,6 @@ public sealed class ActivitySpinner : FrameworkElement
     }
 
     // ── Color helpers ────────────────────────────────────────────────────────
-
-    private static Color LerpColor(Color a, Color b, double t)
-    {
-        t = Math.Clamp(t, 0.0, 1.0);
-        return Color.FromArgb(
-            (byte)(a.A + (b.A - a.A) * t),
-            (byte)(a.R + (b.R - a.R) * t),
-            (byte)(a.G + (b.G - a.G) * t),
-            (byte)(a.B + (b.B - a.B) * t));
-    }
 
     private static Color AdjustBrightness(Color c, double delta)
     {
