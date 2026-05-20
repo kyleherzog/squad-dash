@@ -340,6 +340,94 @@ internal static class MaintenanceMdParser {
         return false;
     }
 
+    /// <summary>
+    /// Finds the task with <paramref name="taskId"/> in the maintenance.md frontmatter,
+    /// then updates the <c>value:</c> sub-key under <paramref name="optionKey"/> and writes back.
+    /// Does nothing if the file or key is not found.
+    /// </summary>
+    public static void UpdateOptionValue(string maintenanceMdPath, string taskId, string optionKey, string newValue) {
+        if (!File.Exists(maintenanceMdPath))
+            return;
+
+        string[] lines;
+        try {
+            lines = File.ReadAllLines(maintenanceMdPath);
+        }
+        catch {
+            return;
+        }
+
+        // Find opening ---
+        int i = 0;
+        while (i < lines.Length && lines[i].Trim() != "---")
+            i++;
+        if (i >= lines.Length) return;
+        int frontmatterStart = i;
+        i++;
+
+        // Find closing ---
+        int frontmatterEnd = -1;
+        while (i < lines.Length) {
+            if (lines[i].Trim() == "---") { frontmatterEnd = i; break; }
+            i++;
+        }
+        if (frontmatterEnd < 0) return;
+
+        // Find "  - id: {taskId}" at indent 2
+        int taskLine = -1;
+        for (int j = frontmatterStart + 1; j < frontmatterEnd; j++) {
+            var line = lines[j];
+            if (line.Length >= 4 && line[0] == ' ' && line[1] == ' ' && line[2] == '-' && line[3] == ' ') {
+                var rest = line[4..].TrimStart();
+                if (rest.StartsWith("id:", StringComparison.Ordinal)) {
+                    var idVal = rest["id:".Length..].Trim().Trim('"', '\'');
+                    if (string.Equals(idVal, taskId, StringComparison.Ordinal)) {
+                        taskLine = j;
+                        break;
+                    }
+                }
+            }
+        }
+        if (taskLine < 0) return;
+
+        // Find "    options:" (indent 4) within the task, stopping at the next "  - " task start
+        int optionsLine = -1;
+        for (int j = taskLine + 1; j < frontmatterEnd; j++) {
+            var line = lines[j];
+            if (line.Length >= 4 && line[0] == ' ' && line[1] == ' ' && line[2] == '-' && line[3] == ' ')
+                break;
+            if (line == "    options:") { optionsLine = j; break; }
+        }
+        if (optionsLine < 0) return;
+
+        // Find "      {optionKey}:" (indent 6) after options:
+        string optionHeader = $"      {optionKey}:";
+        int optionHeaderLine = -1;
+        for (int j = optionsLine + 1; j < frontmatterEnd; j++) {
+            var line = lines[j];
+            if (line.Length >= 4 && line[0] == ' ' && line[1] == ' ' && line[2] == '-' && line[3] == ' ')
+                break;
+            if (line == optionHeader || line.StartsWith(optionHeader + " ", StringComparison.Ordinal)) {
+                optionHeaderLine = j;
+                break;
+            }
+        }
+        if (optionHeaderLine < 0) return;
+
+        // Find "        value:" (indent 8) under the option key
+        for (int j = optionHeaderLine + 1; j < frontmatterEnd; j++) {
+            var line = lines[j];
+            // Stop at next task (indent 2) or next indent-6 option key or shallower
+            if (line.Trim().Length > 0 && CountLeadingSpaces(line) <= 6)
+                break;
+            if (line.StartsWith("        value:", StringComparison.Ordinal)) {
+                lines[j] = $"        value: {newValue}";
+                try { File.WriteAllLines(maintenanceMdPath, lines); } catch { /* best-effort */ }
+                return;
+            }
+        }
+    }
+
     private static int CountLeadingSpaces(string line) {
         int n = 0;
         while (n < line.Length && line[n] == ' ') n++;

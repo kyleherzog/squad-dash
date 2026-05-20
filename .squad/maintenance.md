@@ -27,7 +27,7 @@ tasks:
       if_failing:
         type: radio
         label: If failing tests are found
-        default: report
+        value: report
         choices:
           - value: fix
             tooltip: Fix each failing test; commit fixes to the branch
@@ -54,7 +54,7 @@ tasks:
       if_found:
         type: radio
         label: If duplication is found
-        default: report
+        value: report
         choices:
           - value: fix
             tooltip: Refactor inline on the current branch
@@ -82,7 +82,7 @@ tasks:
       if_found:
         type: radio
         label: If architectural issues are found
-        default: report
+        value: report
         choices:
           - value: branch
             tooltip: Implement improvements on a maintenance branch
@@ -108,7 +108,7 @@ tasks:
       if_found:
         type: radio
         label: If code smells are found
-        default: report
+        value: report
         choices:
           - value: fix
             tooltip: Address smells inline on the current branch
@@ -138,7 +138,7 @@ tasks:
       if_found:
         type: radio
         label: If performance opportunities are found
-        default: report
+        value: report
         choices:
           - value: fix
             tooltip: Implement optimisations inline on the current branch
@@ -221,7 +221,7 @@ tasks:
       if_found:
         type: radio
         label: If magic numbers or hardcoded strings are found
-        default: report
+        value: report
         choices:
           - value: extract
             tooltip: Extract to named constants; commit to a maintenance branch
@@ -279,7 +279,7 @@ tasks:
       if_found:
         type: radio
         label: If naming inconsistencies are found
-        default: report
+        value: report
         choices:
           - value: fix
             tooltip: Rename directly on the current branch; update all references

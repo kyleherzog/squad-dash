@@ -127,6 +127,11 @@ internal sealed class MaintenancePanelController {
 
     // ── In-place task enable/disable ──────────────────────────────────────────
 
+    private string? GetMaintenanceMdPath() {
+        var workspacePath = _getWorkspacePath();
+        return workspacePath is null ? null : Path.Combine(workspacePath, ".squad", "maintenance.md");
+    }
+
     /// <summary>
     /// Reads <c>.squad/maintenance.md</c>, locates the <paramref name="taskId"/> entry,
     /// flips its <c>enabled:</c> value, writes the file back preserving all other content,
@@ -424,7 +429,7 @@ internal sealed class MaintenancePanelController {
                         var rb = new RadioButton {
                             Content   = choice.Value,
                             GroupName = $"task-{task.Id}-{opt.Key}",
-                            IsChecked = false,
+                            IsChecked = string.Equals(choice.Value, opt.RawValue, StringComparison.OrdinalIgnoreCase),
                             Margin    = new Thickness(8, 1, 0, 1),
                         };
                         rb.SetResourceReference(RadioButton.FontSizeProperty,  "FontSizeSmall");
@@ -432,6 +437,14 @@ internal sealed class MaintenancePanelController {
                         rb.SetResourceReference(RadioButton.StyleProperty,      "ThemedRadioButtonStyle");
                         if (!string.IsNullOrEmpty(choice.Tooltip))
                             rb.ToolTip = MakeThemedToolTip(choice.Tooltip);
+                        var capturedPath   = GetMaintenanceMdPath();
+                        var capturedTaskId = task.Id;
+                        var capturedOptKey = opt.Key;
+                        var capturedValue  = choice.Value;
+                        rb.Checked += (_, _) => {
+                            if (capturedPath is not null)
+                                MaintenanceMdParser.UpdateOptionValue(capturedPath, capturedTaskId, capturedOptKey, capturedValue);
+                        };
                         optionsPanel.Children.Add(rb);
                     }
                 }

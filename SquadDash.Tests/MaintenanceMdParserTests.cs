@@ -650,4 +650,230 @@ internal sealed class MaintenanceMdParserTests {
         }
         finally { DeleteTempFile(path); }
     }
+
+    // ── UpdateOptionValue ──────────────────────────────────────────────────────
+
+    [Test]
+    public void UpdateOptionValue_WritesValueToFile() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            tasks:
+              - id: run-tests
+                enabled: true
+                frequency: daily
+                safety: branch
+                title: "Run Tests"
+                instructions: "Run all tests."
+                options:
+                  if_failing:
+                    type: radio
+                    label: If failing tests are found
+                    value: report
+                    choices:
+                      - value: fix
+                        tooltip: Fix each failing test
+                      - value: report
+                        tooltip: Report failures only
+            ---
+            """);
+        try {
+            MaintenanceMdParser.UpdateOptionValue(path, "run-tests", "if_failing", "fix");
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            var opt = config!.Tasks[0].Options!.Single(o => o.Key == "if_failing");
+            Assert.That(opt.RawValue, Is.EqualTo("fix"));
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void UpdateOptionValue_TaskNotFound_DoesNothing() {
+        const string original =
+            """
+            ---
+            configured: true
+            tasks:
+              - id: run-tests
+                enabled: true
+                frequency: daily
+                safety: branch
+                title: "Run Tests"
+                instructions: "Run all tests."
+                options:
+                  if_failing:
+                    type: radio
+                    label: If failing tests are found
+                    value: report
+                    choices:
+                      - value: fix
+                        tooltip: Fix each failing test
+                      - value: report
+                        tooltip: Report failures only
+            ---
+            """;
+        var path = WriteTempFile(original);
+        try {
+            MaintenanceMdParser.UpdateOptionValue(path, "nonexistent-task", "if_failing", "fix");
+            var content = File.ReadAllText(path);
+            // The value: line should still be "report"
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            var opt = config!.Tasks[0].Options!.Single(o => o.Key == "if_failing");
+            Assert.That(opt.RawValue, Is.EqualTo("report"), "File should be unchanged when task not found");
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void UpdateOptionValue_OptionKeyNotFound_DoesNothing() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            tasks:
+              - id: run-tests
+                enabled: true
+                frequency: daily
+                safety: branch
+                title: "Run Tests"
+                instructions: "Run all tests."
+                options:
+                  if_failing:
+                    type: radio
+                    label: If failing tests are found
+                    value: report
+                    choices:
+                      - value: fix
+                        tooltip: Fix each failing test
+                      - value: report
+                        tooltip: Report failures only
+            ---
+            """);
+        try {
+            MaintenanceMdParser.UpdateOptionValue(path, "run-tests", "nonexistent_key", "fix");
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            var opt = config!.Tasks[0].Options!.Single(o => o.Key == "if_failing");
+            Assert.That(opt.RawValue, Is.EqualTo("report"), "File should be unchanged when option key not found");
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void UpdateOptionValue_FileNotFound_DoesNothing() {
+        Assert.DoesNotThrow(() =>
+            MaintenanceMdParser.UpdateOptionValue(
+                @"C:\does\not\exist\maintenance.md", "run-tests", "if_failing", "fix"));
+    }
+
+    [Test]
+    public void UpdateOptionValue_MultipleTasksMultipleOptions_CorrectOneUpdated() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            tasks:
+              - id: task-alpha
+                enabled: true
+                frequency: daily
+                safety: branch
+                title: "Alpha"
+                instructions: "Do alpha things."
+                options:
+                  opt_one:
+                    type: radio
+                    label: Option one
+                    value: a
+                    choices:
+                      - value: a
+                        tooltip: Choice A
+                      - value: b
+                        tooltip: Choice B
+                  opt_two:
+                    type: radio
+                    label: Option two
+                    value: x
+                    choices:
+                      - value: x
+                        tooltip: Choice X
+                      - value: y
+                        tooltip: Choice Y
+              - id: task-beta
+                enabled: true
+                frequency: daily
+                safety: branch
+                title: "Beta"
+                instructions: "Do beta things."
+                options:
+                  opt_one:
+                    type: radio
+                    label: Option one
+                    value: a
+                    choices:
+                      - value: a
+                        tooltip: Choice A
+                      - value: b
+                        tooltip: Choice B
+                  opt_two:
+                    type: radio
+                    label: Option two
+                    value: x
+                    choices:
+                      - value: x
+                        tooltip: Choice X
+                      - value: y
+                        tooltip: Choice Y
+            ---
+            """);
+        try {
+            MaintenanceMdParser.UpdateOptionValue(path, "task-beta", "opt_two", "y");
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+
+            var alpha = config!.Tasks.Single(t => t.Id == "task-alpha");
+            var beta  = config.Tasks.Single(t => t.Id == "task-beta");
+
+            Assert.Multiple(() => {
+                Assert.That(alpha.Options!.Single(o => o.Key == "opt_one").RawValue, Is.EqualTo("a"), "alpha.opt_one unchanged");
+                Assert.That(alpha.Options!.Single(o => o.Key == "opt_two").RawValue, Is.EqualTo("x"), "alpha.opt_two unchanged");
+                Assert.That(beta.Options!.Single(o => o.Key == "opt_one").RawValue,  Is.EqualTo("a"), "beta.opt_one unchanged");
+                Assert.That(beta.Options!.Single(o => o.Key == "opt_two").RawValue,  Is.EqualTo("y"), "beta.opt_two updated");
+            });
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void UpdateOptionValue_ValueKeyAbsent_DoesNotThrow() {
+        // If a task/option exists but has no "value:" sub-key, UpdateOptionValue should do nothing
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            tasks:
+              - id: run-tests
+                enabled: true
+                frequency: daily
+                safety: branch
+                title: "Run Tests"
+                instructions: "Run all tests."
+                options:
+                  if_failing:
+                    type: radio
+                    label: If failing tests are found
+                    choices:
+                      - value: fix
+                        tooltip: Fix each failing test
+                      - value: report
+                        tooltip: Report failures only
+            ---
+            """);
+        try {
+            Assert.DoesNotThrow(() =>
+                MaintenanceMdParser.UpdateOptionValue(path, "run-tests", "if_failing", "fix"));
+        }
+        finally { DeleteTempFile(path); }
+    }
 }
