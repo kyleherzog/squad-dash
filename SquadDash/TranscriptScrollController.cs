@@ -700,25 +700,35 @@ internal sealed class TranscriptScrollController
         if (sv is null)
             return;
 
-        var updateSw = Stopwatch.StartNew();
-        // Force the deferred WPF layout pass to complete now, so ScrollableHeight is
-        // already computed before we move the viewport. This turns the implicit
-        // synchronous layout that ScrollToEnd() triggers into an explicit one that we
-        // control — and avoids it being counted as scroll overhead in perf traces.
-        sv.UpdateLayout();
-        updateSw.Stop();
-
-        var scrollSw = Stopwatch.StartNew();
+        // Bracket UpdateLayout() inside _isProgrammaticScroll so that any ScrollChanged
+        // events fired by WPF during the synchronous layout pass (e.g. from a
+        // FlowDocument shrink/re-expand cycle or block-swap reflow settling) are ignored
+        // by Gate 1 and never reach the user-scroll classifier.  Without this guard a
+        // spurious ScrollChanged(ExtentHeightChange=0, VerticalChange!=0) fired mid-layout
+        // can set IsUserScrolledAway=true; the subsequent ScrollToVerticalOffset then
+        // scrolls to the bottom (correctly, under _isProgrammaticScroll) but its own
+        // ScrollChanged is also ignored by Gate 1, leaving IsUserScrolledAway stuck at
+        // true.  All subsequent streaming Gate 2 extent-grow events skip the re-anchor
+        // because IsUserScrolledAway=true, so auto-scroll stops following.
+        // Gate 2 re-anchors that would normally queue inside UpdateLayout are redundant
+        // here because we are about to call ScrollToVerticalOffset(ScrollableHeight)
+        // unconditionally on the very next line.
         _isProgrammaticScroll = true;
+        var updateSw = Stopwatch.StartNew();
+        var scrollSw = new Stopwatch();
         try
         {
+            sv.UpdateLayout();
+            updateSw.Stop();
+
+            scrollSw.Start();
             sv.ScrollToVerticalOffset(sv.ScrollableHeight);
+            scrollSw.Stop();
         }
         finally
         {
             _isProgrammaticScroll = false;
         }
-        scrollSw.Stop();
         executeSw.Stop();
 
         if (executeSw.ElapsedMilliseconds >= 20 || updateSw.ElapsedMilliseconds >= 20)
