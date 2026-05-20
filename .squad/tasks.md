@@ -514,23 +514,7 @@
 > These tasks have a dependency order: do S1 first (new format), then S2/S3b/S4 against the new format,
 > then S5/S6/S7/S8 as independent cleanup passes.
 
-- [ ] **[maintenance.md] S1 — Redesign to per-task YAML blocks** *(Owner: arjun-sen)*
-  Redesign `maintenance.md` so each task is its own self-contained YAML frontmatter block, separated
-  by `---` markers. The global config (configured, idle_timeout, max_tasks_per_session, safety) remains
-  in the first `---...---` block. Each task block contains: id, enabled, frequency, safety, title,
-  instructions, and optionally an options section. The parser (`MaintenanceMdParser`) must be updated
-  to read multiple YAML blocks from one file. Update all existing tasks in the file to the new format.
-  Example task block:
-    ---
-    id: run-tests
-    enabled: false
-    frequency: daily
-    safety: branch
-    title: Run Tests
-    instructions: |
-      Run all tests and report findings.
-    ---
-  This is a parser + file change. Do S1 before any other task in this group.
+
 
 - [ ] **[maintenance.md] S2 — Convert choices to YAML list with `value:` and `tooltip:`** *(Owner: arjun-sen)*
   Replace the current non-standard pipe-delimited choice syntax (`choices: fix | report` with indented
@@ -634,6 +618,8 @@
 ## ✅ Recently Completed
 
 > Full details in `.squad/completed-tasks.md`. This section is a compact AI-recall index only.
+
+- [x] **[maintenance.md] S1 — Redesign to per-task YAML blocks** — ✅ Rewrote `.squad/maintenance.md` from `## heading` body sections (which the parser ignored) to a single `tasks:` YAML list inside the frontmatter (the format `MaintenanceMdParser` and `MaintenancePanelController` already expect). All 13 tasks preserved with correct indentation, `choices: [a, b]` bracket format, and `default:` keys. Parser needed no changes. 1856 tests pass.
 
 - [x] **[Maintenance] End-to-end maintenance cycle test** — ✅ Implemented (`MaintenanceCycleIntegrationTests.cs`; single `[Test]` exercises full pipeline: `IdleDetectionService.ForceIdle()` fires `IdleThresholdReached` → `MaintenanceRunner.StartAsync` picks enabled eligible task → `executePromptAsync` stub called with correct prompt → `MaintenanceTaskResult.Completed` recorded → `MaintenanceReportWriter.WriteReport` writes `.md` file → `onCompleted` banner-event fires; asserts report file on disk, banner event raised with correct `RanTaskIds`, state store `GetLastRunAt` non-null for today, prompt contains task instructions; 1 new test passes)
 
