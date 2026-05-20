@@ -425,6 +425,28 @@
   last-run data from store, running/idle state header text). Banner show/dismiss lifecycle.
   Cover the case where maintenance-state.json doesn't exist yet (first run).
 
+- [ ] **[Maintenance] `MaintenanceRunner` → maintenance transcript thread routing** *(Owner: arjun-sen)*
+  Wire `executePromptAsync` inside `MaintenanceRunner` to route output to the Vigil/maintenance
+  agent thread ID rather than the coordinator thread. Requires coordination with `AgentThreadRegistry`
+  to resolve the maintenance thread by identity key at run-start. The thread must exist (or be lazily
+  created) before the first task prompt is dispatched. Sub-agent fan-out reports from the coordinator
+  should also route to the same maintenance thread.
+
+- [ ] **[Maintenance] Maintenance agent proxy/thread identity system** *(Owner: arjun-sen + lyra-morn)*
+  When a maintenance cycle starts, create a named agent thread with the Vigil persona identity
+  (read from `.squad/agents/vigil/charter.md`) as the preamble/system prompt. All `MaintenanceRunner`
+  prompt output routes to that thread. The maintenance agent appears in the agent roster after its
+  first run via lazy registration in `AgentThreadRegistry`. Coordinator fan-out sub-agents also route
+  their reports to this thread. Identity key: `vigil` (or the final agreed agent handle). Coordinate
+  between Arjun (backend thread registration) and Lyra (roster card display).
+
+- [ ] **[Maintenance] Wire `IdleDetectionService` into MainWindow** *(Owner: arjun-sen + lyra-morn)*
+  Connect `IdleDetectionService` to `PromptExecutionController._isPromptRunning` (via getter delegate)
+  and `LoopController.IsRunning` so the service has accurate idle state. Forward user activity events
+  from MainWindow's key/mouse input handlers to `IdleDetectionService.RecordActivity()`. This is
+  the integration seam that makes the idle timer tick correctly in production. Pairs with Arjun's
+  `_isPromptRunning` ownership consolidation task.
+
 ---
 
 ## 🟡 Mid Priority — Maintenance Mode (Phase 3 Polish)
@@ -445,11 +467,60 @@
   Shows a "Stop" button during a run that calls `MaintenanceRunner.RequestStop()`. This pairs with
   the abort-mid-run capability.
 
-- [ ] **[Maintenance] Report history log in Maintenance panel** *(Owner: Lyra Morn)*
+- [ ] **[Maintenance] Report history log in Maintenance panel** *(Owner: lyra-morn)*
   Below the task list, add a collapsible "Recent Reports" section in the Maintenance panel.
   Scans `.squad/maintenance-reports/` for existing `.md` files and lists them with date/time and
   task count. Clicking a report opens it in the Docs panel or a lightweight viewer. Shows "No
   reports yet" placeholder on first run.
+
+- [ ] **[Maintenance] Safety hard enforcement at runtime in `MaintenanceRunner`** *(Owner: arjun-sen)*
+  At runtime (not just parse time), verify each task's effective safety level before executing.
+  If a task's computed safety would allow `direct` commits but the global frontmatter floor is
+  `branch`, raise a trace-level error and downgrade the task to `branch`. Log a warning entry in
+  the maintenance report indicating the override. This is a runtime guard — parse-time validation
+  in `MaintenanceMdParser` is a separate (already-planned) concern.
+
+- [ ] **[Maintenance] Safety floor warning chip in Maintenance panel** *(Owner: lyra-morn)*
+  Display a visible warning chip or indicator in the Maintenance panel task list whenever an enabled
+  task has `safety: direct` declared. Chip text: "⚠ direct commits". The indicator is per-task
+  (appears inline with that task row). Does not block execution — purely informational.
+
+- [ ] **[Maintenance] Auto-add `maintenance-state.json` to `.gitignore` on first run** *(Owner: arjun-sen)*
+  On the first maintenance run (or on `WorkspaceOpenCoordinator` first-run install), check whether
+  `.gitignore` already contains an entry for `maintenance-state.json`. If not, append it. Mirrors
+  the pattern used for other auto-managed ignore entries in the workspace. Write a trace entry
+  confirming the addition.
+
+- [ ] **[Maintenance] `per-commit` frequency — git fallback tracing** *(Owner: arjun-sen)*
+  In `MaintenanceStateStore`, when `git rev-parse HEAD` fails (e.g. repo not initialised, git not
+  on PATH), fall back to `daily` frequency behavior for any `per-commit` tasks. Write a
+  `SquadDashTrace.Write` entry recording the fallback so it is visible in the trace log. Do not
+  silently swallow the error.
+
+- [ ] **[Maintenance] Maintenance panel in-place task editing** *(Owner: lyra-morn)*
+  Allow the user to toggle task enabled/disabled state directly in the Maintenance panel UI and
+  write the change back to `maintenance.md` (flip `- [ ]` ↔ `- [x]` for the corresponding task).
+  Analogous to how Loop Settings popup saves frontmatter values back to `loop.md`. Preserve all
+  other file content on write-back. Does not require a save button — apply immediately on toggle,
+  then reload the parsed config.
+
+- [ ] **[Maintenance] Maintenance agent roster entry** *(Owner: mira-quill)*
+  Once the final agent name is decided, add the maintenance agent (Vigil or agreed handle) to
+  `.squad/team.md` with status `🌙 Background`. Update `.squad/routing.md` to note that maintenance
+  orchestration routes to this agent. Coordinate with the thread identity task to ensure the handle
+  matches the registered identity key.
+
+- [ ] **[Maintenance] RELEASING.md / runbook — document Maintenance Mode** *(Owner: mira-quill)*
+  Document the Maintenance Mode feature in any developer runbooks (`RELEASING.md` or equivalent).
+  Cover: what `maintenance.md` is, how to enable/disable tasks, the safety model, where reports
+  live, how to reset state (`maintenance-state.json`), and how to test the idle trigger locally.
+
+- [ ] **[Maintenance] End-to-end maintenance cycle test** *(Owner: vesper-knox)*
+  Single integration test that exercises the full pipeline: force idle threshold → `MaintenanceRunner`
+  picks first enabled eligible task → `executePromptAsync` stub called with correct prompt →
+  `MaintenanceTaskResult` recorded → `MaintenanceReportWriter` writes report file → banner-triggered
+  event fires. Use a fake `IdleDetectionService` and `executePromptAsync` stub. Assert: report file
+  exists, banner event raised, state store updated with correct outcome.
 
 ---
 
