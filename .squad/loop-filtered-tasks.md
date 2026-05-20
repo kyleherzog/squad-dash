@@ -1,6 +1,6 @@
 ---
 configured: true
-interval: 5
+interval: 0.1
 timeout: 60
 max_iterations: 0
 options:

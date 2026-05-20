@@ -261,9 +261,8 @@ internal sealed class MarkdownDocumentWindow : Window {
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin            = new Thickness(12, 0, 8, 0),
                 FontStyle         = FontStyles.Italic,
-                Opacity           = 0.55,
             };
-            loopDescHint.SetResourceReference(TextBlock.ForegroundProperty, "MutedText");
+            loopDescHint.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
             DockPanel.SetDock(loopDescHint, Dock.Right);
             loopDescRow.Children.Add(loopDescHint);
 
@@ -307,7 +306,7 @@ internal sealed class MarkdownDocumentWindow : Window {
                 Margin    = new Thickness(99, 0, 12, 8),
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            frontMatterCheckBox.SetResourceReference(CheckBox.ForegroundProperty, "MutedText");
+            frontMatterCheckBox.SetResourceReference(CheckBox.ForegroundProperty, "LabelText");
 
             var frontMatterRow = new DockPanel { LastChildFill = false };
             DockPanel.SetDock(frontMatterRow, Dock.Top);
