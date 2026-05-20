@@ -8901,14 +8901,24 @@ public partial class MainWindow : Window, ILiveElementLocator
                 return;
             }
 
-            // ── Page Up / Page Down: scroll main transcript ───────────────────
-            if (e.Key == Key.PageUp && PromptTextBox?.IsFocused != true)
+            // ── Page Up / Page Down: scroll active transcript ────────────────
+            // Intercept plain PageUp/PageDown unconditionally (even from the prompt
+            // box) so the transcript is always reachable by keyboard, but leave the
+            // key alone when a document editor or its find bar has focus so those
+            // controls can scroll their own content normally.
+            if (e.Key == Key.PageUp
+                && Keyboard.Modifiers == ModifierKeys.None
+                && DocSourceTextBox?.IsKeyboardFocusWithin != true
+                && _docSourceFindTextBox?.IsFocused != true)
             {
                 ActiveScrollController.ScrollPageUp();
                 e.Handled = true;
                 return;
             }
-            if (e.Key == Key.PageDown && PromptTextBox?.IsFocused != true)
+            if (e.Key == Key.PageDown
+                && Keyboard.Modifiers == ModifierKeys.None
+                && DocSourceTextBox?.IsKeyboardFocusWithin != true
+                && _docSourceFindTextBox?.IsFocused != true)
             {
                 ActiveScrollController.ScrollPageDown();
                 e.Handled = true;
