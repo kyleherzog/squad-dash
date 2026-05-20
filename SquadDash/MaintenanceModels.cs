@@ -10,9 +10,10 @@ internal sealed record MaintenanceTaskResult(
     string               Title,
     MaintenanceTaskOutcome Outcome,
     TimeSpan             Duration,
-    string?              BranchCreated  = null,
-    IReadOnlyList<string>? FilesChanged = null,
-    string?              ErrorMessage   = null);
+    string?              BranchCreated      = null,
+    IReadOnlyList<string>? FilesChanged    = null,
+    string?              ErrorMessage       = null,
+    string?              SafetyOverrideNote = null);
 
 internal sealed class MaintenanceReport {
     public required IReadOnlyList<string>                RanTaskIds     { get; init; }

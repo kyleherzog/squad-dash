@@ -78,6 +78,8 @@ internal sealed class MaintenanceReportWriter {
                     _                                  => "",
                 };
                 sb.AppendLine($"- {icon} {t.Title} ({t.Id}){suffix}");
+                if (!string.IsNullOrWhiteSpace(t.SafetyOverrideNote))
+                    sb.AppendLine($"  ⚠ {t.SafetyOverrideNote}");
             }
         }
         sb.AppendLine();

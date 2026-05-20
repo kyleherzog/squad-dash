@@ -71,6 +71,15 @@ internal sealed class MaintenanceRunner {
                 _onTaskStarted(task.Title);
                 runCount++;
 
+                // Runtime safety floor check — log a warning if the global floor overrides the task's declared safety.
+                var effectiveSafety = ApplySafetyFloor(config.Safety, task.Safety);
+                string? safetyOverrideNote = null;
+                if (!string.Equals(effectiveSafety, task.Safety, StringComparison.OrdinalIgnoreCase)) {
+                    safetyOverrideNote = $"Safety downgraded from '{task.Safety}' to '{effectiveSafety}' by global floor.";
+                    SquadDashTrace.Write(TraceCategory.General,
+                        $"MaintenanceRunner: task '{task.Id}' safety override — declared '{task.Safety}', effective '{effectiveSafety}' (global floor '{config.Safety}').");
+                }
+
                 var taskStart = Stopwatch.GetTimestamp();
                 try {
                     var prompt = BuildPrompt(task, config.Safety, startedAt);
@@ -80,10 +89,11 @@ internal sealed class MaintenanceRunner {
                     _stateStore.RecordRun(task.Id, commitSha);
                     ranIds.Add(task.Id);
                     results.Add(new MaintenanceTaskResult(
-                        Id:       task.Id,
-                        Title:    task.Title,
-                        Outcome:  MaintenanceTaskOutcome.Completed,
-                        Duration: elapsed));
+                        Id:                 task.Id,
+                        Title:              task.Title,
+                        Outcome:            MaintenanceTaskOutcome.Completed,
+                        Duration:           elapsed,
+                        SafetyOverrideNote: safetyOverrideNote));
                     _onTaskCompleted(task.Id);
                 }
                 catch (OperationCanceledException) {
@@ -93,11 +103,12 @@ internal sealed class MaintenanceRunner {
                     var elapsed = Stopwatch.GetElapsedTime(taskStart);
                     ranIds.Add(task.Id);
                     results.Add(new MaintenanceTaskResult(
-                        Id:           task.Id,
-                        Title:        task.Title,
-                        Outcome:      MaintenanceTaskOutcome.Error,
-                        Duration:     elapsed,
-                        ErrorMessage: ex.Message));
+                        Id:                 task.Id,
+                        Title:              task.Title,
+                        Outcome:            MaintenanceTaskOutcome.Error,
+                        Duration:           elapsed,
+                        ErrorMessage:       ex.Message,
+                        SafetyOverrideNote: safetyOverrideNote));
                     _onTaskCompleted(task.Id);
                 }
             }

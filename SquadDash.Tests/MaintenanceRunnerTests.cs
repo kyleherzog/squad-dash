@@ -404,6 +404,58 @@ internal sealed class MaintenanceRunnerTests {
             "branch prompt must contain today's date in yyyyMMdd format");
     }
 
+    // ── Safety override note ──────────────────────────────────────────────────
+
+    [Test]
+    public async Task StartAsync_SafetyOverride_NoteRecordedInResult_WhenFloorApplies() {
+        MaintenanceReport? report = null;
+        var config = MakeConfig(
+            tasks: [MakeTask("override-task", safety: "direct", instructions: "Do work.")],
+            safety: "branch");
+
+        var runner = MakeRunner(onCompleted: r => report = r);
+
+        await runner.StartAsync(config, _workspaceDir, CancellationToken.None);
+
+        Assert.That(report, Is.Not.Null);
+        Assert.That(report!.TaskResults[0].SafetyOverrideNote, Is.Not.Null.And.Not.Empty,
+            "SafetyOverrideNote must be set when the global floor overrides the task's declared safety");
+        Assert.That(report.TaskResults[0].SafetyOverrideNote, Does.Contain("branch"),
+            "SafetyOverrideNote must mention the effective safety level");
+    }
+
+    [Test]
+    public async Task StartAsync_SafetyOverride_NoNote_WhenNoFloorApplied() {
+        MaintenanceReport? report = null;
+        var config = MakeConfig(
+            tasks: [MakeTask("no-override-task", safety: "branch", instructions: "Do work.")],
+            safety: "branch");
+
+        var runner = MakeRunner(onCompleted: r => report = r);
+
+        await runner.StartAsync(config, _workspaceDir, CancellationToken.None);
+
+        Assert.That(report, Is.Not.Null);
+        Assert.That(report!.TaskResults[0].SafetyOverrideNote, Is.Null.Or.Empty,
+            "SafetyOverrideNote must be null when the task's declared safety matches the effective safety");
+    }
+
+    [Test]
+    public async Task StartAsync_SafetyOverride_NoteIncluded_WhenGlobalReportOnlyOverridesDirect() {
+        MaintenanceReport? report = null;
+        var config = MakeConfig(
+            tasks: [MakeTask("report-only-override", safety: "direct", instructions: "Do work.")],
+            safety: "report-only");
+
+        var runner = MakeRunner(onCompleted: r => report = r);
+
+        await runner.StartAsync(config, _workspaceDir, CancellationToken.None);
+
+        Assert.That(report, Is.Not.Null);
+        Assert.That(report!.TaskResults[0].SafetyOverrideNote, Is.Not.Null.And.Not.Empty,
+            "SafetyOverrideNote must be set when report-only global floor overrides direct task safety");
+    }
+
     // ── IsRunning ────────────────────────────────────────────────────────────
 
     [Test]
