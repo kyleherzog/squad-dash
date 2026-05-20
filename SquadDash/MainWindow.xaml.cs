@@ -26851,7 +26851,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 {
                     try
                     {
-                        await _pec.ExecutePromptAsync(prompt, addToHistory: true, clearPromptBox: false);
+                        await _pec.ExecutePromptAsync(prompt, addToHistory: true, clearPromptBox: false, sessionIdOverride: "argus-weld");
                         tcs.TrySetResult();
                     }
                     catch (OperationCanceledException) { tcs.TrySetCanceled(ct); }
@@ -26860,11 +26860,14 @@ public partial class MainWindow : Window, ILiveElementLocator
                 return tcs.Task;
             },
             stateStore:      _maintenanceStateStore,
-            onTaskStarted:   title => Dispatcher.InvokeAsync(() => _maintenancePanel?.OnRunnerStarted(title)),
+            onTaskStarted:   title => Dispatcher.InvokeAsync(() => {
+                EnsureArgusWeldRegistered(workspacePath);
+                _maintenancePanel?.OnRunnerStarted(title);
+            }),
             onTaskCompleted: id    => Dispatcher.InvokeAsync(() => _maintenancePanel?.OnRunnerCompleted()),
             onCompleted:     report =>
             {
-                Dispatcher.InvokeAsync(() =>
+                Dispatcher.InvokeAsync(async () =>
                 {
                     var reportPath = _maintenanceReportWriter?.WriteReport(report) ?? "";
                     _pendingMaintenanceBannerReport = report;
@@ -26875,6 +26878,13 @@ public partial class MainWindow : Window, ILiveElementLocator
                     var updatedConfig = MaintenanceMdParser.Parse(Path.Combine(workspacePath, ".squad", "maintenance.md"));
                     _maintenancePanel?.Refresh(updatedConfig, _maintenanceStateStore);
                     // Banner surfaces on next user activity (see Window_PreviewKeyDown).
+                    var notifBody = !string.IsNullOrEmpty(report.Summary)
+                        ? report.Summary
+                        : $"{report.TaskResults.Count} task(s) completed";
+                    await _pushNotificationService.NotifyEventAsync(
+                        "maintenance_completed",
+                        "Argus Weld — Maintenance Complete",
+                        notifBody);
                 });
             });
 
@@ -26884,8 +26894,30 @@ public partial class MainWindow : Window, ILiveElementLocator
         await _maintenanceRunner.StartAsync(config, workspacePath, CancellationToken.None);
     }
 
-    private void InitIdleDetection(string workspacePath)
-    {
+    private void EnsureArgusWeldRegistered(string workspacePath) {
+        const string threadKey = "agent:argus-weld";
+        if (_agentThreadRegistry.ThreadsByKey.ContainsKey(threadKey))
+            return;
+
+        string? charter = null;
+        var charterPath = Path.Combine(workspacePath, ".squad", "agents", "argus-weld", "charter.md");
+        if (File.Exists(charterPath)) {
+            try { charter = File.ReadAllText(charterPath); }
+            catch { /* best-effort */ }
+        }
+
+        _agentThreadRegistry.GetOrCreateAgentThread(
+            toolCallId:       null,
+            agentId:          "argus-weld",
+            agentName:        "argus-weld",
+            agentDisplayName: "Argus Weld",
+            agentDescription: "Maintenance Coordinator",
+            status:           null,
+            prompt:           charter,
+            startedAt:        DateTimeOffset.UtcNow.ToString("O"));
+    }
+
+    private void InitIdleDetection(string workspacePath) {
         _maintenanceStateStore ??= new MaintenanceStateStore(Path.Combine(workspacePath, ".squad"));
 
         var config = MaintenanceMdParser.Parse(Path.Combine(workspacePath, ".squad", "maintenance.md"));

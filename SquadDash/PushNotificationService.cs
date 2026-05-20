@@ -165,7 +165,8 @@ internal sealed class PushNotificationService {
         ["git_commit_pushed"] = false,
         ["loop_iteration_complete"] = false,
         ["rc_connection_established"] = false,
-        ["quick_reply_needed"] = true
+        ["quick_reply_needed"] = true,
+        ["maintenance_completed"] = true,
     };
 
     public PushNotificationService(ApplicationSettingsStore settingsStore) {
