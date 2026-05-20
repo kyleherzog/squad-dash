@@ -56,8 +56,8 @@ internal sealed class MaintenancePanelControllerTests {
         new(IdleTimeout: 15, MaxTasksPerSession: 5, Safety: "branch", Tasks: tasks ?? []);
 
     private static MaintenanceTask MakeTask(
-        string id, string title, bool enabled = true, string frequency = "daily") =>
-        new(id, enabled, frequency, "branch", title, "Do work.");
+        string id, string title, bool enabled = true, string frequency = "daily", string safety = "branch") =>
+        new(id, enabled, frequency, safety, title, "Do work.");
 
     /// <summary>
     /// Searches the logical tree of <paramref name="panel"/> for all CheckBox instances.
@@ -444,6 +444,82 @@ internal sealed class MaintenancePanelControllerTests {
             var expander = FindReportsExpander(listPanel);
             Assert.That(expander, Is.Not.Null, "Recent Reports expander must be present");
             Assert.That(expander!.IsExpanded, Is.False, "Expander must be collapsed by default");
+        });
+    }
+
+    // ── Safety warning chip ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Recursively walks the logical tree rooted at <paramref name="parent"/> and
+    /// collects all <see cref="Border"/> instances.
+    /// </summary>
+    private static List<Border> CollectBorders(DependencyObject parent) {
+        var result = new List<Border>();
+        CollectBordersCore(parent, result);
+        return result;
+    }
+
+    private static void CollectBordersCore(DependencyObject parent, List<Border> result) {
+        if (parent is Border b)
+            result.Add(b);
+        foreach (object child in LogicalTreeHelper.GetChildren(parent))
+            if (child is DependencyObject dep)
+                CollectBordersCore(dep, result);
+    }
+
+    [Test]
+    public void Refresh_DirectSafetyTask_ShowsWarningChip() {
+        WpfTestContext.Run(() => {
+            var (controller, listPanel, _, _) = CreateController();
+            var config = MakeConfig([MakeTask("t1", "Direct Task", safety: "direct")]);
+
+            controller.Refresh(config, stateStore: null);
+
+            var textBlocks = CollectTextBlocks(listPanel);
+            Assert.That(
+                textBlocks.Any(tb =>
+                    tb.Text.Contains("⚠", StringComparison.Ordinal) ||
+                    tb.Text.Contains("direct commits", StringComparison.OrdinalIgnoreCase)),
+                Is.True,
+                "A warning chip with '⚠ direct commits' must appear for a task with safety: direct");
+        });
+    }
+
+    [Test]
+    public void Refresh_BranchSafetyTask_NoWarningChip() {
+        WpfTestContext.Run(() => {
+            var (controller, listPanel, _, _) = CreateController();
+            var config = MakeConfig([MakeTask("t1", "Branch Task", safety: "branch")]);
+
+            controller.Refresh(config, stateStore: null);
+
+            var textBlocks = CollectTextBlocks(listPanel);
+            Assert.That(
+                textBlocks.All(tb =>
+                    !tb.Text.Contains("⚠", StringComparison.Ordinal) &&
+                    !tb.Text.Contains("direct commits", StringComparison.OrdinalIgnoreCase)),
+                Is.True,
+                "No warning chip must appear for a task with safety: branch");
+        });
+    }
+
+    [Test]
+    public void Refresh_ReportOnlySafetyTask_ShowsPlainSafetyChip_NotWarning() {
+        WpfTestContext.Run(() => {
+            var (controller, listPanel, _, _) = CreateController();
+            var config = MakeConfig([MakeTask("t1", "Report Only Task", safety: "report-only")]);
+
+            controller.Refresh(config, stateStore: null);
+
+            var textBlocks = CollectTextBlocks(listPanel);
+            Assert.That(
+                textBlocks.Any(tb => string.Equals(tb.Text, "report-only", StringComparison.Ordinal)),
+                Is.True,
+                "A plain 'report-only' chip must appear for a task with safety: report-only");
+            Assert.That(
+                textBlocks.All(tb => !tb.Text.Contains("⚠", StringComparison.Ordinal)),
+                Is.True,
+                "No warning chip must appear for a non-direct, non-branch safety level");
         });
     }
 }

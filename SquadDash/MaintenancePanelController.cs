@@ -257,7 +257,9 @@ internal sealed class MaintenancePanelController {
         // Chips: frequency + safety
         var chipRow = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
         chipRow.Children.Add(BuildChip(task.Frequency, null));
-        if (!string.Equals(task.Safety, "branch", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(task.Safety, "direct", StringComparison.OrdinalIgnoreCase))
+            chipRow.Children.Add(BuildWarningChip("⚠ direct commits"));
+        else if (!string.Equals(task.Safety, "branch", StringComparison.OrdinalIgnoreCase))
             chipRow.Children.Add(BuildChip(task.Safety, null));
         rightPanel.Children.Add(chipRow);
 
@@ -311,6 +313,23 @@ internal sealed class MaintenancePanelController {
         chip.BorderThickness = new Thickness(1);
         if (tooltip is not null)
             chip.ToolTip = tooltip;
+        return chip;
+    }
+
+    private static Border BuildWarningChip(string text) {
+        var label = new TextBlock { Text = text };
+        label.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeXSmall");
+        label.SetResourceReference(TextBlock.ForegroundProperty, "WarningText");
+
+        var chip = new Border {
+            Child            = label,
+            Padding          = new Thickness(5, 1, 5, 1),
+            Margin           = new Thickness(0, 0, 4, 2),
+            CornerRadius     = new CornerRadius(8),
+            BorderThickness  = new Thickness(1),
+        };
+        chip.SetResourceReference(Border.BackgroundProperty, "WarningBackground");
+        chip.SetResourceReference(Border.BorderBrushProperty, "WarningBorder");
         return chip;
     }
 

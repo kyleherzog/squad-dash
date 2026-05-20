@@ -467,7 +467,7 @@
 
 - [x] **[Maintenance] Safety hard enforcement at runtime in `MaintenanceRunner`** — ✅ Implemented (runtime safety floor check before each task execution; SquadDashTrace warning emitted when effective safety overrides declared safety; SafetyOverrideNote added to MaintenanceTaskResult; report writer surfaces ⚠ note; 3 new tests)
 
-- [ ] **[Maintenance] Safety floor warning chip in Maintenance panel** *(Owner: lyra-morn)*
+- [x] **[Maintenance] Safety floor warning chip in Maintenance panel** — ✅ Implemented (warning chip "⚠ direct commits" shown inline for direct-safety tasks; plain chip for other non-branch safety; 3 new tests; build passes)
   Display a visible warning chip or indicator in the Maintenance panel task list whenever an enabled
   task has `safety: direct` declared. Chip text: "⚠ direct commits". The indicator is per-task
   (appears inline with that task row). Does not block execution — purely informational.
