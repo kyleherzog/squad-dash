@@ -1,4 +1,4 @@
-﻿# SquadDash Task List
+# SquadDash Task List
 
 > This file is the persistent backlog for SquadDash development.
 > Update status inline (`- [ ]` → `- [x]`). AI agents read this file for context.
@@ -459,7 +459,7 @@
   Shows a "Stop" button during a run that calls `MaintenanceRunner.RequestStop()`. This pairs with
   the abort-mid-run capability.
 
-- [ ] **[Maintenance] Report history log in Maintenance panel** *(Owner: lyra-morn)*
+
   Below the task list, add a collapsible "Recent Reports" section in the Maintenance panel.
   Scans `.squad/maintenance-reports/` for existing `.md` files and lists them with date/time and
   task count. Clicking a report opens it in the Docs panel or a lightweight viewer. Shows "No
@@ -598,5 +598,6 @@
 - [x] Squad CLI upgraded to 0.9.5-insider.1
 - [x] Contributing docs removed
 - [x] Abandoned tool runs / charter menu / version context menu fixes
+- [x] **[Maintenance] Report history log in Maintenance panel** — ✅ Implemented (collapsible Recent Reports section below task list; scans .squad/maintenance-reports/, shows date/time and task count, opens file on click, 'No reports yet' placeholder; 5 new tests)
 
 
