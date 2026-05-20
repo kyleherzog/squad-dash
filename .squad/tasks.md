@@ -516,18 +516,7 @@
 
 
 
-- [ ] **[maintenance.md] S2 — Convert choices to YAML list with `value:` and `tooltip:`** *(Owner: arjun-sen)*
-  Replace the current non-standard pipe-delimited choice syntax (`choices: fix | report` with indented
-  descriptions) with a standard YAML list where each entry has `value:` and `tooltip:`. The `tooltip:`
-  text appears when the user hovers over that radio button option in the Maintenance panel. Update
-  `MaintenanceMdParser` to read the new format. Update all tasks in `maintenance.md`.
-  New format:
-    choices:
-      - value: fix
-        tooltip: Fix failing tests and commit fixes to a new branch
-      - value: report
-        tooltip: Report failures only — do not change any code
-  This is a parser + file change. Requires S1 to be done first.
+
 
 - [ ] **[maintenance.md] S3b — Extend parser to support `instructions: |` block scalars** *(Owner: arjun-sen)*
   Update `MaintenanceMdParser` to correctly parse and reassemble YAML block scalar multi-line values
@@ -618,6 +607,8 @@
 ## ✅ Recently Completed
 
 > Full details in `.squad/completed-tasks.md`. This section is a compact AI-recall index only.
+
+- [x] **[maintenance.md] S2 — Convert choices to YAML list with `value:` and `tooltip:`** — ✅ `MaintenanceOptionChoice` model added; `MaintenanceMdParser` extended to parse YAML list choices at indent 10/12 (backward-compat with bracket format); `MaintenancePanelController` sets `ToolTip` on each radio button; all 7 option blocks in `maintenance.md` updated with meaningful tooltips; 6 new tests; 1862 total pass. Commit `ad1c5f7`.
 
 - [x] **[maintenance.md] S1 — Redesign to per-task YAML blocks** — ✅ Rewrote `.squad/maintenance.md` from `## heading` body sections (which the parser ignored) to a single `tasks:` YAML list inside the frontmatter (the format `MaintenanceMdParser` and `MaintenancePanelController` already expect). All 13 tasks preserved with correct indentation, `choices: [a, b]` bracket format, and `default:` keys. Parser needed no changes. 1856 tests pass.
 
