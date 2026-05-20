@@ -4533,7 +4533,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             thread.DetailText = BuildThreadPreview(thread.LatestResponse!);
 
         SyncThreadChip(thread);
-        FindAgentCardForThread(thread)?.FireActivityPulse(SpinnerActivityKind.Writing);
+        FindAgentCardForThread(thread)?.FireActivityPulse(SpinnerActivityKind.Reading);
         UpdateAgentCardFromThread(thread, syncBuckets: false);
         _conversationManager.SchedulePersistAgentThreadSnapshot(thread);
     }
@@ -20462,16 +20462,31 @@ public partial class MainWindow : Window, ILiveElementLocator
             return SpinnerActivityKind.Thinking;
 
         var name = toolName.Trim();
-        return name.Contains("read",   StringComparison.OrdinalIgnoreCase) ||
-               name.Contains("view",   StringComparison.OrdinalIgnoreCase) ||
-               name.Contains("glob",   StringComparison.OrdinalIgnoreCase) ||
-               name.Contains("grep",   StringComparison.OrdinalIgnoreCase) ||
-               name.Contains("search", StringComparison.OrdinalIgnoreCase) ||
-               name.Contains("fetch",  StringComparison.OrdinalIgnoreCase) ||
-               name.Contains("list",   StringComparison.OrdinalIgnoreCase) ||
-               name.Contains("get",    StringComparison.OrdinalIgnoreCase)
-            ? SpinnerActivityKind.Reading
-            : SpinnerActivityKind.Thinking;
+
+        if (name.Contains("edit",        StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("create",      StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("write",       StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("delete",      StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("move",        StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("rename",      StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("patch",       StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("insert",      StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("replace",     StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("remove_file", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("overwrite",   StringComparison.OrdinalIgnoreCase))
+            return SpinnerActivityKind.Writing;
+
+        if (name.Contains("read",   StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("view",   StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("glob",   StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("grep",   StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("search", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("fetch",  StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("list",   StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("get",    StringComparison.OrdinalIgnoreCase))
+            return SpinnerActivityKind.Reading;
+
+        return SpinnerActivityKind.Thinking;
     }
 
     private string? BuildToolDisplayText(SquadSdkEvent evt)

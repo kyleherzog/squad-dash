@@ -16,8 +16,7 @@ public sealed class ActivitySpinner : FrameworkElement
     // Physics state
     private double _angularVelocity;    // rad/s
     private double _angle;              // radians, current rotation
-    private double _diameter;           // currently rendered diameter, interpolates 12..18
-    private double _targetDiameter;
+    private const double FixedDiameter = 16.0;  // fixed size — no interpolation
     private double _readColorBlend;     // 0=yellow(thinking), 1=blue(reading)
     private double _writeColorBlend;    // 0=blue(reading), 1=red(writing); also drives diameter
     private double _spinnerOpacity;     // 0..1
@@ -44,12 +43,11 @@ public sealed class ActivitySpinner : FrameworkElement
     private const double FrictionK = 0.11;           // exp(-k*t) → ~6% at 25s
     private const double ThinkingImpulse = 3.5;
     private const double WritingImpulse = 6.0;
-    private const double ThinkingDiameter = 12.0;
-    private const double WritingDiameter = 18.0;
+
     private const double WriteColorDecaySeconds = 7.5;
     private const double FadeOutThreshold = 0.18;    // rad/s — start fade below this
     private const double OpacityLerpRate = 2.0;      // units/sec — reaches target in ~0.5s
-    private const double DiameterLerpRate = 2.5;     // interpolation speed (1/s)
+
     private const double PulseFrequency = 3.0;       // Hz for max-speed oscillation
     private const double PulseAmplitude = 0.22;      // ±22% brightness
 
@@ -65,8 +63,7 @@ public sealed class ActivitySpinner : FrameworkElement
 
     public ActivitySpinner()
     {
-        _diameter = ThinkingDiameter;
-        _targetDiameter = ThinkingDiameter;
+
         _spinnerOpacity = 0;
         Visibility = Visibility.Collapsed;
 
@@ -189,10 +186,7 @@ public sealed class ActivitySpinner : FrameworkElement
             _writeColorBlend = 0;
         }
 
-        // Interpolate diameter smoothly (driven by write blend for size variation)
-        _targetDiameter = ThinkingDiameter + (WritingDiameter - ThinkingDiameter) * _writeColorBlend;
-        var diameterDelta = (_targetDiameter - _diameter) * Math.Min(1.0, DiameterLerpRate * dt);
-        _diameter += diameterDelta;
+
 
         // Max-speed saturation/lightness pulse
         var speedRatio = _angularVelocity / MaxAngularVelocity;
@@ -255,9 +249,9 @@ public sealed class ActivitySpinner : FrameworkElement
 
         var geo = GetShapeGeometry();
 
-        // Scale so the 1957-unit shape fits in _diameter × _diameter, centred in 18×18
-        var scale  = _diameter / OriginalCanvasSize;
-        var offset = (18.0 - _diameter) / 2.0; // centres smaller shape in 18×18 box
+        // Scale so the 1957-unit shape fits in FixedDiameter × FixedDiameter, centred in 18×18
+        var scale  = FixedDiameter / OriginalCanvasSize;
+        var offset = (18.0 - FixedDiameter) / 2.0;
 
         dc.PushTransform(new TranslateTransform(offset, offset));
         dc.PushTransform(new ScaleTransform(scale, scale));
