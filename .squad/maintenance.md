@@ -18,17 +18,17 @@ All tasks ship disabled — opt in to exactly what you want.
 FRONTMATTER KEYS
 ────────────────────────────────────────────────────────────────────────────────
 
-  configured: true          Required. Must be present for SquadDash to load
+  configured: **true**          Required. Must be present for SquadDash to load
                             this file.
 
-  idle_timeout: 15          Minutes of inactivity before a maintenance window
+  idle_timeout: **15**          Minutes of inactivity before a maintenance window
                             triggers. Default: 15.
 
-  max_tasks_per_session: 5  Maximum number of tasks to run per maintenance
+  max_tasks_per_session: **5**  Maximum number of tasks to run per maintenance
                             window. Tasks are run in order; the session stops
                             after this many complete. Default: 5.
 
-  safety: branch            Global safety floor. Per-task safety cannot be
+  safety: **branch**            Global safety floor. Per-task safety cannot be
                             less safe than this value. See the Safety Model
                             section below.
 
@@ -36,21 +36,21 @@ FRONTMATTER KEYS
 SAFETY MODEL
 ────────────────────────────────────────────────────────────────────────────────
 
-  report-only   No file changes. The AI generates a report or analysis only.
+  **report-only**   No file changes. The AI generates a report or analysis only.
                 All findings are written to the maintenance transcript; no
                 source files are created, modified, or deleted.
 
-  branch        Before making any edits, the AI creates a new branch named
+  **branch**        Before making any edits, the AI creates a new branch named
                   maintenance/YYYYMMDD-<task-slug>
                 (e.g. maintenance/20260520-fix-failing-tests).
                 All commits go to that branch. The current branch is never
                 touched. This is the recommended default.
 
-  direct        The AI may commit directly to the current branch. This is an
+  **direct**        The AI may commit directly to the current branch. This is an
                 explicit opt-in for tasks that are safe by definition (e.g.
                 writing only to tasks.md). Use with caution.
 
-  Floor rule:   The global `safety:` value is a floor. A per-task setting
+  **Floor rule:**   The global `safety:` value is a floor. A per-task setting
                 cannot be less safe than the global value. If global is
                 `branch`, a task set to `direct` will be silently promoted to
                 `branch`. To allow `direct` on a task, you must also set the
@@ -193,11 +193,12 @@ options:
 ---
 
 ## code-smells
-
-enabled: false
-frequency: daily
-safety: branch
-title: Code Smell Cleanup
+```
+ enabled: false
+ frequency: daily
+ safety: branch
+ title: Code Smell Cleanup
+```
 instructions: |
   Scan the codebase for code smells: poor readability, long methods, unclear
   naming, overly complex conditionals, dead code, unnecessary abstraction,

@@ -507,6 +507,92 @@
 
 ---
 
+## 🟢 Low Priority — maintenance.md File Quality (Malik's Suggestions)
+
+> These tasks clean up and improve the default `.squad/maintenance.md` file format and content.
+> Run one at a time via the loop. S1, S3b, S4 require parser/UI changes; the rest are file-only edits.
+> These tasks have a dependency order: do S1 first (new format), then S2/S3b/S4 against the new format,
+> then S5/S6/S7/S8 as independent cleanup passes.
+
+- [ ] **[maintenance.md] S1 — Redesign to per-task YAML blocks** *(Owner: arjun-sen)*
+  Redesign `maintenance.md` so each task is its own self-contained YAML frontmatter block, separated
+  by `---` markers. The global config (configured, idle_timeout, max_tasks_per_session, safety) remains
+  in the first `---...---` block. Each task block contains: id, enabled, frequency, safety, title,
+  instructions, and optionally an options section. The parser (`MaintenanceMdParser`) must be updated
+  to read multiple YAML blocks from one file. Update all existing tasks in the file to the new format.
+  Example task block:
+    ---
+    id: run-tests
+    enabled: false
+    frequency: daily
+    safety: branch
+    title: Run Tests
+    instructions: |
+      Run all tests and report findings.
+    ---
+  This is a parser + file change. Do S1 before any other task in this group.
+
+- [ ] **[maintenance.md] S2 — Convert choices to YAML list with `value:` and `tooltip:`** *(Owner: arjun-sen)*
+  Replace the current non-standard pipe-delimited choice syntax (`choices: fix | report` with indented
+  descriptions) with a standard YAML list where each entry has `value:` and `tooltip:`. The `tooltip:`
+  text appears when the user hovers over that radio button option in the Maintenance panel. Update
+  `MaintenanceMdParser` to read the new format. Update all tasks in `maintenance.md`.
+  New format:
+    choices:
+      - value: fix
+        tooltip: Fix failing tests and commit fixes to a new branch
+      - value: report
+        tooltip: Report failures only — do not change any code
+  This is a parser + file change. Requires S1 to be done first.
+
+- [ ] **[maintenance.md] S3b — Extend parser to support `instructions: |` block scalars** *(Owner: arjun-sen)*
+  Update `MaintenanceMdParser` to correctly parse and reassemble YAML block scalar multi-line values
+  for the `instructions:` key (the `|` literal block scalar syntax). The instructions in every task
+  currently use `instructions: |` with indented multi-line text. Without this fix, instruction text
+  may be parsed as a raw string including the `|` character or truncated. Requires parser change only;
+  no file format change needed beyond what S1 establishes.
+
+- [ ] **[maintenance.md] S4 — Rename `default:` → `value:` and implement write-back** *(Owner: arjun-sen)*
+  The option blocks in `maintenance.md` currently have `default: report` which the parser ignores.
+  Rename this key to `value:` throughout the file. The `value:` key holds the currently-selected
+  radio option and must be written back to `maintenance.md` immediately when the user changes the
+  selection in the Maintenance panel — exactly like loop.md options work today.
+  Update `MaintenanceMdParser` to read `value:` and `MaintenancePanelController` to write it back.
+  Update all option blocks in the file: `default:` → `value:`.
+
+- [ ] **[maintenance.md] S5 — Add `tooltip:` to option group blocks** *(Owner: arjun-sen)*
+  Add a `tooltip:` key to each option group block in `maintenance.md`. This tooltip appears when the
+  user hovers over the option group label (the radio group heading) in the Maintenance panel, explaining
+  what the option controls. The parser already supports a `hint:` key — rename/update support to use
+  `tooltip:` consistently with S2. Add meaningful tooltip text to every option group in the file.
+  Example:
+    options:
+      if_failing:
+        type: radio
+        label: If failing tests are found
+        tooltip: Controls whether the agent fixes issues or only reports them
+        value: report
+        choices: ...
+
+- [ ] **[maintenance.md] S6 — Fix backtick fence in `code-smells` task** *(Owner: arjun-sen)*
+  The `code-smells` task entry has a stray backtick code fence wrapping the `enabled`/`frequency`/
+  `safety`/`title` key-value lines (lines ~196–201 in the current file). Remove the fence markers so
+  those lines are plain text matching the format of all other tasks. File-only change; no parser update.
+
+- [ ] **[maintenance.md] S7 — Shorten the 100-line header comment to a concise reference card** *(Owner: arjun-sen)*
+  The HTML comment block at the top of `maintenance.md` is ~100 lines covering frontmatter keys,
+  safety model, frequency values, and task block format. Condense it to a 10–15 line reference card
+  with the essential fields and values. Full documentation lives in `docs/features/maintenance-mode.md`
+  — point to that file for details. File-only change.
+
+- [ ] **[maintenance.md] S8 — Move `configured: false` to bottom of frontmatter with annotation** *(Owner: arjun-sen)*
+  In the global config frontmatter block, relocate `configured: false` to the very last line of the
+  block and add a trailing comment: `configured: false  # ← change to true to activate`.
+  This makes it the most prominent thing a new user encounters when they open the file to enable
+  maintenance mode. File-only change.
+
+---
+
 ## 🔵 Low Priority
 
 - [ ] **OpenAI Whisper speech provider — customer request***(Owner: Orion Vale → Lyra Morn)*
