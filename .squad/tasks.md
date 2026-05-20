@@ -465,12 +465,7 @@
   task count. Clicking a report opens it in the Docs panel or a lightweight viewer. Shows "No
   reports yet" placeholder on first run.
 
-- [ ] **[Maintenance] Safety hard enforcement at runtime in `MaintenanceRunner`** *(Owner: arjun-sen)*
-  At runtime (not just parse time), verify each task's effective safety level before executing.
-  If a task's computed safety would allow `direct` commits but the global frontmatter floor is
-  `branch`, raise a trace-level error and downgrade the task to `branch`. Log a warning entry in
-  the maintenance report indicating the override. This is a runtime guard — parse-time validation
-  in `MaintenanceMdParser` is a separate (already-planned) concern.
+- [x] **[Maintenance] Safety hard enforcement at runtime in `MaintenanceRunner`** — ✅ Implemented (runtime safety floor check before each task execution; SquadDashTrace warning emitted when effective safety overrides declared safety; SafetyOverrideNote added to MaintenanceTaskResult; report writer surfaces ⚠ note; 3 new tests)
 
 - [ ] **[Maintenance] Safety floor warning chip in Maintenance panel** *(Owner: lyra-morn)*
   Display a visible warning chip or indicator in the Maintenance panel task list whenever an enabled
