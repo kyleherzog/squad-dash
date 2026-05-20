@@ -195,7 +195,10 @@ internal sealed class MaintenancePanelController {
 
                 if (!inTasksList) continue;
 
-                // Any indent-0 key other than tasks: closes the tasks block
+                // Blank lines are allowed between tasks — skip without resetting state
+                if (string.IsNullOrWhiteSpace(trimmed)) continue;
+
+                // Any non-empty indent-0 key other than tasks: closes the tasks block
                 if (indent == 0) { inTargetTask = false; inTasksList = false; continue; }
 
                 // New task item at indent 2: "  - id: <id>"
