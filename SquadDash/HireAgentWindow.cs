@@ -61,6 +61,7 @@ internal sealed class HireAgentWindow : Window {
 
     // ── PTT voice dictation ───────────────────────────────────────────────────
     private readonly PttTextBoxAttachment _pttAttachment;
+    private TextBox? _roleEditableTextBox;
 
     internal sealed record HireAgentSubmission(
         string UniverseName,
@@ -421,7 +422,7 @@ internal sealed class HireAgentWindow : Window {
                 e.Handled = true;
         };
         PreviewKeyUp += (_, e) => {
-            if (GetFocusedPttTextBox() is not null && _pttAttachment.HandlePreviewKeyUp(e))
+            if (_pttAttachment.HandlePreviewKeyUp(e))
                 e.Handled = true;
         };
     }
@@ -518,6 +519,8 @@ internal sealed class HireAgentWindow : Window {
     }
 
     private TextBox? GetFocusedPttTextBox() {
+        if (_roleComboBox.IsKeyboardFocusWithin && _roleEditableTextBox is not null)
+            return _roleEditableTextBox;
         if (_nameBox.IsKeyboardFocusWithin)            return _nameBox;
         if (_modelPreferenceBox.IsKeyboardFocusWithin) return _modelPreferenceBox;
         if (_extraGuidanceBox.IsKeyboardFocusWithin)   return _extraGuidanceBox;
@@ -967,6 +970,7 @@ internal sealed class HireAgentWindow : Window {
             editable.SetResourceReference(Control.ForegroundProperty, "LabelText");
             editable.SetResourceReference(Control.BackgroundProperty, "InputSurface");
             editable.SetResourceReference(Control.BorderBrushProperty, "InputBorder");
+            _roleEditableTextBox = editable;
             editable.Focus();
         }
     }

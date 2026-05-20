@@ -180,12 +180,15 @@ internal sealed class PttTextBoxAttachment : IDisposable {
 
         var service = _service;
         _service = null;
-        _target  = null;
 
         if (service is not null) {
             try { await service.StopAsync().ConfigureAwait(false); } catch { }
             service.Dispose();
         }
+
+        // Null _target via the dispatcher so any pending PhraseRecognized BeginInvoke
+        // callbacks (queued during service.StopAsync) run before the target is cleared.
+        await _dispatcher.InvokeAsync(() => _target = null);
 
         _stopOnCtrlRelease = false;
         _gesture.Reset();
