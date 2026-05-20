@@ -249,6 +249,7 @@ internal sealed class MaintenancePanelController {
             : new MaintenanceReportWriter(workspacePath).GetReportPaths();
 
         var separator = new Separator { Margin = new Thickness(0, 8, 0, 4) };
+        separator.SetResourceReference(Separator.BackgroundProperty, "SubtleText");
         _listPanel.Children.Add(separator);
 
         var headerLabel = new TextBlock { Text = "Recent Reports" };
