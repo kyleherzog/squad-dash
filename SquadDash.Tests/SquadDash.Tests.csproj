@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.49.0" />
+    <PackageReference Include="NAudio" Version="2.3.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="NUnit" Version="4.4.0" />
     <PackageReference Include="NUnit.Analyzers" Version="4.10.0">
@@ -96,6 +97,11 @@
     <Compile Include="..\SquadDash\AgentImagePathResolver.cs" Link="Source\AgentImagePathResolver.cs" />
     <Compile Include="..\SquadDash\BulletedTextBox.cs" Link="Source\BulletedTextBox.cs" />
     <Compile Include="..\SquadDash\HireAgentWindow.cs" Link="Source\HireAgentWindow.cs" />
+    <Compile Include="..\SquadDash\ISpeechRecognitionService.cs" Link="Source\ISpeechRecognitionService.cs" />
+    <Compile Include="..\SquadDash\SpeechRecognitionService.cs" Link="Source\SpeechRecognitionService.cs" />
+    <Compile Include="..\SquadDash\WhisperSpeechRecognitionService.cs" Link="Source\WhisperSpeechRecognitionService.cs" />
+    <Compile Include="..\SquadDash\PushToTalkWindow.cs" Link="Source\PushToTalkWindow.cs" />
+    <Compile Include="..\SquadDash\PttTextBoxAttachment.cs" Link="Source\PttTextBoxAttachment.cs" />
     <Compile Include="..\SquadDash\PromptExecutionController.cs" Link="Source\PromptExecutionController.cs" />
     <Compile Include="..\SquadDash\PromptInteractionLogic.cs" Link="Source\PromptInteractionLogic.cs" />
     <Compile Include="..\SquadDash\SquadCliAdapter.cs" Link="Source\SquadCliAdapter.cs" />

@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Controls;
+using WpfPath = System.Windows.Shapes.Path;
 
 namespace SquadDash;
 
@@ -62,28 +63,28 @@ internal sealed class PushToTalkWindow : Window
 
         var canvas = new Canvas { Width = 90, Height = 90 };
 
-        var micPath1 = new Path
+        var micPath1 = new WpfPath
         {
             Data = Geometry.Parse("M 45 60.738 C 34.715 60.738 26.3 52.322 26.3 42.037 V 18.7 C 26.3 8.415 34.715 0 45 0 C 55.285 0 63.7 8.415 63.7 18.7 V 42.037 C 63.7 52.322 55.285 60.738 45 60.738 Z")
         };
         micPath1.SetResourceReference(Shape.FillProperty, "RecordingIconFill");
         canvas.Children.Add(micPath1);
 
-        var micPath2 = new Path
+        var micPath2 = new WpfPath
         {
             Data = Geometry.Parse("M 45 70.968 C 28.987 70.968 15.958 57.94 15.958 41.927 C 15.958 40.215 17.346 38.827 19.057 38.827 C 20.769 38.827 22.157 40.215 22.157 41.927 C 22.157 54.522 32.404 64.77 45 64.77 C 57.595 64.77 67.843 54.522 67.843 41.927 C 67.843 40.215 69.23 38.827 70.942 38.827 C 72.654 38.827 74.042 40.215 74.042 41.927 C 74.042 57.94 61.013 70.968 45 70.968 Z")
         };
         micPath2.SetResourceReference(Shape.FillProperty, "RecordingIconFill");
         canvas.Children.Add(micPath2);
 
-        var micPath3 = new Path
+        var micPath3 = new WpfPath
         {
             Data = Geometry.Parse("M 45 89.213 C 43.288 89.213 41.901 87.826 41.901 86.114 V 68.655 C 41.901 66.943 43.288 65.556 45 65.556 C 46.712 65.556 48.099 66.943 48.099 68.655 V 86.114 C 48.099 87.826 46.712 89.213 45 89.213 Z")
         };
         micPath3.SetResourceReference(Shape.FillProperty, "RecordingIconFill");
         canvas.Children.Add(micPath3);
 
-        var micPath4 = new Path
+        var micPath4 = new WpfPath
         {
             Data = Geometry.Parse("M 55.451 90 H 34.549 C 32.837 90 31.45 88.613 31.45 86.901 C 31.45 85.189 32.837 83.802 34.549 83.802 H 55.451 C 57.163 83.802 58.55 85.189 58.55 86.901 C 58.55 88.613 57.163 90 55.451 90 Z")
         };
