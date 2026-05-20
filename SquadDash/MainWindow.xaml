@@ -338,6 +338,7 @@
             <RowDefinition Height="38" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -443,6 +444,10 @@
                               Header="Loop"
                               IsCheckable="True"
                               Click="ViewLoopPanelMenuItem_Click" />
+                    <MenuItem x:Name="ViewMaintenanceMenuItem"
+                              Header="Maintenance"
+                              IsCheckable="True"
+                              Click="ViewMaintenanceMenuItem_Click" />
                     <MenuItem x:Name="ViewNotesMenuItem"
                               Header="Notes"
                               IsCheckable="True"
@@ -729,6 +734,7 @@
                                           Width="Auto" />
                         <ColumnDefinition Width="14" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
@@ -1421,12 +1427,145 @@
                             </ScrollViewer>
                         </Grid>
                     </Border>
+
+                    <!-- Maintenance panel (Column 8) -->
+                    <Border x:Name="MaintenancePanelBorder"
+                            Grid.Column="8"
+                            MinWidth="200"
+                            MaxWidth="280"
+                            VerticalAlignment="Top"
+                            Margin="14,0,0,0"
+                            Padding="12"
+                            Background="{DynamicResource RosterPanelSurface}"
+                            BorderBrush="{DynamicResource RosterPanelBorder}"
+                            BorderThickness="1"
+                            CornerRadius="16"
+                            Visibility="Collapsed">
+                        <Border.Height>
+                            <MultiBinding Converter="{StaticResource MaxValueConverter}">
+                                <Binding Path="ActualHeight" ElementName="ActiveAgentsPanelBorder" />
+                                <Binding Path="ActualHeight" ElementName="InactiveAgentsPanelBorder" />
+                            </MultiBinding>
+                        </Border.Height>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <!-- Row 0: Title + badge + close button -->
+                            <DockPanel Grid.Row="0" LastChildFill="False">
+                                <Button x:Name="MaintenancePanelCloseButton"
+                                        DockPanel.Dock="Right"
+                                        Content="×"
+                                        Width="22"
+                                        Height="22"
+                                        FontSize="{DynamicResource FontSizeNormal}"
+                                        VerticalAlignment="Top"
+                                        Style="{StaticResource PanelCloseButtonStyle}"
+                                        ToolTip="Hide Maintenance panel"
+                                        Click="MaintenancePanelCloseButton_Click" />
+                                <TextBlock DockPanel.Dock="Left"
+                                           Text="Maintenance"
+                                           FontSize="{DynamicResource FontSizeLarge}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource RosterPanelTitle}"
+                                           VerticalAlignment="Center" />
+                                <!-- Unread-report badge -->
+                                <Border x:Name="MaintenancePanelBadge"
+                                        DockPanel.Dock="Left"
+                                        Width="8"
+                                        Height="8"
+                                        CornerRadius="4"
+                                        Margin="5,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Visibility="Collapsed"
+                                        ToolTip="Unread maintenance report">
+                                    <Border.Background>
+                                        <SolidColorBrush Color="#E53935" />
+                                    </Border.Background>
+                                </Border>
+                            </DockPanel>
+
+                            <!-- Row 1: Status label + Run Now button -->
+                            <DockPanel Grid.Row="1" Margin="0,6,0,0" LastChildFill="True">
+                                <Button x:Name="MaintenanceRunNowButton"
+                                        DockPanel.Dock="Right"
+                                        Content="Run Now"
+                                        Height="20"
+                                        Padding="6,0"
+                                        Margin="6,0,0,0"
+                                        FontSize="{DynamicResource FontSizeSmall}"
+                                        Style="{StaticResource ThemedButtonStyle}"
+                                        ToolTip="Start a maintenance cycle immediately"
+                                        Click="MaintenanceRunNowButton_Click" />
+                                <TextBlock x:Name="MaintenanceStatusLabel"
+                                           Text=""
+                                           Visibility="Collapsed"
+                                           VerticalAlignment="Center"
+                                           TextWrapping="NoWrap"
+                                           TextTrimming="CharacterEllipsis"
+                                           FontSize="{DynamicResource FontSizeSmall}"
+                                           Foreground="{DynamicResource SubtleText}" />
+                            </DockPanel>
+
+                            <!-- Row 2: Task list (scrollable) -->
+                            <ScrollViewer Grid.Row="2"
+                                          Margin="0,8,0,0"
+                                          VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled">
+                                <StackPanel x:Name="MaintenanceTaskListPanel" />
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
                 </Grid>
             </Grid>
         </Border>
 
 
-        <Grid x:Name="TranscriptPanelsGrid" Grid.Row="3" Grid.Column="0" Margin="0,14,0,14">
+        <!-- Maintenance "While You Were Away" banner (Row 3) — shown after a maintenance cycle completes -->
+        <Border x:Name="MaintenanceBannerBorder"
+                Grid.Row="3"
+                Grid.Column="0"
+                Margin="0,6,0,0"
+                Padding="14,10"
+                Background="{DynamicResource FollowUpSurface}"
+                BorderBrush="{DynamicResource LineColor}"
+                BorderThickness="1"
+                CornerRadius="12"
+                Visibility="Collapsed">
+            <DockPanel LastChildFill="True">
+                <Button x:Name="MaintenanceBannerDismissButton"
+                        DockPanel.Dock="Right"
+                        Content="×"
+                        Width="22"
+                        Height="22"
+                        VerticalAlignment="Center"
+                        FontSize="{DynamicResource FontSizeNormal}"
+                        Style="{StaticResource PanelCloseButtonStyle}"
+                        ToolTip="Dismiss"
+                        Click="MaintenanceBannerDismissButton_Click" />
+                <Button x:Name="MaintenanceBannerViewButton"
+                        DockPanel.Dock="Right"
+                        Height="22"
+                        Margin="0,0,8,0"
+                        Padding="8,0"
+                        FontSize="{DynamicResource FontSizeSmall}"
+                        Style="{StaticResource ThemedButtonStyle}"
+                        Click="MaintenanceBannerViewButton_Click">
+                    View Report
+                </Button>
+                <TextBlock x:Name="MaintenanceBannerTextBlock"
+                           VerticalAlignment="Center"
+                           TextWrapping="NoWrap"
+                           TextTrimming="CharacterEllipsis"
+                           FontSize="{DynamicResource FontSizeBody}"
+                           Foreground="{DynamicResource LabelText}" />
+            </DockPanel>
+        </Border>
+
+        <Grid x:Name="TranscriptPanelsGrid" Grid.Row="4" Grid.Column="0" Margin="0,14,0,14">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
@@ -1876,7 +2015,7 @@
         </Grid>
 
         <Border x:Name="PromptBorder"
-                Grid.Row="4"
+                Grid.Row="5"
                 Grid.Column="0"
                 Padding="14"
                 Background="{DynamicResource InputSurface}"

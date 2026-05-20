@@ -804,6 +804,7 @@ internal sealed class ApplicationSettingsStore {
                 ApprovalPanelVisible = state.ApprovalPanelVisible ?? existing.ApprovalPanelVisible,
                 NotesPanelVisible = state.NotesPanelVisible ?? existing.NotesPanelVisible,
                 LoopPanelVisible = state.LoopPanelVisible ?? existing.LoopPanelVisible,
+                MaintenancePanelVisible = state.MaintenancePanelVisible ?? existing.MaintenancePanelVisible,
                 DraftFollowUpsJson = state.DraftFollowUpsJson ?? existing.DraftFollowUpsJson,
                 SelectedLoopFile = state.SelectedLoopFile ?? existing.SelectedLoopFile,
                 NotesSortOrder = state.NotesSortOrder ?? existing.NotesSortOrder,
@@ -863,6 +864,12 @@ internal sealed record WorkspaceDocsPanelState
     /// <c>true</c> = user explicitly opened it via menu.
     /// </summary>
     public bool? LoopPanelVisible { get; init; }
+
+    /// <summary>
+    /// Whether the Maintenance inline panel was visible.
+    /// <c>null</c> or <c>false</c> = hidden (default). <c>true</c> = user had the panel open.
+    /// </summary>
+    public bool? MaintenancePanelVisible { get; init; }
 
     /// <summary>
     /// Follow-up attachments on the active draft tab. Persisted so they survive restart.

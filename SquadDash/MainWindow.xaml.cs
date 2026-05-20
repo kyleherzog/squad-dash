@@ -243,6 +243,13 @@ public partial class MainWindow : Window, ILiveElementLocator
     private NotesStore? _notesStore;
     private NotesPanelController? _notesPanel;
     private List<NoteItem> _noteItems = [];
+    private MaintenancePanelController? _maintenancePanel;
+    private IdleDetectionService?       _idleDetectionService;
+    private MaintenanceRunner?          _maintenanceRunner;
+    private MaintenanceStateStore?      _maintenanceStateStore;
+    private MaintenanceReportWriter?    _maintenanceReportWriter;
+    private MaintenanceReport?          _pendingMaintenanceBannerReport;
+    private DispatcherTimer?            _maintenanceBannerTimer;
     // Set true while we are programmatically moving a floating window so its
     // LocationChanged does not overwrite the saved offset.
     private bool _movingFloatingWindow;
@@ -435,6 +442,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _tasksPanelVisible = false;
     private bool _approvalPanelVisible = false;
     private bool _notesPanelVisible = false;
+    private bool _maintenancePanelVisible = false;
     private string? _watchCycleId;
     private int _watchFleetSize;
     private int _watchWaveIndex;
@@ -1066,6 +1074,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             setIsPromptRunning: v =>
             {
                 _isPromptRunning = v;
+                _idleDetectionService?.SetPromptActive(v);
                 if (v)
                 {
                     // Clear stale completion timestamp AND remove the "Completed N ago" footer
@@ -5571,12 +5580,19 @@ public partial class MainWindow : Window, ILiveElementLocator
             : "Start _Remote Access";
     }
 
+    private bool _lastSyncedLoopRunning;
+
     private void SyncLoopPanel()
     {
         if (LoopPanelBorder is null) return;
         SyncSendButton();
         LoopPanelBorder.Visibility = _loopPanelVisible ? Visibility.Visible : Visibility.Collapsed;
         bool running = IsLoopRunning;
+
+        if (running != _lastSyncedLoopRunning) {
+            _lastSyncedLoopRunning = running;
+            _idleDetectionService?.SetLoopActive(running);
+        }
 
         bool nativeMode = _settingsSnapshot.LoopMode == LoopMode.NativeAgents;
         bool busyCoordinator = _isPromptRunning && nativeMode && !running;
@@ -6478,6 +6494,10 @@ public partial class MainWindow : Window, ILiveElementLocator
             _approvalItems.Clear();
             _approvalStore?.Save(_approvalItems);
             _approvalPanel?.ReplaceAllItems(_approvalItems);
+        }));
+        _hostCommandExecutor.Register(new Commands.TriggerIdleCycleCommandHandler(() =>
+        {
+            _idleDetectionService?.ForceIdle();
         }));
 
         _pec.GetHostCommandCatalogInstruction = () =>
@@ -8500,6 +8520,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try
         {
+            _idleDetectionService?.RecordActivity();
+            ShowMaintenanceBannerIfPending();
             if (TryRecoverPromptInputFromStaleModifiers(e))
                 return;
 
@@ -11793,6 +11815,66 @@ public partial class MainWindow : Window, ILiveElementLocator
             PersistNotesPanelVisible();
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(NotesPanelCloseButton_Click), ex); }
+    }
+
+    private void ViewMaintenanceMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _maintenancePanelVisible = !_maintenancePanelVisible;
+            SyncMaintenancePanel();
+            if (ViewMaintenanceMenuItem is not null)
+                ViewMaintenanceMenuItem.IsChecked = _maintenancePanelVisible;
+            if (_maintenancePanelVisible) DismissMaintenanceBadge();
+            PersistMaintenancePanelVisible();
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(ViewMaintenanceMenuItem_Click), ex); }
+    }
+
+    private void MaintenancePanelCloseButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _maintenancePanelVisible = false;
+            SyncMaintenancePanel();
+            if (ViewMaintenanceMenuItem is not null)
+                ViewMaintenanceMenuItem.IsChecked = false;
+            PersistMaintenancePanelVisible();
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(MaintenancePanelCloseButton_Click), ex); }
+    }
+
+    private void MaintenanceRunNowButton_Click(object sender, RoutedEventArgs e)
+    {
+        try { _ = StartMaintenanceCycleAsync(); }
+        catch (Exception ex) { HandleUiCallbackException(nameof(MaintenanceRunNowButton_Click), ex); }
+    }
+
+    private void MaintenanceBannerDismissButton_Click(object sender, RoutedEventArgs e)
+    {
+        try { DismissMaintenanceBanner(); }
+        catch (Exception ex) { HandleUiCallbackException(nameof(MaintenanceBannerDismissButton_Click), ex); }
+    }
+
+    private void MaintenanceBannerViewButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            DismissMaintenanceBanner();
+            if (_pendingMaintenanceBannerReport is not null && _maintenanceReportWriter is not null)
+            {
+                var paths = _maintenanceReportWriter.GetReportPaths();
+                if (paths.Count > 0 && File.Exists(paths[0]))
+                    MarkdownDocumentWindow.Show(
+                        CanShowOwnedWindow() ? this : null,
+                        "Maintenance Report",
+                        paths[0],
+                        showSource: false,
+                        BuildMarkdownCaptureContext(),
+                        autoSave: false);
+            }
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(MaintenanceBannerViewButton_Click), ex); }
     }
 
     private void SetDocumentationMode(bool enabled, bool persistChange = true)
@@ -24987,6 +25069,19 @@ public partial class MainWindow : Window, ILiveElementLocator
                 ViewNotesMenuItem.IsChecked = true;
         }
 
+        // Restore maintenance panel visibility.
+        if (_docsPanelState.MaintenancePanelVisible == true)
+        {
+            _maintenancePanelVisible = true;
+            SyncMaintenancePanel();
+            if (ViewMaintenanceMenuItem is not null)
+                ViewMaintenanceMenuItem.IsChecked = true;
+        }
+
+        // Start idle detection so maintenance can fire automatically.
+        if (_currentWorkspace?.FolderPath is string wPath)
+            InitIdleDetection(wPath);
+
         // Restore loop panel visibility. Default is visible (true); only hide if
         // the user explicitly closed it (LoopPanelVisible == false).
         if (_docsPanelState.LoopPanelVisible == false)
@@ -26659,6 +26754,153 @@ public partial class MainWindow : Window, ILiveElementLocator
         var state = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
         _docsPanelState = state with { NotesPanelVisible = _notesPanelVisible };
         _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
+    }
+
+    private void SyncMaintenancePanel()
+    {
+        if (MaintenancePanelBorder is null) return;
+        MaintenancePanelBorder.Visibility = _maintenancePanelVisible ? Visibility.Visible : Visibility.Collapsed;
+        if (!_maintenancePanelVisible) return;
+
+        var workspacePath = _currentWorkspace?.FolderPath;
+        if (workspacePath is null) return;
+
+        if (_maintenancePanel is null)
+        {
+            _maintenancePanel = new MaintenancePanelController(
+                listPanel:         MaintenanceTaskListPanel,
+                statusLabel:       MaintenanceStatusLabel,
+                runNowButton:      MaintenanceRunNowButton,
+                getWorkspacePath:  () => _currentWorkspace?.FolderPath,
+                runNow:            () => _ = StartMaintenanceCycleAsync(),
+                toggleTaskEnabled: (taskId, enabled) => OnMaintenanceTaskToggled(taskId, enabled));
+        }
+
+        var config = MaintenanceMdParser.Parse(Path.Combine(workspacePath, ".squad", "maintenance.md"));
+        _maintenancePanel.Refresh(config, _maintenanceStateStore);
+    }
+
+    private void PersistMaintenancePanelVisible()
+    {
+        var state = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
+        _docsPanelState = state with { MaintenancePanelVisible = _maintenancePanelVisible };
+        _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
+    }
+
+    private void DismissMaintenanceBadge()
+    {
+        if (MaintenancePanelBadge is not null)
+            MaintenancePanelBadge.Visibility = Visibility.Collapsed;
+    }
+
+    private void DismissMaintenanceBanner()
+    {
+        _maintenanceBannerTimer?.Stop();
+        _maintenanceBannerTimer = null;
+        _pendingMaintenanceBannerReport = null;
+        if (MaintenanceBannerBorder is not null)
+            MaintenanceBannerBorder.Visibility = Visibility.Collapsed;
+        DismissMaintenanceBadge();
+    }
+
+    private void ShowMaintenanceBannerIfPending()
+    {
+        if (_pendingMaintenanceBannerReport is null) return;
+        var report = _pendingMaintenanceBannerReport;
+
+        int ran     = report.RanTaskIds?.Count  ?? 0;
+        int skipped = report.SkippedTaskIds?.Count ?? 0;
+        string summary = ran == 1
+            ? $"Maintenance complete — {ran} task ran, {skipped} skipped."
+            : $"Maintenance complete — {ran} tasks ran, {skipped} skipped.";
+
+        if (MaintenanceBannerTextBlock is not null)
+            MaintenanceBannerTextBlock.Text = summary;
+        if (MaintenanceBannerBorder is not null)
+            MaintenanceBannerBorder.Visibility = Visibility.Visible;
+
+        _maintenanceBannerTimer?.Stop();
+        _maintenanceBannerTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(12) };
+        _maintenanceBannerTimer.Tick += (_, _) => DismissMaintenanceBanner();
+        _maintenanceBannerTimer.Start();
+    }
+
+    private void OnMaintenanceTaskToggled(string taskId, bool enabled)
+    {
+        // Persisted via maintenance.md edit — currently a no-op placeholder.
+    }
+
+    private async Task StartMaintenanceCycleAsync()
+    {
+        var workspacePath = _currentWorkspace?.FolderPath;
+        if (workspacePath is null) return;
+
+        var config = MaintenanceMdParser.Parse(Path.Combine(workspacePath, ".squad", "maintenance.md"));
+        if (config is null) return;
+
+        _maintenanceStateStore ??= new MaintenanceStateStore(Path.Combine(workspacePath, ".squad"));
+        _maintenanceReportWriter = new MaintenanceReportWriter(workspacePath);
+
+        if (_maintenanceRunner?.IsRunning == true) return;
+
+        _maintenanceRunner = new MaintenanceRunner(
+            executePromptAsync: (prompt, ct) =>
+            {
+                var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                Dispatcher.InvokeAsync(async () =>
+                {
+                    try
+                    {
+                        await _pec.ExecutePromptAsync(prompt, addToHistory: true, clearPromptBox: false);
+                        tcs.TrySetResult();
+                    }
+                    catch (OperationCanceledException) { tcs.TrySetCanceled(ct); }
+                    catch (Exception ex) { tcs.TrySetException(ex); }
+                });
+                return tcs.Task;
+            },
+            stateStore:      _maintenanceStateStore,
+            onTaskStarted:   title => Dispatcher.InvokeAsync(() => _maintenancePanel?.OnRunnerStarted(title)),
+            onTaskCompleted: id    => Dispatcher.InvokeAsync(() => _maintenancePanel?.OnRunnerCompleted()),
+            onCompleted:     report =>
+            {
+                Dispatcher.InvokeAsync(() =>
+                {
+                    var reportPath = _maintenanceReportWriter?.WriteReport(report) ?? "";
+                    _pendingMaintenanceBannerReport = report;
+                    if (MaintenancePanelBadge is not null)
+                        MaintenancePanelBadge.Visibility = Visibility.Visible;
+                    _idleDetectionService?.SetRunnerActive(false);
+                    _maintenancePanel?.OnRunnerCompleted();
+                    var updatedConfig = MaintenanceMdParser.Parse(Path.Combine(workspacePath, ".squad", "maintenance.md"));
+                    _maintenancePanel?.Refresh(updatedConfig, _maintenanceStateStore);
+                    // Banner surfaces on next user activity (see Window_PreviewKeyDown).
+                });
+            });
+
+        _idleDetectionService?.SetRunnerActive(true);
+        _maintenancePanel?.OnRunnerStarted("starting…");
+
+        await _maintenanceRunner.StartAsync(config, workspacePath, CancellationToken.None);
+    }
+
+    private void InitIdleDetection(string workspacePath)
+    {
+        _maintenanceStateStore ??= new MaintenanceStateStore(Path.Combine(workspacePath, ".squad"));
+
+        var config = MaintenanceMdParser.Parse(Path.Combine(workspacePath, ".squad", "maintenance.md"));
+        double thresholdMinutes = config?.IdleTimeout ?? 15.0;
+
+        _idleDetectionService = new IdleDetectionService();
+        _idleDetectionService.IdleThresholdReached += () =>
+            Dispatcher.InvokeAsync(() => _ = StartMaintenanceCycleAsync());
+        _idleDetectionService.Start(thresholdMinutes);
+    }
+
+    private void StopIdleDetection()
+    {
+        _idleDetectionService?.Stop();
+        _idleDetectionService = null;
     }
 
     private void OpenNote(NoteItem note)

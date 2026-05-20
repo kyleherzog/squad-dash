@@ -67,6 +67,13 @@ internal sealed class MaintenanceStateStore {
         }
     }
 
+    /// <summary>Returns the UTC timestamp of the last recorded run for the task, or null if never run.</summary>
+    public DateTime? GetLastRunAt(string taskId) {
+        if (_tasks.TryGetValue(taskId, out var state))
+            return state.LastRunAt;
+        return null;
+    }
+
     /// <summary>Records a completed run and persists state atomically.</summary>
     public void RecordRun(string taskId, string? commitSha) {
         var entry = new TaskState {
