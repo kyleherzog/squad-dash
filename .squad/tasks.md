@@ -451,15 +451,7 @@
 
 ## 🟡 Mid Priority — Maintenance Mode (Phase 3 Polish)
 
-- [ ] **[Maintenance] Safety model enforcement — `branch` and `direct` modes** *(Owner: Arjun Sen)*
-  Extend the maintenance prompt injected per task to include explicit branch-creation instructions
-  when `safety: branch`. Inject: "Create branch `maintenance/YYYYMMDD-<task-slug>` before making
-  any code changes. Commit to that branch only." When `safety: report-only`, inject: "Do not modify
-  any source files. Generate a report only." When `safety: direct`, inject: "You may commit directly
-  to the current branch." Global safety in frontmatter is the floor; per-task may be more
-  restrictive but CANNOT be more permissive than `direct` unless the frontmatter also allows it.
-  Validate: if global safety is `report-only`, treat all per-task `branch` or `direct` overrides
-  as `report-only` (safety floor, not ceiling).
+
 
 - [x] **[Maintenance] Manual trigger button in Maintenance panel** *(Owner: Lyra Morn)*
   Add a "Run Now" button to the Maintenance panel header bar. Clicking it immediately starts
@@ -566,7 +558,8 @@
 
 > Full details in `.squad/completed-tasks.md`. This section is a compact AI-recall index only.
 
-- [x] **[Maintenance] Phase 2 tests — ReportWriter + PanelController** — ✅ Implemented (commit 0117326; 7 ReportWriter tests: file naming, content sections, duration format, prune-to-30, no-prune-under-30, newest-first sort, absent-dir safe; 8 PanelController WPF tests: idle/running header text, checkbox state from config, empty config, last-run info, null store, first-run no-throw, Run Now button lifecycle)
+- [x] **[Maintenance] Safety model enforcement — `branch` and `direct` modes** — ✅ Implemented (BuildPrompt now enforces global safety floor via ApplySafetyFloor; branch injects named `maintenance/YYYYMMDD-<slug>` branch; direct injects commit-directly message; report-only overrides more-permissive per-task safety; 5 new tests in MaintenanceRunnerTests.cs; all 17 tests pass)
+- [x] **[Maintenance] Phase 2 tests— ReportWriter + PanelController** — ✅ Implemented (commit 0117326; 7 ReportWriter tests: file naming, content sections, duration format, prune-to-30, no-prune-under-30, newest-first sort, absent-dir safe; 8 PanelController WPF tests: idle/running header text, checkbox state from config, empty config, last-run info, null store, first-run no-throw, Run Now button lifecycle)
 - [x] **[Maintenance] Phase 1 + Phase 2 + partial Phase 3 — full Maintenance Mode implementation** — ✅ Implemented (commits 8d4582b, 5030b6f, 8173256, 07ac04a, ff53624, f248b80, ed04918; IdleDetectionService, parser, state store, runner, report writer, default maintenance.md, prompt injection, WPF panel, banner, ntfy event, Argus Weld lazy registration, thread routing, Run Now button, agent roster)
 - [x] Loop — multi-turn iterations (auto-pause on quick replies, resume on user input) — ✅ Implemented (commit 26ead85; `ExecuteLoopIterationAsync`; `_loopFollowUpTcs`; `CanAutoDispatchPromptQueue` guard; 10 new tests in `LoopMultiTurnTests.cs`; 1637 pass)
 - [x] Loop — `LoopController` harden `onBeforeIteration` exceptions — ✅ Fixed (commit 7932ea8; try/catch around `await _onBeforeIteration()`; break on stop/cancel, continue otherwise; test 9 updated)
