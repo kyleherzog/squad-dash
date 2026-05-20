@@ -466,7 +466,8 @@ internal sealed class WorkspaceConversationStore {
             completedAt,
             turns,
             NormalizeSingleLine(thread.OriginAgentDisplayName),
-            NormalizeSingleLine(thread.OriginParentToolCallId));
+            NormalizeSingleLine(thread.OriginParentToolCallId),
+            thread.WasObservedAsBackgroundTask == true ? true : null);
     }
 
     private static int? NormalizeSequence(int? sequence) {
@@ -800,4 +801,5 @@ internal sealed record TranscriptThreadRecord(
     DateTimeOffset? CompletedAt,
     IReadOnlyList<TranscriptTurnRecord> Turns,
     string? OriginAgentDisplayName = null,
-    string? OriginParentToolCallId = null);
+    string? OriginParentToolCallId = null,
+    bool? WasObservedAsBackgroundTask = null);

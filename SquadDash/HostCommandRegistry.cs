@@ -36,6 +36,11 @@ internal sealed class HostCommandRegistry {
             Description:        "Clears approved entries from the Approvals panel",
             Parameters:         Array.Empty<HostCommandParameterDescriptor>(),
             ResultBehavior:     HostCommandResultBehavior.Silent),
+        new HostCommandDescriptor(
+            Name:           "trigger_idle_cycle",
+            Description:    "Forces maintenance mode to start immediately (for testing). Waits for any active prompt/loop to finish first.",
+            Parameters:     Array.Empty<HostCommandParameterDescriptor>(),
+            ResultBehavior: HostCommandResultBehavior.Silent),
     ];
 
     internal IReadOnlyList<HostCommandDescriptor> GetCommands(string? workspaceFolder) {

@@ -39,7 +39,27 @@ internal static class BuiltInPromptInjections {
                 in AuthService and add a retry on 401 before showing the error to the user.
             """);
 
+    // ── Maintenance ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Fires when the user mentions maintenance mode, idle tasks, or the while-you-were-away report.
+    /// Teaches the AI where the maintenance config lives and what format it uses.
+    /// </summary>
+    internal static readonly TriggeredPromptInjection Maintenance = new(
+        Id:      "builtin:maintenance-guidance",
+        Pattern: @"\b(maintenance|maintenance\s+mode|maintenance\s+task|maintenance\.md|idle\s+task|while\s+(I\s+was|you\s+were)\s+(away|gone|out)|background\s+task)\b",
+        InjectionText:
+            """
+            For maintenance-related tasks that run during idle time:
+            - The maintenance task file for this workspace is at `{workspaceFolder}\.squad\maintenance.md`
+            - When the AI is idle for the configured threshold, it runs tasks defined in that file
+            - Each task has a `safety:` level: `report-only` (no file changes), `branch` (new branch per task), or `direct` (current branch)
+            - Task frequency is controlled by `frequency: daily`, `frequency: per-commit`, or `frequency: always`
+            - The maintenance agent's transcript records all activity during a maintenance session
+            """);
+
     internal static IReadOnlyList<TriggeredPromptInjection> All { get; } = [
         Tasks,
+        Maintenance,
     ];
 }

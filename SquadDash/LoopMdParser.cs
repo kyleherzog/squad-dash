@@ -615,15 +615,16 @@ internal static class LoopMdParser {
         }
     }
 
-    /// <summary>Mutable builder used during options block parsing.</summary>
-    private sealed class LoopOptionBuilder {
-        public string  Key      { get; init; } = "";
-        public string? RawValue { get; set; }
-        public string? Type     { get; set; }
-        public string? Label    { get; set; }
-        public string? Hint     { get; set; }
-        public List<string>? Choices { get; set; }
-    }
 }
 
 internal sealed record LoopFileEntry(string FilePath, string DisplayName, string TooltipText = "");
+
+/// <summary>Mutable builder used during options block parsing in loop and maintenance md parsers.</summary>
+internal sealed class LoopOptionBuilder {
+    public string        Key      { get; init; } = "";
+    public string?       RawValue { get; set; }
+    public string?       Type     { get; set; }
+    public string?       Label    { get; set; }
+    public string?       Hint     { get; set; }
+    public List<string>? Choices  { get; set; }
+}

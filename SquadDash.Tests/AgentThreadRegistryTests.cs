@@ -501,6 +501,7 @@ internal sealed class AgentThreadRegistryTests {
             Assert.That(thread.CompletedAt, Is.EqualTo(snapshotAt));
             Assert.That(thread.LastObservedActivityAt, Is.EqualTo(snapshotAt));
             Assert.That(thread.IsCurrentBackgroundRun, Is.False);
+            Assert.That(thread.WasObservedAsBackgroundTask, Is.True);
             Assert.That(thread.DetailText, Does.Contain("Interrupted by restart"));
         });
     }
