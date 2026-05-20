@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 
 namespace SquadDash;
 
@@ -46,6 +47,9 @@ internal static class MaintenanceMdParser {
         string? currentOptionKey       = null;
         var optionKeys                 = new List<string>();
         var optionBuilders             = new Dictionary<string, LoopOptionBuilder>(StringComparer.Ordinal);
+        bool inMultiLineInstructions   = false;
+        int  multiLineBaseIndent       = 6;
+        var  multiLineAccumulator      = new StringBuilder();
 
         while (i < lines.Length && lines[i].Trim() != "---") {
             var line = lines[i];
@@ -54,6 +58,23 @@ internal static class MaintenanceMdParser {
             // Count leading spaces
             int indent = CountLeadingSpaces(line);
             string trimmed = line.TrimStart();
+
+            // ── Multi-line block scalar accumulation ──────────────────────────
+            if (inMultiLineInstructions) {
+                bool isBlank = string.IsNullOrWhiteSpace(line);
+                if (isBlank || indent >= multiLineBaseIndent) {
+                    if (multiLineAccumulator.Length > 0) multiLineAccumulator.Append('\n');
+                    if (!isBlank) multiLineAccumulator.Append(line[multiLineBaseIndent..]);
+                    continue;
+                }
+                // Non-blank line at shallower indent ends the block scalar.
+                if (current is not null)
+                    current.Instructions = multiLineAccumulator.ToString().TrimEnd('\n');
+                inMultiLineInstructions = false;
+                multiLineAccumulator.Clear();
+                // Fall through to process the current line normally.
+            }
+            // ──────────────────────────────────────────────────────────────────
 
             if (string.IsNullOrWhiteSpace(line))
                 continue;
@@ -74,9 +95,11 @@ internal static class MaintenanceMdParser {
             // New task item: "  - id: xxx"  (indent 2, followed by "- ")
             if (indent == 2 && trimmed.StartsWith("- ")) {
                 FinalizeCurrentTask(current, optionKeys, optionBuilders, tasks);
-                current          = new MaintenanceTaskBuilder();
-                inOptionsBlock   = false;
-                currentOptionKey = null;
+                current                = new MaintenanceTaskBuilder();
+                inOptionsBlock         = false;
+                currentOptionKey       = null;
+                inMultiLineInstructions = false;
+                multiLineAccumulator.Clear();
                 optionKeys.Clear();
                 optionBuilders.Clear();
 
@@ -92,6 +115,14 @@ internal static class MaintenanceMdParser {
                 if (trimmed == "options:" || trimmed.StartsWith("options: ")) {
                     inOptionsBlock   = true;
                     currentOptionKey = null;
+                }
+                else if (trimmed.StartsWith("instructions:") &&
+                         trimmed[(trimmed.IndexOf(':') + 1)..].Trim().Trim('"', '\'') == "|") {
+                    // YAML block scalar: collect subsequent indented lines.
+                    inMultiLineInstructions = true;
+                    multiLineBaseIndent     = indent + 2;
+                    multiLineAccumulator.Clear();
+                    inOptionsBlock = false;
                 }
                 else {
                     inOptionsBlock = false;
@@ -119,6 +150,10 @@ internal static class MaintenanceMdParser {
                 continue;
             }
         }
+
+        // Finalize any pending multi-line block scalar that ran up to the closing ---.
+        if (inMultiLineInstructions && current is not null)
+            current.Instructions = multiLineAccumulator.ToString().TrimEnd('\n');
 
         FinalizeCurrentTask(current, optionKeys, optionBuilders, tasks);
 

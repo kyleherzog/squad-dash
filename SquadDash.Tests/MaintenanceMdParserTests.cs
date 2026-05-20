@@ -315,4 +315,103 @@ internal sealed class MaintenanceMdParserTests {
         }
         finally { DeleteTempFile(path); }
     }
+
+    // ── Multi-line instructions (block scalar) ────────────────────────────────
+
+    [Test]
+    public void Parse_MultiLineInstructions_AllLinesJoined() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            tasks:
+              - id: multi-step
+                enabled: true
+                frequency: weekly
+                safety: branch
+                title: "Multi-step Task"
+                instructions: |
+                  Step one: fetch the latest data.
+                  Step two: validate the schema.
+                  Step three: publish the report.
+            ---
+            """);
+        try {
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            var task = config!.Tasks.Single(t => t.Id == "multi-step");
+            Assert.Multiple(() => {
+                Assert.That(task.Instructions, Does.Contain("Step one"));
+                Assert.That(task.Instructions, Does.Contain("Step two"));
+                Assert.That(task.Instructions, Does.Contain("Step three"));
+                Assert.That(task.Instructions, Does.Contain("\n"),
+                    "Multi-line instructions must contain newline separators");
+            });
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void Parse_MultiLineInstructionsFollowedByOptions_OptionsParsedCorrectly() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            tasks:
+              - id: with-options
+                enabled: true
+                frequency: daily
+                safety: branch
+                title: "Task With Options"
+                instructions: |
+                  Do the first thing.
+                  Then do the second thing.
+                options:
+                  mode:
+                    type: radio
+                    label: "Run mode"
+                    choices: [fast, thorough]
+            ---
+            """);
+        try {
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            var task = config!.Tasks.Single(t => t.Id == "with-options");
+            Assert.Multiple(() => {
+                Assert.That(task.Instructions, Does.Contain("Do the first thing"));
+                Assert.That(task.Instructions, Does.Contain("Then do the second thing"));
+                Assert.That(task.Options,      Is.Not.Null);
+                Assert.That(task.Options,      Has.Count.EqualTo(1));
+                Assert.That(task.Options![0].Key, Is.EqualTo("mode"));
+            });
+        }
+        finally { DeleteTempFile(path); }
+    }
+
+    [Test]
+    public void Parse_MultiLineInstructionsRunsToClosingFrontmatter_ParsedCorrectly() {
+        var path = WriteTempFile(
+            """
+            ---
+            configured: true
+            tasks:
+              - id: final-task
+                enabled: true
+                frequency: daily
+                safety: branch
+                title: "Final Task"
+                instructions: |
+                  Line A.
+                  Line B.
+            ---
+            """);
+        try {
+            var config = MaintenanceMdParser.Parse(path);
+            Assert.That(config, Is.Not.Null);
+            var task = config!.Tasks.Single(t => t.Id == "final-task");
+            Assert.That(task.Instructions, Does.Contain("Line A"));
+            Assert.That(task.Instructions, Does.Contain("Line B"));
+        }
+        finally { DeleteTempFile(path); }
+    }
 }
