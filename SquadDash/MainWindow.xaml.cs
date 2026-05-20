@@ -24022,12 +24022,12 @@ public partial class MainWindow : Window, ILiveElementLocator
     }
 
     // Accent hue offsets offered in the right-click menu, in degrees.
-    // Span ≈225° total (±105°) in 30° steps, centered on the natural complement.
-    private static readonly int[] AccentHueOffsets = [-105, -90, -60, -30, 0, 30, 60, 90, 105];
+    // Span 300° total (±150°) in 30° steps, centered on the natural complement.
+    private static readonly int[] AccentHueOffsets = [-150, -120, -90, -60, -30, 0, 30, 60, 90, 120, 150];
 
     // Default accent hue offset pre-selected when the user picks each tint stop.
     // Order matches the tint label list: Natural=0, Amber=1, Mint=2, Sage=3, Aqua=4, Sky=5, Plum=6, Blush=7.
-    private static readonly int[] DefaultAccentOffsetByTintStop = [30, -60, -90, -60, -105, 105, 105, 90];
+    private static readonly int[] DefaultAccentOffsetByTintStop = [30, -60, -90, -60, -120, 120, 120, 90];
 
     private Color ComputeAccentSwatch(int offsetDegrees)
     {
