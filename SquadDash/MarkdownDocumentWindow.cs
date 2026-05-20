@@ -727,85 +727,11 @@ internal sealed class MarkdownDocumentWindow : Window {
         Func<string, string, string, string, CancellationToken, Task<string>> reviseCallback,
         string instructions)
     {
-        if (tb.GetSelectionLength() == 0) return;
         if (string.IsNullOrWhiteSpace(instructions)) return;
-
-        var doc          = tb.Tag as MarkdownDocumentTabState;
-        var selectedText = tb.GetSelectedText();
-        var fullText     = tb.GetPlainText();
-        var selStart     = tb.GetSelectionStart();
-        var selLen       = tb.GetSelectionLength();
-        var docPath      = doc?.FilePath ?? "";
-
-        var startPointer = tb.GetTextPointerAt(selStart);
-        var endPointer   = tb.GetTextPointerAt(selStart + selLen);
-
-        RevisionHighlightAdorner? adorner   = null;
-        RevisionPendingIndicator? indicator = null;
-        EditorRevisionLock?       revLock   = null;
-
-        adorner   = RevisionHighlightAdorner.Attach(tb, startPointer, endPointer);
-        indicator = RevisionPendingIndicator.Attach(tb, endPointer);
-        revLock   = doc?.AddRevisionLock(startPointer, endPointer);
-
-        var center = new Point(Left + Width / 2, Top + Height / 2);
-        RevisionWorkingOverlay.ShowAt(center, this);
-
-        var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(120));
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                var cwd     = string.IsNullOrEmpty(docPath)
-                    ? string.Empty
-                    : System.IO.Path.GetDirectoryName(docPath) ?? string.Empty;
-                var revised = await reviseCallback(instructions, selectedText, fullText, cwd, cts.Token);
-                if (!string.IsNullOrWhiteSpace(revised))
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        adorner?.Remove();
-                        indicator?.Detach();
-                        if (revLock is not null) doc?.RemoveRevisionLock(revLock);
-                        revLock = null;
-
-                        var currentSelectedText = new TextRange(startPointer, endPointer).Text.Replace("\r\n", "\n");
-                        if (currentSelectedText == selectedText)
-                        {
-                            var replaceRange = new TextRange(startPointer, endPointer);
-                            replaceRange.Text = revised;
-                        }
-                        else
-                        {
-                            var win = new RevisionResultWindow(revised) { Owner = this };
-                            win.Show();
-                        }
-                    });
-                }
-                else
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        adorner?.Remove();
-                        indicator?.Detach();
-                        if (revLock is not null) doc?.RemoveRevisionLock(revLock);
-                    });
-                }
-            }
-            catch
-            {
-                Dispatcher.Invoke(() =>
-                {
-                    adorner?.Remove();
-                    indicator?.Detach();
-                    if (revLock is not null) doc?.RemoveRevisionLock(revLock);
-                });
-            }
-            finally
-            {
-                cts.Dispose();
-            }
-        });
+        var doc = tb.Tag as MarkdownDocumentTabState;
+        MarkdownRevisionExecutor.DirectRevise(
+            tb, doc?.FilePath ?? "", instructions, reviseCallback, this,
+            doc, onCompleted: () => RevisionCompleted?.Invoke());
     }
 
     private void PositionPopupNearCaret(Window popup, RichTextBox richTextBox, int charIndex)

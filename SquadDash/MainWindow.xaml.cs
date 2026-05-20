@@ -13635,62 +13635,10 @@ public partial class MainWindow : Window, ILiveElementLocator
         string filePath,
         string instructions)
     {
-        var selStart = textBox.GetSelectionStart();
-        var selLen   = textBox.GetSelectionLength();
-        if (selLen <= 0) return;
-
-        var originalText = textBox.GetSubstring(selStart, selLen);
-        var fullText     = textBox.GetPlainText();
-        var startPointer = textBox.GetTextPointerAt(selStart);
-        var endPointer   = textBox.GetTextPointerAt(selStart + selLen);
-
-        RevisionHighlightAdorner? highlight = RevisionHighlightAdorner.Attach(textBox, startPointer, endPointer);
-        RevisionPendingIndicator? indicator = RevisionPendingIndicator.Attach(textBox, endPointer);
-
-        ShowRevisionWorkingOverlay(new Point(Left + Width / 2, Top + Height / 2));
-
-        var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(120));
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                var cwd = string.IsNullOrEmpty(filePath)
-                    ? string.Empty
-                    : System.IO.Path.GetDirectoryName(filePath) ?? string.Empty;
-                var revised = await _bridge.RunDocRevisionAsync(
-                    instructions, originalText, fullText, cwd, cts.Token);
-                if (!string.IsNullOrWhiteSpace(revised))
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        indicator?.Detach();
-                        highlight?.Remove();
-                        var currentText = new TextRange(startPointer, endPointer).Text;
-                        if (currentText == originalText)
-                        {
-                            var replaceRange = new TextRange(startPointer, endPointer);
-                            replaceRange.Text = revised;
-                        }
-                        else
-                        {
-                            var win = new RevisionResultWindow(revised) { Owner = this };
-                            WindowPlacementHelper.CenterOnOwnerAndEnsureOnScreen(win, this);
-                            win.Show();
-                        }
-                    });
-                }
-            }
-            catch { /* swallow */ }
-            finally
-            {
-                cts.Dispose();
-                Dispatcher.Invoke(() =>
-                {
-                    indicator?.Detach();
-                    highlight?.Remove();
-                });
-            }
-        });
+        MarkdownRevisionExecutor.DirectRevise(
+            textBox, filePath, instructions,
+            (instr, sel, doc, cwd, ct) => _bridge.RunDocRevisionAsync(instr, sel, doc, cwd, ct),
+            this);
     }
 
     private static bool IsCharacterIndexVisible(System.Windows.Controls.TextBox textBox, int charIndex)
