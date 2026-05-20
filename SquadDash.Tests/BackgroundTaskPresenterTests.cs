@@ -693,6 +693,75 @@ internal sealed class BackgroundTaskPresenterTests {
         });
     }
 
+    [Test]
+    [Apartment(ApartmentState.STA)]
+    public void PromoteRestoredBackgroundAgentReports_AppendsInterruptedUnannouncedThread() {
+        var registry = MakeRegistry();
+        var startedAt = new DateTimeOffset(2026, 5, 20, 12, 56, 54, TimeSpan.FromHours(-4));
+        var thread = registry.GetOrCreateAgentThread(
+            toolCallId: "call-arjun",
+            agentId: "arjun-sen",
+            agentName: "arjun-sen",
+            agentDisplayName: "Arjun Sen",
+            agentDescription: "Backend specialist",
+            status: "interrupted",
+            prompt: "Build the maintenance backend",
+            startedAt: startedAt.ToString("O"));
+        thread.WasObservedAsBackgroundTask = true;
+        thread.StatusText = "Interrupted";
+        thread.CompletedAt = startedAt.AddMinutes(20);
+        thread.LatestResponse = "Partial implementation reached the build step.";
+
+        var appendedLines = new List<string>();
+        var persistedThreads = new List<TranscriptThreadState>();
+        var presenter = MakePresenter(
+            registry,
+            appendedLines: appendedLines,
+            persistedThreads: persistedThreads);
+
+        var promoted = presenter.PromoteRestoredBackgroundAgentReports("workspace-load");
+
+        Assert.Multiple(() => {
+            Assert.That(promoted, Is.EqualTo(1));
+            Assert.That(appendedLines, Has.Count.EqualTo(1));
+            Assert.That(appendedLines[0], Does.StartWith("Arjun Sen (arjun-sen) reported back:"));
+            Assert.That(appendedLines[0], Does.Contain("Partial implementation reached the build step."));
+            Assert.That(thread.LastCoordinatorAnnouncedResponse, Is.EqualTo(thread.LatestResponse));
+            Assert.That(persistedThreads, Is.EquivalentTo(new[] { thread }));
+        });
+    }
+
+    [Test]
+    [Apartment(ApartmentState.STA)]
+    public void PromoteRestoredBackgroundAgentReports_SkipsAlreadyAnnouncedThread() {
+        var registry = MakeRegistry();
+        var startedAt = new DateTimeOffset(2026, 5, 20, 12, 56, 54, TimeSpan.FromHours(-4));
+        var thread = registry.GetOrCreateAgentThread(
+            toolCallId: "call-arjun",
+            agentId: "arjun-sen",
+            agentName: "arjun-sen",
+            agentDisplayName: "Arjun Sen",
+            agentDescription: "Backend specialist",
+            status: "interrupted",
+            prompt: "Build the maintenance backend",
+            startedAt: startedAt.ToString("O"));
+        thread.WasObservedAsBackgroundTask = true;
+        thread.StatusText = "Interrupted";
+        thread.CompletedAt = startedAt.AddMinutes(20);
+        thread.LatestResponse = "Already surfaced.";
+        thread.LastCoordinatorAnnouncedResponse = "Already surfaced.";
+
+        var appendedLines = new List<string>();
+        var presenter = MakePresenter(registry, appendedLines: appendedLines);
+
+        var promoted = presenter.PromoteRestoredBackgroundAgentReports("workspace-load");
+
+        Assert.Multiple(() => {
+            Assert.That(promoted, Is.Zero);
+            Assert.That(appendedLines, Is.Empty);
+        });
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static AgentThreadRegistry MakeRegistry() =>

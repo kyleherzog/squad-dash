@@ -161,6 +161,36 @@ internal sealed class BackgroundTaskPresenter {
         return promotedCount;
     }
 
+    internal int PromoteRestoredBackgroundAgentReports(string reason) {
+        var promotedCount = 0;
+        foreach (var thread in _agentThreadRegistry.ThreadOrder.ToArray()) {
+            if (!ShouldPromoteRestoredBackgroundReport(thread))
+                continue;
+
+            if (TryPromoteBackgroundAgentReportToCoordinator(
+                    thread,
+                    "restored-background-report:" + reason,
+                    allowDuringCurrentTurn: false)) {
+                promotedCount++;
+            }
+        }
+
+        if (promotedCount > 0) {
+            SquadDashTrace.Write(
+                "Agents",
+                $"Promoted {promotedCount} restored background report(s) reason={NormalizePromotionReason(reason)}");
+        }
+
+        return promotedCount;
+    }
+
+    private static bool ShouldPromoteRestoredBackgroundReport(TranscriptThreadState thread) =>
+        !thread.IsPlaceholderThread &&
+        thread.WasObservedAsBackgroundTask &&
+        AgentThreadRegistry.IsTerminalBackgroundStatus(thread.StatusText) &&
+        !string.IsNullOrWhiteSpace(thread.LatestResponse) &&
+        string.IsNullOrWhiteSpace(thread.LastCoordinatorAnnouncedResponse);
+
     // ── Public-facing query ──────────────────────────────────────────────────
 
     internal bool HasBackgroundTasks() =>

@@ -14367,6 +14367,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         await _conversationManager.LoadWorkspaceConversationAsync();
         loadConvSw.Stop();
         SquadDashTrace.Write(TraceCategory.Performance, $"LOAD_CONVERSATION_END: {loadConvSw.ElapsedMilliseconds}ms");
+        _ = Dispatcher.BeginInvoke(
+            new Action(() => _backgroundTaskPresenter.PromoteRestoredBackgroundAgentReports("workspace-load")),
+            System.Windows.Threading.DispatcherPriority.ApplicationIdle);
 
         // Prune agent reports older than 2 weeks on each workspace load.
         var reportStateDir = _conversationManager.ConversationStore.GetWorkspaceStateDirectory(_currentWorkspace?.FolderPath ?? string.Empty);

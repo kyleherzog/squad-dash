@@ -10,7 +10,6 @@ using System.Text.Json;
 namespace SquadDash;
 
 internal static class Program {
-    private static readonly TimeSpan GracefulRestartWait = TimeSpan.FromMinutes(20);
     private static IWorkspacePaths _workspacePaths = null!;
 
     [STAThread]
@@ -59,7 +58,8 @@ internal static class Program {
             catch when (instances.Count > 0) {
                 SaveRestartRequest(restartStateStore, appRoot, restartRequestId!, instances);
                 restartRequestSaved = true;
-                ForceCloseRegisteredInstances(instances);
+                RequestCloseRegisteredInstances(instances);
+                WaitForRegisteredInstancesToExit(instances);
                 nextSlot = PrepareNextSlot(slotStore, activeState.ActiveSlot);
             }
 
@@ -116,7 +116,7 @@ internal static class Program {
             return 0;
 
         try {
-            WaitAndRelaunchInstances(plan.Instances, GracefulRestartWait);
+            WaitAndRelaunchInstances(plan.Instances);
         }
         finally {
             restartStateStore.ClearRequest(appRoot);
@@ -159,7 +159,7 @@ internal static class Program {
         return 0;
     }
 
-    private static void ForceCloseRegisteredInstances(IReadOnlyList<RunningInstanceRecord> instances) {
+    private static void RequestCloseRegisteredInstances(IReadOnlyList<RunningInstanceRecord> instances) {
         var trackedProcesses = new List<(RunningInstanceRecord Record, Process Process)>();
         foreach (var instance in instances) {
             try {
@@ -171,22 +171,14 @@ internal static class Program {
             }
         }
 
-        var deadline = DateTime.UtcNow.AddSeconds(15);
         foreach (var (_, process) in trackedProcesses) {
-            try {
-                while (!process.HasExited && DateTime.UtcNow < deadline) {
-                    process.WaitForExit(250);
-                }
-
-                if (!process.HasExited)
-                    process.Kill(entireProcessTree: true);
-            }
-            catch {
-            }
-            finally {
-                process.Dispose();
-            }
+            process.Dispose();
         }
+    }
+
+    private static void WaitForRegisteredInstancesToExit(IReadOnlyList<RunningInstanceRecord> instances) {
+        while (instances.Any(IsProcessAlive))
+            Thread.Sleep(250);
     }
 
     /// <summary>
@@ -195,13 +187,10 @@ internal static class Program {
     /// workspaces that were not busy) come back immediately while a busy instance
     /// finishes its current turn.
     /// </summary>
-    private static void WaitAndRelaunchInstances(
-        IReadOnlyList<RunningInstanceRecord> instances,
-        TimeSpan timeout) {
-        var deadline = DateTime.UtcNow + timeout;
+    private static void WaitAndRelaunchInstances(IReadOnlyList<RunningInstanceRecord> instances) {
         var pending = new List<RunningInstanceRecord>(instances);
 
-        while (pending.Count > 0 && DateTime.UtcNow < deadline) {
+        while (pending.Count > 0) {
             for (var i = pending.Count - 1; i >= 0; i--) {
                 if (!IsProcessAlive(pending[i])) {
                     RelaunchInstance(pending[i]);
@@ -211,22 +200,6 @@ internal static class Program {
 
             if (pending.Count > 0)
                 Thread.Sleep(250);
-        }
-
-        // Timeout: forcibly close any stragglers and relaunch them.
-        foreach (var instance in pending) {
-            TryKillInstance(instance);
-            RelaunchInstance(instance);
-        }
-    }
-
-    private static void TryKillInstance(RunningInstanceRecord instance) {
-        try {
-            using var process = Process.GetProcessById(instance.ProcessId);
-            if (!process.HasExited)
-                process.Kill(entireProcessTree: true);
-        }
-        catch {
         }
     }
 

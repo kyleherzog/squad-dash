@@ -27,16 +27,16 @@ internal sealed class HostCommandRegistryTests {
     // ── Built-in commands ─────────────────────────────────────────────────────
 
     [Test]
-    public void GetCommands_NoWorkspace_ReturnsSixBuiltInCommands() {
+    public void GetCommands_NoWorkspace_ReturnsSevenBuiltInCommands() {
         var registry = new HostCommandRegistry();
 
         var commands = registry.GetCommands(workspaceFolder: null);
 
-        Assert.That(commands, Has.Count.EqualTo(6));
+        Assert.That(commands, Has.Count.EqualTo(7));
     }
 
     [Test]
-    public void GetCommands_AllSixBuiltInCommandNamesPresent() {
+    public void GetCommands_AllSevenBuiltInCommandNamesPresent() {
         var registry = new HostCommandRegistry();
 
         var names = registry.GetCommands(workspaceFolder: null)
@@ -45,7 +45,8 @@ internal sealed class HostCommandRegistryTests {
 
         Assert.That(names, Is.EquivalentTo(new[] {
             "start_loop", "stop_loop", "get_queue_status",
-            "open_panel", "inject_text", "clear_approved"
+            "open_panel", "inject_text", "clear_approved",
+            "trigger_idle_cycle"
         }));
     }
 
@@ -169,7 +170,7 @@ internal sealed class HostCommandRegistryTests {
         var registry = new HostCommandRegistry();
         var commands = registry.GetCommands(workspace);
 
-        Assert.That(commands, Has.Count.EqualTo(6));
+        Assert.That(commands, Has.Count.EqualTo(7));
     }
 
     [Test]
@@ -182,7 +183,7 @@ internal sealed class HostCommandRegistryTests {
         var registry = new HostCommandRegistry();
         var commands = registry.GetCommands(workspace);
 
-        Assert.That(commands, Has.Count.EqualTo(6));
+        Assert.That(commands, Has.Count.EqualTo(7));
     }
 
     [Test]

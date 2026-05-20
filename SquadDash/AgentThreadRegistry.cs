@@ -764,7 +764,9 @@ internal sealed class AgentThreadRegistry {
                 StatusText = record.StatusText,
                 DetailText = record.DetailText,
                 CompletedAt = record.CompletedAt,
-                IsCurrentBackgroundRun = false
+                IsCurrentBackgroundRun = false,
+                WasObservedAsBackgroundTask = record.WasObservedAsBackgroundTask == true ||
+                                               IsPersistedBackgroundThread(record)
             };
 
             thread.SavedTurns.AddRange(record.Turns);
@@ -793,6 +795,14 @@ internal sealed class AgentThreadRegistry {
         }
         return pendingRenders;
     }
+
+    private static bool IsPersistedBackgroundThread(TranscriptThreadRecord record) =>
+        !string.IsNullOrWhiteSpace(record.ToolCallId) ||
+        !string.IsNullOrWhiteSpace(record.AgentId) ||
+        !string.IsNullOrWhiteSpace(record.AgentName) ||
+        !string.IsNullOrWhiteSpace(record.AgentDisplayName) ||
+        !string.IsNullOrWhiteSpace(record.Prompt) ||
+        record.Turns.Count > 0;
 
     private static void RecoverInterruptedRestoredThread(TranscriptThreadState thread) {
         if (thread.CompletedAt is not null || IsTerminalBackgroundStatus(thread.StatusText))

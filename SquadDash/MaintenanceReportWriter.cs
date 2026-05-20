@@ -108,6 +108,7 @@ internal sealed class MaintenanceReportWriter {
         // Files Changed
         var files = report.TaskResults
             .SelectMany(t => t.FilesChanged)
+            .Where(f => f is not null)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
             .ToList();
