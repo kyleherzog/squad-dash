@@ -370,6 +370,10 @@
                 </Setter>
             </Style>
 
+            <Style x:Key="ThemedCheckBoxStyle"
+                   TargetType="CheckBox"
+                   BasedOn="{StaticResource {x:Type CheckBox}}" />
+
             <Style x:Key="QuickReplyButtonStyle" TargetType="Button">
                 <Setter Property="Background" Value="{DynamicResource QuickReplySurface}"/>
                 <Setter Property="Foreground" Value="{DynamicResource QuickReplyText}"/>
