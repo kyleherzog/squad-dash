@@ -35,6 +35,7 @@ internal sealed class AgentStatusCard : INotifyPropertyChanged, IHaveUniqueName 
     private string _detailText;
     private Brush _accentBrush;
     private Brush _darkAccentBrush;
+    private Brush _darkSpinnerAccentBrush;
     private string _accentColorHex;
     private Visibility _cardVisibility;
     private Visibility _threadChipsVisibility;
@@ -84,6 +85,7 @@ internal sealed class AgentStatusCard : INotifyPropertyChanged, IHaveUniqueName 
         _accentColorHex = accentColorHex;
         _accentBrush = CreateAccentBrush(accentColorHex);
         _darkAccentBrush = CreateDarkAccentBrush(accentColorHex);
+        _darkSpinnerAccentBrush = CreateSpinnerDarkAccentBrush(accentColorHex);
         _cardVisibility = Visibility.Visible;
         _threadChipsVisibility = Visibility.Collapsed;
         _overflowChipVisibility = Visibility.Collapsed;
@@ -200,6 +202,11 @@ internal sealed class AgentStatusCard : INotifyPropertyChanged, IHaveUniqueName 
         : _isDarkTheme ? _darkAccentBrush
         : _accentBrush;
 
+    public Brush EffectiveSpinnerAccentBrush =>
+        _isDarkTheme && IsDynamicAgent ? DarkDynamicAccentBrush
+        : _isDarkTheme ? _darkSpinnerAccentBrush
+        : _accentBrush;
+
     public string AccentColorHex {
         get => _accentColorHex;
         set {
@@ -209,7 +216,9 @@ internal sealed class AgentStatusCard : INotifyPropertyChanged, IHaveUniqueName 
             _accentColorHex = value;
             AccentBrush = CreateAccentBrush(value);
             _darkAccentBrush = CreateDarkAccentBrush(value);
+            _darkSpinnerAccentBrush = CreateSpinnerDarkAccentBrush(value);
             OnPropertyChanged(nameof(EffectiveAccentBrush));
+            OnPropertyChanged(nameof(EffectiveSpinnerAccentBrush));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AccentColorHex)));
         }
     }
@@ -325,7 +334,11 @@ internal sealed class AgentStatusCard : INotifyPropertyChanged, IHaveUniqueName 
     private static SolidColorBrush CreateAccentBrush(string hex) =>
         ColorUtilities.CreateAccentBrush(hex);
 
-    public void NotifyThemeChanged() => OnPropertyChanged(nameof(EffectiveAccentBrush));
+    public void NotifyThemeChanged()
+    {
+        OnPropertyChanged(nameof(EffectiveAccentBrush));
+        OnPropertyChanged(nameof(EffectiveSpinnerAccentBrush));
+    }
 
     // ── Spinner activity ──────────────────────────────────────────────────
 
@@ -351,6 +364,9 @@ internal sealed class AgentStatusCard : INotifyPropertyChanged, IHaveUniqueName 
 
     private static SolidColorBrush CreateDarkAccentBrush(string hex) =>
         ColorUtilities.CreateDarkAccentBrush(hex);
+
+    private static SolidColorBrush CreateSpinnerDarkAccentBrush(string hex) =>
+        ColorUtilities.CreateSpinnerDarkAccentBrush(hex);
 
     private static bool IsStatusNoise(string statusText) {
         if (string.IsNullOrWhiteSpace(statusText))

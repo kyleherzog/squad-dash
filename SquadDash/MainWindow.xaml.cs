@@ -24027,7 +24027,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     // Default accent hue offset pre-selected when the user picks each tint stop.
     // Order matches the tint label list: Natural=0, Amber=1, Mint=2, Sage=3, Aqua=4, Sky=5, Plum=6, Blush=7.
-    private static readonly int[] DefaultAccentOffsetByTintStop = [30, -60, -90, -60, -120, 120, 120, 90];
+    private static readonly int[] DefaultAccentOffsetByTintStop = [30, -60, -90, -60, -120, 150, 120, 90];
 
     private Color ComputeAccentSwatch(int offsetDegrees)
     {

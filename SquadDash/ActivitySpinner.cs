@@ -145,13 +145,15 @@ public sealed class ActivitySpinner : FrameworkElement
 
     private void OnCardPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(AgentStatusCard.AccentColorHex) or nameof(AgentStatusCard.EffectiveAccentBrush))
+        if (e.PropertyName is nameof(AgentStatusCard.AccentColorHex)
+                           or nameof(AgentStatusCard.EffectiveAccentBrush)
+                           or nameof(AgentStatusCard.EffectiveSpinnerAccentBrush))
             SyncAccentColor();
     }
 
     private void SyncAccentColor()
     {
-        if (_subscribedCard?.EffectiveAccentBrush is SolidColorBrush scb)
+        if (_subscribedCard?.EffectiveSpinnerAccentBrush is SolidColorBrush scb)
             AccentColor = scb.Color;
     }
 
