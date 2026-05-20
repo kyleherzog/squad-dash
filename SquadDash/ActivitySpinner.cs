@@ -80,7 +80,7 @@ public sealed class ActivitySpinner : FrameworkElement
     private const double DotGrowRate = 6.0;             // lerp speed when growing (units/sec)
     private const double DotShrinkRate = 2.0;           // lerp speed when shrinking (units/sec)
     private const double PulseIncrement = 1.5;          // px added per write pulse
-    private const double DotGlowHz = 2.5;               // glow oscillation frequency
+    private const double DotGlowHz = 0.833;              // glow oscillation frequency (~3× slower)
     private const double DotBorderFraction = 0.15;      // white border = radius * 0.15
 
     // Accent color — set from the agent's card; fallback to SteelBlue
