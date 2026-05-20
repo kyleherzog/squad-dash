@@ -362,6 +362,7 @@ internal sealed class MarkdownDocumentWindow : Window {
         _tabControl = new TabControl {
             Visibility = _documents.Count > 1 ? Visibility.Visible : Visibility.Collapsed
         };
+        _tabControl.SetResourceReference(Control.StyleProperty, "ThemedTabControlStyle");
         _tabControl.SelectionChanged += TabControl_SelectionChanged;
         Grid.SetColumn(_tabControl, 0);
         _contentGrid.Children.Add(_tabControl);
@@ -371,6 +372,7 @@ internal sealed class MarkdownDocumentWindow : Window {
                 Content = document.PreviewHost,
                 Tag = document
             };
+            tabItem.SetResourceReference(Control.StyleProperty, "ThemedTabItemStyle");
             document.TabItem = tabItem;
             _tabControl.Items.Add(tabItem);
         }
