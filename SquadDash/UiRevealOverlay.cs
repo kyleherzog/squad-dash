@@ -42,6 +42,8 @@ internal sealed class UiRevealOverlay
     private TextBlock? _line3;
     private TextBlock? _line4;
     private FrameworkElement? _lastElement;
+    private HighlightAdorner? _activeAdorner;
+    private UIElement? _activeAdornerTarget;
 
     public void Activate(Window owner)
     {
@@ -65,6 +67,7 @@ internal sealed class UiRevealOverlay
         if (_popup is not null)
             _popup.IsOpen = false;
 
+        RemoveHighlight();
         _lastElement = null;
     }
 
@@ -93,8 +96,14 @@ internal sealed class UiRevealOverlay
 
             _lastElement = element;
             UpdatePopupContent(element);
-            PositionPopup(e.GetPosition(null));
+
+            // Convert window-relative position to screen coordinates for AbsolutePoint popup
+            var windowPos  = e.GetPosition(_owner);
+            var screenPos  = _owner.PointToScreen(windowPos);
+            PositionPopup(screenPos);
             _popup!.IsOpen = true;
+
+            ApplyHighlight(element);
         }
         catch { /* never throw from overlay */ }
     }
@@ -155,8 +164,41 @@ internal sealed class UiRevealOverlay
     private void PositionPopup(Point screenPos)
     {
         if (_popup is null) return;
-        _popup.HorizontalOffset = screenPos.X + 12;
-        _popup.VerticalOffset   = screenPos.Y + 12;
+        _popup.HorizontalOffset = screenPos.X + 16;
+        _popup.VerticalOffset   = screenPos.Y + 16;
+    }
+
+    private void ApplyHighlight(FrameworkElement element)
+    {
+        try
+        {
+            RemoveHighlight();
+            var layer = System.Windows.Documents.AdornerLayer.GetAdornerLayer(element);
+            if (layer is null) return;
+            var adorner = new HighlightAdorner(element);
+            layer.Add(adorner);
+            _activeAdorner       = adorner;
+            _activeAdornerTarget = element;
+        }
+        catch { }
+    }
+
+    private void RemoveHighlight()
+    {
+        try
+        {
+            if (_activeAdorner is not null && _activeAdornerTarget is not null)
+            {
+                var layer = System.Windows.Documents.AdornerLayer.GetAdornerLayer(_activeAdornerTarget);
+                layer?.Remove(_activeAdorner);
+            }
+        }
+        catch { }
+        finally
+        {
+            _activeAdorner       = null;
+            _activeAdornerTarget = null;
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -279,5 +321,39 @@ internal sealed class UiRevealOverlay
             return $"◈ dc: {dcType.Name} ({string.Join(", ", ifaces)})";
         }
         catch { return string.Empty; }
+    }
+
+    // -------------------------------------------------------------------------
+    // Highlight adorner — 1px black outer + 1px white inner, both 50% opaque
+    // -------------------------------------------------------------------------
+
+    private sealed class HighlightAdorner : System.Windows.Documents.Adorner
+    {
+        private static readonly Pen _outerPen = MakePen(0, 0, 0);
+        private static readonly Pen _innerPen = MakePen(255, 255, 255);
+
+        private static Pen MakePen(byte r, byte g, byte b)
+        {
+            var pen = new Pen(new SolidColorBrush(Color.FromArgb(128, r, g, b)), 1.0);
+            pen.Freeze();
+            return pen;
+        }
+
+        public HighlightAdorner(UIElement element) : base(element)
+        {
+            IsHitTestVisible = false;
+        }
+
+        protected override void OnRender(DrawingContext dc)
+        {
+            var w = ActualWidth;
+            var h = ActualHeight;
+            // outer black rect (0.5px inset so the stroke falls on a pixel boundary)
+            dc.DrawRectangle(null, _outerPen,
+                new Rect(0.5, 0.5, Math.Max(0, w - 1), Math.Max(0, h - 1)));
+            // inner white rect (1.5px inset)
+            dc.DrawRectangle(null, _innerPen,
+                new Rect(1.5, 1.5, Math.Max(0, w - 3), Math.Max(0, h - 3)));
+        }
     }
 }
