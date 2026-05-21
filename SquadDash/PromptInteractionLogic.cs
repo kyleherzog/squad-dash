@@ -322,6 +322,9 @@ internal static class RunButtonLabelPolicy {
         // Editing a specific queued tab.
         if (activeTabId is not null)
         {
+            // QRB awaiting answer on the rightmost tab: the item can be sent as the
+            // quick-reply answer directly, even while the loop is still running.
+            if (queuePausedAwaitingInput && isRightmostTab) return LabelSend;
             if (coordinatorBusy || queueManuallyPaused) return LabelQueue;
             // QRB state: any tab shows "Send" so the item can be dispatched immediately.
             if (queuePausedAwaitingInput) return LabelSend;

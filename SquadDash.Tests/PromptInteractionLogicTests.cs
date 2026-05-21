@@ -946,6 +946,16 @@ internal sealed class RunButtonLabelPolicyTests {
         Assert.That(label, Is.EqualTo(RunButtonLabelPolicy.LabelQueue));
     }
 
+    [Test]
+    public void Compute_ActiveTab_QueuePaused_CoordinatorBusy_RightmostTab_ReturnsSend() {
+        // QRB + rightmost tab bypasses the coordinator-busy guard so the user can
+        // answer the quick-reply directly from the queued tab even while the loop runs.
+        var label = RunButtonLabelPolicy.Compute(
+            coordinatorBusy: true, queuePausedAwaitingInput: true,
+            queueCount: 1, activeTabId: "tab-99", isRightmostTab: true);
+        Assert.That(label, Is.EqualTo(RunButtonLabelPolicy.LabelSend));
+    }
+
     // ── Edge: queueCount boundary ─────────────────────────────────────────────
 
     [TestCase(0)]

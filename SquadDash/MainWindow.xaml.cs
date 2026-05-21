@@ -1989,6 +1989,11 @@ public partial class MainWindow : Window, ILiveElementLocator
             // When the queue is idle the original direct-dispatch path is correct.
             if (_activeTabId is not null)
             {
+                if (_queuePausedNotificationFired && IsRightmostQueueTabActive())
+                {
+                    await DispatchRightmostQueuedTabAsQuickReplyAsync(_activeTabId);
+                    return;
+                }
                 if (_isPromptRunning || IsNativeLoopRunning || _queueManuallyPaused || HasPendingDirectQuickReplyAgentFollowUp())
                 {
                     OnQueueTabClicked(null);
@@ -2251,6 +2256,52 @@ public partial class MainWindow : Window, ILiveElementLocator
         catch (Exception ex)
         {
             HandleUiCallbackException(nameof(DispatchQueuedTabAsync), ex);
+        }
+    }
+
+    private async Task DispatchRightmostQueuedTabAsQuickReplyAsync(string id)
+    {
+        var item = _promptQueue.Items.FirstOrDefault(i => i.Id == id);
+        if (item is null) return;
+
+        var prompt = PromptTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(prompt)) return;
+
+        item.Text = prompt;
+
+        var entry = _lastQuickReplyEntry;
+        if (entry is not null)
+            _pec.DisableQuickReplies(entry);
+        ClearActiveQuickReplyState(entry);
+
+        _activeTabId = null;
+        SetPromptTextBoxLogicalBuffer(
+            _queuePreEditDraft ?? string.Empty,
+            _queuePreEditDraftCaretIndex,
+            _queuePreEditDraftSelectionStart,
+            _queuePreEditDraftSelectionLength,
+            "dispatch-queued-tab-as-qr-restore-draft");
+        _queuePreEditDraft = null;
+        UpdateFollowUpStrip();
+
+        _promptQueue.Remove(id);
+        if (_queueManuallyPaused || _queuePausePending)
+            SetQueuePaused(false);
+        ResetQueuePausedState();
+        SyncQueuePanel();
+
+        try
+        {
+            SquadDashTrace.Write("UI", $"Prompt sent: rightmost queued tab as quick-reply answer id={id}");
+            await _pec.ExecutePromptAsync(ApplyFollowUpHeader(ApplyDictationAnnotation(item), id), addToHistory: !item.IsSystemInjected, clearPromptBox: false);
+        }
+        catch (Exception ex)
+        {
+            HandleUiCallbackException(nameof(DispatchRightmostQueuedTabAsQuickReplyAsync), ex);
+        }
+        finally
+        {
+            _loopFollowUpTcs?.TrySetResult(true);
         }
     }
 
