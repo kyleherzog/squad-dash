@@ -1442,6 +1442,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             DocEditorToolbar.TargetRichTextBox = DocSourceTextBox;
 
+            DeveloperMenuItem.Visibility = SquadDashEnvironment.IsDeveloperMode
+                ? Visibility.Visible : Visibility.Collapsed;
+
             // Wire the search highlight adorner unconditionally (idempotent).
             if (_searchAdorner is null)
             {
@@ -11195,6 +11198,14 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             HandleUiCallbackException(nameof(RunDoctorMenuItem_Click), ex);
         }
+    }
+
+    private UiRevealOverlay? _uiRevealOverlay;
+
+    private void UiRevealMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        _uiRevealOverlay ??= new UiRevealOverlay();
+        _uiRevealOverlay.Activate(this);
     }
 
     private void ToolIconGalleryMenuItem_Click(object sender, RoutedEventArgs e)
