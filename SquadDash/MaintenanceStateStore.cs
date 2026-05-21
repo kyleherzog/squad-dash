@@ -61,6 +61,22 @@ internal sealed class MaintenanceStateStore {
                 return !string.Equals(commitState.LastCommitSha, commitSha,
                     StringComparison.OrdinalIgnoreCase);
 
+            case "weekly":
+                if (!_tasks.TryGetValue(taskId, out var weeklyState))
+                    return true;
+                if (weeklyState.LastRunAt is null)
+                    return true;
+                return weeklyState.LastRunAt.Value < DateTime.UtcNow.AddDays(-7);
+
+            case "monthly":
+                if (!_tasks.TryGetValue(taskId, out var monthlyState))
+                    return true;
+                if (monthlyState.LastRunAt is null)
+                    return true;
+                var now = DateTime.UtcNow;
+                var last = monthlyState.LastRunAt.Value;
+                return last.Year < now.Year || (last.Year == now.Year && last.Month < now.Month);
+
             case "daily":
             default:
                 if (!_tasks.TryGetValue(taskId, out var dailyState))
