@@ -2348,7 +2348,7 @@ internal static class MarkdownFlowDocumentBuilder {
             }
 
             if (trimmed.StartsWith("> ", StringComparison.Ordinal)) {
-                document.Blocks.Add(BuildQuote(trimmed[2..].Trim(), quoteFill, quoteBorder));
+                document.Blocks.Add(BuildQuote(trimmed[2..].Trim(), quoteFill, quoteBorder, foreground));
                 continue;
             }
 
@@ -2418,7 +2418,7 @@ internal static class MarkdownFlowDocumentBuilder {
         return paragraph;
     }
 
-    private static BlockUIContainer BuildQuote(string text, Brush quoteFill, Brush quoteBorder) {
+    private static BlockUIContainer BuildQuote(string text, Brush quoteFill, Brush quoteBorder, Brush foreground) {
         var paragraph = new Paragraph {
             Margin = new Thickness(0)
         };
@@ -2432,7 +2432,7 @@ internal static class MarkdownFlowDocumentBuilder {
             Padding = new Thickness(12, 8, 12, 8),
             Margin = new Thickness(0, 2, 0, 10),
             Child = new RichTextBox {
-                Document = new FlowDocument(paragraph),
+                Document = new FlowDocument(paragraph) { Foreground = foreground },
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
                 IsReadOnly = true,
