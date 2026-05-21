@@ -1083,12 +1083,7 @@ internal sealed class PromptExecutionController {
             return true;
         }
 
-        if (_getIsPromptRunning()) {
-            _enqueuePrompt(submission.PromptText, false);
-            return true;
-        }
-
-        _ = ExecutePromptAsync(submission.PromptText, addToHistory: false, clearPromptBox: false);
+        _enqueuePrompt(submission.PromptText, false);
         return true;
     }
 

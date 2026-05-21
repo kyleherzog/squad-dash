@@ -22563,6 +22563,20 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         AddWorkspaceMenuSeparator();
 
+        var hireMenuItem = new MenuItem
+        {
+            Header = "👤 _Hire New Agent",
+            Style = (Style)FindResource("ThemedMenuItemStyle")
+        };
+        hireMenuItem.Click += (_, _) =>
+        {
+            var submission = ShowHireAgentWindow();
+            if (submission is null)
+                return;
+            EnqueuePrompt(submission.PromptText, isSystemInjected: false);
+        };
+        WorkspaceMenuItem.Items.Add(hireMenuItem);
+
         OpenSquadFolderMenuItem = new MenuItem
         {
             Header = "📂 _Squad Folder",
