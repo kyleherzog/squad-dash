@@ -1509,7 +1509,7 @@
                                         ToolTip="Start a maintenance cycle immediately"
                                         Click="MaintenanceRunNowButton_Click" />
                                 <CheckBox x:Name="MaintenanceEnabledOnIdleCheckBox"
-                                          DockPanel.Dock="Right"
+                                          DockPanel.Dock="Left"
                                           Content="Enable (on idle)"
                                           VerticalAlignment="Center"
                                           Margin="0,0,8,0"
