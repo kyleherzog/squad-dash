@@ -2353,17 +2353,27 @@ internal static class MarkdownFlowDocumentBuilder {
             }
 
             if (trimmed.StartsWith("- ", StringComparison.Ordinal) || trimmed.StartsWith("* ", StringComparison.Ordinal)) {
-                var listItems = new List<string> { trimmed[2..].Trim() };
+                // Collect list items, merging indented continuation lines into the preceding item.
+                var currentItem = new System.Text.StringBuilder(trimmed[2..].Trim());
+                var listItems   = new List<string>();
                 while (index + 1 < lines.Length) {
-                    var next = lines[index + 1].Trim();
-                    if (!next.StartsWith("- ", StringComparison.Ordinal) &&
-                        !next.StartsWith("* ", StringComparison.Ordinal)) {
+                    var nextRaw = lines[index + 1];
+                    var next    = nextRaw.Trim();
+                    if (next.StartsWith("- ", StringComparison.Ordinal) || next.StartsWith("* ", StringComparison.Ordinal)) {
+                        // New sibling list item.
+                        listItems.Add(currentItem.ToString());
+                        currentItem = new System.Text.StringBuilder(next[2..].Trim());
+                        index++;
+                    } else if (!string.IsNullOrWhiteSpace(next) &&
+                               nextRaw.Length > 0 && char.IsWhiteSpace(nextRaw[0])) {
+                        // Indented continuation of the current item — join as a single line.
+                        currentItem.Append(' ').Append(next);
+                        index++;
+                    } else {
                         break;
                     }
-
-                    listItems.Add(next[2..].Trim());
-                    index++;
                 }
+                listItems.Add(currentItem.ToString());
 
                 document.Blocks.Add(BuildList(listItems));
                 continue;
