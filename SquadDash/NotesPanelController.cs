@@ -131,18 +131,42 @@ internal sealed class NotesPanelController {
 
         row.Child = titleLabel;
 
-        // ── Hover tooltip ─────────────────────────────────────────────────────
-        if (_loadPreview is not null)
-        {
-            var tooltip = new ToolTip { MaxWidth = 190, Placement = System.Windows.Controls.Primitives.PlacementMode.Right };
-            tooltip.SetResourceReference(ToolTip.BackgroundProperty, "PopupSurface");
+        // ── Hover popup ───────────────────────────────────────────────────────────
+        if (_loadPreview is not null) {
+            MarkdownHoverPopup.Attach(
+                row,
+                buildHeader: () => {
+                    var ts      = DateTimeOffset.FromUnixTimeSeconds(note.CreatedAt);
+                    var relTime = StatusTimingPresentation.FormatRelativeTimestamp(ts);
 
-            tooltip.Opened += (_, _) =>
-            {
-                tooltip.Content = BuildTooltipContent(note);
-            };
-            row.ToolTip = tooltip;
-            ToolTipService.SetInitialShowDelay(row, 600);
+                    var headerPanel = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+
+                    var titleBlock = new TextBlock {
+                        Text         = note.Title,
+                        FontWeight   = FontWeights.SemiBold,
+                        TextTrimming = TextTrimming.CharacterEllipsis,
+                        MaxWidth     = 165,
+                    };
+                    titleBlock.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeBody");
+                    titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+
+                    var separatorBlock = new TextBlock { Text = " — " };
+                    separatorBlock.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeBody");
+                    separatorBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+
+                    var timeBlock = new TextBlock { Text = relTime };
+                    timeBlock.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
+                    timeBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+
+                    headerPanel.Children.Add(titleBlock);
+                    headerPanel.Children.Add(separatorBlock);
+                    headerPanel.Children.Add(timeBlock);
+                    return headerPanel;
+                },
+                getMarkdown: () => _loadPreview!(note),
+                placement:   System.Windows.Controls.Primitives.PlacementMode.Right,
+                maxWidth:    320,
+                maxHeight:   200);
         }
 
         // Single click → open note
@@ -155,59 +179,6 @@ internal sealed class NotesPanelController {
         row.ContextMenu = BuildRowContextMenu(note, row, titleLabel);
 
         return row;
-    }
-
-    private object BuildTooltipContent(NoteItem note)
-    {
-        var panel = new StackPanel { Margin = new Thickness(4, 4, 4, 6), MaxWidth = 267 };
-
-        // Header: title — relative time
-        var ts = DateTimeOffset.FromUnixTimeSeconds(note.CreatedAt);
-        var relTime = StatusTimingPresentation.FormatRelativeTimestamp(ts);
-
-        var headerPanel = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
-        var titleBlock = new TextBlock
-        {
-            Text       = note.Title,
-            FontWeight = FontWeights.SemiBold,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxWidth   = 165,
-        };
-        titleBlock.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBody");
-        titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
-        var separatorBlock = new TextBlock { Text = " — " };
-        separatorBlock.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBody");
-        separatorBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
-        var timeBlock = new TextBlock { Text = relTime };
-        timeBlock.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeSmall");
-        timeBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
-        headerPanel.Children.Add(titleBlock);
-        headerPanel.Children.Add(separatorBlock);
-        headerPanel.Children.Add(timeBlock);
-        panel.Children.Add(headerPanel);
-
-        // Content preview
-        var content = _loadPreview!(note);
-        var preview = string.IsNullOrWhiteSpace(content) ? "(empty)" : TruncatePreview(content, 300);
-        var bodyBlock = new TextBlock
-        {
-            Text         = preview,
-            TextWrapping = TextWrapping.Wrap,
-            MaxWidth     = 267,
-        };
-        bodyBlock.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeSmall");
-        bodyBlock.SetResourceReference(TextBlock.ForegroundProperty, "ImportantText");
-        panel.Children.Add(bodyBlock);
-
-        return panel;
-    }
-
-    private static string TruncatePreview(string text, int maxChars)
-    {
-        var trimmed = text.Trim();
-        if (trimmed.Length <= maxChars) return trimmed;
-        var cut = trimmed.LastIndexOf(' ', maxChars);
-        return cut > 0 ? trimmed[..cut] + "…" : trimmed[..maxChars] + "…";
     }
 
     private ContextMenu BuildRowContextMenu(NoteItem note, Border row, TextBlock titleLabel) {

@@ -387,7 +387,12 @@ internal sealed class MaintenancePanelController {
         };
 
         if (!string.IsNullOrWhiteSpace(task.Instructions))
-            row.ToolTip = MakeInstructionsToolTip(task.Instructions);
+            MarkdownHoverPopup.Attach(
+                row,
+                buildHeader: null,
+                getMarkdown: () => task.Instructions,
+                maxWidth:    400,
+                maxHeight:   200);
 
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -535,26 +540,6 @@ internal sealed class MaintenancePanelController {
             Content         = tb,
         };
         tip.SetResourceReference(ToolTip.BackgroundProperty, "InputSurface");
-        tip.SetResourceReference(ToolTip.BorderBrushProperty, "InputBorder");
-        return tip;
-    }
-
-    private static ToolTip MakeInstructionsToolTip(string instructions) {
-        if (string.IsNullOrWhiteSpace(instructions)) return null!;
-        var tb = new TextBlock {
-            Text         = instructions.Trim(),
-            TextWrapping = TextWrapping.Wrap,
-            MaxWidth     = 380,
-        };
-        tb.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
-        tb.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
-        var tip = new ToolTip {
-            BorderThickness = new Thickness(1),
-            Padding         = new Thickness(8, 6, 8, 6),
-            Content         = tb,
-            MaxWidth        = 400,
-        };
-        tip.SetResourceReference(ToolTip.BackgroundProperty,  "InputSurface");
         tip.SetResourceReference(ToolTip.BorderBrushProperty, "InputBorder");
         return tip;
     }

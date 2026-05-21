@@ -32,7 +32,7 @@ internal sealed class TasksPanelController {
     private string    _filterText = string.Empty;
     private MenuItem? _toggleCompletedItem;
     private readonly List<MenuItem> _allToggleItems = [];
-    private DateTime  _lastPopupShownTime = DateTime.MinValue;
+
 
     // ── Construction ─────────────────────────────────────────────────────────
 
@@ -263,190 +263,20 @@ internal sealed class TasksPanelController {
 
         row.Child = grid;
 
-        // Popup content is built lazily on first open so Refresh() stays cheap.
-        {
-            var contentStack = new StackPanel { Margin = new Thickness(10) };
-
-            var titleBlock = new TextBlock {
-                Text         = item.Text,
-                FontWeight   = FontWeights.SemiBold,
-                TextWrapping = TextWrapping.Wrap,
-                MaxWidth     = 300,
-            };
-            titleBlock.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeNormal");
-            titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
-            contentStack.Children.Add(titleBlock);
-
-            var popupBorder = new Border {
-                Child           = contentStack,
-                Padding         = new Thickness(0),
-                BorderThickness = new Thickness(1),
-                MinWidth        = 220,
-                MaxWidth        = 340,
-            };
-
-            var popup = new Popup {
-                Child              = popupBorder,
-                PlacementTarget    = row,
-                Placement          = PlacementMode.Left,
-                StaysOpen          = true,
-                AllowsTransparency = true,
-            };
-
-            bool brushesResolved = false;
-            void ResolveBrushes() {
-                if (brushesResolved) return;
-                brushesResolved = true;
-                popupBorder.Background  = (row.TryFindResource("PopupSurface")      as Brush)
-                                       ?? new SolidColorBrush(Color.FromRgb(0x30, 0x2C, 0x28));
-                popupBorder.BorderBrush = (row.TryFindResource("ActivePanelBorder") as Brush)
-                                       ?? new SolidColorBrush(Color.FromRgb(0x55, 0x4E, 0x47));
-            }
-
-            // FlowDocument/viewer is deferred until the popup first opens.
-            bool contentBuilt = false;
-            void EnsureContentBuilt() {
-                if (contentBuilt) return;
-                contentBuilt = true;
-                if (!string.IsNullOrEmpty(item.Description)) {
-                    var doc = MarkdownFlowDocumentBuilder.Build(item.Description);
-                    doc.TextAlignment = TextAlignment.Left;
-                    var viewer = new FlowDocumentScrollViewer {
-                        Document                    = doc,
-                        MaxWidth                    = 320,
-                        MaxHeight                   = 220,
-                        Margin                      = new Thickness(0, 6, 0, 0),
-                        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                    };
-                    contentStack.Children.Add(viewer);
-                } else {
-                    var noDesc = new TextBlock {
-                        Text      = "No description",
-                        FontStyle = FontStyles.Italic,
-                        Margin    = new Thickness(0, 4, 0, 0),
-                        Opacity   = 0.6,
-                    };
-                    noDesc.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeSmall");
-                    noDesc.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
-                    contentStack.Children.Add(noDesc);
-                }
-            }
-
-            bool isFading = false;
-            bool isMouseOverPopup = false;
-            DispatcherTimer? fadeDelayTimer = null;
-            DispatcherTimer? openTimer = null;
-
-            void CancelPendingFade() {
-                fadeDelayTimer?.Stop();
-                fadeDelayTimer = null;
-            }
-
-            void CancelFade() {
-                CancelPendingFade();
-                if (!isFading) return;
-                popupBorder.BeginAnimation(UIElement.OpacityProperty, null);
-                popupBorder.Opacity = 1.0;
-                isFading = false;
-            }
-
-            void BeginFadeOut() {
-                if (!popup.IsOpen || isFading || isMouseOverPopup) return;
-                isFading = true;
-                var anim = new DoubleAnimation(1.0, 0.0, TimeSpan.FromMilliseconds(350)) {
-                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
+        MarkdownHoverPopup.Attach(
+            row,
+            buildHeader: () => {
+                var titleBlock = new TextBlock {
+                    Text         = item.Text,
+                    FontWeight   = FontWeights.SemiBold,
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxWidth     = 300,
                 };
-                anim.Completed += (_, _) => {
-                    popup.IsOpen = false;
-                    popupBorder.BeginAnimation(UIElement.OpacityProperty, null);
-                    popupBorder.Opacity = 1.0;
-                    isFading = false;
-                };
-                popupBorder.BeginAnimation(UIElement.OpacityProperty, anim);
-            }
-
-            // Deferred fade: waits delayMs before actually fading so the mouse has time to
-            // travel from the row into the popup.
-            void ScheduleFadeOut(int delayMs = 500) {
-                CancelPendingFade();
-                if (!popup.IsOpen || isMouseOverPopup) return;
-                fadeDelayTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(delayMs) };
-                fadeDelayTimer.Tick += (_, _) => {
-                    fadeDelayTimer!.Stop();
-                    fadeDelayTimer = null;
-                    BeginFadeOut();
-                };
-                fadeDelayTimer.Start();
-            }
-
-            void OpenPopup() {
-                if (popup.IsOpen || isFading) return;
-                ResolveBrushes();
-                EnsureContentBuilt();
-                popupBorder.BeginAnimation(UIElement.OpacityProperty, null);
-                popupBorder.Opacity = 1.0;
-                popup.IsOpen = true;
-                _lastPopupShownTime = DateTime.Now;
-            }
-
-            // instant=true skips the 400 ms hover-dwell delay when the user is sliding
-            // between tasks and a popup was recently visible.
-            void StartOpenTimer(bool instant = false) {
-                openTimer?.Stop();
-                openTimer = null;
-                if (instant) {
-                    OpenPopup();
-                } else {
-                    openTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
-                    openTimer.Tick += (_, _) => {
-                        openTimer!.Stop();
-                        openTimer = null;
-                        OpenPopup();
-                    };
-                    openTimer.Start();
-                }
-            }
-
-            popupBorder.MouseEnter += (_, _) => {
-                isMouseOverPopup = true;
-                CancelFade();
-            };
-            popupBorder.MouseLeave += (_, _) => {
-                isMouseOverPopup = false;
-                BeginFadeOut();
-            };
-
-            row.MouseEnter += (_, _) => {
-                // Cancel any in-progress fade so the popup snaps back to full opacity
-                // if the mouse returns while it was fading away.
-                CancelFade();
-                if (!popup.IsOpen) {
-                    bool instant = (DateTime.Now - _lastPopupShownTime).TotalMilliseconds < 1000;
-                    StartOpenTimer(instant);
-                }
-            };
-
-            row.MouseLeave += (_, _) => {
-                openTimer?.Stop();
-                openTimer = null;
-                ScheduleFadeOut(500);
-            };
-
-            row.PreviewMouseDown += (_, _) => BeginFadeOut();
-
-            // Stop all timers and close the popup when the row is removed from the panel
-            // (e.g. on Refresh()), preventing timer accumulation.
-            row.Unloaded += (_, _) => {
-                openTimer?.Stop();
-                openTimer = null;
-                fadeDelayTimer?.Stop();
-                fadeDelayTimer = null;
-                if (popup.IsOpen) {
-                    popupBorder.BeginAnimation(UIElement.OpacityProperty, null);
-                    popup.IsOpen = false;
-                }
-            };
-        }
+                titleBlock.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeNormal");
+                titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
+                return titleBlock;
+            },
+            getMarkdown: () => item.Description);
 
         return row;
     }
