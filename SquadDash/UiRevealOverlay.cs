@@ -112,14 +112,29 @@ internal sealed class UiRevealOverlay
                 current = VisualTreeHelper.GetParent(current);
             }
 
-            if (element is null || ReferenceEquals(element, _lastElement)) return;
-            _lastElement = element;
+            if (element is null) return;
 
-            UpdatePopupContent(element);
+            // WPF ToolTip popups are IsHitTestVisible=false, so mouse events always
+            // hit the trigger element beneath the tooltip, not the tooltip contents.
+            // Check if the hovered element (or an ancestor) has an open ToolTip and,
+            // if so, inspect the tooltip's visual tree instead.
+            var openTip = FindOpenToolTip(element);
+            if (openTip is not null)
+            {
+                if (ReferenceEquals(openTip, _lastElement)) return;
+                _lastElement = openTip;
+                UpdatePopupContentForTooltip(openTip);
+                RemoveHighlight(); // no AdornerLayer inside tooltip HWND
+            }
+            else
+            {
+                if (ReferenceEquals(element, _lastElement)) return;
+                _lastElement = element;
+                UpdatePopupContent(element);
+                ApplyHighlight(element);
+            }
 
-            // Position popup near the cursor.  Mouse.GetPosition works even when
-            // the pointer is inside a ToolTip HWND because WPF translates from
-            // Win32 cursor pos internally.
+            // Position popup near the cursor.
             try
             {
                 var ownerRelative = Mouse.GetPosition(_owner);
@@ -138,9 +153,20 @@ internal sealed class UiRevealOverlay
             }
 
             _popup!.IsOpen = true;
-            ApplyHighlight(element);
         }
         catch { /* never throw from overlay */ }
+    }
+
+    private static ToolTip? FindOpenToolTip(FrameworkElement element)
+    {
+        var current = (DependencyObject)element;
+        for (int depth = 0; depth < 10 && current is not null; depth++)
+        {
+            if (current is FrameworkElement fe && fe.ToolTip is ToolTip { IsOpen: true } tip)
+                return tip;
+            current = VisualTreeHelper.GetParent(current);
+        }
+        return null;
     }
 
     // -------------------------------------------------------------------------
@@ -229,6 +255,44 @@ internal sealed class UiRevealOverlay
     // -------------------------------------------------------------------------
     // Content building
     // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Shows a summary of all DynamicResource keys used anywhere in the tooltip's
+    /// visual tree — this is what the user cares about when inspecting themed tooltips.
+    /// </summary>
+    private void UpdatePopupContentForTooltip(ToolTip tip)
+    {
+        if (_line1 is null) return;
+        try
+        {
+            var contentType = tip.Content?.GetType().Name ?? "ToolTip";
+            _line1.Text = $"ToolTip → {contentType}";
+
+            // Collect every DynamicResource key from every element in the tooltip tree.
+            var keys = new List<string>();
+            CollectAllResourceKeysInTree(tip, keys);
+            var distinct = keys.Distinct().ToList();
+
+            if (_line2 is not null)
+            {
+                _line2.Text = distinct.Count > 0 ? "◈ " + string.Join(", ", distinct) : string.Empty;
+                _line2.Visibility = string.IsNullOrEmpty(_line2.Text) ? Visibility.Collapsed : Visibility.Visible;
+            }
+            if (_line3 is not null) { _line3.Text = string.Empty; _line3.Visibility = Visibility.Collapsed; }
+            if (_line4 is not null) { _line4.Text = string.Empty; _line4.Visibility = Visibility.Collapsed; }
+        }
+        catch { if (_line1 is not null) _line1.Text = "(error reading tooltip)"; }
+    }
+
+    private static void CollectAllResourceKeysInTree(DependencyObject node, List<string> keys)
+    {
+        if (node is FrameworkElement fe)
+            CollectResourceKeys(fe, keys, prefix: null);
+
+        int count = VisualTreeHelper.GetChildrenCount(node);
+        for (int i = 0; i < count; i++)
+            CollectAllResourceKeysInTree(VisualTreeHelper.GetChild(node, i), keys);
+    }
 
     private void UpdatePopupContent(FrameworkElement element)
     {
