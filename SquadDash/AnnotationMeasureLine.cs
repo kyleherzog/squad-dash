@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Input;
 
 namespace SquadDash;
 
@@ -41,4 +42,10 @@ internal sealed class AnnotationMeasureLine {
 
     /// <summary>Wide transparent hit-test proxy line, enables click/drag anywhere along the shaft.</summary>
     public Line HitLine { get; set; } = null!;
+
+    /// <summary>Drag handle at <see cref="StartPt"/> (left end for H, top end for V). Hidden unless selected.</summary>
+    public Ellipse Handle1 { get; set; } = null!;
+
+    /// <summary>Drag handle at <see cref="EndPt"/> (right end for H, bottom end for V). Hidden unless selected.</summary>
+    public Ellipse Handle2 { get; set; } = null!;
 }

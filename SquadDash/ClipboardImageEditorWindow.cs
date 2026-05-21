@@ -183,6 +183,10 @@ internal sealed class ClipboardImageEditorWindow : Window {
     private Point _measureLineDragOrigStart;
     private Point _measureLineDragOrigEnd;
 
+    // Measure-line handle-drag sub-state
+    private bool _mlDraggingHandle;   // true when an endpoint handle is being dragged
+    private bool _mlDraggingHandle1;  // true = StartPt handle, false = EndPt handle
+
     // Measure-line drag-to-draw state
     private bool _creatingMeasureLine;
     private Point _measureLineAnchor;
@@ -2399,6 +2403,13 @@ internal sealed class ClipboardImageEditorWindow : Window {
             _selectedMeasureLine = null;
             e.Handled = true;
         }
+        else if (e.Key == Key.Delete && _selectedText != null && _editingText == null) {
+            PushUndo();
+            var toDelete = _selectedText;
+            SelectText(null);
+            RemoveTextAnnotation(toDelete);
+            e.Handled = true;
+        }
         else if (e.Key == Key.Delete && !_sel.IsEmpty) {
             PushUndo();
             _sel = Rect.Empty;
@@ -2668,11 +2679,11 @@ internal sealed class ClipboardImageEditorWindow : Window {
         Panel.SetZIndex(head2, 5);
         _canvas.Children.Add(head2);
 
-        var cap1 = new Line { Stroke = stroke, StrokeThickness = 2, IsHitTestVisible = false };
+        var cap1 = new Line { Stroke = stroke, StrokeThickness = 2, Opacity = 0.5, IsHitTestVisible = false };
         Panel.SetZIndex(cap1, 5);
         _canvas.Children.Add(cap1);
 
-        var cap2 = new Line { Stroke = stroke, StrokeThickness = 2, IsHitTestVisible = false };
+        var cap2 = new Line { Stroke = stroke, StrokeThickness = 2, Opacity = 0.5, IsHitTestVisible = false };
         Panel.SetZIndex(cap2, 5);
         _canvas.Children.Add(cap2);
 
@@ -2702,26 +2713,122 @@ internal sealed class ClipboardImageEditorWindow : Window {
         _canvas.Children.Add(badge);
 
         // Hit line (transparent, wider for clicking)
-        var hitLine = new Line { Stroke = Brushes.Transparent, StrokeThickness = 14, IsHitTestVisible = true, Cursor = Cursors.Hand };
+        var hitLine = new Line { Stroke = Brushes.Transparent, StrokeThickness = 14, IsHitTestVisible = true, Cursor = Cursors.Arrow };
         Panel.SetZIndex(hitLine, 4);
         _canvas.Children.Add(hitLine);
+
+        // Endpoint drag handles — visible only when the line is selected
+        var endpointCursor = isH ? Cursors.SizeWE : Cursors.SizeNS;
+        var handle1 = new Ellipse {
+            Width = 8, Height = 8, Fill = Brushes.White, Stroke = Brushes.Black, StrokeThickness = 1,
+            Cursor = endpointCursor, Visibility = Visibility.Hidden, IsHitTestVisible = true
+        };
+        var handle2 = new Ellipse {
+            Width = 8, Height = 8, Fill = Brushes.White, Stroke = Brushes.Black, StrokeThickness = 1,
+            Cursor = endpointCursor, Visibility = Visibility.Hidden, IsHitTestVisible = true
+        };
+        Panel.SetZIndex(handle1, 10);
+        Panel.SetZIndex(handle2, 10);
+        _canvas.Children.Add(handle1);
+        _canvas.Children.Add(handle2);
 
         var ml = new AnnotationMeasureLine {
             StartPt = p1, EndPt = p2, IsHorizontal = isH, LineColor = lineColor,
             ShadowLine = shadow, ShadowHead1 = shadowH1, ShadowHead2 = shadowH2,
             ShadowCap1 = shadowCap1, ShadowCap2 = shadowCap2,
             MainLine = main, Head1 = head1, Head2 = head2, Cap1 = cap1, Cap2 = cap2,
-            LabelBadge = badge, LabelText = labelText, HitLine = hitLine
+            LabelBadge = badge, LabelText = labelText, HitLine = hitLine,
+            Handle1 = handle1, Handle2 = handle2
         };
         _measureLines.Add(ml);
 
+        // Body drag — select + translate the whole line
         hitLine.MouseLeftButtonDown += (_, e2) => {
             SelectMeasureLine(ml);
+            _preDragSnapshot = CaptureSnapshot();
+            _draggingMeasureLine = ml;
+            _measureLineDragStart = e2.GetPosition(_canvas);
+            _measureLineDragOrigStart = ml.StartPt;
+            _measureLineDragOrigEnd = ml.EndPt;
+            hitLine.CaptureMouse();
+            e2.Handled = true;
+        };
+        hitLine.MouseMove += (_, e2) => {
+            if (_draggingMeasureLine != ml || _mlDraggingHandle) return;
+            var pt = e2.GetPosition(_canvas);
+            var dx = pt.X - _measureLineDragStart.X;
+            var dy = pt.Y - _measureLineDragStart.Y;
+            ml.StartPt = new Point(_measureLineDragOrigStart.X + dx, _measureLineDragOrigStart.Y + dy);
+            ml.EndPt   = new Point(_measureLineDragOrigEnd.X   + dx, _measureLineDragOrigEnd.Y   + dy);
+            UpdateMeasureLineGeometry(ml);
+            e2.Handled = true;
+        };
+        hitLine.MouseLeftButtonUp += (_, e2) => {
+            if (_draggingMeasureLine != ml || _mlDraggingHandle) return;
+            CommitDragUndo();
+            _draggingMeasureLine = null;
+            hitLine.ReleaseMouseCapture();
             e2.Handled = true;
         };
         hitLine.MouseRightButtonDown += (_, e2) => {
             SelectMeasureLine(ml);
             ShowColorPickerForMeasureLine(ml);
+            e2.Handled = true;
+        };
+
+        // Handle1 drag — moves StartPt along the constrained axis
+        handle1.MouseLeftButtonDown += (_, e2) => {
+            SelectMeasureLine(ml);
+            _preDragSnapshot = CaptureSnapshot();
+            _draggingMeasureLine = ml;
+            _mlDraggingHandle = true;
+            _mlDraggingHandle1 = true;
+            handle1.CaptureMouse();
+            e2.Handled = true;
+        };
+        handle1.MouseMove += (_, e2) => {
+            if (_draggingMeasureLine != ml || !_mlDraggingHandle || !_mlDraggingHandle1) return;
+            var pt = e2.GetPosition(_canvas);
+            ml.StartPt = ml.IsHorizontal
+                ? new Point(Math.Min(pt.X, ml.EndPt.X - 8), ml.StartPt.Y)
+                : new Point(ml.StartPt.X, Math.Min(pt.Y, ml.EndPt.Y - 8));
+            UpdateMeasureLineGeometry(ml);
+            e2.Handled = true;
+        };
+        handle1.MouseLeftButtonUp += (_, e2) => {
+            if (_draggingMeasureLine != ml || !_mlDraggingHandle) return;
+            CommitDragUndo();
+            _draggingMeasureLine = null;
+            _mlDraggingHandle = false;
+            handle1.ReleaseMouseCapture();
+            e2.Handled = true;
+        };
+
+        // Handle2 drag — moves EndPt along the constrained axis
+        handle2.MouseLeftButtonDown += (_, e2) => {
+            SelectMeasureLine(ml);
+            _preDragSnapshot = CaptureSnapshot();
+            _draggingMeasureLine = ml;
+            _mlDraggingHandle = true;
+            _mlDraggingHandle1 = false;
+            handle2.CaptureMouse();
+            e2.Handled = true;
+        };
+        handle2.MouseMove += (_, e2) => {
+            if (_draggingMeasureLine != ml || !_mlDraggingHandle || _mlDraggingHandle1) return;
+            var pt = e2.GetPosition(_canvas);
+            ml.EndPt = ml.IsHorizontal
+                ? new Point(Math.Max(pt.X, ml.StartPt.X + 8), ml.EndPt.Y)
+                : new Point(ml.EndPt.X, Math.Max(pt.Y, ml.StartPt.Y + 8));
+            UpdateMeasureLineGeometry(ml);
+            e2.Handled = true;
+        };
+        handle2.MouseLeftButtonUp += (_, e2) => {
+            if (_draggingMeasureLine != ml || !_mlDraggingHandle) return;
+            CommitDragUndo();
+            _draggingMeasureLine = null;
+            _mlDraggingHandle = false;
+            handle2.ReleaseMouseCapture();
             e2.Handled = true;
         };
 
@@ -2797,6 +2904,12 @@ internal sealed class ClipboardImageEditorWindow : Window {
         by = Math.Max(0, Math.Min(_canvas.Height - bh, by));
         Canvas.SetLeft(ml.LabelBadge, bx);
         Canvas.SetTop(ml.LabelBadge, by);
+
+        // Position endpoint handles (centred on each endpoint)
+        Canvas.SetLeft(ml.Handle1, p1.X - 4);
+        Canvas.SetTop(ml.Handle1,  p1.Y - 4);
+        Canvas.SetLeft(ml.Handle2, p2.X - 4);
+        Canvas.SetTop(ml.Handle2,  p2.Y - 4);
     }
 
     private static void SetArrowHeadPoints(Polygon poly, double x, double y, double aLen, double aHalf, bool goingLeft, bool vertical = false) {
@@ -2832,15 +2945,23 @@ internal sealed class ClipboardImageEditorWindow : Window {
         _canvas.Children.Remove(ml.Cap2);
         _canvas.Children.Remove(ml.LabelBadge);
         _canvas.Children.Remove(ml.HitLine);
+        _canvas.Children.Remove(ml.Handle1);
+        _canvas.Children.Remove(ml.Handle2);
         _measureLines.Remove(ml);
     }
 
     private void SelectMeasureLine(AnnotationMeasureLine? ml) {
+        if (_selectedMeasureLine != null && _selectedMeasureLine != ml) {
+            _selectedMeasureLine.Handle1.Visibility = Visibility.Hidden;
+            _selectedMeasureLine.Handle2.Visibility = Visibility.Hidden;
+        }
         _selectedMeasureLine = ml;
         if (ml != null) {
             if (_selectedArrow != null) SelectArrow(null);
             if (_selectedAnnotRect != null) SelectAnnotationRect(null);
             if (_selectedText != null) SelectText(null);
+            ml.Handle1.Visibility = Visibility.Visible;
+            ml.Handle2.Visibility = Visibility.Visible;
             ShowColorPickerForMeasureLine(ml);
         }
         else {
@@ -3321,7 +3442,11 @@ internal sealed class ClipboardImageEditorWindow : Window {
         if (arrow != null) {
             if (_selectedText != null) SelectText(null);
             if (_selectedAnnotRect != null) SelectAnnotationRect(null);
-            if (_selectedMeasureLine != null) _selectedMeasureLine = null;
+            if (_selectedMeasureLine != null) {
+                _selectedMeasureLine.Handle1.Visibility = Visibility.Hidden;
+                _selectedMeasureLine.Handle2.Visibility = Visibility.Hidden;
+                _selectedMeasureLine = null;
+            }
             arrow.TipHandle.Visibility = Visibility.Visible;
             arrow.TailHandle.Visibility = Visibility.Visible;
             ShowColorPicker(arrow);
@@ -3919,7 +4044,11 @@ internal sealed class ClipboardImageEditorWindow : Window {
         if (rect != null) {
             if (_selectedText != null) SelectText(null);
             SelectArrow(null);
-            if (_selectedMeasureLine != null) _selectedMeasureLine = null;
+            if (_selectedMeasureLine != null) {
+                _selectedMeasureLine.Handle1.Visibility = Visibility.Hidden;
+                _selectedMeasureLine.Handle2.Visibility = Visibility.Hidden;
+                _selectedMeasureLine = null;
+            }
             foreach (var h in rect.Handles) h.Visibility = Visibility.Visible;
             ShowColorPickerForRect(rect);
         }
