@@ -27053,7 +27053,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                 enabledOnIdleCheckBox:  MaintenanceEnabledOnIdleCheckBox,
                 getWorkspacePath:       () => _currentWorkspace?.FolderPath,
                 runNow:                 () => _ = StartMaintenanceCycleAsync(),
-                toggleTaskEnabled:      (taskId, enabled) => OnMaintenanceTaskToggled(taskId, enabled));
+                toggleTaskEnabled:      (taskId, enabled) => OnMaintenanceTaskToggled(taskId, enabled),
+                reloadPanel:            () => OnMaintenanceTaskToggled(string.Empty, false));
         }
 
         var config = MaintenanceMdParser.Parse(Path.Combine(workspacePath, ".squad", "maintenance.md"));
