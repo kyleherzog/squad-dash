@@ -88,6 +88,14 @@ internal sealed class MarkdownDocumentWindow : Window {
     private readonly CtrlDoubleTapGestureTracker _editorPttGesture =
         new(maxTapHoldMs: 250, doubleTapGapMs: 350);
 
+    // ── Note title voice / PTT ─────────────────────────────────────────────
+    private TextBox?                   _noteTitleBox;
+    private ISpeechRecognitionService? _titleVoiceService;
+    private PushToTalkWindow?          _titlePttWindow;
+    private bool                       _titleVoiceStopOnCtrlRelease;
+    private int                        _titleVoiceCaretIndex;
+    private int                        _titleVoiceSelectionLength;
+
     private MarkdownDocumentCaptureContext? _captureContext;
 
     // ── Editor find-in-source bar state ────────────────────────────────────────
@@ -200,14 +208,15 @@ internal sealed class MarkdownDocumentWindow : Window {
 
             var noteTitleBox = new TextBox {
                 Text            = noteContext.InitialTitle,
-                FontSize = (double)Application.Current.Resources["FontSizeBody"],
                 Padding         = new Thickness(6, 4, 6, 4),
                 BorderThickness = new Thickness(1),
                 VerticalContentAlignment = VerticalAlignment.Center,
             };
+            noteTitleBox.SetResourceReference(TextBox.FontSizeProperty,   "FontSizeBody");
             noteTitleBox.SetResourceReference(TextBox.BackgroundProperty, "InputSurface");
             noteTitleBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
             noteTitleBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
+            _noteTitleBox = noteTitleBox;
             noteTitleRow.Children.Add(noteTitleBox);
 
             void CommitNoteTitle() {
@@ -450,7 +459,10 @@ internal sealed class MarkdownDocumentWindow : Window {
             SetupFileWatcher(document);
 
         Closed += (_, _) => DisposeAllFileWatchers();
-        Closed += (_, _) => _ = StopEditorVoiceAsync();
+        Closed += (_, _) => {
+            _ = StopEditorVoiceAsync();
+            _ = StopTitleVoiceAsync();
+        };
 
         PreviewKeyDown += MarkdownDocumentWindow_PreviewKeyDown;
         PreviewKeyUp   += MarkdownDocumentWindow_PreviewKeyUp;
@@ -1056,39 +1068,54 @@ internal sealed class MarkdownDocumentWindow : Window {
     // ── Editor PTT (double-tap Ctrl voice) ────────────────────────────────
 
     private void MarkdownDocumentWindow_PreviewKeyDown(object sender, KeyEventArgs e) {
-        if (!_showSource) return;
-
-        // ── Ctrl+F: show/focus find bar ───────────────────────────────────────────
-        if (e.Key == Key.F && (Keyboard.Modifiers & ModifierKeys.Control) != 0) {
+        // ── Ctrl+F: show/focus find bar (source only) ─────────────────────────
+        if (_showSource && e.Key == Key.F && (Keyboard.Modifiers & ModifierKeys.Control) != 0) {
             ShowEditorFindBar();
             e.Handled = true;
             return;
         }
 
-        // ── Escape: hide find bar ─────────────────────────────────────────────────
-        if (e.Key == Key.Escape && _editorFindBar is not null) {
+        // ── Escape: hide find bar (source only) ───────────────────────────────
+        if (_showSource && e.Key == Key.Escape && _editorFindBar is not null) {
             HideEditorFindBar();
             e.Handled = true;
             return;
         }
 
-        var editorTb = _activeDocument?.EditorTextBox;
-        if (editorTb is null || !editorTb.IsKeyboardFocusWithin) return;
+        var editorTb      = _activeDocument?.EditorTextBox;
+        bool focusInEditor = _showSource && editorTb is not null && editorTb.IsKeyboardFocusWithin;
+        bool focusInTitle  = _noteTitleBox is not null && _noteTitleBox.IsKeyboardFocusWithin;
+        if (!focusInEditor && !focusInTitle) return;
 
         var action = _editorPttGesture.HandleKeyDown(e.Key, e.IsRepeat, DateTime.UtcNow);
         if (action != CtrlDoubleTapGestureAction.Triggered) return;
 
-        if (_editorVoiceService is null) {
-            _editorVoiceStopOnCtrlRelease = true;
-            _ = StartEditorVoiceAsync();
+        if (focusInTitle) {
+            if (_titleVoiceService is null) {
+                _titleVoiceStopOnCtrlRelease = true;
+                _ = StartTitleVoiceAsync();
+            } else {
+                _ = StopTitleVoiceAsync();
+            }
         } else {
-            _ = StopEditorVoiceAsync();
+            if (_editorVoiceService is null) {
+                _editorVoiceStopOnCtrlRelease = true;
+                _ = StartEditorVoiceAsync();
+            } else {
+                _ = StopEditorVoiceAsync();
+            }
         }
         e.Handled = true;
     }
 
     private void MarkdownDocumentWindow_PreviewKeyUp(object sender, KeyEventArgs e) {
         if (!CtrlDoubleTapGestureTracker.IsCtrlKey(e.Key)) return;
+
+        if (_titleVoiceStopOnCtrlRelease && (_titleVoiceService is not null || _titlePttWindow is not null)) {
+            _ = StopTitleVoiceAsync();
+            e.Handled = true;
+            return;
+        }
 
         if (_editorVoiceStopOnCtrlRelease && (_editorVoiceService is not null || _editorPttWindow is not null)) {
             _ = StopEditorVoiceAsync();
@@ -1194,6 +1221,124 @@ internal sealed class MarkdownDocumentWindow : Window {
 
         _editorVoiceStopOnCtrlRelease = false;
         _editorPttGesture.Reset();
+    }
+
+    private async Task StartTitleVoiceAsync() {
+        var settings = new ApplicationSettingsStore().Load();
+        string key, region;
+        if (settings.SpeechProvider == SpeechProvider.OpenAI) {
+            key    = settings.OpenAiSpeechApiKey ?? string.Empty;
+            region = string.Empty;
+        } else {
+            key    = Environment.GetEnvironmentVariable("SQUAD_SPEECH_KEY", EnvironmentVariableTarget.User) ?? string.Empty;
+            region = settings.SpeechRegion ?? string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(key) ||
+            (settings.SpeechProvider == SpeechProvider.Azure && string.IsNullOrWhiteSpace(region))) {
+            _titleVoiceStopOnCtrlRelease = false;
+            _editorPttGesture.Reset();
+            return;
+        }
+
+        var titleBox = _noteTitleBox;
+        if (titleBox is null) return;
+
+        _titleVoiceCaretIndex      = titleBox.SelectionStart;
+        _titleVoiceSelectionLength = titleBox.SelectionLength;
+
+        _titleVoiceService = settings.SpeechProvider == SpeechProvider.OpenAI
+            ? new WhisperSpeechRecognitionService()
+            : new AzureSpeechRecognitionService();
+
+        _titleVoiceService.PhraseRecognized += (_, text) =>
+            Dispatcher.BeginInvoke(() => AppendSpeechToTitle(text));
+
+        _titleVoiceService.VolumeChanged += (_, level) =>
+            Dispatcher.BeginInvoke(DispatcherPriority.Render, () => {
+                if (_titlePttWindow is not null)
+                    _titlePttWindow.VolumeBar.Height = Math.Max(2, level * 36);
+            });
+
+        _titleVoiceService.RecognitionError += (_, _) =>
+            Dispatcher.BeginInvoke(() => _ = StopTitleVoiceAsync());
+
+        try {
+            System.Windows.Point physicalPt;
+            try {
+                var caretRect = titleBox.GetRectFromCharacterIndex(titleBox.SelectionStart);
+                physicalPt = titleBox.PointToScreen(new System.Windows.Point(caretRect.Left, caretRect.Bottom));
+            } catch {
+                physicalPt = titleBox.PointToScreen(new System.Windows.Point(0, titleBox.ActualHeight + 4));
+            }
+
+            var physWa          = NativeMethods.GetWorkAreaForPhysicalPoint((int)physicalPt.X, (int)physicalPt.Y);
+            var logicalPt       = DpiHelper.PhysicalToLogical(titleBox, physicalPt);
+            var logicalWaOrigin = DpiHelper.PhysicalToLogical(titleBox, new System.Windows.Point(physWa.Left, physWa.Top));
+            var logicalWaCorner = DpiHelper.PhysicalToLogical(titleBox, new System.Windows.Point(physWa.Right, physWa.Bottom));
+            var logicalWorkArea = new System.Windows.Rect(logicalWaOrigin, logicalWaCorner);
+
+            _titlePttWindow = new PushToTalkWindow(this, showHint: false);
+            _titlePttWindow.PositionUnderCaret(logicalPt, logicalWorkArea);
+            _titlePttWindow.Show();
+            titleBox.Focus();
+
+            await _titleVoiceService.StartAsync(key, region, language: settings.SpeechLanguage).ConfigureAwait(false);
+        } catch {
+            await Dispatcher.InvokeAsync(() => {
+                _titlePttWindow?.Close();
+                _titlePttWindow = null;
+            });
+            _titleVoiceService?.Dispose();
+            _titleVoiceService = null;
+            _titleVoiceStopOnCtrlRelease = false;
+            _editorPttGesture.Reset();
+        }
+    }
+
+    private async Task StopTitleVoiceAsync() {
+        await Dispatcher.InvokeAsync(() => {
+            _titlePttWindow?.Close();
+            _titlePttWindow = null;
+        });
+
+        var service = _titleVoiceService;
+        _titleVoiceService = null;
+
+        if (service is not null) {
+            try { await service.StopAsync().ConfigureAwait(false); } catch { }
+            service.Dispose();
+        }
+
+        _titleVoiceStopOnCtrlRelease = false;
+        _editorPttGesture.Reset();
+    }
+
+    private void AppendSpeechToTitle(string text) {
+        var titleBox = _noteTitleBox;
+        if (titleBox is null) return;
+
+        var current     = titleBox.Text;
+        var caretIndex  = Math.Min(_titleVoiceCaretIndex, current.Length);
+        var selLength   = _titleVoiceSelectionLength;
+        _titleVoiceSelectionLength = 0;
+        var selEndIndex = Math.Min(caretIndex + selLength, current.Length);
+        var left        = current[..caretIndex];
+        var right       = current[selEndIndex..];
+        var prefix      = VoiceInsertionHeuristics.LeadingInsertionSpace(left, right);
+        var processed   = VoiceInsertionHeuristics.Apply(left, text, right);
+        var insert      = prefix + processed;
+        var rules       = new ApplicationSettingsStore().Load().VoiceReplacementRules;
+        var replaced    = rules.Count > 0
+            ? prefix + VoiceInsertionHeuristics.ApplyReplacementRules(processed, rules)
+            : insert;
+
+        titleBox.SelectionStart  = caretIndex;
+        titleBox.SelectionLength = selEndIndex - caretIndex;
+        titleBox.SelectedText    = replaced;
+        titleBox.SelectionStart  = caretIndex + replaced.Length;
+        titleBox.SelectionLength = 0;
+        _titleVoiceCaretIndex    = caretIndex + replaced.Length;
     }
 
     private void AppendSpeechToEditor(string text) {
