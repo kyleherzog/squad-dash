@@ -1450,8 +1450,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             DocEditorToolbar.TargetRichTextBox = DocSourceTextBox;
 
-            DeveloperMenuItem.Visibility = SquadDashEnvironment.IsDeveloperMode
-                ? Visibility.Visible : Visibility.Collapsed;
+            DeveloperMenuItem.Visibility = Visibility.Collapsed;
 
             // Wire the search highlight adorner unconditionally (idempotent).
             if (_searchAdorner is null)
@@ -14523,6 +14522,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         _startupWorkspaceLease = null;
 
         _currentWorkspace = targetWorkspace;
+        DeveloperMenuItem.Visibility = File.Exists(Path.Combine(targetWorkspace.FolderPath, "squad-dash.slnx"))
+            ? Visibility.Visible : Visibility.Collapsed;
         BuildAgentSuggestions();
         _currentSolutionPath = _currentWorkspace.SolutionPath;
         _currentSolutionName = _currentWorkspace.SolutionName;
