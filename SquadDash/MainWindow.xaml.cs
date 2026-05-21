@@ -20709,6 +20709,20 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void RenderToolMessage(ToolTranscriptEntry entry)
     {
         var iconKey = $"ToolIcon_{entry.Descriptor.ToolName.Trim()}";
+        if (entry.Descriptor.ToolName.Trim() == "read_powershell" && entry.ArgsJson is { } argsJsonForIcon)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(argsJsonForIcon);
+                if (doc.RootElement.TryGetProperty("delay", out var delayEl) &&
+                    delayEl.TryGetDouble(out var delayVal) &&
+                    delayVal >= 30)
+                {
+                    iconKey = "ToolIcon_read_powershell_waiting";
+                }
+            }
+            catch { }
+        }
         entry.EmojiImage.Source = (TryFindResource(iconKey) ?? TryFindResource("ToolIcon_default"))
             as System.Windows.Media.ImageSource;
         entry.EmojiImage.Visibility = entry.EmojiImage.Source is not null
