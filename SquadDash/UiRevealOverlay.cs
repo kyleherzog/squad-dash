@@ -134,22 +134,30 @@ internal sealed class UiRevealOverlay
                 ApplyHighlight(element);
             }
 
-            // Position popup near the cursor.
-            try
+            // Position popup near the cursor — but when a tooltip is being inspected,
+            // offset outside the tooltip so the reveal info isn't hidden behind it.
+            if (openTip is not null)
             {
-                var ownerRelative = Mouse.GetPosition(_owner);
-                var screenPos     = _owner.PointToScreen(ownerRelative);
-                PositionPopup(screenPos);
+                PositionPopupBesideTooltip(openTip);
             }
-            catch
+            else
             {
                 try
                 {
-                    var pos       = mouse.GetPosition(element);
-                    var screenPos = element.PointToScreen(pos);
+                    var ownerRelative = Mouse.GetPosition(_owner);
+                    var screenPos     = _owner.PointToScreen(ownerRelative);
                     PositionPopup(screenPos);
                 }
-                catch { /* element not yet in a presentation source */ }
+                catch
+                {
+                    try
+                    {
+                        var pos       = mouse.GetPosition(element);
+                        var screenPos = element.PointToScreen(pos);
+                        PositionPopup(screenPos);
+                    }
+                    catch { /* element not yet in a presentation source */ }
+                }
             }
 
             _popup!.IsOpen = true;
@@ -217,6 +225,70 @@ internal sealed class UiRevealOverlay
         if (_popup is null) return;
         _popup.HorizontalOffset = screenPos.X + 16;
         _popup.VerticalOffset   = screenPos.Y + 16;
+    }
+
+    /// <summary>
+    /// When inspecting an open ToolTip, position the reveal popup just outside the
+    /// tooltip rect so neither overlaps the other.  Tries: right edge, then left edge,
+    /// then below.  Falls back to cursor-relative if the tooltip bounds can't be read.
+    /// </summary>
+    private void PositionPopupBesideTooltip(ToolTip tip)
+    {
+        if (_popup is null || _owner is null) return;
+        try
+        {
+            // The ToolTip is itself a FrameworkElement once open; use it directly.
+            var tipTopLeft     = tip.PointToScreen(new Point(0, 0));
+            var tipBottomRight = tip.PointToScreen(new Point(tip.ActualWidth, tip.ActualHeight));
+            var tipRect = new Rect(tipTopLeft, tipBottomRight);
+
+            // Get screen size via SystemParameters so we can keep within bounds.
+            var screenW = SystemParameters.PrimaryScreenWidth;
+            var screenH = SystemParameters.PrimaryScreenHeight;
+
+            // Estimate reveal popup size (it hasn't rendered yet; use a conservative max).
+            const double revealW = 380;
+            const double revealH = 120;
+            const double gap     = 8;
+
+            double x, y;
+
+            // Try right of tooltip
+            if (tipRect.Right + gap + revealW <= screenW)
+            {
+                x = tipRect.Right + gap;
+                y = tipRect.Top;
+            }
+            // Try left of tooltip
+            else if (tipRect.Left - gap - revealW >= 0)
+            {
+                x = tipRect.Left - gap - revealW;
+                y = tipRect.Top;
+            }
+            // Fall back: below tooltip
+            else
+            {
+                x = tipRect.Left;
+                y = tipRect.Bottom + gap;
+            }
+
+            // Clamp so the reveal popup doesn't go off the bottom.
+            if (y + revealH > screenH) y = Math.Max(0, screenH - revealH);
+
+            _popup.HorizontalOffset = x;
+            _popup.VerticalOffset   = y;
+        }
+        catch
+        {
+            // Fallback: cursor-relative
+            try
+            {
+                var cursorRelative = Mouse.GetPosition(_owner);
+                var screenPos      = _owner.PointToScreen(cursorRelative);
+                PositionPopup(screenPos);
+            }
+            catch { }
+        }
     }
 
     private void ApplyHighlight(FrameworkElement element)
