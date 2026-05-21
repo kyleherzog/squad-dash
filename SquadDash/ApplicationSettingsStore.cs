@@ -349,14 +349,25 @@ internal sealed class ApplicationSettingsStore {
     }
 
     public ApplicationSettingsSnapshot SaveDeveloperIssueSimulation(
+        string workspaceFolder,
         DeveloperStartupIssueSimulation startupIssueSimulation,
         DeveloperRuntimeIssueSimulation runtimeIssueSimulation) {
         using var mutex = AcquireMutex();
 
+        var normalizedWorkspace = NormalizeFolder(workspaceFolder);
         var current = LoadCore();
+
+        var startupDict = current.StartupIssueSimulationByWorkspace
+            .ToDictionary(e => e.Key, e => e.Value, StringComparer.OrdinalIgnoreCase);
+        startupDict[normalizedWorkspace] = startupIssueSimulation;
+
+        var runtimeDict = current.RuntimeIssueSimulationByWorkspace
+            .ToDictionary(e => e.Key, e => e.Value, StringComparer.OrdinalIgnoreCase);
+        runtimeDict[normalizedWorkspace] = runtimeIssueSimulation;
+
         var updated = current with {
-            StartupIssueSimulation = startupIssueSimulation,
-            RuntimeIssueSimulation = runtimeIssueSimulation
+            StartupIssueSimulationByWorkspace = startupDict,
+            RuntimeIssueSimulationByWorkspace = runtimeDict
         };
 
         SaveCore(updated);
@@ -954,8 +965,23 @@ internal sealed record ApplicationSettingsSnapshot(
     /// Font size for the documentation source editor (DocSourceTextBox). Global/machine-wide.
     /// </summary>
     public double DocSourceFontSize { get; init; } = 12;
-    public DeveloperStartupIssueSimulation StartupIssueSimulation { get; init; }
-    public DeveloperRuntimeIssueSimulation RuntimeIssueSimulation { get; init; }
+    public IReadOnlyDictionary<string, DeveloperStartupIssueSimulation> StartupIssueSimulationByWorkspace { get; init; } =
+        new Dictionary<string, DeveloperStartupIssueSimulation>(StringComparer.OrdinalIgnoreCase);
+
+    public IReadOnlyDictionary<string, DeveloperRuntimeIssueSimulation> RuntimeIssueSimulationByWorkspace { get; init; } =
+        new Dictionary<string, DeveloperRuntimeIssueSimulation>(StringComparer.OrdinalIgnoreCase);
+
+    public DeveloperStartupIssueSimulation GetStartupIssueSimulation(string workspaceFolder) {
+        if (string.IsNullOrEmpty(workspaceFolder)) return DeveloperStartupIssueSimulation.None;
+        var key = Path.GetFullPath(workspaceFolder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return StartupIssueSimulationByWorkspace.TryGetValue(key, out var v) ? v : DeveloperStartupIssueSimulation.None;
+    }
+
+    public DeveloperRuntimeIssueSimulation GetRuntimeIssueSimulation(string workspaceFolder) {
+        if (string.IsNullOrEmpty(workspaceFolder)) return DeveloperRuntimeIssueSimulation.None;
+        var key = Path.GetFullPath(workspaceFolder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return RuntimeIssueSimulationByWorkspace.TryGetValue(key, out var v) ? v : DeveloperRuntimeIssueSimulation.None;
+    }
     public string? Theme { get; init; }
     public string? LastUsedModel { get; init; }
     public bool TasksWindowOpen { get; init; }
@@ -1380,6 +1406,26 @@ internal sealed record ApplicationSettingsSnapshot(
             normalizedShutdownTimes = dict.Count > 0 ? dict : null;
         }
 
+        var normalizedStartupSimulations = new Dictionary<string, DeveloperStartupIssueSimulation>(StringComparer.OrdinalIgnoreCase);
+        if (StartupIssueSimulationByWorkspace is not null) {
+            foreach (var entry in StartupIssueSimulationByWorkspace) {
+                if (string.IsNullOrWhiteSpace(entry.Key)) continue;
+                var normalizedWorkspace = Path.GetFullPath(entry.Key)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                normalizedStartupSimulations[normalizedWorkspace] = entry.Value;
+            }
+        }
+
+        var normalizedRuntimeSimulations = new Dictionary<string, DeveloperRuntimeIssueSimulation>(StringComparer.OrdinalIgnoreCase);
+        if (RuntimeIssueSimulationByWorkspace is not null) {
+            foreach (var entry in RuntimeIssueSimulationByWorkspace) {
+                if (string.IsNullOrWhiteSpace(entry.Key)) continue;
+                var normalizedWorkspace = Path.GetFullPath(entry.Key)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                normalizedRuntimeSimulations[normalizedWorkspace] = entry.Value;
+            }
+        }
+
         return new ApplicationSettingsSnapshot(
             lastOpenedFolder,
             normalizedFolders,
@@ -1392,8 +1438,6 @@ internal sealed record ApplicationSettingsSnapshot(
             SpeechRegion = string.IsNullOrWhiteSpace(SpeechRegion) ? null : SpeechRegion.Trim(),
             TranscriptFontSize = NormalizeFontSize(TranscriptFontSize),
             DocSourceFontSize = NormalizeFontSize(DocSourceFontSize),
-            StartupIssueSimulation = StartupIssueSimulation,
-            RuntimeIssueSimulation = RuntimeIssueSimulation,
             Theme = Theme is "Light" or "Dark" or "Auto" ? Theme : null,
             LastUsedModel = string.IsNullOrWhiteSpace(LastUsedModel) ? null : LastUsedModel.Trim(),
             TasksWindowOpen = TasksWindowOpen,
@@ -1470,6 +1514,8 @@ internal sealed record ApplicationSettingsSnapshot(
             WorkspaceShutdownTimes = normalizedShutdownTimes,
             TintStopByWorkspace = normalizedTintStops,
             AccentHueOffsetByWorkspace = normalizedAccentOffsets,
+            StartupIssueSimulationByWorkspace = normalizedStartupSimulations,
+            RuntimeIssueSimulationByWorkspace = normalizedRuntimeSimulations,
             FontSizeScaleLevel = Math.Clamp(FontSizeScaleLevel, 0, 6),
         };
     }

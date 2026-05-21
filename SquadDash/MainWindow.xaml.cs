@@ -11325,7 +11325,9 @@ public partial class MainWindow : Window, ILiveElementLocator
             var value = Enum.TryParse<DeveloperStartupIssueSimulation>(tag, out var parsed)
                 ? parsed : DeveloperStartupIssueSimulation.None;
             _settingsSnapshot = _settingsStore.SaveDeveloperIssueSimulation(
-                value, _settingsSnapshot.RuntimeIssueSimulation);
+                _currentWorkspace!.FolderPath,
+                value,
+                _settingsSnapshot.GetRuntimeIssueSimulation(_currentWorkspace.FolderPath));
             SyncSimulationMenuCheckmarks();
             RefreshInstallationState();
         }
@@ -11340,7 +11342,9 @@ public partial class MainWindow : Window, ILiveElementLocator
             var value = Enum.TryParse<DeveloperRuntimeIssueSimulation>(tag, out var parsed)
                 ? parsed : DeveloperRuntimeIssueSimulation.None;
             _settingsSnapshot = _settingsStore.SaveDeveloperIssueSimulation(
-                _settingsSnapshot.StartupIssueSimulation, value);
+                _currentWorkspace!.FolderPath,
+                _settingsSnapshot.GetStartupIssueSimulation(_currentWorkspace.FolderPath),
+                value);
             SyncSimulationMenuCheckmarks();
             RefreshDeveloperRuntimeIssuePreview();
         }
@@ -11349,8 +11353,9 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void SyncSimulationMenuCheckmarks()
     {
-        var startup = _settingsSnapshot.StartupIssueSimulation;
-        var runtime = _settingsSnapshot.RuntimeIssueSimulation;
+        var folder = _currentWorkspace?.FolderPath ?? "";
+        var startup = _settingsSnapshot.GetStartupIssueSimulation(folder);
+        var runtime = _settingsSnapshot.GetRuntimeIssueSimulation(folder);
 
         void SyncStartup(MenuItem item, DeveloperStartupIssueSimulation val) =>
             item.IsChecked = startup == val;
@@ -21186,14 +21191,14 @@ public partial class MainWindow : Window, ILiveElementLocator
             ? null
             : _installationStateService.GetState(_currentWorkspace.FolderPath);
         _currentRoutingAssessment = _currentWorkspace is not null &&
-                                    _settingsSnapshot.StartupIssueSimulation == DeveloperStartupIssueSimulation.None
+                                    _settingsSnapshot.GetStartupIssueSimulation(_currentWorkspace.FolderPath) == DeveloperStartupIssueSimulation.None
             ? _routingDocumentService.Assess(_currentWorkspace.FolderPath)
             : null;
         ClearIgnoredRoutingIssueFingerprintIfResolved();
 
         _startupIssue = WorkspaceIssueFactory.CreateStartupIssue(
             _currentInstallationState,
-            _settingsSnapshot.StartupIssueSimulation);
+            _settingsSnapshot.GetStartupIssueSimulation(_currentWorkspace?.FolderPath ?? ""));
         _installSquadButtonPressed = false;
         UpdateWorkspaceIssuePanel();
         UpdateInteractiveControlState();
@@ -21298,10 +21303,10 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private WorkspaceIssuePresentation ShowRuntimeIssue(string errorMessage)
     {
-        _runtimeIssue = _settingsSnapshot.RuntimeIssueSimulation == DeveloperRuntimeIssueSimulation.None
+        _runtimeIssue = _settingsSnapshot.GetRuntimeIssueSimulation(_currentWorkspace?.FolderPath ?? "") == DeveloperRuntimeIssueSimulation.None
             ? WorkspaceIssueFactory.CreateRuntimeIssue(errorMessage, _currentInstallationState)
             : WorkspaceIssueFactory.CreateSimulatedRuntimeIssue(
-                _settingsSnapshot.RuntimeIssueSimulation,
+                _settingsSnapshot.GetRuntimeIssueSimulation(_currentWorkspace?.FolderPath ?? ""),
                 _currentInstallationState);
         _dismissedWorkspaceIssueKey = null;
         UpdateWorkspaceIssuePanel();
@@ -21319,14 +21324,20 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void RefreshDeveloperRuntimeIssuePreview()
     {
-        if (_settingsSnapshot.RuntimeIssueSimulation == DeveloperRuntimeIssueSimulation.None)
+        if (_currentWorkspace is null || !File.Exists(Path.Combine(_currentWorkspace.FolderPath, "squad-dash.slnx")))
+        {
+            ClearRuntimeIssue();
+            return;
+        }
+
+        if (_settingsSnapshot.GetRuntimeIssueSimulation(_currentWorkspace.FolderPath) == DeveloperRuntimeIssueSimulation.None)
         {
             ClearRuntimeIssue();
             return;
         }
 
         _runtimeIssue = WorkspaceIssueFactory.CreateSimulatedRuntimeIssue(
-            _settingsSnapshot.RuntimeIssueSimulation,
+            _settingsSnapshot.GetRuntimeIssueSimulation(_currentWorkspace.FolderPath),
             _currentInstallationState);
         _dismissedWorkspaceIssueKey = null;
         UpdateWorkspaceIssuePanel();
@@ -21364,8 +21375,9 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private bool IsDeveloperSimulationActive()
     {
-        return _settingsSnapshot.StartupIssueSimulation != DeveloperStartupIssueSimulation.None ||
-               _settingsSnapshot.RuntimeIssueSimulation != DeveloperRuntimeIssueSimulation.None;
+        var folder = _currentWorkspace?.FolderPath ?? "";
+        return _settingsSnapshot.GetStartupIssueSimulation(folder) != DeveloperStartupIssueSimulation.None ||
+               _settingsSnapshot.GetRuntimeIssueSimulation(folder) != DeveloperRuntimeIssueSimulation.None;
     }
 
     private void IssueHelpButton_Click(object sender, RoutedEventArgs e)

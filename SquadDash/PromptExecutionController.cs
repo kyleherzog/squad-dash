@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Windows;
@@ -622,6 +623,9 @@ internal sealed class PromptExecutionController {
         if (!_getIsPromptRunning())
             return;
 
+        if (!ShouldCountPromptActivity(evt, _getRestartPending()))
+            return;
+
         var now = _lastPromptActivityAt ?? DateTimeOffset.Now;
         var isStreamingDelta = evt.Type is "thinking_delta" or "response_delta" or "subagent_thinking_delta";
         if (isStreamingDelta)
@@ -726,6 +730,32 @@ internal sealed class PromptExecutionController {
                 }
                 break;
         }
+    }
+
+    internal static bool ShouldCountPromptActivity(SquadSdkEvent evt, bool restartPending) {
+        if (!restartPending)
+            return true;
+
+        if (string.Equals(evt.Type, "usage", StringComparison.Ordinal))
+            return false;
+
+        if (evt.Type is "tool_start" or "tool_progress" or "tool_complete" &&
+            string.Equals(evt.ToolName, "read_powershell", StringComparison.OrdinalIgnoreCase) &&
+            IsDelayOnlyPowerShellRead(evt.Args))
+            return false;
+
+        return true;
+    }
+
+    private static bool IsDelayOnlyPowerShellRead(JsonElement args) {
+        if (args.ValueKind != JsonValueKind.Object)
+            return false;
+
+        return args.TryGetProperty("delay", out _) &&
+               args.TryGetProperty("shellId", out _) &&
+               args.EnumerateObject().All(property =>
+                   property.NameEquals("delay") ||
+                   property.NameEquals("shellId"));
     }
 
     private void FlushPromptHealthDeltaTrace(DateTimeOffset now, bool force) {
@@ -1999,10 +2029,10 @@ internal sealed class PromptExecutionController {
         try {
             var configDirectory = _conversationManager.ConversationStore.GetSessionConfigDirectory(workspace.FolderPath);
             var settings = _getSettingsSnapshot();
-            if (settings.RuntimeIssueSimulation != DeveloperRuntimeIssueSimulation.None) {
+            if (settings.GetRuntimeIssueSimulation(workspace.FolderPath) != DeveloperRuntimeIssueSimulation.None) {
                 throw new InvalidOperationException(
                     WorkspaceIssueFactory.CreateSimulatedRuntimeErrorMessage(
-                        settings.RuntimeIssueSimulation));
+                        settings.GetRuntimeIssueSimulation(workspace.FolderPath)));
             }
 
             if (CurrentDispatchedItem?.IsSimEntry == true) {
