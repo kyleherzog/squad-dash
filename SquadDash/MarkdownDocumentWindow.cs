@@ -2320,7 +2320,8 @@ internal static class MarkdownFlowDocumentBuilder {
             var trimmed = line.Trim();
 
             if (string.IsNullOrWhiteSpace(trimmed)) {
-                document.Blocks.Add(new Paragraph());
+                // Use a minimal spacer instead of a full-height empty paragraph.
+                document.Blocks.Add(new Paragraph { Margin = new Thickness(0), LineHeight = 6 });
                 continue;
             }
 
@@ -2605,6 +2606,27 @@ internal static class MarkdownFlowDocumentBuilder {
         }
     }
 
+    // Matches **bold**, __bold__, *italic*, _italic_ — bold patterns listed first so ** beats *.
+    private static readonly System.Text.RegularExpressions.Regex BoldItalicRegex = new(
+        @"\*\*(.+?)\*\*|__(.+?)__|(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)|(?<!_)_(?!_)(.+?)(?<!_)_(?!_)",
+        System.Text.RegularExpressions.RegexOptions.Singleline);
+
+    private static void AddFormattedRuns(InlineCollection inlines, string text) {
+        if (string.IsNullOrEmpty(text)) return;
+        int pos = 0;
+        foreach (System.Text.RegularExpressions.Match m in BoldItalicRegex.Matches(text)) {
+            if (m.Index > pos)
+                inlines.Add(new Run(text[pos..m.Index]));
+            if (m.Groups[1].Success || m.Groups[2].Success)
+                inlines.Add(new Run(m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value) { FontWeight = FontWeights.Bold });
+            else
+                inlines.Add(new Run(m.Groups[3].Success ? m.Groups[3].Value : m.Groups[4].Value) { FontStyle = FontStyles.Italic });
+            pos = m.Index + m.Length;
+        }
+        if (pos < text.Length)
+            inlines.Add(new Run(text[pos..]));
+    }
+
     private static void AddTextWithCircleEmoji(InlineCollection inlines, string text) {
         // Walk through the string, splitting out any known circle emoji.
         var remaining = text;
@@ -2621,14 +2643,14 @@ internal static class MarkdownFlowDocumentBuilder {
             }
 
             if (earliestIdx < 0) {
-                // No more emoji — emit the rest as a plain Run.
-                inlines.Add(new Run(remaining));
+                // No more emoji — emit the rest with bold/italic formatting.
+                AddFormattedRuns(inlines, remaining);
                 break;
             }
 
-            // Emit text before the emoji.
+            // Emit text before the emoji with bold/italic formatting.
             if (earliestIdx > 0)
-                inlines.Add(new Run(remaining[..earliestIdx]));
+                AddFormattedRuns(inlines, remaining[..earliestIdx]);
 
             // Emit the emoji as a drawn circle.
             var color  = CircleEmojiColors[earliestEmoji];
