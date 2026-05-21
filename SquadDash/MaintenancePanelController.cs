@@ -402,7 +402,7 @@ internal sealed class MaintenancePanelController {
         var check = new CheckBox {
             IsChecked         = task.Enabled,
             VerticalAlignment = VerticalAlignment.Top,
-            Margin            = new Thickness(0, 1, 8, 0),
+            Margin            = new Thickness(0, 1, 0, 0),
         };
         check.SetResourceReference(CheckBox.FontSizeProperty, "FontSizeBody");
         check.SetResourceReference(CheckBox.ForegroundProperty, "LabelText");
