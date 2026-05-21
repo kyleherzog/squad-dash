@@ -8816,10 +8816,11 @@ public partial class MainWindow : Window, ILiveElementLocator
             }
 
 #if DEBUG
-            // ── Debug: simulate bridge interruption (Ctrl+Shift+F12) ────────────
+            // ── Debug: simulate bridge interruption (Ctrl+Shift+F12, no Alt) ─────
             if (e.Key == Key.F12 &&
                 (Keyboard.Modifiers & ModifierKeys.Control) != 0 &&
-                (Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+                (Keyboard.Modifiers & ModifierKeys.Shift) != 0 &&
+                (Keyboard.Modifiers & ModifierKeys.Alt) == 0)
             {
                 // AppendLine only renders quick-reply buttons when there is an active
                 // CurrentTurn (it uses AppendResponseSegment → RenderResponseEntry path).
