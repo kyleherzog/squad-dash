@@ -12,23 +12,17 @@ namespace SquadDash.Tests;
 [TestFixture]
 internal sealed class MaintenanceStateStoreTests {
 
-    private string _stateDir = null!;
+    private TestWorkspace _workspace = null!;
     private MaintenanceStateStore _store = null!;
 
     [SetUp]
     public void SetUp() {
-        _stateDir = Path.Combine(
-            TestContext.CurrentContext.WorkDirectory,
-            $"maint_state_{Guid.NewGuid():N}");
-        Directory.CreateDirectory(_stateDir);
-        _store = new MaintenanceStateStore(_stateDir);
+        _workspace = new TestWorkspace();
+        _store = new MaintenanceStateStore(_workspace.RootPath);
     }
 
     [TearDown]
-    public void TearDown() {
-        if (Directory.Exists(_stateDir))
-            Directory.Delete(_stateDir, recursive: true);
-    }
+    public void TearDown() => _workspace.Dispose();
 
     // ── IsEligible — unknown task ─────────────────────────────────────────────
 
@@ -133,8 +127,8 @@ internal sealed class MaintenanceStateStoreTests {
     public void RecordRun_PersistsStateToDisk() {
         _store.RecordRun("persist-task", commitSha: "sha-persist");
 
-        // Verify a state file was written somewhere inside _stateDir.
-        var files = Directory.GetFiles(_stateDir, "*", SearchOption.AllDirectories);
+        // Verify a state file was written somewhere inside _workspace.RootPath.
+        var files = Directory.GetFiles(_workspace.RootPath, "*", SearchOption.AllDirectories);
         Assert.That(files, Is.Not.Empty, "RecordRun must write at least one file to the state directory");
     }
 
@@ -145,7 +139,7 @@ internal sealed class MaintenanceStateStoreTests {
         _store.RecordRun("reload-task", commitSha: "sha-reload");
 
         // Create a fresh store over the same directory and reload.
-        var freshStore = new MaintenanceStateStore(_stateDir);
+        var freshStore = new MaintenanceStateStore(_workspace.RootPath);
         freshStore.Reload();
 
         var eligible = freshStore.IsEligible("reload-task", "daily", commitSha: "sha-other");
@@ -161,7 +155,7 @@ internal sealed class MaintenanceStateStoreTests {
 
         // Ensure the final state file is valid JSON (proves the write was completed atomically
         // and did not leave a half-written or zero-byte file).
-        var files = Directory.GetFiles(_stateDir, "*.json", SearchOption.AllDirectories);
+        var files = Directory.GetFiles(_workspace.RootPath, "*.json", SearchOption.AllDirectories);
         Assert.That(files, Is.Not.Empty, "A .json state file must exist after RecordRun");
 
         foreach (var file in files) {
@@ -177,10 +171,10 @@ internal sealed class MaintenanceStateStoreTests {
     [Test]
     public void Load_CorruptStateFile_GracefulDegradation_ReturnsEmptyState() {
         // Write garbage directly to the expected state file.
-        var stateFile = Path.Combine(_stateDir, "maintenance-state.json");
+        var stateFile = Path.Combine(_workspace.RootPath, "maintenance-state.json");
         File.WriteAllText(stateFile, "{ this is not valid json !!!");
 
-        var store = new MaintenanceStateStore(_stateDir);
+        var store = new MaintenanceStateStore(_workspace.RootPath);
         store.Reload();
 
         // All tasks should appear as never-run (no crash, empty state).
@@ -194,7 +188,7 @@ internal sealed class MaintenanceStateStoreTests {
     [Test]
     public void Load_MissingStateFile_GracefulDegradation_ReturnsEmptyState() {
         // Point to a directory that contains no state file at all.
-        var emptyDir = Path.Combine(_stateDir, "empty");
+        var emptyDir = Path.Combine(_workspace.RootPath, "empty");
         Directory.CreateDirectory(emptyDir);
 
         var store = new MaintenanceStateStore(emptyDir);
@@ -215,11 +209,11 @@ internal sealed class MaintenanceStateStoreTests {
     }
 
     /// <summary>
-    /// Writes a minimal state JSON file into <see cref="_stateDir"/> so tests can
+    /// Writes a minimal state JSON file into <see cref="_workspace.RootPath"/> so tests can
     /// exercise date-dependent eligibility without waiting a real day.
     /// </summary>
     private void WriteStateWithLastRunAt(string taskId, DateTime lastRunAt, string lastSha) {
-        var stateFile = Path.Combine(_stateDir, "maintenance-state.json");
+        var stateFile = Path.Combine(_workspace.RootPath, "maintenance-state.json");
         var json = $$"""
             {
               "tasks": {
