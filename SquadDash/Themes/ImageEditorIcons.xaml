@@ -151,6 +151,28 @@
         </Canvas>
     </Viewbox>
 
+    <!-- Measurement / dimension-line tool icon — horizontal shaft with outward arrowheads and cap ticks -->
+    <Viewbox x:Key="ImageEditorMeasureLineIcon" Width="18" Height="18" Stretch="Uniform">
+        <Canvas Width="100" Height="52">
+            <!-- Shadow layer (offset 2 px down-right) -->
+            <Line X1="16" Y1="28" X2="84" Y2="28" Stroke="#66000000" StrokeThickness="4"/>
+            <Polygon Points="16,28 28,22 28,34" Fill="#66000000"/>
+            <Polygon Points="84,28 72,22 72,34" Fill="#66000000"/>
+            <Line X1="16" Y1="18" X2="16" Y2="38" Stroke="#66000000" StrokeThickness="3.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+            <Line X1="84" Y1="18" X2="84" Y2="38" Stroke="#66000000" StrokeThickness="3.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+            <!-- Main shaft -->
+            <Line X1="14" Y1="26" X2="86" Y2="26" Stroke="{DynamicResource LabelText}" StrokeThickness="4"/>
+            <!-- Left arrowhead (tip at x=14, pointing outward/left) -->
+            <Polygon Points="14,26 26,20 26,32" Fill="{DynamicResource LabelText}"/>
+            <!-- Right arrowhead (tip at x=86, pointing outward/right) -->
+            <Polygon Points="86,26 74,20 74,32" Fill="{DynamicResource LabelText}"/>
+            <!-- Left cap tick -->
+            <Line X1="14" Y1="16" X2="14" Y2="36" Stroke="{DynamicResource LabelText}" StrokeThickness="3.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+            <!-- Right cap tick -->
+            <Line X1="86" Y1="16" X2="86" Y2="36" Stroke="{DynamicResource LabelText}" StrokeThickness="3.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+        </Canvas>
+    </Viewbox>
+
     <!-- Round corners mask icon -->
     <Viewbox x:Key="ImageEditorRoundCornersIcon" Width="18" Height="18" Stretch="Uniform">
         <!-- Replace with your design -->

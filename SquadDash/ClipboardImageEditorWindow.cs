@@ -168,6 +168,31 @@ internal sealed class ClipboardImageEditorWindow : Window {
     // Rect annotation defaults
     private Color _defaultRectColor = Color.FromRgb(255, 80, 80);
 
+    // ── Annotation — measurement lines ────────────────────────────────────────
+
+    private readonly List<AnnotationMeasureLine> _measureLines = new();
+    private AnnotationMeasureLine? _selectedMeasureLine;
+    private AnnotationMeasureLine? _colorPickerMeasureLine;
+    private bool _inMeasureLineMode;
+    private Button? _addMeasureLineBtn;
+    private Color _defaultMeasureLineColor = Color.FromRgb(255, 120, 20);
+
+    // Measure-line body-drag sub-state
+    private AnnotationMeasureLine? _draggingMeasureLine;
+    private Point _measureLineDragStart;
+    private Point _measureLineDragOrigStart;
+    private Point _measureLineDragOrigEnd;
+
+    // Measure-line drag-to-draw state
+    private bool _creatingMeasureLine;
+    private Point _measureLineAnchor;
+    private Line? _mlPreviewLine;
+    private Polygon? _mlPreviewHead1;
+    private Polygon? _mlPreviewHead2;
+    private Line? _mlPreviewCap1;
+    private Line? _mlPreviewCap2;
+    private bool _mlPreviewIsHorizontal;
+
     // Last-used arrow angle/tail and rect size — used for click-without-drag placement.
     private double _lastDragArrowAngleDeg = 225.0;  // same as _defaultArrowAngleDeg default
     private double _lastDragArrowTailLength = 80.0;
@@ -788,6 +813,14 @@ internal sealed class ClipboardImageEditorWindow : Window {
             Margin = new Thickness(0, 0, 4, 0),
             ToolTip = "Text label \u00B7 click to place \u00B7 Shift+click for multi-drop \u00B7 double-click to re-edit"
         };
+        _addMeasureLineBtn = new Button {
+            Content = MakeToolIcon("ImageEditorMeasureLineIcon"),
+            Width = 32,
+            Height = 28,
+            Padding = new Thickness(4, 3, 4, 3),
+            Margin = new Thickness(0, 0, 4, 0),
+            ToolTip = "Dimension line (D) \u00B7 drag horizontally or vertically to measure pixel distance"
+        };
         var cursorBtn = new Button {
             Content = MakeToolIcon("ImageEditorCursorIcon"),
             Width = 32,
@@ -870,8 +903,8 @@ internal sealed class ClipboardImageEditorWindow : Window {
             roundCornersBtn.Visibility = Visibility.Collapsed;
 
         var styleButtons = _isPromptMode
-            ? new[] { _moveSelectBtn, _cropBtn, _addArrowBtn, _addRectBtn, _addTextBtn, cursorBtn, _eyedropperBtn, insertBtn, cancelBtn }
-            : new[] { _moveSelectBtn, _cropBtn, _addArrowBtn, _addRectBtn, _addTextBtn, cursorBtn, _eyedropperBtn, roundCornersBtn, insertBtn, cancelBtn };
+            ? new[] { _moveSelectBtn, _cropBtn, _addArrowBtn, _addRectBtn, _addTextBtn, _addMeasureLineBtn, cursorBtn, _eyedropperBtn, insertBtn, cancelBtn }
+            : new[] { _moveSelectBtn, _cropBtn, _addArrowBtn, _addRectBtn, _addTextBtn, _addMeasureLineBtn, cursorBtn, _eyedropperBtn, roundCornersBtn, insertBtn, cancelBtn };
         foreach (var btn in styleButtons)
             btn.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
 
@@ -919,6 +952,13 @@ internal sealed class ClipboardImageEditorWindow : Window {
                 ShowModeHint("Multi-drop: click to place text · ESC to exit");
             }
             _addTextBtn.Content = MakeToolIcon("ImageEditorTextIcon", active: true, multiDrop: isShift);
+        };
+
+        _addMeasureLineBtn!.Click += (_, _) => {
+            if (_inMeasureLineMode) { ExitMeasureLineMode(returnToMove: true); return; }
+            ExitAllToolModes();
+            EnterMeasureLineMode();
+            _addMeasureLineBtn.Content = MakeToolIcon("ImageEditorMeasureLineIcon", active: true);
         };
 
         cursorBtn.Click += (_, _) => {
@@ -1027,6 +1067,7 @@ internal sealed class ClipboardImageEditorWindow : Window {
         leftStack.Children.Add(_addArrowBtn);
         leftStack.Children.Add(_addRectBtn);
         leftStack.Children.Add(_addTextBtn);
+        leftStack.Children.Add(_addMeasureLineBtn);
         leftStack.Children.Add(cursorBtn);
         leftStack.Children.Add(_eyedropperBtn);
         leftStack.Children.Add(_eyedropperSwatch);
@@ -1537,7 +1578,7 @@ internal sealed class ClipboardImageEditorWindow : Window {
         if (_inTextMode && e.ClickCount == 1 && (_activeTextBox != null || _editingText != null))
             _pendingTextCommitDeselect = true;
 
-        if (e.ClickCount != 1 || _inTextMode || _inArrowMode || _inRectMode
+        if (e.ClickCount != 1 || _inTextMode || _inArrowMode || _inRectMode || _inMeasureLineMode
             || _inCursorPlacementMode || _inEyedropperMode || _suppressNextTextDeselect)
             return;
 
@@ -1652,6 +1693,7 @@ internal sealed class ClipboardImageEditorWindow : Window {
 
         SelectArrow(null);
         SelectAnnotationRect(null);
+        SelectMeasureLine(null);
 
         var pt = e.GetPosition(_canvas);
 
@@ -1718,6 +1760,17 @@ internal sealed class ClipboardImageEditorWindow : Window {
             Canvas.SetTop(preview, pt.Y);
             preview.Width = 1;
             preview.Height = 1;
+            e.Handled = true;
+            return;
+        }
+
+        // Measure-line drawing mode: start drag-to-draw.
+        if (_inMeasureLineMode) {
+            _creatingMeasureLine = true;
+            _measureLineAnchor = pt;
+            _preDragSnapshot = CaptureSnapshot();
+            _canvas.CaptureMouse();
+            EnsureMlPreview(isHorizontal: true);
             e.Handled = true;
             return;
         }
@@ -1849,6 +1902,29 @@ internal sealed class ClipboardImageEditorWindow : Window {
             Canvas.SetTop(preview, t);
             preview.Width = r - l;
             preview.Height = b2 - t;
+            e.Handled = true;
+            return;
+        }
+
+        // Live preview for measure-line drag-to-draw.
+        if (_creatingMeasureLine) {
+            var cur = e.GetPosition(_canvas);
+            var dx = cur.X - _measureLineAnchor.X;
+            var dy = cur.Y - _measureLineAnchor.Y;
+            bool isH = Math.Abs(dx) >= Math.Abs(dy);
+            Point p1, p2;
+            if (isH) {
+                double y = _measureLineAnchor.Y;
+                p1 = new Point(Math.Min(_measureLineAnchor.X, cur.X), y);
+                p2 = new Point(Math.Max(_measureLineAnchor.X, cur.X), y);
+            }
+            else {
+                double x = _measureLineAnchor.X;
+                p1 = new Point(x, Math.Min(_measureLineAnchor.Y, cur.Y));
+                p2 = new Point(x, Math.Max(_measureLineAnchor.Y, cur.Y));
+            }
+            EnsureMlPreview(isH);
+            UpdateMlPreview(p1, p2, isH);
             e.Handled = true;
             return;
         }
@@ -2156,6 +2232,41 @@ internal sealed class ClipboardImageEditorWindow : Window {
             return;
         }
 
+        if (_creatingMeasureLine) {
+            _creatingMeasureLine = false;
+            _canvas.ReleaseMouseCapture();
+            RemoveMlPreview();
+
+            var upPt = e.GetPosition(_canvas);
+            var dx2 = upPt.X - _measureLineAnchor.X;
+            var dy2 = upPt.Y - _measureLineAnchor.Y;
+            bool isH2 = Math.Abs(dx2) >= Math.Abs(dy2);
+            double span = isH2 ? Math.Abs(dx2) : Math.Abs(dy2);
+
+            if (span >= 8.0) {
+                Point p1, p2;
+                if (isH2) {
+                    double y = _measureLineAnchor.Y;
+                    p1 = new Point(Math.Min(_measureLineAnchor.X, upPt.X), y);
+                    p2 = new Point(Math.Max(_measureLineAnchor.X, upPt.X), y);
+                }
+                else {
+                    double x = _measureLineAnchor.X;
+                    p1 = new Point(x, Math.Min(_measureLineAnchor.Y, upPt.Y));
+                    p2 = new Point(x, Math.Max(_measureLineAnchor.Y, upPt.Y));
+                }
+                _preDragSnapshot = null; // let CreateMeasureLine push its own undo entry
+                CreateMeasureLine(p1, p2, isH2);
+            }
+            else {
+                _preDragSnapshot = null;
+            }
+            CommitDragUndo();
+            ExitMeasureLineMode(returnToMove: true);
+            e.Handled = true;
+            return;
+        }
+
         if (_creatingNewSel) {
             _creatingNewSel = false;
             CommitDragUndo();
@@ -2217,6 +2328,17 @@ internal sealed class ClipboardImageEditorWindow : Window {
                 ExitArrowMode(returnToMove: true); e.Handled = true; return;
             }
             if (_inRectMode) { ExitRectMode(returnToMove: true); e.Handled = true; return; }
+            if (_inMeasureLineMode) {
+                if (_creatingMeasureLine) {
+                    _creatingMeasureLine = false;
+                    _canvas.ReleaseMouseCapture();
+                    RemoveMlPreview();
+                    _preDragSnapshot = null;
+                }
+                ExitMeasureLineMode(returnToMove: true);
+                e.Handled = true;
+                return;
+            }
             if (_inTextMode) {
                 // TextBox ESC is already handled in CreateTextBoxOverlay's KeyDown (e.Handled=true there),
                 // so this branch handles text mode with no active textbox — just exit the mode.
@@ -2236,6 +2358,7 @@ internal sealed class ClipboardImageEditorWindow : Window {
             // Priority 2 — deselect a selected annotation (arrow, rect, or text label).
             if (_selectedArrow != null) { SelectArrow(null); e.Handled = true; return; }
             if (_selectedAnnotRect != null) { SelectAnnotationRect(null); e.Handled = true; return; }
+            if (_selectedMeasureLine != null) { SelectMeasureLine(null); e.Handled = true; return; }
             if (_selectedText != null) { SelectText(null); e.Handled = true; return; }
 
             // Priority 3 — no active selection: close only when NOT in the neutral move mode.
@@ -2268,6 +2391,12 @@ internal sealed class ClipboardImageEditorWindow : Window {
             PushUndo();
             RemoveAnnotationRect(_selectedAnnotRect);
             _selectedAnnotRect = null;
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Delete && _selectedMeasureLine != null) {
+            PushUndo();
+            RemoveMeasureLine(_selectedMeasureLine);
+            _selectedMeasureLine = null;
             e.Handled = true;
         }
         else if (e.Key == Key.Delete && !_sel.IsEmpty) {
@@ -2336,6 +2465,12 @@ internal sealed class ClipboardImageEditorWindow : Window {
                 if (_addTextBtn != null) _addTextBtn.Content = MakeToolIcon("ImageEditorTextIcon", active: true);
                 e.Handled = true;
             }
+            else if (e.Key == Key.D) {
+                ExitAllToolModes();
+                EnterMeasureLineMode();
+                if (_addMeasureLineBtn != null) _addMeasureLineBtn.Content = MakeToolIcon("ImageEditorMeasureLineIcon", active: true);
+                e.Handled = true;
+            }
         }
     }
 
@@ -2399,13 +2534,352 @@ internal sealed class ClipboardImageEditorWindow : Window {
         if (_inTextMode) ExitTextMode();
         if (_activeTextBox != null) CommitActiveTextBox(); // commit in-progress edit even if text mode was already exited
         if (_inEyedropperMode) ExitEyedropperMode();
+        if (_inMeasureLineMode) ExitMeasureLineMode();
         SelectText(null);
     }
 
-    /// <summary>
-    /// Creates an arrow where <paramref name="tailPt"/> is the blunt tail end
-    /// and <paramref name="headPt"/> is the arrowhead tip (pointy end).
-    /// </summary>
+    // ── Measure-line mode ─────────────────────────────────────────────────────
+
+    private void EnterMeasureLineMode() {
+        if (_selectedArrow != null) SelectArrow(null);
+        if (_selectedAnnotRect != null) SelectAnnotationRect(null);
+        if (_selectedText != null) SelectText(null);
+        _inMoveMode = false;
+        _inCropMode = false;
+        _inMeasureLineMode = true;
+        _canvas.Cursor = AnnotationCursors.ArrowTool;
+        Cursor = AnnotationCursors.ArrowTool;
+        ShowModeHint("Drag to draw a dimension line · ESC to exit");
+        if (_addMeasureLineBtn != null) _addMeasureLineBtn.Content = MakeToolIcon("ImageEditorMeasureLineIcon", active: true);
+    }
+
+    private void ExitMeasureLineMode(bool returnToMove = false) {
+        _inMeasureLineMode = false;
+        _canvas.Cursor = Cursors.Arrow;
+        Cursor = Cursors.Arrow;
+        HideModeHint();
+        if (_addMeasureLineBtn != null) _addMeasureLineBtn.Content = MakeToolIcon("ImageEditorMeasureLineIcon");
+        if (returnToMove) EnterMoveMode();
+    }
+
+    // Ensure preview shapes exist for the current isHorizontal orientation.
+    private void EnsureMlPreview(bool isHorizontal) {
+        if (_mlPreviewLine != null && _mlPreviewIsHorizontal == isHorizontal) return;
+        RemoveMlPreview();
+        _mlPreviewIsHorizontal = isHorizontal;
+
+        var stroke = new SolidColorBrush(_defaultMeasureLineColor);
+        var dash = new DoubleCollection { 4, 3 };
+
+        _mlPreviewLine = new Line {
+            Stroke = stroke, StrokeThickness = 2, Opacity = 0.7,
+            StrokeDashArray = dash, IsHitTestVisible = false
+        };
+        Panel.SetZIndex(_mlPreviewLine, 99);
+        _canvas.Children.Add(_mlPreviewLine);
+
+        for (int i = 0; i < 2; i++) {
+            var head = new Polygon {
+                Fill = stroke, Opacity = 0.7, IsHitTestVisible = false
+            };
+            Panel.SetZIndex(head, 99);
+            _canvas.Children.Add(head);
+            if (i == 0) _mlPreviewHead1 = head;
+            else _mlPreviewHead2 = head;
+        }
+        for (int i = 0; i < 2; i++) {
+            var cap = new Line {
+                Stroke = stroke, StrokeThickness = 2, Opacity = 0.7,
+                IsHitTestVisible = false
+            };
+            Panel.SetZIndex(cap, 99);
+            _canvas.Children.Add(cap);
+            if (i == 0) _mlPreviewCap1 = cap;
+            else _mlPreviewCap2 = cap;
+        }
+    }
+
+    private void RemoveMlPreview() {
+        if (_mlPreviewLine != null) { _canvas.Children.Remove(_mlPreviewLine); _mlPreviewLine = null; }
+        if (_mlPreviewHead1 != null) { _canvas.Children.Remove(_mlPreviewHead1); _mlPreviewHead1 = null; }
+        if (_mlPreviewHead2 != null) { _canvas.Children.Remove(_mlPreviewHead2); _mlPreviewHead2 = null; }
+        if (_mlPreviewCap1 != null) { _canvas.Children.Remove(_mlPreviewCap1); _mlPreviewCap1 = null; }
+        if (_mlPreviewCap2 != null) { _canvas.Children.Remove(_mlPreviewCap2); _mlPreviewCap2 = null; }
+    }
+
+    private void UpdateMlPreview(Point p1, Point p2, bool isH) {
+        const double aLen = 14.0, aHalf = 6.0, capHalf = 9.0;
+        if (_mlPreviewLine != null) {
+            _mlPreviewLine.X1 = p1.X; _mlPreviewLine.Y1 = p1.Y;
+            _mlPreviewLine.X2 = p2.X; _mlPreviewLine.Y2 = p2.Y;
+        }
+        if (isH) {
+            _mlPreviewHead1?.Points.Clear();
+            _mlPreviewHead1?.Points.Add(new Point(p1.X, p1.Y));
+            _mlPreviewHead1?.Points.Add(new Point(p1.X + aLen, p1.Y - aHalf));
+            _mlPreviewHead1?.Points.Add(new Point(p1.X + aLen, p1.Y + aHalf));
+            _mlPreviewHead2?.Points.Clear();
+            _mlPreviewHead2?.Points.Add(new Point(p2.X, p2.Y));
+            _mlPreviewHead2?.Points.Add(new Point(p2.X - aLen, p2.Y - aHalf));
+            _mlPreviewHead2?.Points.Add(new Point(p2.X - aLen, p2.Y + aHalf));
+            if (_mlPreviewCap1 != null) { _mlPreviewCap1.X1 = p1.X; _mlPreviewCap1.Y1 = p1.Y - capHalf; _mlPreviewCap1.X2 = p1.X; _mlPreviewCap1.Y2 = p1.Y + capHalf; }
+            if (_mlPreviewCap2 != null) { _mlPreviewCap2.X1 = p2.X; _mlPreviewCap2.Y1 = p2.Y - capHalf; _mlPreviewCap2.X2 = p2.X; _mlPreviewCap2.Y2 = p2.Y + capHalf; }
+        }
+        else {
+            _mlPreviewHead1?.Points.Clear();
+            _mlPreviewHead1?.Points.Add(new Point(p1.X, p1.Y));
+            _mlPreviewHead1?.Points.Add(new Point(p1.X - aHalf, p1.Y + aLen));
+            _mlPreviewHead1?.Points.Add(new Point(p1.X + aHalf, p1.Y + aLen));
+            _mlPreviewHead2?.Points.Clear();
+            _mlPreviewHead2?.Points.Add(new Point(p2.X, p2.Y));
+            _mlPreviewHead2?.Points.Add(new Point(p2.X - aHalf, p2.Y - aLen));
+            _mlPreviewHead2?.Points.Add(new Point(p2.X + aHalf, p2.Y - aLen));
+            if (_mlPreviewCap1 != null) { _mlPreviewCap1.X1 = p1.X - capHalf; _mlPreviewCap1.Y1 = p1.Y; _mlPreviewCap1.X2 = p1.X + capHalf; _mlPreviewCap1.Y2 = p1.Y; }
+            if (_mlPreviewCap2 != null) { _mlPreviewCap2.X1 = p2.X - capHalf; _mlPreviewCap2.Y1 = p2.Y; _mlPreviewCap2.X2 = p2.X + capHalf; _mlPreviewCap2.Y2 = p2.Y; }
+        }
+    }
+
+    private AnnotationMeasureLine CreateMeasureLine(Point p1, Point p2, bool isH, Color? color = null) {
+        if (!_suppressUndo) PushUndo();
+        var lineColor = color ?? _defaultMeasureLineColor;
+        var stroke = new SolidColorBrush(lineColor);
+
+        var shadow = new Line { Stroke = Brushes.Black, StrokeThickness = 3.5, Opacity = 0.35, IsHitTestVisible = false };
+        Panel.SetZIndex(shadow, 2);
+        _canvas.Children.Add(shadow);
+
+        var shadowH1 = new Polygon { Fill = Brushes.Black, Opacity = 0.35, IsHitTestVisible = false };
+        Panel.SetZIndex(shadowH1, 2);
+        _canvas.Children.Add(shadowH1);
+
+        var shadowH2 = new Polygon { Fill = Brushes.Black, Opacity = 0.35, IsHitTestVisible = false };
+        Panel.SetZIndex(shadowH2, 2);
+        _canvas.Children.Add(shadowH2);
+
+        var main = new Line { Stroke = stroke, StrokeThickness = 2, IsHitTestVisible = false };
+        Panel.SetZIndex(main, 5);
+        _canvas.Children.Add(main);
+
+        var head1 = new Polygon { Fill = stroke, IsHitTestVisible = false };
+        Panel.SetZIndex(head1, 5);
+        _canvas.Children.Add(head1);
+
+        var head2 = new Polygon { Fill = stroke, IsHitTestVisible = false };
+        Panel.SetZIndex(head2, 5);
+        _canvas.Children.Add(head2);
+
+        var cap1 = new Line { Stroke = stroke, StrokeThickness = 2, IsHitTestVisible = false };
+        Panel.SetZIndex(cap1, 5);
+        _canvas.Children.Add(cap1);
+
+        var cap2 = new Line { Stroke = stroke, StrokeThickness = 2, IsHitTestVisible = false };
+        Panel.SetZIndex(cap2, 5);
+        _canvas.Children.Add(cap2);
+
+        var shadowCap1 = new Line { Stroke = Brushes.Black, StrokeThickness = 3.5, Opacity = 0.35, IsHitTestVisible = false };
+        Panel.SetZIndex(shadowCap1, 2);
+        _canvas.Children.Add(shadowCap1);
+
+        var shadowCap2 = new Line { Stroke = Brushes.Black, StrokeThickness = 3.5, Opacity = 0.35, IsHitTestVisible = false };
+        Panel.SetZIndex(shadowCap2, 2);
+        _canvas.Children.Add(shadowCap2);
+
+        // Badge
+        var labelText = new TextBlock {
+            Foreground = Brushes.White,
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            IsHitTestVisible = false
+        };
+        var badge = new Border {
+            Background = new SolidColorBrush(Color.FromArgb(200, 0, 0, 0)),
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(4, 2, 4, 2),
+            Child = labelText,
+            IsHitTestVisible = false
+        };
+        Panel.SetZIndex(badge, 5);
+        _canvas.Children.Add(badge);
+
+        // Hit line (transparent, wider for clicking)
+        var hitLine = new Line { Stroke = Brushes.Transparent, StrokeThickness = 14, IsHitTestVisible = true, Cursor = Cursors.Hand };
+        Panel.SetZIndex(hitLine, 4);
+        _canvas.Children.Add(hitLine);
+
+        var ml = new AnnotationMeasureLine {
+            StartPt = p1, EndPt = p2, IsHorizontal = isH, LineColor = lineColor,
+            ShadowLine = shadow, ShadowHead1 = shadowH1, ShadowHead2 = shadowH2,
+            ShadowCap1 = shadowCap1, ShadowCap2 = shadowCap2,
+            MainLine = main, Head1 = head1, Head2 = head2, Cap1 = cap1, Cap2 = cap2,
+            LabelBadge = badge, LabelText = labelText, HitLine = hitLine
+        };
+        _measureLines.Add(ml);
+
+        hitLine.MouseLeftButtonDown += (_, e2) => {
+            SelectMeasureLine(ml);
+            e2.Handled = true;
+        };
+        hitLine.MouseRightButtonDown += (_, e2) => {
+            SelectMeasureLine(ml);
+            ShowColorPickerForMeasureLine(ml);
+            e2.Handled = true;
+        };
+
+        UpdateMeasureLineGeometry(ml);
+        return ml;
+    }
+
+    private void UpdateMeasureLineGeometry(AnnotationMeasureLine ml) {
+        const double aLen = 14.0, aHalf = 6.0, capHalf = 9.0, shadowOff = 1.5;
+
+        var p1 = ml.StartPt;
+        var p2 = ml.EndPt;
+        var stroke = new SolidColorBrush(ml.LineColor);
+        ml.MainLine.Stroke = stroke;
+        ml.Head1.Fill = stroke;
+        ml.Head2.Fill = stroke;
+        ml.Cap1.Stroke = stroke;
+        ml.Cap2.Stroke = stroke;
+
+        ml.MainLine.X1 = p1.X; ml.MainLine.Y1 = p1.Y;
+        ml.MainLine.X2 = p2.X; ml.MainLine.Y2 = p2.Y;
+        ml.HitLine.X1 = p1.X; ml.HitLine.Y1 = p1.Y;
+        ml.HitLine.X2 = p2.X; ml.HitLine.Y2 = p2.Y;
+        ml.ShadowLine.X1 = p1.X + shadowOff; ml.ShadowLine.Y1 = p1.Y + shadowOff;
+        ml.ShadowLine.X2 = p2.X + shadowOff; ml.ShadowLine.Y2 = p2.Y + shadowOff;
+
+        if (ml.IsHorizontal) {
+            SetArrowHeadPoints(ml.Head1, p1.X, p1.Y, aLen, aHalf, goingLeft: true);
+            SetArrowHeadPoints(ml.Head2, p2.X, p2.Y, aLen, aHalf, goingLeft: false);
+            SetArrowHeadPoints(ml.ShadowHead1, p1.X + shadowOff, p1.Y + shadowOff, aLen, aHalf, goingLeft: true);
+            SetArrowHeadPoints(ml.ShadowHead2, p2.X + shadowOff, p2.Y + shadowOff, aLen, aHalf, goingLeft: false);
+            ml.Cap1.X1 = p1.X; ml.Cap1.Y1 = p1.Y - capHalf; ml.Cap1.X2 = p1.X; ml.Cap1.Y2 = p1.Y + capHalf;
+            ml.Cap2.X1 = p2.X; ml.Cap2.Y1 = p2.Y - capHalf; ml.Cap2.X2 = p2.X; ml.Cap2.Y2 = p2.Y + capHalf;
+            ml.ShadowCap1.X1 = p1.X + shadowOff; ml.ShadowCap1.Y1 = p1.Y - capHalf + shadowOff; ml.ShadowCap1.X2 = p1.X + shadowOff; ml.ShadowCap1.Y2 = p1.Y + capHalf + shadowOff;
+            ml.ShadowCap2.X1 = p2.X + shadowOff; ml.ShadowCap2.Y1 = p2.Y - capHalf + shadowOff; ml.ShadowCap2.X2 = p2.X + shadowOff; ml.ShadowCap2.Y2 = p2.Y + capHalf + shadowOff;
+        }
+        else {
+            SetArrowHeadPoints(ml.Head1, p1.X, p1.Y, aLen, aHalf, goingLeft: true, vertical: true);
+            SetArrowHeadPoints(ml.Head2, p2.X, p2.Y, aLen, aHalf, goingLeft: false, vertical: true);
+            SetArrowHeadPoints(ml.ShadowHead1, p1.X + shadowOff, p1.Y + shadowOff, aLen, aHalf, goingLeft: true, vertical: true);
+            SetArrowHeadPoints(ml.ShadowHead2, p2.X + shadowOff, p2.Y + shadowOff, aLen, aHalf, goingLeft: false, vertical: true);
+            ml.Cap1.X1 = p1.X - capHalf; ml.Cap1.Y1 = p1.Y; ml.Cap1.X2 = p1.X + capHalf; ml.Cap1.Y2 = p1.Y;
+            ml.Cap2.X1 = p2.X - capHalf; ml.Cap2.Y1 = p2.Y; ml.Cap2.X2 = p2.X + capHalf; ml.Cap2.Y2 = p2.Y;
+            ml.ShadowCap1.X1 = p1.X - capHalf + shadowOff; ml.ShadowCap1.Y1 = p1.Y + shadowOff; ml.ShadowCap1.X2 = p1.X + capHalf + shadowOff; ml.ShadowCap1.Y2 = p1.Y + shadowOff;
+            ml.ShadowCap2.X1 = p2.X - capHalf + shadowOff; ml.ShadowCap2.Y1 = p2.Y + shadowOff; ml.ShadowCap2.X2 = p2.X + capHalf + shadowOff; ml.ShadowCap2.Y2 = p2.Y + shadowOff;
+        }
+
+        // Label text
+        double canvasDist = ml.IsHorizontal ? Math.Abs(p2.X - p1.X) : Math.Abs(p2.Y - p1.Y);
+        double scaleX = _canvasScaleX > 0 ? _canvasScaleX : 1.0;
+        double scaleY = _canvasScaleY > 0 ? _canvasScaleY : 1.0;
+        double scale = ml.IsHorizontal ? scaleX : scaleY;
+        int px = (int)Math.Round(canvasDist / scale);
+        ml.LabelText.Text = $"{px} px";
+
+        ml.LabelBadge.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double bw = ml.LabelBadge.DesiredSize.Width;
+        double bh = ml.LabelBadge.DesiredSize.Height;
+        double midX = (p1.X + p2.X) / 2;
+        double midY = (p1.Y + p2.Y) / 2;
+        const double labelPerp = 16.0;
+
+        double bx, by;
+        if (ml.IsHorizontal) {
+            bx = midX - bw / 2;
+            by = midY - labelPerp - bh;
+        }
+        else {
+            bx = midX - labelPerp - bw;
+            by = midY - bh / 2;
+        }
+        bx = Math.Max(0, Math.Min(_canvas.Width - bw, bx));
+        by = Math.Max(0, Math.Min(_canvas.Height - bh, by));
+        Canvas.SetLeft(ml.LabelBadge, bx);
+        Canvas.SetTop(ml.LabelBadge, by);
+    }
+
+    private static void SetArrowHeadPoints(Polygon poly, double x, double y, double aLen, double aHalf, bool goingLeft, bool vertical = false) {
+        poly.Points.Clear();
+        if (!vertical) {
+            // Horizontal: tip at (x,y), base extends inward (+X for left-pointing, -X for right-pointing)
+            double bx = goingLeft ? x + aLen : x - aLen;
+            poly.Points.Add(new Point(x, y));
+            poly.Points.Add(new Point(bx, y - aHalf));
+            poly.Points.Add(new Point(bx, y + aHalf));
+        }
+        else {
+            // Vertical: tip at (x,y), base extends inward (+Y for top-pointing, -Y for bottom-pointing)
+            double by = goingLeft ? y + aLen : y - aLen;
+            poly.Points.Add(new Point(x, y));
+            poly.Points.Add(new Point(x - aHalf, by));
+            poly.Points.Add(new Point(x + aHalf, by));
+        }
+    }
+
+    private void RemoveMeasureLine(AnnotationMeasureLine ml) {
+        if (!_suppressUndo) PushUndo();
+        if (ml == _colorPickerMeasureLine) HideColorPicker();
+        _canvas.Children.Remove(ml.ShadowLine);
+        _canvas.Children.Remove(ml.ShadowHead1);
+        _canvas.Children.Remove(ml.ShadowHead2);
+        _canvas.Children.Remove(ml.ShadowCap1);
+        _canvas.Children.Remove(ml.ShadowCap2);
+        _canvas.Children.Remove(ml.MainLine);
+        _canvas.Children.Remove(ml.Head1);
+        _canvas.Children.Remove(ml.Head2);
+        _canvas.Children.Remove(ml.Cap1);
+        _canvas.Children.Remove(ml.Cap2);
+        _canvas.Children.Remove(ml.LabelBadge);
+        _canvas.Children.Remove(ml.HitLine);
+        _measureLines.Remove(ml);
+    }
+
+    private void SelectMeasureLine(AnnotationMeasureLine? ml) {
+        _selectedMeasureLine = ml;
+        if (ml != null) {
+            if (_selectedArrow != null) SelectArrow(null);
+            if (_selectedAnnotRect != null) SelectAnnotationRect(null);
+            if (_selectedText != null) SelectText(null);
+            ShowColorPickerForMeasureLine(ml);
+        }
+        else {
+            HideColorPicker();
+        }
+    }
+
+    private void ShowColorPickerForMeasureLine(AnnotationMeasureLine ml) {
+        HideColorPicker();
+        _colorPickerMeasureLine = ml;
+        var palette = GetArrowPalette();
+
+        _colorPickerPanel = new StackPanel { Orientation = Orientation.Horizontal };
+        Panel.SetZIndex(_colorPickerPanel, 300);
+
+        foreach (var color in palette) {
+            var c = color;
+            bool isSelected = c == ml.LineColor;
+            var swatch = MakeColorSwatch(c, isSelected, picked => {
+                ml.LineColor = picked;
+                _defaultMeasureLineColor = picked;
+                UpdateMeasureLineGeometry(ml);
+                ShowColorPickerForMeasureLine(ml);
+            });
+            _colorPickerPanel.Children.Add(swatch);
+        }
+
+        _canvas.Children.Add(_colorPickerPanel);
+
+        double midX = (ml.StartPt.X + ml.EndPt.X) / 2;
+        double midY = (ml.StartPt.Y + ml.EndPt.Y) / 2;
+        _colorPickerPanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double pw = _colorPickerPanel.DesiredSize.Width;
+        double ph = _colorPickerPanel.DesiredSize.Height;
+        double cx = Math.Max(0, Math.Min(_canvas.Width - pw, midX - pw / 2));
+        double cy = Math.Max(0, Math.Min(_canvas.Height - ph, midY - ph - 20));
+        Canvas.SetLeft(_colorPickerPanel, cx);
+        Canvas.SetTop(_colorPickerPanel, cy);
+    }
     private void PlaceArrowFromDrag(Point tailPt, Point headPt, double dist) {
         headPt = new Point(
             Math.Max(0, Math.Min(headPt.X, _canvas.Width)),
@@ -2847,6 +3321,7 @@ internal sealed class ClipboardImageEditorWindow : Window {
         if (arrow != null) {
             if (_selectedText != null) SelectText(null);
             if (_selectedAnnotRect != null) SelectAnnotationRect(null);
+            if (_selectedMeasureLine != null) _selectedMeasureLine = null;
             arrow.TipHandle.Visibility = Visibility.Visible;
             arrow.TailHandle.Visibility = Visibility.Visible;
             ShowColorPicker(arrow);
@@ -2991,6 +3466,7 @@ internal sealed class ClipboardImageEditorWindow : Window {
         _colorPickerArrow = null;
         _colorPickerRect = null;
         _colorPickerText = null;
+        _colorPickerMeasureLine = null;
         _selectedText = null;
         // Don't remove handles while a text box is actively being edited.
         if (_activeTextBox == null) {
@@ -3416,6 +3892,12 @@ internal sealed class ClipboardImageEditorWindow : Window {
             if (t.Bounds.Contains(pt)) return true;
         }
 
+        // Measure lines: proximity to shaft segment.
+        const double MlTol = 6.0;
+        foreach (var ml in _measureLines) {
+            if (PointToSegmentDist(pt, ml.StartPt, ml.EndPt) <= MlTol) return true;
+        }
+
         return false;
     }
 
@@ -3437,6 +3919,7 @@ internal sealed class ClipboardImageEditorWindow : Window {
         if (rect != null) {
             if (_selectedText != null) SelectText(null);
             SelectArrow(null);
+            if (_selectedMeasureLine != null) _selectedMeasureLine = null;
             foreach (var h in rect.Handles) h.Visibility = Visibility.Visible;
             ShowColorPickerForRect(rect);
         }
@@ -4582,7 +5065,8 @@ internal sealed class ClipboardImageEditorWindow : Window {
         CanvasW: _canvas.Width,
         CanvasH: _canvas.Height,
         CanvasScaleX: _canvasScaleX,
-        CanvasScaleY: _canvasScaleY);
+        CanvasScaleY: _canvasScaleY,
+        MeasureLines: _measureLines.Select(ml => new MeasureLineSnap(ml.StartPt, ml.EndPt, ml.IsHorizontal, ml.LineColor)).ToList());
 
     private void PushUndo() {
         if (_suppressUndo) return;
@@ -4629,6 +5113,7 @@ internal sealed class ClipboardImageEditorWindow : Window {
             SelectAnnotationRect(null);
             foreach (var a in _arrows.ToList()) RemoveArrow(a);
             foreach (var r in _annotRects.ToList()) RemoveAnnotationRect(r);
+            foreach (var ml in _measureLines.ToList()) RemoveMeasureLine(ml);
 
             foreach (var s in snap.Arrows) {
                 var a = CreateArrow(s.TargetElementBounds);
@@ -4651,6 +5136,11 @@ internal sealed class ClipboardImageEditorWindow : Window {
 
             SelectAnnotationRect(null);
             foreach (var t in _texts.ToList()) RemoveTextAnnotation(t);
+
+            foreach (var ms in snap.MeasureLines)
+                CreateMeasureLine(ms.StartPt, ms.EndPt, ms.IsHorizontal, ms.LineColor);
+            SelectMeasureLine(null);
+
             _sel = snap.Sel;
             _cursorEnabled = snap.CursorEnabled;
 
@@ -5152,7 +5642,8 @@ internal sealed class ClipboardImageEditorWindow : Window {
         double CanvasW,
         double CanvasH,
         double CanvasScaleX,
-        double CanvasScaleY);
+        double CanvasScaleY,
+        IReadOnlyList<MeasureLineSnap> MeasureLines);
 
     private sealed record ArrowSnap(
         string TargetElementName,
@@ -5170,6 +5661,8 @@ internal sealed class ClipboardImageEditorWindow : Window {
 
     private sealed record TextSnap(Rect Bounds, string Text, double FontSize, Color TextColor, Color BackgroundColor);
 
+    private sealed record MeasureLineSnap(Point StartPt, Point EndPt, bool IsHorizontal, Color LineColor);
+
     // ── Change detection ──────────────────────────────────────────────────────
 
     /// <summary>
@@ -5184,6 +5677,7 @@ internal sealed class ClipboardImageEditorWindow : Window {
         => _arrows.Count > 0
         || _annotRects.Count > 0
         || _texts.Count > 0
+        || _measureLines.Count > 0
         || (_cursorEnabled && _cursorImage != null)
         || !_sel.IsEmpty;
 }
