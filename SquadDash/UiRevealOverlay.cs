@@ -142,22 +142,8 @@ internal sealed class UiRevealOverlay
             }
             else
             {
-                try
-                {
-                    var ownerRelative = Mouse.GetPosition(_owner);
-                    var screenPos     = _owner.PointToScreen(ownerRelative);
-                    PositionPopup(screenPos);
-                }
-                catch
-                {
-                    try
-                    {
-                        var pos       = mouse.GetPosition(element);
-                        var screenPos = element.PointToScreen(pos);
-                        PositionPopup(screenPos);
-                    }
-                    catch { /* element not yet in a presentation source */ }
-                }
+                // Use Win32 GetCursorPos — reliable regardless of which HWND has the mouse.
+                PositionPopup(NativeMethods.GetCursorScreenPos());
             }
 
             _popup!.IsOpen = true;
@@ -220,59 +206,75 @@ internal sealed class UiRevealOverlay
         };
     }
 
-    private void PositionPopup(Point screenPos)
+    private void PositionPopup(Point screenPixels)
     {
-        if (_popup is null) return;
-        _popup.HorizontalOffset = screenPos.X + 16;
-        _popup.VerticalOffset   = screenPos.Y + 16;
+        // AbsolutePoint popup offsets are in WPF logical (96-dpi) units.
+        if (_popup is null || _owner is null) return;
+        var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(_owner);
+        _popup.HorizontalOffset = screenPixels.X / dpi.DpiScaleX + 16;
+        _popup.VerticalOffset   = screenPixels.Y / dpi.DpiScaleY + 16;
     }
 
     /// <summary>
     /// When inspecting an open ToolTip, position the reveal popup just outside the
-    /// tooltip rect so neither overlaps the other.  Tries: right edge, then left edge,
-    /// then below.  Falls back to cursor-relative if the tooltip bounds can't be read.
+    /// tooltip rect so neither overlaps the other.  Uses the tooltip HWND rect via
+    /// Win32 GetWindowRect for reliability; falls back to Win32 cursor position.
     /// </summary>
     private void PositionPopupBesideTooltip(ToolTip tip)
     {
         if (_popup is null || _owner is null) return;
         try
         {
-            // The ToolTip is itself a FrameworkElement once open; use it directly.
-            var tipTopLeft     = tip.PointToScreen(new Point(0, 0));
-            var tipBottomRight = tip.PointToScreen(new Point(tip.ActualWidth, tip.ActualHeight));
-            var tipRect = new Rect(tipTopLeft, tipBottomRight);
+            // Use the HWND rect — reliable even when PointToScreen would throw.
+            var tipRect = NativeMethods.TryGetVisualHwndScreenRect(tip);
 
-            // Get screen size via SystemParameters so we can keep within bounds.
-            var screenW = SystemParameters.PrimaryScreenWidth;
-            var screenH = SystemParameters.PrimaryScreenHeight;
+            // Also account for DPI: GetWindowRect returns physical pixels; WPF
+            // AbsolutePoint popup offsets are in logical (96-dpi) units.
+            var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(_owner);
+            double dpiX = dpi.DpiScaleX;
+            double dpiY = dpi.DpiScaleY;
 
-            // Estimate reveal popup size (it hasn't rendered yet; use a conservative max).
-            const double revealW = 380;
-            const double revealH = 120;
+            if (tipRect is null || tipRect.Value.Width == 0)
+            {
+                // Fallback: use Win32 cursor pos (works even when mouse is in a foreign HWND).
+                var cur = NativeMethods.GetCursorScreenPos();
+                _popup.HorizontalOffset = cur.X / dpiX + 16;
+                _popup.VerticalOffset   = cur.Y / dpiY + 16;
+                return;
+            }
+
+            var r = tipRect.Value;
+            // Convert from physical pixels to WPF logical units.
+            double tipLeft   = r.Left   / dpiX;
+            double tipTop    = r.Top    / dpiY;
+            double tipRight  = r.Right  / dpiX;
+            double tipBottom = r.Bottom / dpiY;
+
+            double screenW = SystemParameters.PrimaryScreenWidth;
+            double screenH = SystemParameters.PrimaryScreenHeight;
+
+            const double revealW = 390;
+            const double revealH = 130;
             const double gap     = 8;
 
             double x, y;
 
-            // Try right of tooltip
-            if (tipRect.Right + gap + revealW <= screenW)
+            if (tipRight + gap + revealW <= screenW)
             {
-                x = tipRect.Right + gap;
-                y = tipRect.Top;
+                x = tipRight + gap;
+                y = tipTop;
             }
-            // Try left of tooltip
-            else if (tipRect.Left - gap - revealW >= 0)
+            else if (tipLeft - gap - revealW >= 0)
             {
-                x = tipRect.Left - gap - revealW;
-                y = tipRect.Top;
+                x = tipLeft - gap - revealW;
+                y = tipTop;
             }
-            // Fall back: below tooltip
             else
             {
-                x = tipRect.Left;
-                y = tipRect.Bottom + gap;
+                x = tipLeft;
+                y = tipBottom + gap;
             }
 
-            // Clamp so the reveal popup doesn't go off the bottom.
             if (y + revealH > screenH) y = Math.Max(0, screenH - revealH);
 
             _popup.HorizontalOffset = x;
@@ -280,12 +282,12 @@ internal sealed class UiRevealOverlay
         }
         catch
         {
-            // Fallback: cursor-relative
             try
             {
-                var cursorRelative = Mouse.GetPosition(_owner);
-                var screenPos      = _owner.PointToScreen(cursorRelative);
-                PositionPopup(screenPos);
+                var cur = NativeMethods.GetCursorScreenPos();
+                var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(_owner);
+                _popup.HorizontalOffset = cur.X / dpi.DpiScaleX + 16;
+                _popup.VerticalOffset   = cur.Y / dpi.DpiScaleY + 16;
             }
             catch { }
         }

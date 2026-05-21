@@ -66,6 +66,10 @@ internal static class NativeMethods {
     private static extern bool GetWindowRect(nint hWnd, out RECT lpRect);
 
     [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out POINT lpPoint);
+
+    [DllImport("user32.dll")]
     private static extern bool IsIconic(nint hWnd);
 
     [DllImport("user32.dll")]
@@ -205,6 +209,35 @@ internal static class NativeMethods {
                 (r.Bottom - r.Top)  / dpi.DpiScaleY);
         }
         return new Rect(window.Left, window.Top, window.ActualWidth, window.ActualHeight);
+    }
+
+    /// <summary>
+    /// Returns the screen-pixel rect of the HWND that hosts <paramref name="visual"/>.
+    /// Useful for getting the bounds of a ToolTip popup whose PresentationSource is
+    /// a separate Popup HWND.  Returns null if the visual isn't connected to an HwndSource.
+    /// </summary>
+    public static Rect? TryGetVisualHwndScreenRect(System.Windows.Media.Visual visual)
+    {
+        try
+        {
+            var src = System.Windows.PresentationSource.FromVisual(visual)
+                      as System.Windows.Interop.HwndSource;
+            if (src is null || src.IsDisposed) return null;
+            if (!GetWindowRect(src.Handle, out RECT r)) return null;
+            return new Rect(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Returns the current Win32 cursor position in screen pixels.</summary>
+    public static Point GetCursorScreenPos()
+    {
+        try
+        {
+            if (GetCursorPos(out POINT pt)) return new Point(pt.x, pt.y);
+        }
+        catch { }
+        return default;
     }
 
     public static bool TryActivateProcessMainWindow(int processId) {        if (processId <= 0)
