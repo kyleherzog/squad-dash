@@ -110,10 +110,8 @@ internal sealed class MaintenanceStateStore {
             w.WriteEndObject();
             w.Flush();
 
-            var json     = System.Text.Encoding.UTF8.GetString(ms.ToArray());
-            var tmpPath  = _statePath + ".tmp";
-            File.WriteAllText(tmpPath, json, System.Text.Encoding.UTF8);
-            File.Move(tmpPath, _statePath, overwrite: true);
+            var json = System.Text.Encoding.UTF8.GetString(ms.ToArray());
+            JsonFileStorage.AtomicWrite(_statePath, json);
         }
         catch (Exception ex) {
             SquadDashTrace.Write(TraceCategory.General,
