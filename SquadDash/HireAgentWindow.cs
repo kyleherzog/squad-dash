@@ -131,6 +131,7 @@ internal sealed class HireAgentWindow : Window {
         MinHeight = 760;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         this.SetResourceReference(BackgroundProperty, "AppSurface");
+        this.SetResourceReference(FontSizeProperty, "FontSizeBody");
 
         Resources = new ResourceDictionary();
 
@@ -208,10 +209,10 @@ internal sealed class HireAgentWindow : Window {
 
         var previewTitle = new TextBlock {
             Text = "New Agent",
-            FontSize = (double)Application.Current.Resources["FontSizeHeading"],
             FontWeight = FontWeights.Bold,
             Margin = new Thickness(0, 0, 0, 18)
         };
+        previewTitle.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeHeading");
         previewTitle.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
         DockPanel.SetDock(previewTitle, Dock.Top);
         previewDock.Children.Add(previewTitle);
@@ -254,8 +255,8 @@ internal sealed class HireAgentWindow : Window {
             Margin = new Thickness(0, 18, 0, 0),
             TextWrapping = TextWrapping.Wrap,
             TextAlignment = TextAlignment.Left,
-            FontSize = (double)Application.Current.Resources["FontSizeSmall"]
         };
+        disclaimerText.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeSmall");
         disclaimerText.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
         Grid.SetRow(disclaimerText, 1);
         Grid.SetColumnSpan(disclaimerText, 3);
@@ -287,6 +288,7 @@ internal sealed class HireAgentWindow : Window {
             ItemsSource = CommonRoles
         };
         _roleComboBox.Template = BuildComboBoxTemplate();
+        _roleComboBox.SetResourceReference(Control.FontSizeProperty,   "FontSizeBody");
         _roleComboBox.SetResourceReference(Control.BackgroundProperty, "InputSurface");
         _roleComboBox.SetResourceReference(Control.ForegroundProperty, "LabelText");
         _roleComboBox.SetResourceReference(Control.BorderBrushProperty, "InputBorder");
@@ -375,6 +377,7 @@ internal sealed class HireAgentWindow : Window {
             VerticalAlignment = VerticalAlignment.Center,
             TextAlignment = TextAlignment.Center
         };
+        _imagePlaceholderText.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
         _imagePlaceholderText.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
         imageGrid.Children.Add(_imagePlaceholderText);
 
@@ -535,6 +538,7 @@ internal sealed class HireAgentWindow : Window {
             Text = text,
             FontWeight = FontWeights.SemiBold
         };
+        block.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeBody");
         block.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
         return block;
     }
@@ -542,9 +546,9 @@ internal sealed class HireAgentWindow : Window {
     private static TextBlock BuildHintText(string text) {
         var block = new TextBlock {
             Text = text,
-            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Margin = new Thickness(0, 2, 0, 14)
         };
+        block.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
         block.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
         return block;
     }
@@ -592,6 +596,7 @@ internal sealed class HireAgentWindow : Window {
             Padding = multiline ? new Thickness(10, 8, 10, 8) : new Thickness(10, 3, 10, 3),
             VerticalContentAlignment = VerticalAlignment.Center
         };
+        textBox.SetResourceReference(Control.FontSizeProperty,   "FontSizeBody");
         textBox.SetResourceReference(Control.ForegroundProperty, "LabelText");
         textBox.SetResourceReference(Control.BackgroundProperty, "InputSurface");
         textBox.SetResourceReference(Control.BorderBrushProperty, "InputBorder");
@@ -602,6 +607,7 @@ internal sealed class HireAgentWindow : Window {
         var textBox = new BulletedTextBox {
             MinHeight = 96
         };
+        textBox.SetResourceReference(Control.FontSizeProperty,   "FontSizeBody");
         textBox.SetResourceReference(Control.ForegroundProperty, "LabelText");
         textBox.SetResourceReference(Control.BackgroundProperty, "InputSurface");
         textBox.SetResourceReference(Control.BorderBrushProperty, "InputBorder");
@@ -922,11 +928,11 @@ internal sealed class HireAgentWindow : Window {
             avatar.SetResourceReference(Border.BorderBrushProperty, "BadgeBorder");
             avatar.Child = new TextBlock {
                 Text = string.IsNullOrWhiteSpace(option.Name) ? "?" : option.Name.Trim()[..1].ToUpperInvariant(),
-                FontSize = (double)Application.Current.Resources["FontSizeTitle"],
                 FontWeight = FontWeights.Bold,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            ((TextBlock)avatar.Child).SetResourceReference(TextBlock.FontSizeProperty, "FontSizeTitle");
             stack.Children.Add(avatar);
         }
 
@@ -943,10 +949,10 @@ internal sealed class HireAgentWindow : Window {
             var roleBlock = new TextBlock {
                 Text = option.Role,
                 Margin = new Thickness(0, 6, 0, 0),
-                FontSize = (double)Application.Current.Resources["FontSizeSmall"],
                 TextAlignment = TextAlignment.Center,
                 TextWrapping = TextWrapping.Wrap
             };
+            roleBlock.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
             roleBlock.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
             stack.Children.Add(roleBlock);
         }
