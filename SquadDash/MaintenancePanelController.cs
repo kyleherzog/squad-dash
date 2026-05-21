@@ -422,8 +422,9 @@ internal sealed class MaintenancePanelController {
         titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
         rightPanel.Children.Add(titleBlock);
 
-        // Chips: frequency + safety
-        var chipRow = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
+        // Chips: frequency + safety — only visible when task is enabled
+        var chipRow = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0),
+            Visibility = task.Enabled ? Visibility.Visible : Visibility.Collapsed };
         chipRow.Children.Add(BuildChip(task.Frequency, FrequencyTooltip(task.Frequency)));
         if (string.Equals(task.Safety, "direct", StringComparison.OrdinalIgnoreCase))
             chipRow.Children.Add(BuildWarningChip("⚠ direct commits"));
