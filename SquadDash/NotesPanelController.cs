@@ -159,7 +159,7 @@ internal sealed class NotesPanelController {
 
     private object BuildTooltipContent(NoteItem note)
     {
-        var panel = new StackPanel { Margin = new Thickness(4, 4, 4, 6), MaxWidth = 178 };
+        var panel = new StackPanel { Margin = new Thickness(4, 4, 4, 6), MaxWidth = 267 };
 
         // Header: title — relative time
         var ts = DateTimeOffset.FromUnixTimeSeconds(note.CreatedAt);
@@ -171,10 +171,10 @@ internal sealed class NotesPanelController {
             Text       = note.Title,
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxWidth   = 110,
+            MaxWidth   = 165,
         };
         titleBlock.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBody");
-        titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "ImportantText");
+        titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
         var separatorBlock = new TextBlock { Text = " — " };
         separatorBlock.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBody");
         separatorBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
@@ -193,10 +193,10 @@ internal sealed class NotesPanelController {
         {
             Text         = preview,
             TextWrapping = TextWrapping.Wrap,
-            MaxWidth     = 178,
+            MaxWidth     = 267,
         };
         bodyBlock.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeSmall");
-        bodyBlock.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+        bodyBlock.SetResourceReference(TextBlock.ForegroundProperty, "ImportantText");
         panel.Children.Add(bodyBlock);
 
         return panel;
