@@ -61,17 +61,17 @@ internal sealed class UiRevealOverlay
         EnsurePopup();
         _lastElement = null;
 
-        // PreProcessInput fires for ALL input on the UI thread, including mouse
-        // events inside floating ToolTip / Popup HWNDs that own their own window,
-        // so the overlay works even when the mouse is inside a hint popup.
-        InputManager.Current.PreProcessInput += OnGlobalInput;
+        // PostProcessInput fires AFTER the input event has been fully dispatched,
+        // so OriginalSource is set correctly for both main-window elements and
+        // elements inside floating ToolTip / Popup HWNDs.
+        InputManager.Current.PostProcessInput += OnPostProcessInput;
     }
 
     internal void Deactivate()
     {
         if (_owner is not null)
         {
-            InputManager.Current.PreProcessInput -= OnGlobalInput;
+            InputManager.Current.PostProcessInput -= OnPostProcessInput;
             _owner = null;
         }
 
@@ -82,18 +82,16 @@ internal sealed class UiRevealOverlay
         _lastElement = null;
     }
 
-    private void OnGlobalInput(object sender, PreProcessInputEventArgs e)
+    private void OnPostProcessInput(object sender, ProcessInputEventArgs e)
     {
         try
         {
             if (_owner is null) return;
 
-            // Left-click anywhere → eat the click and dismiss.
-            if (e.StagingItem.Input is MouseButtonEventArgs { ChangedButton: MouseButton.Left } click
-                && click.RoutedEvent != Mouse.MouseUpEvent
-                && click.RoutedEvent != Mouse.PreviewMouseUpEvent)
+            // Left-click anywhere → dismiss.
+            if (e.StagingItem.Input is MouseButtonEventArgs
+                { ChangedButton: MouseButton.Left, ButtonState: MouseButtonState.Pressed })
             {
-                e.Cancel();
                 Deactivate();
                 return;
             }
@@ -104,7 +102,7 @@ internal sealed class UiRevealOverlay
                 || e.StagingItem.Input is MouseWheelEventArgs)
                 return;
 
-            // Resolve the deepest FrameworkElement under the pointer from the event source.
+            // At PostProcessInput, OriginalSource is the actual hit-tested element.
             var source = (mouse.OriginalSource ?? mouse.Source) as DependencyObject;
             FrameworkElement? element = null;
             var current = source;
@@ -119,19 +117,27 @@ internal sealed class UiRevealOverlay
 
             UpdatePopupContent(element);
 
-            // Position the info-popup near the cursor using screen coordinates.
+            // Position popup near the cursor.  Mouse.GetPosition works even when
+            // the pointer is inside a ToolTip HWND because WPF translates from
+            // Win32 cursor pos internally.
             try
             {
-                var pos       = mouse.GetPosition(element);
-                var screenPos = element.PointToScreen(pos);
+                var ownerRelative = Mouse.GetPosition(_owner);
+                var screenPos     = _owner.PointToScreen(ownerRelative);
                 PositionPopup(screenPos);
             }
-            catch { /* element may not yet be connected to a visual root */ }
+            catch
+            {
+                try
+                {
+                    var pos       = mouse.GetPosition(element);
+                    var screenPos = element.PointToScreen(pos);
+                    PositionPopup(screenPos);
+                }
+                catch { /* element not yet in a presentation source */ }
+            }
 
             _popup!.IsOpen = true;
-
-            // Highlight adorner — works for main-window elements and may work in
-            // tooltip trees that include an AdornerDecorator; safe to try either way.
             ApplyHighlight(element);
         }
         catch { /* never throw from overlay */ }
