@@ -30,14 +30,22 @@ internal static class MarkdownHoverPopup {
     /// <param name="getMarkdown">Lazily returns the markdown string. Called once on first open.</param>
     /// <param name="placement">Which side of the row to place the popup.</param>
     /// <param name="maxWidth">Maximum width of the popup border.</param>
-    /// <param name="maxHeight">Maximum height of the markdown scroll viewer.</param>
+    /// <param name="maxHeight">
+    ///   Maximum height of the markdown scroll viewer. Pass 0 (default) to use
+    ///   up to 50% of the primary screen height automatically.
+    /// </param>
     public static void Attach(
         FrameworkElement  row,
         Func<UIElement?>? buildHeader,
         Func<string?>     getMarkdown,
         PlacementMode     placement = PlacementMode.Left,
         double            maxWidth  = 680,
-        double            maxHeight = 220) {
+        double            maxHeight = 0) {
+
+        // Resolve effective max height: caller-supplied value, or 50% of screen height.
+        double EffectiveMaxHeight() =>
+            maxHeight > 0 ? maxHeight
+                          : SystemParameters.PrimaryScreenHeight * 0.5;
 
         var contentStack = new StackPanel { Margin = new Thickness(10) };
 
@@ -83,7 +91,7 @@ internal static class MarkdownHoverPopup {
                 var viewer = new FlowDocumentScrollViewer {
                     Document                    = doc,
                     MaxWidth                    = maxWidth - 20,
-                    MaxHeight                   = maxHeight,
+                    MaxHeight                   = EffectiveMaxHeight(),
                     Margin                      = header is null ? new Thickness(0) : new Thickness(0, 6, 0, 0),
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 };

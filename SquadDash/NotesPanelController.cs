@@ -164,8 +164,7 @@ internal sealed class NotesPanelController {
                 },
                 getMarkdown: () => _loadPreview!(note),
                 placement:   System.Windows.Controls.Primitives.PlacementMode.Right,
-                maxWidth:    640,
-                maxHeight:   200);
+                maxWidth:    640);
         }
 
         // Single click → open note

@@ -391,8 +391,7 @@ internal sealed class MaintenancePanelController {
                 row,
                 buildHeader: null,
                 getMarkdown: () => task.Instructions,
-                maxWidth:    800,
-                maxHeight:   200);
+                maxWidth:    800);
 
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
