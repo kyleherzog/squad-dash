@@ -422,7 +422,16 @@ internal sealed class MaintenancePanelController {
         if (!string.IsNullOrWhiteSpace(task.Instructions))
             MarkdownHoverPopup.Attach(
                 row,
-                buildHeader: null,
+                buildHeader: () => {
+                    var header = new TextBlock {
+                        Text       = task.Title,
+                        FontWeight = FontWeights.SemiBold,
+                        Margin     = new Thickness(0, 0, 0, 6),
+                    };
+                    header.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeBody");
+                    header.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+                    return header;
+                },
                 getMarkdown: () => task.Instructions,
                 maxWidth:    800);
 
