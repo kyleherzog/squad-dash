@@ -17,20 +17,27 @@ using System.Windows.Media.Animation;
 namespace SquadDash;
 
 /// <summary>
-/// Standalone image-editing dialog that pre-loads an image from the clipboard,
+/// Standalone image-editing window that pre-loads an image from the clipboard,
 /// shows a resizable crop rectangle, and supports arrow and cursor-overlay annotations.
 ///
 /// Pattern: code-behind only (no XAML), all colours via SetResourceReference —
 /// consistent with <see cref="AgentInfoWindow"/> and <see cref="ScreenshotOverlayWindow"/>.
 ///
-/// After <c>ShowDialog()</c> returns, check <see cref="Result"/>:
-/// non-null = the user clicked "Insert Image" (cropped + annotated bitmap);
-/// null = the user cancelled.
+/// Modeless: call <c>Show()</c> (not <c>ShowDialog()</c>) and subscribe to
+/// <see cref="ImageAccepted"/> to receive the rendered bitmap when the user clicks
+/// "Insert Image". Multiple instances may be open simultaneously.
+/// <see cref="Result"/> is also set for convenience at the moment the event fires.
 /// </summary>
 internal sealed class ClipboardImageEditorWindow : Window {
-    // ── Result ────────────────────────────────────────────────────────────────
+    // ── Result / callback ─────────────────────────────────────────────────────
 
     internal BitmapSource? Result { get; private set; }
+
+    /// <summary>
+    /// Fired (on the UI thread) when the user clicks "Insert Image" / "Attach Image".
+    /// The argument is the rendered, annotated bitmap. The window closes immediately after.
+    /// </summary>
+    internal event Action<BitmapSource>? ImageAccepted;
 
     // ── Hit zones ─────────────────────────────────────────────────────────────
 
@@ -329,11 +336,11 @@ internal sealed class ClipboardImageEditorWindow : Window {
         _isPromptMode = isPromptMode;
         _themeName = AgentStatusCard.IsDarkTheme ? "dark" : "light";
 
-        Owner = owner;
+        // Owner is intentionally not set — this window is modeless and fully independent.
         Title = "Edit Clipboard Image";
         WindowStyle = WindowStyle.SingleBorderWindow;
         ResizeMode = ResizeMode.CanResizeWithGrip;
-        ShowInTaskbar = false;
+        ShowInTaskbar = true;
         WindowStartupLocation = WindowStartupLocation.Manual;
         this.SetResourceReference(BackgroundProperty, "AppSurface");
 
@@ -5034,6 +5041,8 @@ internal sealed class ClipboardImageEditorWindow : Window {
 
         try {
             Result = RenderFinalBitmap();
+            if (Result is not null)
+                ImageAccepted?.Invoke(Result);
         }
         finally {
             Close();
