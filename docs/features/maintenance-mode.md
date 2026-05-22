@@ -223,11 +223,32 @@ The `actions` array renders as clickable buttons in the Inbox viewer. Because ma
 - **`start_coordinator`** — routes to the coordinator when clicked.
 - **`done`** — dismisses the message with no follow-up.
 
-> **Self-contained prompts:** Each `prompt` must include all the context needed to act on the finding — file paths, line numbers, symptoms, relevant background. There is no conversation history available when the button is clicked; the prompt is the entire briefing.
+> **Self-contained prompts:** Each `prompt` must include all the context needed to act on the finding — file paths, structural anchors (see [Reporting file locations](#reporting-file-locations--structural-anchors)), symptoms, relevant background. There is no conversation history available when the button is clicked; the prompt is the entire briefing.
 
 ### Why not `QUICK_REPLIES_JSON`?
 
 `QUICK_REPLIES_JSON` is a live quick-reply mechanism that pauses and waits for the user to click. Maintenance runs while you are away, so using `QUICK_REPLIES_JSON` in a maintenance task would leave the session waiting indefinitely. Use `actions` in inbox messages instead — they are fully deferred and safe to compose at any time.
+
+---
+
+## Reporting file locations — structural anchors
+
+When an agent references a location in a file — in a report, inbox message, deferred action prompt, or commit message — **do not use line numbers as the primary anchor**. Line numbers shift whenever surrounding content is added or removed, making them unreliable across sessions.
+
+Use the structural signpost appropriate to the file type:
+
+| File type | Primary anchor | Example |
+|-----------|---------------|---------|
+| **C# / Java / TypeScript / Python / most languages** | `ClassName.MethodName` — nest as deeply as needed | `MaintenancePanelController.Refresh` |
+| **Markdown / documentation** | Heading breadcrumb from the document root | `## Setup > ### Windows Installation` |
+| **JSON** | Dot-notation or bracket key path | `tasks[2].options.if_found.value` |
+| **YAML** | Dot-notation or bracket key path | `tasks.docs-review.options.if_found.value` |
+| **CSS / SCSS** | Selector (add property when the finding is property-specific) | `.maintenance-panel > .status-label` · `.btn:hover { color }` |
+| **Plain text / unknown** | Verbatim excerpt — first 8–15 words of the relevant sentence | `"After the idle timeout expires, SquadDash loads…"` |
+
+**General fallback:** when a file has no identifiable structure, quote the exact text being referenced. A verbatim excerpt is grep-able and stays valid even after surrounding lines shift.
+
+Line numbers may appear as a *secondary* hint (e.g. "near line 42") but must never be the sole anchor in a report, prompt, or commit message.
 
 ---
 
@@ -311,3 +332,4 @@ SquadDash will wait for any currently-running prompt or Loop iteration to finish
 | `after-commits` frequency | Runs once per new HEAD commit SHA; alias: `per-commit`  |
 | Inbox messages   | `INBOX_MESSAGE_JSON` block at end of task output        |
 | Deferred actions | `actions` array in inbox messages; rendered as buttons  |
+| File location anchors | Structural signpost (class/method, heading path, key path, selector, excerpt) — not bare line numbers |
