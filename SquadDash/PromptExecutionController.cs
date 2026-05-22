@@ -246,6 +246,7 @@ internal sealed class PromptExecutionController {
     private readonly Action                     _hideTasksStatusWindow;
     private readonly Action                     _showApprovalWindow;
     private readonly Action                     _showLiveTraceWindow;
+    private readonly Action                     _showScreenshotHealthWindow;
     private readonly Action                     _runDoctor;
     private readonly Func<HireAgentWindow.HireAgentSubmission?> _showHireAgentWindow;
     private readonly Action<string, bool>       _enqueuePrompt;
@@ -456,6 +457,7 @@ internal sealed class PromptExecutionController {
         Action hideTasksStatusWindow,
         Action showApprovalWindow,
         Action showLiveTraceWindow,
+        Action showScreenshotHealthWindow,
         Action runDoctor,
         Func<HireAgentWindow.HireAgentSubmission?> showHireAgentWindow,
         Action<string, bool> enqueuePrompt,
@@ -529,6 +531,7 @@ internal sealed class PromptExecutionController {
         _hideTasksStatusWindow                 = hideTasksStatusWindow;
         _showApprovalWindow                    = showApprovalWindow;
         _showLiveTraceWindow                   = showLiveTraceWindow;
+        _showScreenshotHealthWindow            = showScreenshotHealthWindow;
         _runDoctor                             = runDoctor;
         _showHireAgentWindow                   = showHireAgentWindow;
         _enqueuePrompt                         = enqueuePrompt;
@@ -1029,6 +1032,9 @@ internal sealed class PromptExecutionController {
         if (string.Equals(trimmed, "/trace", StringComparison.OrdinalIgnoreCase))
             return HandleLocalTraceCommand(prompt, addToHistory, clearPromptBox);
 
+        if (string.Equals(trimmed, "/health", StringComparison.OrdinalIgnoreCase))
+            return HandleLocalHealthCommand(prompt, addToHistory, clearPromptBox);
+
         if (string.Equals(trimmed, "/doctor", StringComparison.OrdinalIgnoreCase))
             return HandleLocalDoctorCommand(prompt, addToHistory, clearPromptBox);
 
@@ -1110,6 +1116,16 @@ internal sealed class PromptExecutionController {
             addToHistory,
             clearPromptBox,
             _showLiveTraceWindow);
+    }
+
+    private bool HandleLocalHealthCommand(string prompt, bool addToHistory, bool clearPromptBox) {
+        SquadDashTrace.Write("UI", "Local command intercepted prompt=/health");
+
+        return ExecuteLocalUiCommand(
+            prompt,
+            addToHistory,
+            clearPromptBox,
+            _showScreenshotHealthWindow);
     }
 
     private bool HandleLocalDoctorCommand(string prompt, bool addToHistory, bool clearPromptBox) {

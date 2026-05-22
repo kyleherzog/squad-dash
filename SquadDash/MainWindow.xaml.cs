@@ -1199,6 +1199,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             hideTasksStatusWindow: () => HideTasksStatusWindow(),
             showApprovalWindow: () => ShowApprovalPanel(),
             showLiveTraceWindow: () => ShowTraceWindow(),
+            showScreenshotHealthWindow: () => ShowScreenshotHealthWindow(),
             runDoctor: () => RunDoctorButton_Click(null!, null!),
             showHireAgentWindow: () => ShowHireAgentWindow(),
             enqueuePrompt: (text, isSystemInjected) => EnqueuePrompt(text, isSystemInjected),
@@ -2007,6 +2008,30 @@ public partial class MainWindow : Window, ILiveElementLocator
                     await DispatchRightmostQueuedTabAsQuickReplyAsync(_activeTabId);
                     return;
                 }
+
+                // A slash command in a queued tab must execute immediately regardless of
+                // queue state — remove the slot, restore the main draft, then dispatch.
+                var queuedText = PromptTextBox.Text.Trim();
+                if (LocalPromptSubmissionPolicy.IsImmediateLocalCommand(queuedText))
+                {
+                    var capturedId = _activeTabId;
+                    _promptQueue.Remove(capturedId);
+                    _activeTabId = null;
+                    SetPromptTextBoxLogicalBuffer(
+                        _queuePreEditDraft ?? string.Empty,
+                        _queuePreEditDraftCaretIndex,
+                        _queuePreEditDraftSelectionStart,
+                        _queuePreEditDraftSelectionLength,
+                        "slash-command-from-queued-tab");
+                    _queuePreEditDraft = null;
+                    UpdateFollowUpStrip();
+                    SyncQueuePanel();
+                    SquadDashTrace.Write("UI", $"Slash command {queuedText} executed from queued tab — slot removed");
+                    await _pec.ExecutePromptAsync(queuedText, addToHistory: true, clearPromptBox: false);
+                    SyncPromptTextBoxSimBorder();
+                    return;
+                }
+
                 if (_isPromptRunning || IsNativeLoopRunning || _queueManuallyPaused || HasPendingDirectQuickReplyAgentFollowUp())
                 {
                     OnQueueTabClicked(null);
@@ -6704,7 +6729,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private static readonly string[] SlashCommands = [
         "/activate", "/add-dir", "/agents", "/allow-all", "/approval", "/changelog", "/clear",
         "/context", "/copy", "/delegate", "/deactivate", "/diff", "/doctor", "/experimental", "/feedback",
-        "/fleet", "/dropTasks", "/help", "/hire", "/ide", "/init", "/instructions", "/login", "/logout",
+        "/fleet", "/dropTasks", "/health", "/help", "/hire", "/ide", "/init", "/instructions", "/login", "/logout",
         "/lsp", "/mcp", "/model", "/new", "/plan", "/pr", "/queue-sim", "/research", "/restart",
         "/resume", "/review", "/rewind", "/rename", "/retire", "/session", "/sessions", "/share", "/skills",
         "/status", "/tasks", "/test-queue", "/trace", "/update", "/usage", "/version"
