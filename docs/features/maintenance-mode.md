@@ -97,15 +97,16 @@ Both methods are equivalent — the file is the single source of truth.
 
 ## Frequency values
 
-| Value        | Behaviour                                                                                 |
-|--------------|-------------------------------------------------------------------------------------------|
-| `daily`      | Runs at most once per UTC calendar day; skipped on subsequent windows the same day        |
-| `weekly`     | Runs at most once per 7-day rolling window; skipped on subsequent windows within 7 days  |
-| `monthly`    | Runs at most once per calendar month; skipped on subsequent windows the same month       |
-| `per-commit` | Runs once per unique HEAD commit SHA; re-runs after new commits land                      |
-| `always`     | Runs every maintenance window regardless of when it last ran                              |
+| Value           | Behaviour                                                                                          |
+|-----------------|----------------------------------------------------------------------------------------------------|
+| `daily`         | Runs at most once per UTC calendar day; skipped on subsequent windows the same day                 |
+| `weekly`        | Runs at most once per Monday–Sunday calendar week (UTC); skipped on subsequent windows the same week |
+| `monthly`       | Runs at most once per calendar month; skipped on subsequent windows the same month                 |
+| `after-commits` | Runs once per unique HEAD commit SHA; re-runs automatically when new commits land                  |
+| `per-commit`    | Backward-compat alias for `after-commits`; identical behaviour; prefer `after-commits` in new configs |
+| `always`        | Runs every maintenance window regardless of when it last ran                                       |
 
-> **`per-commit` fallback:** If git is unavailable or HEAD cannot be resolved, `per-commit` tasks fall back to `daily` behaviour and a trace entry is written to the SquadDash trace log.
+> **`after-commits` fallback:** If git is unavailable or HEAD cannot be resolved, `after-commits` tasks (and the `per-commit` alias) fall back to `daily` behaviour and a trace entry is written to the SquadDash trace log.
 
 ---
 
@@ -116,7 +117,7 @@ Every task runs with an *effective safety level* determined by the stricter of t
 | Level         | What the AI may do                                                              |
 |---------------|---------------------------------------------------------------------------------|
 | `report-only` | No file changes. Findings are written to the session transcript only.           |
-| `branch`      | Creates branch `maintenance/YYYYMMDD-<task-slug>` before any edits. Commits go to that branch; the current branch is never touched. **Recommended default.** |
+| `branch`      | Creates branch `maintenance/YYYYMMDD-<task-slug>` before any edits. Commits go to that branch; the current branch is never touched. **Recommended default.**<br><br>⚠ **Multi-task sessions:** Each task receives a "create branch from the current HEAD" instruction. If a prior task in the same session committed to its branch, the next task branches from that branch — not from your main/default branch. A fix to inject an explicit base-branch checkout is tracked in the backlog. For now, verify multi-task `branch`-safety session outputs before merging. |
 | `direct`      | Commits directly to the current branch. Use only for tasks that are safe by design (e.g. writing only to `tasks.md`). |
 
 **Safety floor rule:** the global `safety:` value is a *floor*. A per-task setting cannot be less safe than the global value.
@@ -176,6 +177,57 @@ The filename uses local time. Reports are automatically pruned to the **30 most 
 ```
 
 Outcome icons: `✅` completed · `⏭` skipped · `❌` error · `⏸` interrupted.
+
+---
+
+## Inbox messages and deferred actions
+
+Maintenance tasks can send messages to your **Inbox panel** using the `INBOX_MESSAGE_JSON` block format. This is especially useful for `report-only` tasks that find something worth your attention.
+
+### Sending an inbox message
+
+At the end of its output, any maintenance agent can include:
+
+```
+INBOX_MESSAGE_JSON:
+{
+  "subject": "Brief subject line",
+  "from": "argus-weld",
+  "body": "Full Markdown report body",
+  "attachments": [],
+  "actions": [
+    {
+      "label": "Fix this",
+      "routeMode": "start_named_agent",
+      "targetAgent": "arjun-sen",
+      "prompt": "Arjun: during maintenance on 2026-05-22 I found X in src/Foo.cs:42. Please fix it."
+    },
+    {
+      "label": "Add to backlog",
+      "routeMode": "start_coordinator",
+      "prompt": "Add a mid-priority task: [description of finding from maintenance on 2026-05-22]"
+    },
+    {
+      "label": "Dismiss",
+      "routeMode": "done"
+    }
+  ]
+}
+```
+
+### Deferred action buttons
+
+The `actions` array renders as clickable buttons in the Inbox viewer. Because maintenance runs while you are away, these buttons let you defer a decision until you return:
+
+- **`start_named_agent`** — routes to a specific specialist when clicked.
+- **`start_coordinator`** — routes to the coordinator when clicked.
+- **`done`** — dismisses the message with no follow-up.
+
+> **Self-contained prompts:** Each `prompt` must include all the context needed to act on the finding — file paths, line numbers, symptoms, relevant background. There is no conversation history available when the button is clicked; the prompt is the entire briefing.
+
+### Why not `QUICK_REPLIES_JSON`?
+
+`QUICK_REPLIES_JSON` is a live quick-reply mechanism that pauses and waits for the user to click. Maintenance runs while you are away, so using `QUICK_REPLIES_JSON` in a maintenance task would leave the session waiting indefinitely. Use `actions` in inbox messages instead — they are fully deferred and safe to compose at any time.
 
 ---
 
@@ -256,3 +308,6 @@ SquadDash will wait for any currently-running prompt or Loop iteration to finish
 | State file           | `<workspace-root>/maintenance-state.json`         |
 | Reset state          | Delete `maintenance-state.json`                   |
 | Test trigger         | `trigger_idle_cycle` command in SquadDash         |
+| `after-commits` frequency | Runs once per new HEAD commit SHA; alias: `per-commit`  |
+| Inbox messages   | `INBOX_MESSAGE_JSON` block at end of task output        |
+| Deferred actions | `actions` array in inbox messages; rendered as buttons  |
