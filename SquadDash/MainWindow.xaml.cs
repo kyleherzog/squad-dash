@@ -4322,6 +4322,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                                 Read        = false,
                                 Body        = inboxDto.Body,
                                 Attachments = inboxDto.Attachments,
+                                Actions     = inboxDto.Actions,
                             };
                             _inboxStore.Save(inboxMessage);
                             AppendLine($"📬 **Inbox:** {inboxDto.Subject}");

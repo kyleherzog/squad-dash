@@ -101,6 +101,24 @@ public class InboxStore
         }
     }
 
+    /// <summary>Records that the user clicked an action; persists the update to disk.</summary>
+    public void MarkActionUsed(string messageId, string actionLabel)
+    {
+        lock (_sync)
+        {
+            var msg = GetById(messageId);
+            if (msg is null) return;
+
+            if (msg.UsedActions.Contains(actionLabel)) return;
+
+            var updated = msg with { UsedActions = [.. msg.UsedActions, actionLabel] };
+            Save(updated);
+
+            // Replace in-memory too if callers have a reference
+            // (callers should re-call LoadAll() to refresh)
+        }
+    }
+
     /// <summary>Returns the message with the given <paramref name="id"/>, or null if not found.</summary>
     public InboxMessage? GetById(string id)
     {

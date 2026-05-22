@@ -22,6 +22,9 @@ internal sealed class InboxMessageDto
 
     [JsonPropertyName("attachments")]
     public IReadOnlyList<InboxAttachment> Attachments { get; init; } = [];
+
+    [JsonPropertyName("actions")]
+    public IReadOnlyList<InboxAction> Actions { get; init; } = [];
 }
 
 /// <summary>

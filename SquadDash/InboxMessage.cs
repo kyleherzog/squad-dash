@@ -26,6 +26,13 @@ public sealed record InboxMessage
 
     [JsonPropertyName("attachments")]
     public IReadOnlyList<InboxAttachment> Attachments { get; init; } = [];
+
+    [JsonPropertyName("actions")]
+    public IReadOnlyList<InboxAction> Actions { get; init; } = [];
+
+    /// <summary>Labels of actions the user has already clicked (persisted).</summary>
+    [JsonPropertyName("usedActions")]
+    public IReadOnlyList<string> UsedActions { get; init; } = [];
 }
 
 public sealed record InboxAttachment
@@ -51,4 +58,36 @@ public sealed record InboxAttachment
     /// <summary>Inline text or markdown content.</summary>
     [JsonPropertyName("content")]
     public string? Content { get; init; }
+}
+
+/// <summary>
+/// A deferred action button embedded in an inbox message.
+/// Clicking it injects <see cref="Prompt"/> into the queue and routes based on <see cref="RouteMode"/>.
+/// The prompt must be fully self-contained — it will be dispatched in a future session
+/// with no conversation history from when this message was written.
+/// </summary>
+public sealed record InboxAction
+{
+    /// <summary>Human-readable button label.</summary>
+    [JsonPropertyName("label")]
+    public string Label { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Routing mode. Valid values: "start_named_agent", "start_coordinator", "done".
+    /// Use "done" for dismiss/no-op actions that require no prompt injection.
+    /// </summary>
+    [JsonPropertyName("routeMode")]
+    public string RouteMode { get; init; } = string.Empty;
+
+    /// <summary>Agent handle (required when routeMode is "start_named_agent").</summary>
+    [JsonPropertyName("targetAgent")]
+    public string? TargetAgent { get; init; }
+
+    /// <summary>
+    /// Fully self-contained prompt to inject. Null only when routeMode is "done".
+    /// Must include all context the receiving agent needs — file paths, symptoms,
+    /// discovered facts — because no session history will be available.
+    /// </summary>
+    [JsonPropertyName("prompt")]
+    public string? Prompt { get; init; }
 }
