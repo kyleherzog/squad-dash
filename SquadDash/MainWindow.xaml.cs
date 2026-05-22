@@ -27779,9 +27779,9 @@ public partial class MainWindow : Window, ILiveElementLocator
                 EnsureArgusWeldRegistered(workspacePath);
                 _maintenancePanel?.OnRunnerStarted(title);
             }),
-            onTaskCompleted: (id, title, anchorIndex) => Dispatcher.InvokeAsync(() => {
+            onTaskCompleted: (id, title, anchorIndex, startedAt, duration) => Dispatcher.InvokeAsync(() => {
                 _maintenancePanel?.OnRunnerCompleted();
-                AppendMaintenanceStub(title, anchorIndex);
+                AppendMaintenanceStub(title, anchorIndex, startedAt, duration);
             }),
             onCompleted:     report =>
             {
@@ -27860,7 +27860,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     /// maintenance task. The stub shows a wrench emoji and a clickable link that navigates
     /// to the corresponding turn in Argus Weld's thread.
     /// </summary>
-    private void AppendMaintenanceStub(string taskTitle, int anchorIndex)
+    private void AppendMaintenanceStub(string taskTitle, int anchorIndex, DateTimeOffset startedAt, TimeSpan duration)
     {
         var paragraph = CreateTranscriptParagraph();
 
@@ -27877,6 +27877,15 @@ public partial class MainWindow : Window, ILiveElementLocator
         link.SetResourceReference(TextElement.ForegroundProperty, "ActionLinkText");
         link.Click += (_, _) => NavigateToArgusWeldTask(anchorIndex);
         paragraph.Inlines.Add(link);
+
+        // Rebuild tooltip on each open so the relative timestamp ("3 minutes ago") stays current.
+        var toolTip = new ToolTip();
+        paragraph.ToolTip = toolTip;
+        paragraph.ToolTipOpening += (_, _) =>
+        {
+            var durationText = StatusTimingPresentation.FormatDuration(duration);
+            toolTip.Content = $"Maintenance task performed while you were away\nStarted: {StatusTimingPresentation.FormatRelativeTimestamp(startedAt)}\nTook: {durationText}";
+        };
 
         CoordinatorThread.Document.Blocks.Add(paragraph);
         ScrollToEndIfAtBottom(CoordinatorThread);
@@ -27934,7 +27943,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             ScrollToPromptParagraph(promptEntry.Paragraph);
     }
 
-
+    private void InitIdleDetection(string workspacePath)
+    {
         _maintenanceStateStore ??= new MaintenanceStateStore(Path.Combine(workspacePath, ".squad"));
 
         var config = MaintenanceMdParser.Parse(Path.Combine(workspacePath, ".squad", "maintenance.md"));

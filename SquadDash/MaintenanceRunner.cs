@@ -12,7 +12,7 @@ internal sealed class MaintenanceRunner {
     private readonly Func<string, CancellationToken, Task<int>> _executePromptAsync;
     private readonly MaintenanceStateStore                       _stateStore;
     private readonly Action<string>                              _onTaskStarted;
-    private readonly Action<string, string, int>                 _onTaskCompleted;
+    private readonly Action<string, string, int, DateTimeOffset, TimeSpan> _onTaskCompleted;
     private readonly Action<MaintenanceReport>                   _onCompleted;
     private readonly Func<string, CancellationToken, Task<string?>> _getCommitShaAsync;
 
@@ -24,7 +24,7 @@ internal sealed class MaintenanceRunner {
         Func<string, CancellationToken, Task<int>> executePromptAsync,
         MaintenanceStateStore                       stateStore,
         Action<string>                              onTaskStarted,
-        Action<string, string, int>                 onTaskCompleted,
+        Action<string, string, int, DateTimeOffset, TimeSpan> onTaskCompleted,
         Action<MaintenanceReport>                   onCompleted,
         Func<string, CancellationToken, Task<string?>>? getCommitShaAsync = null) {
 
@@ -88,6 +88,7 @@ internal sealed class MaintenanceRunner {
                         $"MaintenanceRunner: task '{task.Id}' safety override — declared '{task.Safety}', effective '{effectiveSafety}' (global floor '{config.Safety}').");
                 }
 
+                var taskStartedAt = DateTimeOffset.UtcNow;
                 var taskStart = Stopwatch.GetTimestamp();
                 try {
                     var prompt = BuildPrompt(task, config.Safety, startedAt);
@@ -102,7 +103,7 @@ internal sealed class MaintenanceRunner {
                         Outcome:            MaintenanceTaskOutcome.Completed,
                         Duration:           elapsed,
                         SafetyOverrideNote: safetyOverrideNote));
-                    _onTaskCompleted(task.Id, task.Title, anchorIndex);
+                    _onTaskCompleted(task.Id, task.Title, anchorIndex, taskStartedAt, elapsed);
                 }
                 catch (OperationCanceledException) {
                     break;
@@ -117,7 +118,7 @@ internal sealed class MaintenanceRunner {
                         Duration:           elapsed,
                         ErrorMessage:       ex.Message,
                         SafetyOverrideNote: safetyOverrideNote));
-                    _onTaskCompleted(task.Id, task.Title, -1);
+                    _onTaskCompleted(task.Id, task.Title, -1, taskStartedAt, elapsed);
                 }
             }
 
