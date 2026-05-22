@@ -47,7 +47,7 @@ public sealed record InboxAttachment
     [JsonPropertyName("path")]
     public string? Path { get; init; }
 
-    /// <summary>URL (for url attachment type).</summary>
+    /// <summary>URL (for url attachment type, and remote image attachments).</summary>
     [JsonPropertyName("href")]
     public string? Href { get; init; }
 

@@ -3,12 +3,14 @@ namespace SquadDash;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 
 /// <summary>Manages content in the inline Inbox panel.</summary>
@@ -274,7 +276,7 @@ internal sealed class InboxPanelController
         // Attachments
         _viewerAttachmentsPanel.Children.Clear();
         foreach (var att in msg.Attachments)
-            _viewerAttachmentsPanel.Children.Add(BuildAttachmentChip(att));
+            _viewerAttachmentsPanel.Children.Add(BuildAttachmentChip(att, Application.Current?.MainWindow));
         _viewerAttachmentsPanel.Visibility = msg.Attachments.Count > 0
             ? Visibility.Visible : Visibility.Collapsed;
 
@@ -324,12 +326,13 @@ internal sealed class InboxPanelController
         return btn;
     }
 
-    private static UIElement BuildAttachmentChip(InboxAttachment att)
+    private static UIElement BuildAttachmentChip(InboxAttachment att, Window? owner)
     {
         var icon = att.Type switch
         {
             "url"      => "🔗",
             "file"     => "📄",
+            "image"    => "🖼",
             "task-ref" => "✅",
             "text"     => "📝",
             _          => "📎",
@@ -368,13 +371,65 @@ internal sealed class InboxPanelController
                 break;
 
             case "file":
-                if (att.Path is not null)
-                    chip.MouseLeftButtonUp += (_, _) =>
+            {
+                var resolved = System.IO.Path.GetFullPath(att.Path!);
+                chip.MouseLeftButtonUp += (_, _) =>
+                {
+                    try
                     {
-                        try { Process.Start(new ProcessStartInfo(System.IO.Path.GetFullPath(att.Path)) { UseShellExecute = true }); }
-                        catch { }
-                    };
+                        if (resolved.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+                            MarkdownDocumentWindow.Show(owner, att.Label, resolved);
+                        else
+                            Process.Start(new ProcessStartInfo(resolved) { UseShellExecute = true });
+                    }
+                    catch { }
+                };
                 break;
+            }
+
+            case "image":
+            {
+                string? imagePath = att.Path is not null ? System.IO.Path.GetFullPath(att.Path) : null;
+                string? imageHref = att.Href;
+                chip.MouseLeftButtonUp += (_, _) =>
+                {
+                    try
+                    {
+                        Uri? uri = imagePath is not null ? new Uri(imagePath) :
+                                   imageHref is not null ? new Uri(imageHref) : null;
+                        if (uri is null) return;
+
+                        if (imagePath is not null && !File.Exists(imagePath))
+                        {
+                            MessageBox.Show($"Image not found:\n{imagePath}", att.Label, MessageBoxButton.OK, MessageBoxImage.Warning);
+                            return;
+                        }
+
+                        var bmp = new BitmapImage(uri);
+                        var img = new System.Windows.Controls.Image
+                        {
+                            Source  = bmp,
+                            Stretch = System.Windows.Media.Stretch.Uniform,
+                            Margin  = new Thickness(8),
+                        };
+                        var win = new Window
+                        {
+                            Title         = att.Label,
+                            Content       = img,
+                            Width         = Math.Min(bmp.PixelWidth  > 0 ? bmp.PixelWidth  + 32 : 800, SystemParameters.PrimaryScreenWidth  * 0.9),
+                            Height        = Math.Min(bmp.PixelHeight > 0 ? bmp.PixelHeight + 56 : 600, SystemParameters.PrimaryScreenHeight * 0.9),
+                            Owner         = owner,
+                            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                        };
+                        win.Show();
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show(ex.Message, att.Label, MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                };
+                break;
+            }
 
             case "task-ref":
                 chip.ToolTip = $"Task: {att.TaskId}";
