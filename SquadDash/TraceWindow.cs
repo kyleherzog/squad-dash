@@ -62,13 +62,24 @@ internal sealed class TraceWindow : ChromedWindow, ILiveTraceTarget
         Grid.SetRow(header, 0);
         root.Children.Add(header);
 
-        var copyButton= new Button
+        var titleBlock = new TextBlock
         {
-            Content = "Copy",
+            Text              = "Trace",
+            FontSize          = (double)Application.Current.Resources["FontSizeSubtitle"],
+            FontWeight        = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(0, 0, 8, 0),
+        };
+        titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+        DockPanel.SetDock(titleBlock, Dock.Left);
+        header.Children.Add(titleBlock);
+
+        var copyButton = new Button
+        {
+            Content  = "Copy",
             MinWidth = 76,
-            Height = 30,
-            Margin = new Thickness(0, 0, 8, 0),
-            HorizontalAlignment = HorizontalAlignment.Right,
+            Height   = 30,
+            Margin   = new Thickness(0, 0, 8, 0),
         };
         copyButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
         WindowChrome.SetIsHitTestVisibleInChrome(copyButton, true);
@@ -78,32 +89,21 @@ internal sealed class TraceWindow : ChromedWindow, ILiveTraceTarget
             if (!string.IsNullOrEmpty(text))
                 Clipboard.SetText(text);
         };
-        DockPanel.SetDock(copyButton, Dock.Right);
+        DockPanel.SetDock(copyButton, Dock.Left);
         header.Children.Add(copyButton);
 
         var clearButton = new Button
         {
-            Content = "Clear",
+            Content  = "Clear",
             MinWidth = 76,
-            Height = 30,
-            Margin = new Thickness(0, 0, 8, 0),
-            HorizontalAlignment = HorizontalAlignment.Right,
+            Height   = 30,
+            Margin   = new Thickness(0, 0, 8, 0),
         };
         clearButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
         WindowChrome.SetIsHitTestVisibleInChrome(clearButton, true);
         clearButton.Click += (_, _) => _logTextBox.Clear();
-        DockPanel.SetDock(clearButton, Dock.Right);
+        DockPanel.SetDock(clearButton, Dock.Left);
         header.Children.Add(clearButton);
-
-        var titleBlock = new TextBlock
-        {
-            Text = "Trace",
-            FontSize = (double)Application.Current.Resources["FontSizeSubtitle"],
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "ImportantText");
-        header.Children.Add(titleBlock);
 
         // ── Hint ────────────────────────────────────────────────────────────────────────────
 

@@ -37,6 +37,18 @@ internal sealed class LoopOutputWindow : ChromedWindow
         Grid.SetRow(header, 0);
         root.Children.Add(header);
 
+        var titleBlock = new TextBlock
+        {
+            Text              = "Loop Output",
+            FontSize          = (double)Application.Current.Resources["FontSizeSubtitle"],
+            FontWeight        = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(0, 0, 8, 0),
+        };
+        titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+        DockPanel.SetDock(titleBlock, Dock.Left);
+        header.Children.Add(titleBlock);
+
         var copyButton = new Button { Content = "Copy", MinWidth = 76, Height = 30, Margin = new Thickness(0, 0, 8, 0) };
         copyButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
         WindowChrome.SetIsHitTestVisibleInChrome(copyButton, true);
@@ -54,16 +66,6 @@ internal sealed class LoopOutputWindow : ChromedWindow
         clearButton.Click += (_, _) => SaveAndClear();
         DockPanel.SetDock(clearButton, Dock.Left);
         header.Children.Add(clearButton);
-
-        var titleBlock = new TextBlock
-        {
-            Text              = "Loop Output",
-            FontSize = (double)Application.Current.Resources["FontSizeSubtitle"],
-            FontWeight        = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "ImportantText");
-        header.Children.Add(titleBlock);
 
         // ── Log area ────────────────────────────────────────────────────────────────────────
 

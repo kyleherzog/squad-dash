@@ -39,12 +39,22 @@ internal sealed class TasksStatusWindow : ChromedWindow {
         Grid.SetRow(header, 0);
         root.Children.Add(header);
 
+        var titleBlock = new TextBlock {
+            Text              = "Live Tasks",
+            FontSize          = (double)Application.Current.Resources["FontSizeSubtitle"],
+            FontWeight        = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(0, 0, 8, 0),
+        };
+        titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+        DockPanel.SetDock(titleBlock, Dock.Left);
+        header.Children.Add(titleBlock);
+
         var copyButton = new Button {
-            Content = "Copy",
+            Content  = "Copy",
             MinWidth = 76,
-            Height = 30,
-            Margin = new Thickness(0, 0, 8, 0),
-            HorizontalAlignment = HorizontalAlignment.Right
+            Height   = 30,
+            Margin   = new Thickness(0, 0, 8, 0),
         };
         copyButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
         WindowChrome.SetIsHitTestVisibleInChrome(copyButton, true);
@@ -52,17 +62,8 @@ internal sealed class TasksStatusWindow : ChromedWindow {
             if (!string.IsNullOrEmpty(_rawContent))
                 Clipboard.SetText(_rawContent);
         };
-        DockPanel.SetDock(copyButton, Dock.Right);
+        DockPanel.SetDock(copyButton, Dock.Left);
         header.Children.Add(copyButton);
-
-        var titleBlock = new TextBlock {
-            Text = "Live Tasks",
-            FontSize = (double)Application.Current.Resources["FontSizeSubtitle"],
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "ImportantText");
-        header.Children.Add(titleBlock);
 
         var hintBlock = new TextBlock {
             Text = "Use /dropTasks to hide this window.",
