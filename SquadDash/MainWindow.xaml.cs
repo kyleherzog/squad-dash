@@ -27328,6 +27328,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 viewerAttachmentsPanel: InboxViewerAttachmentsPanel!,
                 viewerBody:             InboxViewerBody!,
                 markRead:               id => _inboxStore?.MarkRead(id),
+                markUnread:             id => _inboxStore?.MarkUnread(id),
                 archive:                id => _inboxStore?.Archive(id),
                 delete:                 id => _inboxStore?.Delete(id),
                 viewerActionsPanel:     InboxViewerActionsPanel!,

@@ -74,6 +74,19 @@ public class InboxStore
         }
     }
 
+    /// <summary>Loads the message, sets <see cref="InboxMessage.Read"/> = false, and saves.</summary>
+    public void MarkUnread(string id)
+    {
+        lock (_sync)
+        {
+            var msg = TryReadMessage(GetFilePath(id));
+            if (msg is null) return;
+            var updated = msg with { Read = false };
+            var json    = JsonSerializer.Serialize(updated, JsonOptions);
+            JsonFileStorage.AtomicWrite(GetFilePath(id), json);
+        }
+    }
+
     /// <summary>Deletes the message file.</summary>
     public void Delete(string id)
     {

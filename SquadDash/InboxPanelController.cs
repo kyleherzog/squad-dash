@@ -25,6 +25,7 @@ internal sealed class InboxPanelController
     private readonly WrapPanel                 _viewerActionsPanel;
     private readonly FlowDocumentScrollViewer  _viewerBody;
     private readonly Action<string>            _markRead;
+    private readonly Action<string>            _markUnread;
     private readonly Action<string>            _archive;
     private readonly Action<string>            _delete;
     private readonly Action<InboxAction, InboxMessage> _onActionClicked;
@@ -47,6 +48,7 @@ internal sealed class InboxPanelController
         WrapPanel                viewerAttachmentsPanel,
         FlowDocumentScrollViewer viewerBody,
         Action<string>           markRead,
+        Action<string>           markUnread,
         Action<string>           archive,
         Action<string>           delete,
         WrapPanel                viewerActionsPanel,
@@ -62,6 +64,7 @@ internal sealed class InboxPanelController
         _viewerAttachmentsPanel = viewerAttachmentsPanel;
         _viewerBody             = viewerBody;
         _markRead               = markRead;
+        _markUnread             = markUnread;
         _archive                = archive;
         _delete                 = delete;
         _viewerActionsPanel     = viewerActionsPanel;
@@ -265,6 +268,16 @@ internal sealed class InboxPanelController
         dot.Visibility         = Visibility.Hidden;
         subjectLabel.FontWeight = FontWeights.Normal;
         subjectLabel.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+    }
+
+    private void MarkRowUnread(InboxMessage msg, Border row, Ellipse dot, TextBlock subjectLabel)
+    {
+        msg.Read = false;
+        _markUnread(msg.Id);
+        row.Opacity            = 1.0;
+        dot.Visibility         = Visibility.Visible;
+        subjectLabel.FontWeight = FontWeights.SemiBold;
+        subjectLabel.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
     }
 
     // ── Message viewer ────────────────────────────────────────────────────────
@@ -493,17 +506,24 @@ internal sealed class InboxPanelController
     {
         var menu = MakeMenu();
 
-        var markReadItem = MakeItem("Mark as read");
-        markReadItem.IsEnabled = !msg.Read;
-        markReadItem.Click += (_, _) =>
+        if (msg.Read)
         {
-            if (!msg.Read)
+            var markUnreadItem = MakeItem("Mark as unread");
+            markUnreadItem.Click += (_, _) =>
+            {
+                MarkRowUnread(msg, row, dot, subjectLabel);
+            };
+            menu.Items.Add(markUnreadItem);
+        }
+        else
+        {
+            var markReadItem = MakeItem("Mark as read");
+            markReadItem.Click += (_, _) =>
             {
                 MarkRowRead(msg, row, dot, subjectLabel);
-                markReadItem.IsEnabled = false;
-            }
-        };
-        menu.Items.Add(markReadItem);
+            };
+            menu.Items.Add(markReadItem);
+        }
 
         menu.Items.Add(MakeSep());
 
