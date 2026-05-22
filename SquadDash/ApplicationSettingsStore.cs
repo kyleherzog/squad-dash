@@ -805,6 +805,8 @@ internal sealed class ApplicationSettingsStore {
                 NotesPanelVisible = state.NotesPanelVisible ?? existing.NotesPanelVisible,
                 LoopPanelVisible = state.LoopPanelVisible ?? existing.LoopPanelVisible,
                 MaintenancePanelVisible = state.MaintenancePanelVisible ?? existing.MaintenancePanelVisible,
+                InboxPanelVisible = state.InboxPanelVisible ?? existing.InboxPanelVisible,
+                OpenInboxMessageIds = state.OpenInboxMessageIds ?? existing.OpenInboxMessageIds,
                 DraftFollowUpsJson = state.DraftFollowUpsJson ?? existing.DraftFollowUpsJson,
                 SelectedLoopFile = state.SelectedLoopFile ?? existing.SelectedLoopFile,
                 NotesSortOrder = state.NotesSortOrder ?? existing.NotesSortOrder,
@@ -876,6 +878,12 @@ internal sealed record WorkspaceDocsPanelState
     /// <c>null</c> or <c>false</c> = hidden (default). <c>true</c> = user had the panel open.
     /// </summary>
     public bool? InboxPanelVisible { get; init; }
+
+    /// <summary>
+    /// IDs of inbox messages that were open in popup viewer windows at shutdown.
+    /// Restored on next startup. <c>null</c> = none open.
+    /// </summary>
+    public IReadOnlyList<string>? OpenInboxMessageIds { get; init; }
 
     /// <summary>
     /// Follow-up attachments on the active draft tab. Persisted so they survive restart.

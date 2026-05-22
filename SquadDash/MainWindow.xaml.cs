@@ -259,6 +259,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _movingFloatingWindow;
     private bool _isInstallingSquad;
     private bool _isClosing;
+    private readonly List<InboxMessageWindow> _openInboxWindows = new();
     private bool _mainWindowClosingInProgress; // set at the very start of Closing, before ShowDialog
     private bool _isPromptRunning;
     private bool _queueDrainActive;  // true while an auto-dispatched queue item is executing
@@ -22267,6 +22268,23 @@ public partial class MainWindow : Window, ILiveElementLocator
             _pendingUtilityWindowState = (
                 _tasksStatusWindow is { IsVisible: true },
                 _traceWindow is { IsVisible: true });
+
+            // Persist open inbox viewer IDs.
+            if (_inboxStore is not null)
+            {
+                var openIds = _openInboxWindows
+                    .Select(w => w.MessageId)
+                    .Where(id => !string.IsNullOrEmpty(id))
+                    .ToList();
+                var inboxState = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
+                _docsPanelState = inboxState with
+                {
+                    InboxPanelVisible = _inboxPanelVisible,
+                    OpenInboxMessageIds = openIds.Count > 0 ? openIds : null,
+                };
+                _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
+            }
+
             // Capture docs panel state (only when panel is open; closed state is already
             // written by SetDocumentationMode when the user toggles it off).
             if (_documentationModeEnabled)
@@ -25519,6 +25537,29 @@ public partial class MainWindow : Window, ILiveElementLocator
                 ViewInboxMenuItem.IsChecked = true;
         }
 
+        // Restore any inbox viewer windows that were open at last shutdown.
+        if (_docsPanelState.OpenInboxMessageIds is { Count: > 0 } openIds)
+        {
+            _inboxStore ??= _currentWorkspace?.FolderPath is string wPath2
+                ? new InboxStore(System.IO.Path.Combine(wPath2, ".squad"))
+                : null;
+            if (_inboxStore is not null)
+            {
+                foreach (var id in openIds)
+                {
+                    var msg = _inboxStore.GetById(id);
+                    if (msg is not null)
+                    {
+                        var win = new InboxMessageWindow(msg, DispatchInboxAction);
+                        win.Owner = this;
+                        _openInboxWindows.Add(win);
+                        win.Closed += (_, _) => _openInboxWindows.Remove(win);
+                        win.Show();
+                    }
+                }
+            }
+        }
+
         // Start idle detection so maintenance can fire automatically.
         if (_currentWorkspace?.FolderPath is string wPath)
             InitIdleDetection(wPath);
@@ -27269,6 +27310,9 @@ public partial class MainWindow : Window, ILiveElementLocator
                 openMessageWindow:      msg =>
                 {
                     var win = new InboxMessageWindow(msg, DispatchInboxAction);
+                    win.Owner = this;
+                    _openInboxWindows.Add(win);
+                    win.Closed += (_, _) => _openInboxWindows.Remove(win);
                     win.Show();
                 });
 

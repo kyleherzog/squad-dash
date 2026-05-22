@@ -11,10 +11,13 @@ namespace SquadDash;
 /// <summary>Modeless pop-up window that displays a single <see cref="InboxMessage"/>.</summary>
 internal sealed class InboxMessageWindow : Window
 {
+    public string MessageId { get; }
+
     public InboxMessageWindow(
         InboxMessage message,
         Action<InboxAction, InboxMessage> onActionClicked)
     {
+        MessageId               = message.Id;
         Title                   = message.Subject;
         WindowStyle             = WindowStyle.ToolWindow;
         ResizeMode              = ResizeMode.CanResize;
