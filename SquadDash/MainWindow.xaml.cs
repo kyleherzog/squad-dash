@@ -12138,6 +12138,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             _inboxPanel?.SetFilter(text);
             if (InboxFilterClearButton is not null)
                 InboxFilterClearButton.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with { InboxFilterText = text.Length > 0 ? text : string.Empty };
+            _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(InboxFilterBox_TextChanged), ex); }
     }
@@ -12156,7 +12158,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try {
             _inboxPanel?.SetUnreadOnly(true);
-            _settingsStore.SaveInboxShowUnreadOnly(true);
+            _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with { InboxShowUnreadOnly = true };
+            _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(InboxUnreadOnlyCheckBox_Checked), ex); }
     }
@@ -12165,7 +12168,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try {
             _inboxPanel?.SetUnreadOnly(false);
-            _settingsStore.SaveInboxShowUnreadOnly(false);
+            _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with { InboxShowUnreadOnly = false };
+            _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(InboxUnreadOnlyCheckBox_Unchecked), ex); }
     }
@@ -27471,10 +27475,13 @@ public partial class MainWindow : Window, ILiveElementLocator
             var messages = _inboxStore?.LoadAll() ?? [];
             _inboxPanel.Refresh(messages);
 
-            var savedUnreadOnly = _settingsStore.Load().InboxShowUnreadOnly;
-            if (savedUnreadOnly) {
+            var inboxWorkspaceState = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
+            if (inboxWorkspaceState.InboxShowUnreadOnly == true) {
                 InboxUnreadOnlyCheckBox.IsChecked = true;
                 _inboxPanel.SetUnreadOnly(true);
+            }
+            if (inboxWorkspaceState.InboxFilterText is { Length: > 0 } savedFilter) {
+                if (InboxFilterBox is not null) InboxFilterBox.Text = savedFilter;
             }
         }
     }

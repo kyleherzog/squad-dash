@@ -530,14 +530,6 @@ internal sealed class ApplicationSettingsStore {
         return updated;
     }
 
-    public ApplicationSettingsSnapshot SaveInboxShowUnreadOnly(bool value) {
-        using var mutex = AcquireMutex();
-        var current = LoadCore();
-        var updated = current with { InboxShowUnreadOnly = value };
-        SaveCore(updated);
-        return updated;
-    }
-
     /// <summary>
     /// Persists the RC session token so the same QR code URL stays valid across restarts.
     /// </summary>
@@ -823,6 +815,8 @@ internal sealed class ApplicationSettingsStore {
                 ApprovalsPanelFilter = state.ApprovalsPanelFilter ?? existing.ApprovalsPanelFilter,
                 TasksPanelFilter = state.TasksPanelFilter ?? existing.TasksPanelFilter,
                 NotesPanelFilter = state.NotesPanelFilter ?? existing.NotesPanelFilter,
+                InboxShowUnreadOnly = state.InboxShowUnreadOnly ?? existing.InboxShowUnreadOnly,
+                InboxFilterText = state.InboxFilterText ?? existing.InboxFilterText,
             };
         }
         dict[key] = state;
@@ -938,7 +932,17 @@ internal sealed record WorkspaceDocsPanelState
     public string? NotesPanelFilter { get; init; }
 
     /// <summary>
-    /// Legacy single-item follow-up fields — kept for reading old settings files.
+    /// Whether the Inbox "Unread Only" filter is active. Null / false = off (default).
+    /// </summary>
+    public bool? InboxShowUnreadOnly { get; init; }
+
+    /// <summary>
+    /// Last filter text entered in the Inbox panel filter box. Null = no filter.
+    /// </summary>
+    public string? InboxFilterText { get; init; }
+
+    /// <summary>
+    /// Legacy single-item follow-up fields— kept for reading old settings files.
     /// New writes use <see cref="DraftFollowUpsJson"/> instead.
     /// </summary>
     public string? DraftFollowUpCommitSha { get; init; }
@@ -1161,11 +1165,6 @@ internal sealed record ApplicationSettingsSnapshot(
     /// Defaults to true (rejected items shown by default). Machine-wide setting.
     /// </summary>
     public bool ApprovalShowRejected { get; init; } = true;
-
-    /// <summary>
-    /// Whether the Inbox "Unread Only" filter is active. Machine-wide setting.
-    /// </summary>
-    public bool InboxShowUnreadOnly { get; init; }
 
     /// <summary>
     /// The RC session token from the last successful RC start.
@@ -1496,8 +1495,7 @@ internal sealed record ApplicationSettingsSnapshot(
             RcPersistentPort = RcPersistentPort,
             ApprovalShowApproved = ApprovalShowApproved,
             ApprovalShowRejected = ApprovalShowRejected,
-            InboxShowUnreadOnly = InboxShowUnreadOnly,
-            CleanupPrompt = string.IsNullOrWhiteSpace(CleanupPrompt)
+            CleanupPrompt= string.IsNullOrWhiteSpace(CleanupPrompt)
                 ? "Clean up and clarify this text."
                 : CleanupPrompt,
             SpeechProvider = SpeechProvider,
