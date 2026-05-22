@@ -93,7 +93,7 @@ tasks:
             tooltip: List each instance — do not change any code
 
   - id: architectural-practices
-    enabled: true
+    enabled: false
     frequency: daily
     safety: report-only
     title: Architectural Practice Review
@@ -121,7 +121,7 @@ tasks:
             tooltip: Write a report — do not change any code
 
   - id: code-smells
-    enabled: true
+    enabled: false
     frequency: daily
     safety: branch
     title: Code Smell Cleanup
@@ -197,7 +197,7 @@ tasks:
 
   - id: prune-tasks
     enabled: false
-    frequency: daily
+    frequency: monthly
     safety: direct
     title: Prune Completed Tasks
     instructions: |
