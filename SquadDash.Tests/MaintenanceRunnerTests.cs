@@ -131,6 +131,25 @@ internal sealed class MaintenanceRunnerTests {
             "Enabled per-commit tasks need the current HEAD SHA for eligibility");
     }
 
+    [Test]
+    public async Task StartAsync_ResolvesCommitSha_ForEnabledAfterCommitsTasks() {
+        var commitShaCalls = 0;
+        var config = MakeConfig([
+            MakeTask("after-commits-task", enabled: true, frequency: "after-commits"),
+        ]);
+
+        var runner = MakeRunner(
+            getCommitShaAsync: (_, _) => {
+                commitShaCalls++;
+                return Task.FromResult<string?>("abc123");
+            });
+
+        await runner.StartAsync(config, _workspaceDir, CancellationToken.None);
+
+        Assert.That(commitShaCalls, Is.EqualTo(1),
+            "Enabled after-commits tasks need the current HEAD SHA for eligibility");
+    }
+
     // ── Skips ineligible tasks ────────────────────────────────────────────────
 
     [Test]
