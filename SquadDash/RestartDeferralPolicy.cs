@@ -28,7 +28,9 @@ internal static class RestartDeferralPolicy {
             return RestartDeferralReason.PromptRunning;
         if (isLoopRunning)
             return RestartDeferralReason.LoopRunning;
-        if (hasBackgroundWork)
+        // Background work is driven by the same bridge turn. Once that turn is
+        // assumed dead, a pending build restart must be allowed to recover it.
+        if (hasBackgroundWork && !promptAppearsStalled)
             return RestartDeferralReason.BackgroundWork;
         if (hasPendingDirectQuickReplyHandoff)
             return RestartDeferralReason.DirectQuickReplyHandoff;

@@ -30,6 +30,7 @@ internal sealed class MaintenancePanelController {
     private bool                   _runnerActive;
     private string?                _runningTaskTitle;
     private DispatcherTimer?       _countdownTimer;
+    private DispatcherTimer?       _transientStatusTimer;
     private DateTimeOffset         _nextMaintenanceAt = DateTimeOffset.MaxValue;
     private bool                   _suppressEnabledOnIdleEvent;
     private string                 _filterText = string.Empty;
@@ -621,6 +622,21 @@ internal sealed class MaintenancePanelController {
     }
 
     // ── Status header ─────────────────────────────────────────────────────────
+
+    internal void ShowTransientStatus(string message) {
+        _transientStatusTimer?.Stop();
+
+        _statusLabel.Text       = message;
+        _statusLabel.Visibility = Visibility.Visible;
+
+        _transientStatusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+        _transientStatusTimer.Tick += (_, _) => {
+            _transientStatusTimer?.Stop();
+            _transientStatusTimer = null;
+            SyncStatusLabel();
+        };
+        _transientStatusTimer.Start();
+    }
 
     private void SyncStatusLabel() {
         if (_runnerActive) {

@@ -236,6 +236,15 @@ namespace SquadDash {
                             $"Blocked for {candidateWorkspace} but no explicit folder — opening new no-folder window.");
                         return false;
                     }
+
+                    if (StartupBlockedDialogPolicy.HasPendingRestartRequest(workspacePaths.ApplicationRoot)) {
+                        SquadDashTrace.Write(
+                            "Startup",
+                            $"Blocked for {candidateWorkspace} while restart request is pending — exiting without modal dialog.");
+                        Shutdown();
+                        return true;
+                    }
+
                     MessageBox.Show(
                         $"That workspace is already open in another SquadDash window:{Environment.NewLine}{candidateWorkspace}",
                         "Workspace Already Open",

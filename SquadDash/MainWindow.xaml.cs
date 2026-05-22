@@ -4736,7 +4736,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         SyncThreadChip(thread);
         FindAgentCardForThread(thread)?.FireActivityPulse(GetToolActivityKind(evt.ToolName));
         UpdateAgentCardFromThread(thread, syncBuckets: false);
-        _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, "subagent_tool_start");
+        ObserveSubagentToolActivityIfMeaningful(thread, evt, "subagent_tool_start");
         _conversationManager.SchedulePersistAgentThreadSnapshot(thread);
     }
 
@@ -4754,7 +4754,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         SyncThreadChip(thread);
         FindAgentCardForThread(thread)?.FireActivityPulse(GetToolActivityKind(evt.ToolName));
         UpdateAgentCardFromThread(thread, syncBuckets: false);
-        _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, "subagent_tool_progress");
+        ObserveSubagentToolActivityIfMeaningful(thread, evt, "subagent_tool_progress");
         _conversationManager.SchedulePersistAgentThreadSnapshot(thread);
     }
 
@@ -4780,8 +4780,24 @@ public partial class MainWindow : Window, ILiveElementLocator
         SyncThreadChip(thread);
         FindAgentCardForThread(thread)?.FireActivityPulse(GetToolActivityKind(evt.ToolName));
         UpdateAgentCardFromThread(thread, syncBuckets: false);
-        _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, "subagent_tool_complete");
+        ObserveSubagentToolActivityIfMeaningful(thread, evt, "subagent_tool_complete");
         _conversationManager.SchedulePersistAgentThreadSnapshot(thread);
+    }
+
+    private void ObserveSubagentToolActivityIfMeaningful(
+        TranscriptThreadState thread,
+        SquadSdkEvent evt,
+        string reason)
+    {
+        if (!PromptExecutionController.ShouldCountPromptActivity(evt, _restartPending))
+        {
+            SquadDashTrace.Write(
+                "Agents",
+                $"Ignored restart-pending delay-only subagent tool activity thread={thread.ThreadId} tool={evt.ToolName ?? "(none)"} reason={reason}");
+            return;
+        }
+
+        _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, reason);
     }
 
     private void HandleSubagentCompleted(SquadSdkEvent evt)
@@ -27502,7 +27518,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 runNowButton:           MaintenanceRunNowButton,
                 enabledOnIdleCheckBox:  MaintenanceEnabledOnIdleCheckBox,
                 getWorkspacePath:       () => _currentWorkspace?.FolderPath,
-                runNow:                 () => _ = StartMaintenanceCycleAsync(),
+                runNow:                 () => _ = StartMaintenanceCycleAsync(isManual: true),
                 toggleTaskEnabled:      (taskId, enabled) => OnMaintenanceTaskToggled(taskId, enabled),
                 reloadPanel:            () => OnMaintenanceTaskToggled(string.Empty, false),
                 openInMarkdownEditor:   path => MarkdownDocumentWindow.Show(
@@ -27707,22 +27723,37 @@ public partial class MainWindow : Window, ILiveElementLocator
         _maintenancePanel.Refresh(config, _maintenanceStateStore);
     }
 
-    private async Task StartMaintenanceCycleAsync()
+    private async Task StartMaintenanceCycleAsync(bool isManual = false)
     {
         var workspacePath = _currentWorkspace?.FolderPath;
         if (workspacePath is null) return;
         if (ShouldSuppressMaintenanceCycle())
+        {
+            if (isManual) _maintenancePanel?.ShowTransientStatus("Cannot run — AI is busy. Try again when idle.");
             return;
+        }
 
         var config = MaintenanceMdParser.Parse(Path.Combine(workspacePath, ".squad", "maintenance.md"));
-        if (config is null || !config.EnabledOnIdle) return;
-        if (config.Tasks is not { Count: > 0 } tasks || !tasks.Any(task => task.Enabled))
+        if (config is null)
+        {
+            if (isManual) _maintenancePanel?.ShowTransientStatus("No maintenance.md found in this workspace.");
             return;
+        }
+        if (!isManual && !config.EnabledOnIdle) return;
+        if (config.Tasks is not { Count: > 0 } tasks || !tasks.Any(task => task.Enabled))
+        {
+            if (isManual) _maintenancePanel?.ShowTransientStatus("No enabled maintenance tasks to run.");
+            return;
+        }
 
         _maintenanceStateStore ??= new MaintenanceStateStore(Path.Combine(workspacePath, ".squad"));
         _maintenanceReportWriter = new MaintenanceReportWriter(workspacePath);
 
-        if (_maintenanceRunner?.IsRunning == true) return;
+        if (_maintenanceRunner?.IsRunning == true)
+        {
+            if (isManual) _maintenancePanel?.ShowTransientStatus("Maintenance is already running.");
+            return;
+        }
 
         _maintenanceRunner = new MaintenanceRunner(
             executePromptAsync: (prompt, ct) =>

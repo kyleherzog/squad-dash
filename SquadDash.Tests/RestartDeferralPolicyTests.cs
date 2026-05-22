@@ -17,6 +17,21 @@ internal sealed class RestartDeferralPolicyTests {
     }
 
     [Test]
+    public void GetDeferralReason_AllowsRestart_WhenPromptAppearsStalledAndBackgroundWorkIsActive() {
+        var reason = RestartDeferralPolicy.GetDeferralReason(
+            isPromptRunning: true,
+            isLoopRunning: false,
+            hasBackgroundWork: true,
+            hasPendingDirectQuickReplyHandoff: false,
+            isVoiceInputActiveOrDraining: false,
+            hasDocRevisionInFlight: false,
+            isClipboardEditorOpen: false,
+            promptAppearsStalled: true);
+
+        Assert.That(reason, Is.EqualTo(RestartDeferralReason.None));
+    }
+
+    [Test]
     public void GetDeferralReason_BlocksRestart_WhenDirectQuickReplyHandoffIsPending() {
         var reason = RestartDeferralPolicy.GetDeferralReason(
             isPromptRunning: false,
