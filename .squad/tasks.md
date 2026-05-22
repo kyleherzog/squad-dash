@@ -222,6 +222,14 @@
 
 ## 🟡 Mid Priority
 
+- [ ] **Maintenance — multi-file support** *(Owner: Arjun Sen + Lyra Morn)*
+  Load all `maintenance*.md` files from the `.squad/` folder (e.g. `maintenance.md`,
+  `maintenance-docs.md`, `maintenance-screenshots.md`). The base `maintenance.md` tasks are
+  treated as "system" tasks. Additional files contribute supplemental tasks.
+  Each task row in the panel must store its source file path so that toggle/frequency changes
+  are written back to the correct file. Panel UI groups or labels tasks by source file.
+  **Prerequisite for:** Inbox integration, per-repo custom maintenance tasks.
+
 - [x] Screenshots health panel — XAML + bindings + status UX *(Owner: lyra-morn)*
 
 - [ ] **WinGet — create GitHub Release v1.0.0** *(Owner: you — manual step)*
