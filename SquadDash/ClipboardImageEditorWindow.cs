@@ -1190,9 +1190,6 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             var helper = new System.Windows.Interop.WindowInteropHelper(w);
             IntPtr hwnd = helper.Handle;
 
-            // Strategy 1: GetWindowRect gives actual pixel bounds even when maximized,
-            // unlike WPF Left/Top which reflects restore bounds. MonitorFromPoint on the
-            // center is more reliable than MonitorFromWindow when HWND may be transitional.
             if (hwnd != IntPtr.Zero && GetWindowRect(hwnd, out Rect32 wr)) {
                 int cx = (wr.Left + wr.Right) / 2;
                 int cy = (wr.Top + wr.Bottom) / 2;
@@ -1200,8 +1197,28 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 if (hMon != IntPtr.Zero) {
                     var mi = new MonitorInfo { cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<MonitorInfo>() };
                     if (GetMonitorInfo(hMon, ref mi)) {
-                        // Use GetDpiForMonitor for accurate scale — TransformToDevice returns 1.0 for System DPI aware apps.
+                        // Use PresentationSource transform when available — this is the exact
+                        // physical-to-WPF-DIP matrix WPF uses for this window, regardless of
+                        // whether the process is System-DPI-aware or Per-Monitor-DPI-aware.
+                        var ps = System.Windows.PresentationSource.FromVisual(w);
+                        var tfm = ps?.CompositionTarget?.TransformFromDevice;
+                        if (tfm.HasValue) {
+                            var tl = tfm.Value.Transform(new Point(mi.rcWork.Left, mi.rcWork.Top));
+                            var br = tfm.Value.Transform(new Point(mi.rcWork.Right, mi.rcWork.Bottom));
+                            SquadDashTrace.Write("UI",
+                                $"[GetMonitorWorkAreaRect] PresentationSource path hMon={hMon:X} " +
+                                $"phys=({mi.rcWork.Left},{mi.rcWork.Top},{mi.rcWork.Right},{mi.rcWork.Bottom}) " +
+                                $"wpf=({tl.X:F1},{tl.Y:F1},{br.X:F1},{br.Y:F1}) " +
+                                $"scale=({tfm.Value.M11:F3},{tfm.Value.M22:F3})");
+                            return new Rect(tl, br);
+                        }
+                        // Fallback: use GetRawMonitorScale (per-monitor DPI) — may be wrong for
+                        // System-DPI-aware processes on non-primary monitors, but better than nothing.
                         double s = GetRawMonitorScale(hMon);
+                        SquadDashTrace.Write("UI",
+                            $"[GetMonitorWorkAreaRect] rawScale fallback hMon={hMon:X} scale={s:F3} " +
+                            $"phys=({mi.rcWork.Left},{mi.rcWork.Top},{mi.rcWork.Right},{mi.rcWork.Bottom}) " +
+                            $"wpf=({mi.rcWork.Left/s:F1},{mi.rcWork.Top/s:F1},{mi.rcWork.Right/s:F1},{mi.rcWork.Bottom/s:F1})");
                         return new Rect(
                             mi.rcWork.Left / s,
                             mi.rcWork.Top / s,
@@ -1210,32 +1227,10 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                     }
                 }
             }
-
-            // Strategy 2: HWND not yet available — estimate screen center from WPF logical coords.
-            // WPF Left/Top are in logical units; for System DPI aware apps these are already at
-            // scale 1.0, so we use physical coords from GetWindowRect center when available.
-            // Fallback: use the primary monitor scale as an approximation.
-            double fallbackScale = 1.0;
-            if (hwnd != IntPtr.Zero) {
-                var hMonFallback = MonitorFromPoint(new POINT { X = (int)w.Left, Y = (int)w.Top }, MONITOR_DEFAULTTONEAREST);
-                fallbackScale = GetRawMonitorScale(hMonFallback);
-            }
-            int wpfCx = (int)((w.Left + w.Width / 2) * fallbackScale);
-            int wpfCy = (int)((w.Top + w.Height / 2) * fallbackScale);
-            var hMon2 = MonitorFromPoint(new POINT { X = wpfCx, Y = wpfCy }, MONITOR_DEFAULTTONEAREST);
-            if (hMon2 != IntPtr.Zero) {
-                double s2 = GetRawMonitorScale(hMon2);
-                var mi2 = new MonitorInfo { cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<MonitorInfo>() };
-                if (GetMonitorInfo(hMon2, ref mi2)) {
-                    return new Rect(
-                        mi2.rcWork.Left / s2,
-                        mi2.rcWork.Top / s2,
-                        (mi2.rcWork.Right - mi2.rcWork.Left) / s2,
-                        (mi2.rcWork.Bottom - mi2.rcWork.Top) / s2);
-                }
-            }
         }
-        catch { }
+        catch (Exception ex) {
+            SquadDashTrace.Write("UI", $"[GetMonitorWorkAreaRect] exception: {ex.GetType().Name}: {ex.Message}");
+        }
         return SystemParameters.WorkArea; // last resort: primary monitor
     }
 
@@ -1353,6 +1348,8 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         double newW = Math.Min(work.Width, desiredW);
         double newH = Math.Min(work.Height, desiredH);
 
+        double prevLeft = Left, prevTop = Top, prevW = Width, prevH = Height;
+
         // Keep the current window center fixed — don't re-centre on the monitor.
         // This prevents the window from jumping to a different monitor when the work-area
         // DIP conversion is imprecise (e.g. monitors with negative screen coordinates).
@@ -1364,6 +1361,13 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         if (newTop < work.Top) newTop = work.Top;
         if (newLeft + newW > work.Right) newLeft = work.Right - newW;
         if (newTop + newH > work.Bottom) newTop = work.Bottom - newH;
+
+        SquadDashTrace.Write("UI",
+            $"[UpdateWindowSizeForZoom] zoom={_zoom:F2} " +
+            $"canvas={_canvas.Width:F0}x{_canvas.Height:F0} " +
+            $"work=({work.Left:F0},{work.Top:F0},{work.Right:F0},{work.Bottom:F0}) " +
+            $"prev=({prevLeft:F0},{prevTop:F0},{prevW:F0}x{prevH:F0}) " +
+            $"desired=({desiredW:F0}x{desiredH:F0}) new=({newLeft:F0},{newTop:F0},{newW:F0}x{newH:F0})");
 
         Width = newW;
         Height = newH;
