@@ -8043,7 +8043,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
             if (hasSelection)
             {
-                var followUpItem = new MenuItem { Header = "Add to chat" };
+                var followUpItem = new MenuItem { Header = "Add to Chat" };
                 followUpItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
                 followUpItem.Click += (_, _) => AttachTranscriptFollowUp(activeRtb);
                 menu.Items.Add(followUpItem);
@@ -13473,7 +13473,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
                 var addToChatItem = new MenuItem
                 {
-                    Header = "Add to chat",
+                    Header = "Add to Chat",
                     Style  = (Style)FindResource("ThemedMenuItemStyle")
                 };
                 addToChatItem.Click += (_, _) => {
@@ -16954,7 +16954,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
                 if (hasSelection)
                 {
-                    var followUpItem = new MenuItem { Header = "Add to chat" };
+                    var followUpItem = new MenuItem { Header = "Add to Chat" };
                     followUpItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
                     followUpItem.Click += (_, _) => AttachTranscriptFollowUp(rtb);
                     menu.Items.Add(followUpItem);
@@ -25910,8 +25910,8 @@ public partial class MainWindow : Window, ILiveElementLocator
 
             var menu = MakeMenu();
 
-            // Add to chat first
-            var followUpItem = MakeItem("Add to chat");
+            // Add to Chat first
+            var followUpItem = MakeItem("Add to Chat");
             followUpItem.Click += (_, _) => AttachTopicFollowUp(item, filePath);
             menu.Items.Add(followUpItem);
 

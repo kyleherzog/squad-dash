@@ -184,7 +184,7 @@ internal sealed class NotesPanelController {
 
         if (_attachFollowUp is not null)
         {
-            var followUpItem = MakeItem("Add to chat");
+            var followUpItem = MakeItem("Add to Chat");
             followUpItem.Click += (_, _) => _attachFollowUp(note);
             menu.Items.Add(followUpItem);
             menu.Items.Add(MakeSep());

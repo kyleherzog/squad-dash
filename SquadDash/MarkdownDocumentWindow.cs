@@ -647,12 +647,12 @@ internal sealed class MarkdownDocumentWindow : ChromedWindow {
                 mi.IsEnabled = tb.GetSelectionLength() > 0;
         }
 
-        // Inject "Add to chat" and "Add to Notes" at the top when there is a selection
+        // Inject "Add to Chat" and "Add to Notes" at the top when there is a selection
         if (tb.GetSelectionLength() > 0) {
             int insertIdx = 0;
 
             if (_captureContext?.AddToChatCallback is { } chatCallback) {
-                var chatItem = new MenuItem { Header = "Add to chat", Tag = "AddToChat" };
+                var chatItem = new MenuItem { Header = "Add to Chat", Tag = "AddToChat" };
                 chatItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
                 chatItem.Click += (_, _) => {
                     var text = tb.GetSelectedText();
@@ -2577,7 +2577,7 @@ internal sealed record MarkdownDocumentCaptureContext(
     string                              ThemeName,
     string                              SpeechRegion) {
     /// <summary>
-    /// Optional callback invoked when the user chooses "Add to chat" from the source
+    /// Optional callback invoked when the user chooses "Add to Chat" from the source
     /// editor context menu. Receives the selected markdown text.
     /// </summary>
     public Action<string>? AddToChatCallback { get; init; }

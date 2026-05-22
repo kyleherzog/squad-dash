@@ -534,7 +534,7 @@ internal sealed class InboxPanelController
 
         if (_addToChat is not null)
         {
-            var addToChatItem = MakeItem("Add to chat");
+            var addToChatItem = MakeItem("Add to Chat");
             addToChatItem.Click += (_, _) => _addToChat(msg);
             menu.Items.Add(addToChatItem);
             menu.Items.Add(MakeSep());

@@ -185,7 +185,7 @@ internal sealed class CommitApprovalPanel {
         };
 
         var menu = MakeMenu();
-        var followUpItem = MakeItem("Add to chat");
+        var followUpItem = MakeItem("Add to Chat");
         followUpItem.Click += (_, _) => _onFollowUp(item);
         menu.Items.Add(followUpItem);
         if (_addToNotes is not null)
