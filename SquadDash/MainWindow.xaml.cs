@@ -25575,6 +25575,11 @@ public partial class MainWindow : Window, ILiveElementLocator
                     var msg = _inboxStore.GetById(id);
                     if (msg is not null)
                     {
+                        // Opening the window is equivalent to reading the message — mark it
+                        // read now so it doesn't re-surface as unread after this session.
+                        if (!msg.Read)
+                            _inboxStore.MarkRead(id);
+
                         var win = new InboxMessageWindow(msg, DispatchInboxAction, LookupTaskById);
                         win.Owner = this;
                         _openInboxWindows.Add(win);
@@ -25582,6 +25587,9 @@ public partial class MainWindow : Window, ILiveElementLocator
                         win.Show();
                     }
                 }
+
+                // Refresh the panel so any newly-read messages are rendered at lower opacity.
+                _inboxPanel?.Refresh(_inboxStore.LoadAll());
             }
         }
 
