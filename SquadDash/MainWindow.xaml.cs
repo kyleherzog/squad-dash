@@ -4325,6 +4325,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                                 Actions     = inboxDto.Actions,
                             };
                             _inboxStore.Save(inboxMessage);
+                            _inboxPanel?.Refresh(_inboxStore.LoadAll());
                         }
                     }
                 }
