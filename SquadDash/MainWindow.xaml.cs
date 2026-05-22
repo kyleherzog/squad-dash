@@ -14823,7 +14823,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                             a.TranscriptQuote,
                             a.ContentBlock,
                             a.ImagePath,
-                            a.ImageSubmittedAt is not null && DateTime.TryParse(a.ImageSubmittedAt, out var dt2) ? dt2 : null))
+                            a.ImageSubmittedAt is not null && DateTime.TryParse(a.ImageSubmittedAt, out var dt2) ? dt2 : null,
+                            a.InboxMessageId))
                         .ToList();
                 }
             }
@@ -17652,7 +17653,12 @@ public partial class MainWindow : Window, ILiveElementLocator
                     link.Click  += (_, _) =>
                     {
                         if (capturedAttachments.Count > 0)
-                            PromptAttachmentViewerWindow.Show(capturedAttachments, CanShowOwnedWindow() ? this : null);
+                        {
+                            if (capturedAttachments.Count == 1 && capturedAttachments[0].InboxMessageId is { } msgId)
+                                OpenOrFocusInboxMessage(msgId);
+                            else
+                                PromptAttachmentViewerWindow.Show(capturedAttachments, CanShowOwnedWindow() ? this : null);
+                        }
                     };
                     promptParagraph.Inlines.Add(link);
                 }
@@ -25681,7 +25687,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                         d.TranscriptQuote,
                         d.ContentBlock,
                         d.ImagePath,
-                        d.ImageSubmittedAt is not null && DateTime.TryParse(d.ImageSubmittedAt, out var dt1) ? dt1 : null)));
+                        d.ImageSubmittedAt is not null && DateTime.TryParse(d.ImageSubmittedAt, out var dt1) ? dt1 : null,
+                        d.InboxMessageId)));
             }
             catch { /* corrupt data — ignore */ }
         }
@@ -26974,8 +26981,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private static int StripTypedAttachmentHeaders(string prompt) =>
         AttachmentBlockFormatter.StripTypedAttachmentHeaders(prompt);
 
-    private void AttachContextFollowUp(string description, string contentBlock)
-    {
+    private void AttachContextFollowUp(string description, string contentBlock)    {
         var list = GetOrCreateFollowUpList(_activeTabId ?? "");
         // Deduplicate by description.
         if (list.Count >= 15 || list.Any(a => a.Description == description)) return;
@@ -26987,6 +26993,46 @@ public partial class MainWindow : Window, ILiveElementLocator
         UpdateFollowUpStrip();
         SyncQueuePanel();
         if (_activeTabId is null) PersistDraftFollowUp();
+    }
+
+    private void AttachInboxMessageFollowUp(InboxMessage msg)
+    {
+        var list = GetOrCreateFollowUpList(_activeTabId ?? "");
+        if (list.Count >= 15 || list.Any(a => a.InboxMessageId == msg.Id)) return;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"From: {msg.From}");
+        sb.AppendLine($"Date: {msg.Timestamp:g}");
+        sb.AppendLine();
+        sb.Append(msg.Body.Trim());
+        var contentBlock = BuildTypedAttachmentBlock("inbox-message", msg.Subject, sb.ToString().TrimEnd());
+        list.Add(new FollowUpAttachment(
+            CommitSha:      string.Empty,
+            Description:    msg.Subject,
+            OriginalPrompt: null,
+            ContentBlock:   contentBlock,
+            InboxMessageId: msg.Id));
+        UpdateFollowUpStrip();
+        SyncQueuePanel();
+        if (_activeTabId is null) PersistDraftFollowUp();
+    }
+
+    private void OpenOrFocusInboxMessage(string messageId)
+    {
+        var existing = _openInboxWindows.FirstOrDefault(w => w.MessageId == messageId);
+        if (existing is not null)
+        {
+            if (existing.WindowState == WindowState.Minimized)
+                existing.WindowState = WindowState.Normal;
+            existing.Activate();
+            return;
+        }
+        var msg = _inboxStore?.LoadAll().FirstOrDefault(m => m.Id == messageId);
+        if (msg is null) return;
+        var win = new InboxMessageWindow(msg, DispatchInboxAction, LookupTaskById);
+        win.Owner = CanShowOwnedWindow() ? this : null;
+        _openInboxWindows.Add(win);
+        win.Closed += (_, _) => _openInboxWindows.Remove(win);
+        win.Show();
     }
 
     private void AttachFollowUpToActiveTab(CommitApprovalItem item)
@@ -27051,7 +27097,18 @@ public partial class MainWindow : Window, ILiveElementLocator
                 label.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeSmall");
                 label.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
 
-                if (att.ImagePath != null)
+                if (att.InboxMessageId != null)
+                {
+                    var icon    = new Run("📧 ");
+                    var descRun = new Run(att.Description);
+                    descRun.SetResourceReference(Run.ForegroundProperty, "LabelText");
+                    label.Inlines.Add(icon);
+                    label.Inlines.Add(descRun);
+                    label.Cursor = System.Windows.Input.Cursors.Hand;
+                    var capturedMsgId = att.InboxMessageId;
+                    label.MouseLeftButtonUp += (_, _) => OpenOrFocusInboxMessage(capturedMsgId);
+                }
+                else if (att.ImagePath != null)
                 {
                     int imgIndex = list.Take(i + 1).Count(a => a.ImagePath != null);
                     var icon    = new Run("📷 ");
@@ -27202,6 +27259,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 ContentBlock     = a.ContentBlock,
                 ImagePath        = a.ImagePath,
                 ImageSubmittedAt = a.ImageSubmittedAt?.ToString("O"),
+                InboxMessageId   = a.InboxMessageId,
             }).ToList();
             _docsPanelState = state with
             {
@@ -27395,7 +27453,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                     win.Closed += (_, _) => _openInboxWindows.Remove(win);
                     win.Show();
                 },
-                lookupTask:             LookupTaskById);
+                lookupTask:             LookupTaskById,
+                addToChat:              msg => AttachInboxMessageFollowUp(msg));
 
             var messages = _inboxStore?.LoadAll() ?? [];
             _inboxPanel.Refresh(messages);
