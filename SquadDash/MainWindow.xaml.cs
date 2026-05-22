@@ -27263,7 +27263,9 @@ public partial class MainWindow : Window, ILiveElementLocator
                 viewerBody:             InboxViewerBody!,
                 markRead:               id => _inboxStore?.MarkRead(id),
                 archive:                id => _inboxStore?.Archive(id),
-                delete:                 id => _inboxStore?.Delete(id));
+                delete:                 id => _inboxStore?.Delete(id),
+                viewerActionsPanel:     InboxViewerActionsPanel!,
+                onActionClicked:        DispatchInboxAction);
 
             var messages = _inboxStore?.LoadAll() ?? [];
             _inboxPanel.Refresh(messages);
@@ -27275,6 +27277,21 @@ public partial class MainWindow : Window, ILiveElementLocator
         var state = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
         _docsPanelState = state with { InboxPanelVisible = _inboxPanelVisible };
         _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
+    }
+
+    private void DispatchInboxAction(InboxAction action, InboxMessage message)
+    {
+        _inboxStore?.MarkActionUsed(message.Id, action.Label);
+
+        if (action.RouteMode == "done" || string.IsNullOrWhiteSpace(action.Prompt))
+            return;
+
+        string prompt = action.Prompt;
+
+        if (action.RouteMode == "start_named_agent" && !string.IsNullOrWhiteSpace(action.TargetAgent))
+            prompt = $"[Deferred inbox action — route to @{action.TargetAgent}]\n\n{prompt}";
+
+        EnqueuePrompt(prompt, isSystemInjected: true);
     }
 
     private void DismissMaintenanceBadge()

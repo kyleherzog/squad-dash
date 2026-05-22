@@ -20,10 +20,12 @@ internal sealed class InboxPanelController
     private readonly TextBlock                 _viewerSubjectLabel;
     private readonly TextBlock                 _viewerMetaLabel;
     private readonly WrapPanel                 _viewerAttachmentsPanel;
+    private readonly WrapPanel                 _viewerActionsPanel;
     private readonly FlowDocumentScrollViewer  _viewerBody;
     private readonly Action<string>            _markRead;
     private readonly Action<string>            _archive;
     private readonly Action<string>            _delete;
+    private readonly Action<InboxAction, InboxMessage> _onActionClicked;
 
     private List<InboxMessage> _messages      = [];
     private string             _filterText    = string.Empty;
@@ -42,7 +44,9 @@ internal sealed class InboxPanelController
         FlowDocumentScrollViewer viewerBody,
         Action<string>           markRead,
         Action<string>           archive,
-        Action<string>           delete)
+        Action<string>           delete,
+        WrapPanel                viewerActionsPanel,
+        Action<InboxAction, InboxMessage> onActionClicked)
     {
         _listPanel              = listPanel;
         _listScrollContainer    = listScrollContainer;
@@ -54,6 +58,8 @@ internal sealed class InboxPanelController
         _markRead               = markRead;
         _archive                = archive;
         _delete                 = delete;
+        _viewerActionsPanel     = viewerActionsPanel;
+        _onActionClicked        = onActionClicked;
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -269,10 +275,48 @@ internal sealed class InboxPanelController
         _viewerAttachmentsPanel.Visibility = msg.Attachments.Count > 0
             ? Visibility.Visible : Visibility.Collapsed;
 
+        // Actions (deferred quick-reply buttons)
+        _viewerActionsPanel.Children.Clear();
+        bool hasActions = msg.Actions is { Count: > 0 };
+        _viewerActionsPanel.Visibility = hasActions ? Visibility.Visible : Visibility.Collapsed;
+        if (hasActions)
+        {
+            foreach (var action in msg.Actions)
+                _viewerActionsPanel.Children.Add(BuildActionButton(action, msg));
+        }
+
         // Markdown body
         _viewerBody.Document = MarkdownFlowDocumentBuilder.Build(msg.Body ?? string.Empty);
 
         _viewerBorder.Visibility = Visibility.Visible;
+    }
+
+    private Button BuildActionButton(InboxAction action, InboxMessage msg)
+    {
+        var btn = new Button
+        {
+            Content = action.Label,
+            Margin  = new Thickness(0, 0, 6, 4),
+        };
+        btn.SetResourceReference(Button.StyleProperty, "FlatButtonStyle");
+
+        bool alreadyUsed = msg.UsedActions.Contains(action.Label);
+        if (alreadyUsed)
+        {
+            btn.IsEnabled = false;
+            btn.Opacity   = 0.5;
+        }
+
+        if (action.RouteMode == "done")
+            btn.SetResourceReference(Button.ForegroundProperty, "SubtleText");
+
+        btn.Click += (_, _) =>
+        {
+            btn.IsEnabled = false;
+            _onActionClicked(action, msg);
+        };
+
+        return btn;
     }
 
     private static UIElement BuildAttachmentChip(InboxAttachment att)

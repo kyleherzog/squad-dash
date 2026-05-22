@@ -1689,6 +1689,7 @@
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
                                     <TextBlock x:Name="InboxViewerSubjectLabel"
                                                Grid.Row="0"
@@ -1709,8 +1710,13 @@
                                                Orientation="Horizontal"
                                                Margin="0,0,0,6"
                                                Visibility="Collapsed" />
+                                    <WrapPanel x:Name="InboxViewerActionsPanel"
+                                               Grid.Row="3"
+                                               Orientation="Horizontal"
+                                               Margin="0,6,0,0"
+                                               Visibility="Collapsed" />
                                     <FlowDocumentScrollViewer x:Name="InboxViewerBody"
-                                                              Grid.Row="3"
+                                                              Grid.Row="4"
                                                               MaxHeight="200"
                                                               VerticalScrollBarVisibility="Auto"
                                                               Background="{DynamicResource TranscriptSurface}" />
