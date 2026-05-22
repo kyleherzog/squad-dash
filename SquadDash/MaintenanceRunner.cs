@@ -136,6 +136,13 @@ internal sealed class MaintenanceRunner {
         }
     }
 
+    // ── Constants ──────────────────────────────────────────────────────────────
+
+    private const string MaintenanceInboxReminder =
+        "<maintenance_inbox_reminder>\n" +
+        "If this task has safety: report-only, send your findings as an inbox message using INBOX_MESSAGE_JSON with `\"from\": \"argus-weld\"`. The subject should be the task title. The body should be your full report in Markdown.\n" +
+        "</maintenance_inbox_reminder>";
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     private static string BuildPrompt(MaintenanceTask task, string globalSafety, DateTimeOffset runDate) {
@@ -149,13 +156,10 @@ internal sealed class MaintenanceRunner {
             _             => string.Empty,
         };
 
-        // TODO(Arjun – Phase 3 inbox): for report-only tasks, append MaintenanceInboxReminder
-        // from Squad.SDK/inboxPromptInjection.ts so Argus Weld delivers findings via the Inbox panel:
-        //   var inboxReminder = effectiveSafety == "report-only"
-        //       ? "\n\n" + MaintenanceInboxReminder
-        //       : string.Empty;
-        //   return safetyPrefix + task.Instructions + inboxReminder;
-        return safetyPrefix + task.Instructions;
+        var inboxReminder = effectiveSafety == "report-only"
+            ? "\n\n" + MaintenanceInboxReminder
+            : string.Empty;
+        return safetyPrefix + task.Instructions + inboxReminder;
     }
 
     private static string ApplySafetyFloor(string globalSafety, string taskSafety) {
