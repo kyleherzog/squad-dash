@@ -414,7 +414,7 @@ internal sealed class MaintenancePanelController {
 
     private Border BuildTaskRow(MaintenanceTask task) {
         var row = new Border {
-            Padding    = new Thickness(0, 6, 0, 6),
+            Padding    = new Thickness(0, 2, 0, 2),
             Background = Brushes.Transparent,
             Tag        = task,
         };
