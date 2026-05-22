@@ -42,7 +42,8 @@ internal sealed class MaintenancePanelControllerTests {
             enabledOnIdleCheckBox,
             getWorkspacePath:  () => null,
             runNow:            () => { },
-            toggleTaskEnabled: (_, _) => { });
+            toggleTaskEnabled: (_, _) => { },
+            reloadPanel:       () => { });
         return (controller, listPanel, statusLabel, runNowButton);
     }
 
@@ -310,7 +311,8 @@ internal sealed class MaintenancePanelControllerTests {
             enabledOnIdleCheckBox,
             getWorkspacePath:  () => workspacePath,
             runNow:            () => { },
-            toggleTaskEnabled: (_, _) => { });
+            toggleTaskEnabled: (_, _) => { },
+            reloadPanel:       () => { });
         return (controller, listPanel, statusLabel, runNowButton);
     }
 
@@ -544,7 +546,8 @@ internal sealed class MaintenancePanelControllerTests {
             enabledOnIdleCheckBox,
             getWorkspacePath:  () => workspacePath,
             runNow:            () => { },
-            toggleTaskEnabled: (id, en) => toggleCalls.Add((id, en)));
+            toggleTaskEnabled: (id, en) => toggleCalls.Add((id, en)),
+            reloadPanel:       () => { });
         return (controller, toggleCalls);
     }
 

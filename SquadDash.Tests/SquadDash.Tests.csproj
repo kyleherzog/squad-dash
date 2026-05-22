@@ -63,6 +63,7 @@
     <Compile Include="..\SquadDash\TraceCategory.cs" Link="Source\TraceCategory.cs" />
     <Compile Include="..\SquadDash\TranscriptViewMode.cs" Link="Source\TranscriptViewMode.cs" />
     <Compile Include="..\SquadDash\ILiveTraceTarget.cs" Link="Source\ILiveTraceTarget.cs" />
+    <Compile Include="..\SquadDash\ChromedWindow.cs" Link="Source\ChromedWindow.cs" />
     <Compile Include="..\SquadDash\TraceWindow.cs" Link="Source\TraceWindow.cs" />
     <Compile Include="..\SquadDash\SquadDashTrace.cs" Link="Source\SquadDashTrace.cs" />
     <Compile Include="..\SquadDash\SquadDashRuntimeStamp.cs" Link="Source\SquadDashRuntimeStamp.cs" />
@@ -147,6 +148,10 @@
     <Compile Include="..\SquadDash\WorkspaceIssuePresentation.cs" Link="Source\WorkspaceIssuePresentation.cs" />
     <Compile Include="..\SquadDash\ProcessIdentity.cs" Link="Source\ProcessIdentity.cs" />
     <Compile Include="..\SquadDash\ColorUtilities.cs" Link="Source\ColorUtilities.cs" />
+    <Compile Include="..\SquadDash\TranscriptTextUtilities.cs" Link="Source\TranscriptTextUtilities.cs" />
+    <Compile Include="..\SquadDash\InboxMessageParser.cs" Link="Source\InboxMessageParser.cs" />
+    <Compile Include="..\SquadDash\PanelFilterHelper.cs" Link="Source\PanelFilterHelper.cs" />
+    <Compile Include="..\SquadDash\CompactPickerButton.cs" Link="Source\CompactPickerButton.cs" />
 
     <Compile Include="..\SquadDash\CtrlDoubleTapGestureTracker.cs" Link="Source\CtrlDoubleTapGestureTracker.cs" />
     <Compile Include="..\SquadDash\VisualTreeEdgeAnalyzer.cs" Link="Source\VisualTreeEdgeAnalyzer.cs" />
