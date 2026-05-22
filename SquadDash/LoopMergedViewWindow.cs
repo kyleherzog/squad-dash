@@ -35,17 +35,6 @@ internal sealed class LoopMergedViewWindow : ChromedWindow
         Grid.SetRow(header, 0);
         root.Children.Add(header);
 
-        var closeButton = new Button
-        {
-            Content = "×",
-            Width   = 28,
-            Height  = 28,
-        };
-        WindowChrome.SetIsHitTestVisibleInChrome(closeButton, true);
-        closeButton.Click += (_, _) => Close();
-        DockPanel.SetDock(closeButton, Dock.Right);
-        header.Children.Add(closeButton);
-
         var titleBlock = new TextBlock
         {
             Text                = "Loop Preview",

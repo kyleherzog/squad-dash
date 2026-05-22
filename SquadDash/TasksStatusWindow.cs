@@ -39,18 +39,6 @@ internal sealed class TasksStatusWindow : ChromedWindow {
         Grid.SetRow(header, 0);
         root.Children.Add(header);
 
-        var closeButton = new Button {
-            Content = "Close",
-            MinWidth = 76,
-            Height = 30,
-            HorizontalAlignment = HorizontalAlignment.Right
-        };
-        closeButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
-        WindowChrome.SetIsHitTestVisibleInChrome(closeButton, true);
-        closeButton.Click += (_, _) => Close();
-        DockPanel.SetDock(closeButton, Dock.Right);
-        header.Children.Add(closeButton);
-
         var copyButton = new Button {
             Content = "Copy",
             MinWidth = 76,

@@ -79,13 +79,6 @@ internal sealed class RcStatusPanel : ChromedWindow
         DockPanel.SetDock(titleText, Dock.Left);
         titleRow.Children.Add(titleText);
 
-        var closeButton = new Button { Content = "×", Width = 28, Height = 28 };
-        closeButton.SetResourceReference(Control.StyleProperty, "PanelCloseButtonStyle");
-        WindowChrome.SetIsHitTestVisibleInChrome(closeButton, true);
-        closeButton.Click += (_, _) => Close();
-        DockPanel.SetDock(closeButton, Dock.Right);
-        titleRow.Children.Add(closeButton);
-
         // ── Separator ────────────────────────────────────────────────────
         _root.Children.Add(MakeSeparator());
 

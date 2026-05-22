@@ -9,7 +9,7 @@ namespace SquadDash;
 /// <summary>
 /// Floating window that streams loop output in real time.
 /// Open via right-click "Show Loop Output" on the Loop panel, or auto-shown
-/// when loop output first arrives.  Dismiss with the × button or "Close" (hides, preserves history).
+/// when loop output first arrives.  Dismiss with the × button (hides, preserves history).
 /// </summary>
 internal sealed class LoopOutputWindow : ChromedWindow
 {
@@ -36,13 +36,6 @@ internal sealed class LoopOutputWindow : ChromedWindow
         var header = new DockPanel { LastChildFill = false, Background = Brushes.Transparent };
         Grid.SetRow(header, 0);
         root.Children.Add(header);
-
-        var closeButton = new Button { Content = "Close", MinWidth = 76, Height = 30 };
-        closeButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
-        WindowChrome.SetIsHitTestVisibleInChrome(closeButton, true);
-        closeButton.Click += (_, _) => Hide();
-        DockPanel.SetDock(closeButton, Dock.Right);
-        header.Children.Add(closeButton);
 
         var copyButton = new Button { Content = "Copy", MinWidth = 76, Height = 30, Margin = new Thickness(0, 0, 8, 0) };
         copyButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
@@ -135,5 +128,12 @@ internal sealed class LoopOutputWindow : ChromedWindow
         if (!string.IsNullOrWhiteSpace(text))
             LoopOutputStore.SaveLog(text);
         _logTextBox.Clear();
+    }
+
+    /// <summary>Hides rather than closes the window so output history is preserved for re-opening.</summary>
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        e.Cancel = true;
+        Hide();
     }
 }

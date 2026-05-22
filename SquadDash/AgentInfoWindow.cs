@@ -89,17 +89,6 @@ internal sealed class AgentInfoWindow : ChromedWindow {
             root.Children.Add(scrollViewer);
         }
 
-        // Close button
-        var closeButton = new Button {
-            Content = "Close",
-            Width = 88,
-            Height = 30,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 8, 0, 20)
-        };
-        closeButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
-        closeButton.Click += (_, _) => Close();
-        root.Children.Add(closeButton);
     }
 
     public static void Show(Window owner, AgentStatusCard card, string? workspaceFolderPath, string agentImageAssetsDirectory) {

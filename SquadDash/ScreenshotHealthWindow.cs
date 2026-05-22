@@ -13,7 +13,7 @@ namespace SquadDash;
 /// Floating panel that runs the screenshot structural health check and displays
 /// per-definition results — pass/warning/error/not-captured — with issue details.
 ///
-/// <para>Open via <c>open_panel health</c> or the host command; close with the Close button.
+/// <para>Open via <c>open_panel health</c> or the host command; close with the × button.
 /// Follows the singleton floating-window pattern used by <see cref="TasksStatusWindow"/>
 /// and <see cref="TraceWindow"/>.</para>
 /// </summary>
@@ -53,19 +53,6 @@ internal sealed class ScreenshotHealthWindow : ChromedWindow
         var header = new DockPanel { LastChildFill = false, Background = Brushes.Transparent };
         Grid.SetRow(header, 0);
         root.Children.Add(header);
-
-        var closeButton = new Button
-        {
-            Content             = "Close",
-            MinWidth            = 76,
-            Height              = 30,
-            HorizontalAlignment = HorizontalAlignment.Right,
-        };
-        closeButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
-        WindowChrome.SetIsHitTestVisibleInChrome(closeButton, true);
-        closeButton.Click += (_, _) => Close();
-        DockPanel.SetDock(closeButton, Dock.Right);
-        header.Children.Add(closeButton);
 
         _runButton = new Button
         {

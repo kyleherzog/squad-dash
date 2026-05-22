@@ -17,7 +17,7 @@ namespace SquadDash;
 /// Floating developer/debug tool that shows a running log of trace entries from
 /// <see cref="TranscriptScrollController"/> and <see cref="SquadDashTrace"/>.
 ///
-/// <para>Open via the <c>/trace</c> slash command; close with the × button or the Close button.
+/// <para>Open via the <c>/trace</c> slash command; close with the × button.
 /// When closed, <see cref="TranscriptScrollController.TraceTarget"/> and
 /// <see cref="SquadDashTrace.TraceTarget"/> are automatically cleared so tracing has zero
 /// overhead while the window is not visible.</para>
@@ -62,20 +62,7 @@ internal sealed class TraceWindow : ChromedWindow, ILiveTraceTarget
         Grid.SetRow(header, 0);
         root.Children.Add(header);
 
-        var closeButton = new Button
-        {
-            Content = "Close",
-            MinWidth = 76,
-            Height = 30,
-            HorizontalAlignment = HorizontalAlignment.Right,
-        };
-        closeButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
-        WindowChrome.SetIsHitTestVisibleInChrome(closeButton, true);
-        closeButton.Click += (_, _) => Close();
-        DockPanel.SetDock(closeButton, Dock.Right);
-        header.Children.Add(closeButton);
-
-        var copyButton = new Button
+        var copyButton= new Button
         {
             Content = "Copy",
             MinWidth = 76,

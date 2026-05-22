@@ -44,19 +44,6 @@ internal sealed class ToolIconGalleryWindow : ChromedWindow {
         DockPanel.SetDock(titleBlock, Dock.Top);
         root.Children.Add(titleBlock);
 
-        // Close button
-        var closeButton = new Button {
-            Content = "Close",
-            Width = 80,
-            Height = 28,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(20, 8, 20, 0)
-        };
-        closeButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
-        closeButton.Click += (_, _) => Close();
-        DockPanel.SetDock(closeButton, Dock.Bottom);
-        root.Children.Add(closeButton);
-
         // Scroll area
         var scroll = new ScrollViewer {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
