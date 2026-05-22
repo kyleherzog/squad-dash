@@ -147,11 +147,11 @@ internal sealed class InboxMessageWindow : Window
     {
         var icon = att.Type switch
         {
-            "file"  => "📄",
-            "link"  => "🔗",
-            "task"  => "✅",
-            "image" => "🖼",
-            _       => "📎",
+            "url"      => "🔗",
+            "file"     => "📄",
+            "task-ref" => "✅",
+            "text"     => "📝",
+            _          => "📎",
         };
 
         var chip = new Border
@@ -160,7 +160,7 @@ internal sealed class InboxMessageWindow : Window
             Padding         = new Thickness(6, 2, 6, 2),
             CornerRadius    = new CornerRadius(4),
             BorderThickness = new Thickness(1),
-            Cursor          = Cursors.Hand,
+            Cursor          = att.Type == "task-ref" ? Cursors.Arrow : Cursors.Hand,
         };
         chip.SetResourceReference(Border.BackgroundProperty,  "InputSurface");
         chip.SetResourceReference(Border.BorderBrushProperty, "InputBorder");
@@ -175,14 +175,37 @@ internal sealed class InboxMessageWindow : Window
         label.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
         chip.Child = label;
 
-        var target = att.Href ?? att.Path;
-        if (target is not null)
+        switch (att.Type)
         {
-            chip.MouseLeftButtonUp += (_, _) =>
-            {
-                try { Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }); }
-                catch { }
-            };
+            case "url":
+                if (att.Href is not null)
+                    chip.MouseLeftButtonUp += (_, _) =>
+                    {
+                        try { Process.Start(new ProcessStartInfo(att.Href) { UseShellExecute = true }); }
+                        catch { }
+                    };
+                break;
+
+            case "file":
+                if (att.Path is not null)
+                    chip.MouseLeftButtonUp += (_, _) =>
+                    {
+                        try { Process.Start(new ProcessStartInfo(System.IO.Path.GetFullPath(att.Path)) { UseShellExecute = true }); }
+                        catch { }
+                    };
+                break;
+
+            case "task-ref":
+                chip.ToolTip = $"Task: {att.TaskId}";
+                break;
+
+            case "text":
+                chip.MouseLeftButtonUp += (_, _) =>
+                {
+                    try { MessageBox.Show(att.Content ?? "", att.Label); }
+                    catch { }
+                };
+                break;
         }
 
         return chip;
