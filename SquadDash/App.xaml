@@ -424,7 +424,7 @@
                                     Padding="6,3,6,3">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" SharedSizeGroup="MenuItemIconColumn"/>
+                                        <ColumnDefinition MinWidth="18" Width="Auto" SharedSizeGroup="MenuItemIconColumn"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto" SharedSizeGroup="MenuItemIGTColumn"/>
                                         <ColumnDefinition Width="14"/>
@@ -506,7 +506,7 @@
                                     Padding="6,3,6,3">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" SharedSizeGroup="MenuItemIconColumn"/>
+                                        <ColumnDefinition MinWidth="18" Width="Auto" SharedSizeGroup="MenuItemIconColumn"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto" SharedSizeGroup="MenuItemIGTColumn"/>
                                         <ColumnDefinition Width="14"/>
