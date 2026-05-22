@@ -31,7 +31,7 @@
 idle_timeout: 15
 max_tasks_per_session: 5
 safety: branch
-enabled_on_idle: true
+enabled_on_idle: false
 configured: false  # ← change to true to activate
 tasks:
   - id: run-tests
@@ -411,4 +411,45 @@ tasks:
             tooltip: Rename directly on the current branch; update all references
           - value: report
             tooltip: List each inconsistency — do not change any code
+  - id: security-audit
+    enabled: false
+    frequency: weekly
+    safety: report-only
+    title: Security Vulnerability Audit
+    instructions: |
+      Audit the codebase for security vulnerabilities and unsafe patterns.
+      Focus on:
+      - Injection risks (SQL, command, path traversal, format string)
+      - Secrets or credentials hard-coded or logged in plain text
+      - Unsafe deserialization or untrusted data passed to eval-equivalent APIs
+      - Missing input validation or output encoding (XSS, open redirect)
+      - Overly broad exception catches that swallow security-relevant errors
+      - Insecure cryptography (MD5/SHA1 for integrity, ECB mode, short keys, hard-coded IVs)
+      - Dependency or NuGet package references with known CVEs (check via `dotnet list package --vulnerable` if available)
+      - File or network operations that trust caller-supplied paths without sanitisation
+      - Sensitive data written to logs, temp files, or crash dumps
+      {{#if if_found == "report"}}
+      Do not change any code. Produce a structured report grouped by severity
+      (Critical / High / Medium / Low), listing file path, structural anchor
+      (e.g. ClassName.MethodName), and a description of each finding.
+      Send the report to the user's Inbox using an INBOX_MESSAGE_JSON block
+      (from: "argus-weld").
+      {{/if}}
+      {{#if if_found == "fix"}}
+      Fix issues that are safe to patch automatically (remove hard-coded secrets,
+      add input guards, replace deprecated crypto calls). Commit to a maintenance
+      branch. Issues requiring design decisions or external dependency updates
+      should still be reported in an INBOX_MESSAGE_JSON block (from: "argus-weld").
+      {{/if}}
+    options:
+      if_found:
+        type: radio
+        label: If vulnerabilities are found
+        tooltip: "Produce a report or patch what can be fixed automatically"
+        value: report
+        choices:
+          - value: report
+            tooltip: Write a report — do not change any files
+          - value: fix
+            tooltip: Auto-patch safe fixes on a maintenance branch; report the rest
 ---
