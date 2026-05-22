@@ -27445,14 +27445,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 delete:                 id => _inboxStore?.Delete(id),
                 viewerActionsPanel:     InboxViewerActionsPanel!,
                 onActionClicked:        DispatchInboxAction,
-                openMessageWindow:      msg =>
-                {
-                    var win = new InboxMessageWindow(msg, DispatchInboxAction, LookupTaskById);
-                    win.Owner = this;
-                    _openInboxWindows.Add(win);
-                    win.Closed += (_, _) => _openInboxWindows.Remove(win);
-                    win.Show();
-                },
+                openMessageWindow:      msg => OpenOrFocusInboxMessage(msg.Id),
                 lookupTask:             LookupTaskById,
                 addToChat:              msg => AttachInboxMessageFollowUp(msg));
 
