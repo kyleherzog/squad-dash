@@ -25575,7 +25575,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                     var msg = _inboxStore.GetById(id);
                     if (msg is not null)
                     {
-                        var win = new InboxMessageWindow(msg, DispatchInboxAction);
+                        var win = new InboxMessageWindow(msg, DispatchInboxAction, LookupTaskById);
                         win.Owner = this;
                         _openInboxWindows.Add(win);
                         win.Closed += (_, _) => _openInboxWindows.Remove(win);
@@ -27334,12 +27334,13 @@ public partial class MainWindow : Window, ILiveElementLocator
                 onActionClicked:        DispatchInboxAction,
                 openMessageWindow:      msg =>
                 {
-                    var win = new InboxMessageWindow(msg, DispatchInboxAction);
+                    var win = new InboxMessageWindow(msg, DispatchInboxAction, LookupTaskById);
                     win.Owner = this;
                     _openInboxWindows.Add(win);
                     win.Closed += (_, _) => _openInboxWindows.Remove(win);
                     win.Show();
-                });
+                },
+                lookupTask:             LookupTaskById);
 
             var messages = _inboxStore?.LoadAll() ?? [];
             _inboxPanel.Refresh(messages);
@@ -27351,6 +27352,20 @@ public partial class MainWindow : Window, ILiveElementLocator
         var state = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
         _docsPanelState = state with { InboxPanelVisible = _inboxPanelVisible };
         _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
+    }
+
+    private TaskItem? LookupTaskById(string taskId)
+    {
+        var path = _currentWorkspace is null
+            ? null
+            : Path.Combine(_currentWorkspace.SquadFolderPath, "tasks.md");
+        if (path is null || !File.Exists(path)) return null;
+        var lines  = File.ReadAllLines(path);
+        var result = TasksPanelParser.Parse(lines);
+        var allItems = result.OpenGroups.SelectMany(g => g.Items)
+            .Concat(result.CompletedItems);
+        return allItems.FirstOrDefault(t =>
+            t.Text.Contains(taskId, StringComparison.OrdinalIgnoreCase));
     }
 
     private void DispatchInboxAction(InboxAction action, InboxMessage message)

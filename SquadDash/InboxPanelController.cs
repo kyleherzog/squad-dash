@@ -29,6 +29,7 @@ internal sealed class InboxPanelController
     private readonly Action<string>            _delete;
     private readonly Action<InboxAction, InboxMessage> _onActionClicked;
     private readonly Action<InboxMessage>      _openMessageWindow;
+    private Func<string, TaskItem?>?          _lookupTask;
 
     private List<InboxMessage> _messages      = [];
     private string             _filterText    = string.Empty;
@@ -50,7 +51,8 @@ internal sealed class InboxPanelController
         Action<string>           delete,
         WrapPanel                viewerActionsPanel,
         Action<InboxAction, InboxMessage> onActionClicked,
-        Action<InboxMessage>     openMessageWindow)
+        Action<InboxMessage>     openMessageWindow,
+        Func<string, TaskItem?>? lookupTask = null)
     {
         _listPanel              = listPanel;
         _listScrollContainer    = listScrollContainer;
@@ -65,6 +67,7 @@ internal sealed class InboxPanelController
         _viewerActionsPanel     = viewerActionsPanel;
         _onActionClicked        = onActionClicked;
         _openMessageWindow      = openMessageWindow;
+        _lookupTask             = lookupTask;
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -276,7 +279,7 @@ internal sealed class InboxPanelController
         // Attachments
         _viewerAttachmentsPanel.Children.Clear();
         foreach (var att in msg.Attachments)
-            _viewerAttachmentsPanel.Children.Add(BuildAttachmentChip(att, Application.Current?.MainWindow));
+            _viewerAttachmentsPanel.Children.Add(BuildAttachmentChip(att, Application.Current?.MainWindow, _lookupTask));
         _viewerAttachmentsPanel.Visibility = msg.Attachments.Count > 0
             ? Visibility.Visible : Visibility.Collapsed;
 
@@ -326,7 +329,14 @@ internal sealed class InboxPanelController
         return btn;
     }
 
-    private static UIElement BuildAttachmentChip(InboxAttachment att, Window? owner)
+    private static string GetPriorityLabel(string emoji) => emoji switch {
+        "🔴" => "High Priority",
+        "🟡" => "Mid Priority",
+        "🟢" => "Low Priority",
+        _    => "Unknown Priority",
+    };
+
+    private static UIElement BuildAttachmentChip(InboxAttachment att, Window? owner, Func<string, TaskItem?>? lookupTask = null)
     {
         var icon = att.Type switch
         {
@@ -344,7 +354,7 @@ internal sealed class InboxPanelController
             Padding         = new Thickness(6, 2, 6, 2),
             CornerRadius    = new CornerRadius(4),
             BorderThickness = new Thickness(1),
-            Cursor          = att.Type == "task-ref" ? Cursors.Arrow : Cursors.Hand,
+            Cursor          = Cursors.Hand,
         };
         chip.SetResourceReference(Border.BackgroundProperty,   "InputSurface");
         chip.SetResourceReference(Border.BorderBrushProperty,  "InputBorder");
@@ -432,8 +442,38 @@ internal sealed class InboxPanelController
             }
 
             case "task-ref":
+            {
                 chip.ToolTip = $"Task: {att.TaskId}";
+                chip.Cursor  = Cursors.Hand;
+                if (lookupTask is not null && att.TaskId is not null)
+                {
+                    chip.MouseLeftButtonUp += (_, _) =>
+                    {
+                        try
+                        {
+                            var task = lookupTask(att.TaskId);
+                            if (task is null)
+                            {
+                                MessageBox.Show($"Task not found: {att.TaskId}", att.Label,
+                                    MessageBoxButton.OK, MessageBoxImage.Information);
+                                return;
+                            }
+
+                            var status   = task.IsChecked ? "✅ Done" : "⬜ Open";
+                            var priority = $"{task.Emoji} {GetPriorityLabel(task.Emoji)}";
+                            var owner    = task.Owner is not null ? $"\nOwner: {task.Owner}" : "";
+                            var desc     = task.Description is not null ? $"\n\n{task.Description}" : "";
+                            MessageBox.Show(
+                                $"{status}  |  {priority}{owner}\n\n{task.Text}{desc}",
+                                att.Label,
+                                MessageBoxButton.OK,
+                                MessageBoxImage.None);
+                        }
+                        catch { }
+                    };
+                }
                 break;
+            }
 
             case "text":
                 chip.MouseLeftButtonUp += (_, _) =>
