@@ -194,7 +194,8 @@ internal sealed class MaintenanceRunner {
     private static bool NeedsCommitSha(IEnumerable<MaintenanceTask> tasks) =>
         tasks.Any(task =>
             task.Enabled &&
-            string.Equals(task.Frequency, "per-commit", StringComparison.OrdinalIgnoreCase));
+            (string.Equals(task.Frequency, "after-commits", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(task.Frequency, "per-commit",    StringComparison.OrdinalIgnoreCase)));
 
     private static async Task<string?> TryGetCommitShaAsync(string workspacePath, CancellationToken ct) {
         try {
