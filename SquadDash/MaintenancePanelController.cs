@@ -31,6 +31,7 @@ internal sealed class MaintenancePanelController {
     private DispatcherTimer?       _countdownTimer;
     private DateTimeOffset         _nextMaintenanceAt = DateTimeOffset.MaxValue;
     private bool                   _suppressEnabledOnIdleEvent;
+    private string                 _filterText = string.Empty;
 
     // ── Construction ─────────────────────────────────────────────────────────
 
@@ -102,6 +103,22 @@ internal sealed class MaintenancePanelController {
         _suppressEnabledOnIdleEvent = false;
 
         RebuildList();
+    }
+
+    internal void SetFilter(string text) {
+        _filterText = text.Trim();
+        ApplyFilter();
+    }
+
+    private void ApplyFilter() {
+        foreach (UIElement child in _listPanel.Children) {
+            if (child is FrameworkElement fe && fe.Tag is MaintenanceTask task) {
+                bool matches = string.IsNullOrEmpty(_filterText)
+                    || PanelFilterHelper.Matches(task.Title, _filterText)
+                    || PanelFilterHelper.Matches(task.Instructions ?? string.Empty, _filterText);
+                fe.Visibility = matches ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
     }
 
     /// <summary>
@@ -291,6 +308,7 @@ internal sealed class MaintenancePanelController {
 
         SyncStatusLabel();
         AppendReportsSection();
+        ApplyFilter();
     }
 
     private void AppendReportsSection() {
@@ -398,6 +416,7 @@ internal sealed class MaintenancePanelController {
         var row = new Border {
             Padding    = new Thickness(0, 6, 0, 6),
             Background = Brushes.Transparent,
+            Tag        = task,
         };
 
         if (!string.IsNullOrWhiteSpace(task.Instructions))

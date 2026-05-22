@@ -12073,6 +12073,31 @@ public partial class MainWindow : Window, ILiveElementLocator
         catch (Exception ex) { HandleUiCallbackException(nameof(MaintenancePanelCloseButton_Click), ex); }
     }
 
+    private void MaintenanceFilterBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        try
+        {
+            var text = MaintenanceFilterBox?.Text ?? string.Empty;
+            _maintenancePanel?.SetFilter(text);
+            if (MaintenanceFilterClearButton is not null)
+                MaintenanceFilterClearButton.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(MaintenanceFilterBox_TextChanged), ex); }
+    }
+
+    private void MaintenanceFilterClearButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (MaintenanceFilterBox is not null)
+            {
+                MaintenanceFilterBox.Text = string.Empty;
+                MaintenanceFilterBox.Focus();
+            }
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(MaintenanceFilterClearButton_Click), ex); }
+    }
+
     private void ViewInboxMenuItem_Click(object sender, RoutedEventArgs e)
     {
         try

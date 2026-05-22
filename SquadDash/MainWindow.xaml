@@ -1508,7 +1508,7 @@
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
-                            <!-- Row 0: Title + badge + close button -->
+                            <!-- Row 0: Title + badge + filter + close button -->
                             <DockPanel Grid.Row="0" LastChildFill="False">
                                 <Button x:Name="MaintenancePanelCloseButton"
                                         DockPanel.Dock="Right"
@@ -1540,6 +1540,33 @@
                                         <SolidColorBrush Color="#E53935" />
                                     </Border.Background>
                                 </Border>
+                                <StackPanel DockPanel.Dock="Left"
+                                            Orientation="Horizontal"
+                                            VerticalAlignment="Center"
+                                            Margin="6,0,0,0">
+                                    <TextBox x:Name="MaintenanceFilterBox"
+                                             Width="70"
+                                             FontSize="{DynamicResource FontSizeSmall}"
+                                             VerticalContentAlignment="Center"
+                                             Background="{DynamicResource InputSurface}"
+                                             Foreground="{DynamicResource LabelText}"
+                                             CaretBrush="{DynamicResource LabelText}"
+                                             BorderBrush="{DynamicResource InputBorder}"
+                                             BorderThickness="1"
+                                             Style="{StaticResource PanelFilterBoxStyle}"
+                                             TextChanged="MaintenanceFilterBox_TextChanged" />
+                                    <Button x:Name="MaintenanceFilterClearButton"
+                                            Content="×"
+                                            Width="14"
+                                            Height="14"
+                                            FontSize="{DynamicResource FontSizeXSmall}"
+                                            Margin="2,0,0,0"
+                                            VerticalAlignment="Center"
+                                            Visibility="Collapsed"
+                                            ToolTip="Clear filter"
+                                            Style="{StaticResource PanelFilterClearButtonStyle}"
+                                            Click="MaintenanceFilterClearButton_Click" />
+                                </StackPanel>
                             </DockPanel>
 
                             <!-- Row 1: Status label + Run Now button -->
@@ -1608,7 +1635,7 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <!-- Row 0: Title + close button -->
+                            <!-- Row 0: Title + filter + close button -->
                             <DockPanel Grid.Row="0" LastChildFill="False">
                                 <Button x:Name="InboxPanelCloseButton"
                                         DockPanel.Dock="Right"
@@ -1626,43 +1653,45 @@
                                            FontWeight="SemiBold"
                                            Foreground="{DynamicResource RosterPanelTitle}"
                                            VerticalAlignment="Center" />
+                                <StackPanel DockPanel.Dock="Left"
+                                            Orientation="Horizontal"
+                                            VerticalAlignment="Center"
+                                            Margin="8,0,0,0">
+                                    <TextBox x:Name="InboxFilterBox"
+                                             Width="80"
+                                             FontSize="{DynamicResource FontSizeSmall}"
+                                             VerticalContentAlignment="Center"
+                                             Background="{DynamicResource InputSurface}"
+                                             Foreground="{DynamicResource LabelText}"
+                                             CaretBrush="{DynamicResource LabelText}"
+                                             BorderBrush="{DynamicResource InputBorder}"
+                                             BorderThickness="1"
+                                             Style="{StaticResource PanelFilterBoxStyle}"
+                                             TextChanged="InboxFilterBox_TextChanged" />
+                                    <Button x:Name="InboxFilterClearButton"
+                                            Content="×"
+                                            Width="14"
+                                            Height="14"
+                                            FontSize="{DynamicResource FontSizeXSmall}"
+                                            Margin="2,0,0,0"
+                                            VerticalAlignment="Center"
+                                            Visibility="Collapsed"
+                                            ToolTip="Clear filter"
+                                            Style="{StaticResource PanelFilterClearButtonStyle}"
+                                            Click="InboxFilterClearButton_Click" />
+                                </StackPanel>
                             </DockPanel>
 
-                            <!-- Row 1: Filter bar -->
-                            <StackPanel Grid.Row="1"
-                                        Orientation="Horizontal"
-                                        Margin="0,8,0,0">
-                                <TextBox x:Name="InboxFilterBox"
-                                         Width="80"
-                                         FontSize="{DynamicResource FontSizeSmall}"
-                                         VerticalContentAlignment="Center"
-                                         Background="{DynamicResource InputSurface}"
-                                         Foreground="{DynamicResource LabelText}"
-                                         CaretBrush="{DynamicResource LabelText}"
-                                         BorderBrush="{DynamicResource InputBorder}"
-                                         BorderThickness="1"
-                                         Style="{StaticResource PanelFilterBoxStyle}"
-                                         TextChanged="InboxFilterBox_TextChanged" />
-                                <Button x:Name="InboxFilterClearButton"
-                                        Content="×"
-                                        Width="14"
-                                        Height="14"
-                                        FontSize="{DynamicResource FontSizeXSmall}"
-                                        Margin="2,0,0,0"
-                                        VerticalAlignment="Center"
-                                        Visibility="Collapsed"
-                                        ToolTip="Clear filter"
-                                        Style="{StaticResource PanelFilterClearButtonStyle}"
-                                        Click="InboxFilterClearButton_Click" />
-                                <CheckBox x:Name="InboxUnreadOnlyCheckBox"
-                                          Content="Unread only"
-                                          Margin="6,0,0,0"
-                                          VerticalAlignment="Center"
-                                          FontSize="{DynamicResource FontSizeSmall}"
-                                          Style="{StaticResource ThemedCheckBoxStyle}"
-                                          Checked="InboxUnreadOnlyCheckBox_Checked"
-                                          Unchecked="InboxUnreadOnlyCheckBox_Unchecked" />
-                            </StackPanel>
+                            <!-- Row 1: Unread-only filter -->
+                            <CheckBox x:Name="InboxUnreadOnlyCheckBox"
+                                      Grid.Row="1"
+                                      Content="Unread only"
+                                      Margin="0,6,0,0"
+                                      VerticalAlignment="Center"
+                                      FontSize="{DynamicResource FontSizeSmall}"
+                                      Style="{StaticResource ThemedCheckBoxStyle}"
+                                      Checked="InboxUnreadOnlyCheckBox_Checked"
+                                      Unchecked="InboxUnreadOnlyCheckBox_Unchecked" />
 
                             <!-- Row 2: Message list -->
                             <ScrollViewer x:Name="InboxListScrollViewer"
