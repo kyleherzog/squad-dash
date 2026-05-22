@@ -25,7 +25,7 @@ internal sealed class TasksStatusWindow : ChromedWindow {
         Topmost = false;
 
         var root = new Grid {
-            Margin = new Thickness(12)
+            Margin = new Thickness(12, CloseButtonHeight, 12, 12)
         };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });

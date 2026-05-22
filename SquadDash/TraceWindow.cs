@@ -48,7 +48,7 @@ internal sealed class TraceWindow : ChromedWindow, ILiveTraceTarget
         ShowActivated = false;
         Topmost = false;
 
-        var root = new Grid { Margin = new Thickness(12) };
+        var root = new Grid { Margin = new Thickness(12, CloseButtonHeight, 12, 12) };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // header
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // hint
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // checkboxes

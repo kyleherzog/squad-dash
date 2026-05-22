@@ -14,6 +14,13 @@ namespace SquadDash;
 internal class ChromedWindow : Window {
 
     /// <summary>
+    /// Height of the floating close (✕) button.  Subclasses should ensure their
+    /// top-most content row starts at least this many pixels below the border edge
+    /// so the close button does not cover interactive controls.
+    /// </summary>
+    protected const double CloseButtonHeight = 34;
+
+    /// <summary>
     /// Applies the standard SquadDash custom chrome to the window.
     /// </summary>
     /// <param name="captionHeight">
@@ -75,7 +82,7 @@ internal class ChromedWindow : Window {
 
         var closeBtn = new Button {
             Width               = 38,
-            Height              = 34,
+            Height              = CloseButtonHeight,
             Padding             = new Thickness(0),
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment   = VerticalAlignment.Top,
