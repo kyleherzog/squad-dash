@@ -298,20 +298,22 @@ internal sealed class InboxPanelController
     {
         var btn = new Button
         {
-            Content = action.Label,
-            Margin  = new Thickness(0, 0, 6, 4),
+            Content         = action.Label,
+            Margin          = new Thickness(0, 0, 8, 8),
+            Padding         = new Thickness(10, 4, 10, 4),
+            BorderThickness = new Thickness(1),
+            Cursor          = Cursors.Hand,
+            MinHeight       = 28,
         };
-        btn.SetResourceReference(Button.StyleProperty, "FlatButtonStyle");
+        if (Application.Current.TryFindResource("QuickReplyButtonStyle") is Style qrStyle)
+            btn.Style = qrStyle;
+        btn.SetResourceReference(Button.BackgroundProperty,   "QuickReplySurface");
+        btn.SetResourceReference(Button.ForegroundProperty,   "QuickReplyText");
+        btn.SetResourceReference(Button.BorderBrushProperty,  "QuickReplyBorder");
 
         bool alreadyUsed = msg.UsedActions.Contains(action.Label);
         if (alreadyUsed)
-        {
             btn.IsEnabled = false;
-            btn.Opacity   = 0.5;
-        }
-
-        if (action.RouteMode == "done")
-            btn.SetResourceReference(Button.ForegroundProperty, "SubtleText");
 
         btn.Click += (_, _) =>
         {
