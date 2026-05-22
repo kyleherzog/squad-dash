@@ -251,6 +251,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private MaintenanceReportWriter?    _maintenanceReportWriter;
     private MaintenanceReport?          _pendingMaintenanceBannerReport;
     private DispatcherTimer?            _maintenanceBannerTimer;
+    private InboxPanelController?       _inboxPanel;
+    private bool                        _inboxPanelVisible = false;
     // Set true while we are programmatically moving a floating window so its
     // LocationChanged does not overwrite the saved offset.
     private bool _movingFloatingWindow;
@@ -480,6 +482,12 @@ public partial class MainWindow : Window, ILiveElementLocator
     private TranscriptThreadState CoordinatorThread => _coordinatorThread ??= CreateCoordinatorTranscriptThread();
     private bool IsLoopRunning => _pec is { IsLoopRunning: true };
     private bool IsNativeLoopRunning => IsLoopRunning && _activeLoopMode == LoopMode.NativeAgents;
+
+    /// <summary>
+    /// The per-workspace inbox store, accessible to panel controllers (e.g. InboxPanelController).
+    /// Null until a workspace is opened.
+    /// </summary>
+    internal InboxStore? InboxStore => _inboxStore;
     private TranscriptTurnView? _currentTurn
     {
         get => CoordinatorThread.CurrentTurn;
@@ -4295,6 +4303,29 @@ public partial class MainWindow : Window, ILiveElementLocator
                             }
                         }
                     }
+
+                    // Process INBOX_MESSAGE_JSON blocks from this turn's response.
+                    if (_inboxStore is not null && rawResponse is not null)
+                    {
+                        var rawForInbox = ToolTranscriptFormatter.StripSystemNotifications(rawResponse);
+                        if (InboxMessageParser.TryExtract(rawForInbox, out _, out var inboxDto) && inboxDto is not null)
+                        {
+                            var inboxTimestamp = DateTimeOffset.UtcNow;
+                            var inboxId        = BuildInboxMessageId(inboxTimestamp, inboxDto.Subject);
+                            var inboxMessage   = new InboxMessage
+                            {
+                                Id          = inboxId,
+                                Subject     = inboxDto.Subject,
+                                From        = inboxDto.From,
+                                Timestamp   = inboxTimestamp,
+                                Read        = false,
+                                Body        = inboxDto.Body,
+                                Attachments = inboxDto.Attachments,
+                            };
+                            _inboxStore.Save(inboxMessage);
+                            AppendLine($"📬 **Inbox:** {inboxDto.Subject}");
+                        }
+                    }
                 }
                 if (_pendingRcRestartAfterReset)
                 {
@@ -6558,6 +6589,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 case "tasks": ShowTasksStatusWindow(); break;
                 case "trace": ShowTraceWindow(); break;
                 case "health": ShowScreenshotHealthWindow(); break;
+                case "inbox": ShowInboxPanel(); break;
             }
         }));
         _hostCommandExecutor.Register(new Commands.InjectTextCommandHandler(_ =>
@@ -12038,6 +12070,66 @@ public partial class MainWindow : Window, ILiveElementLocator
         catch (Exception ex) { HandleUiCallbackException(nameof(MaintenancePanelCloseButton_Click), ex); }
     }
 
+    private void ViewInboxMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _inboxPanelVisible = !_inboxPanelVisible;
+            SyncInboxPanel();
+            if (ViewInboxMenuItem is not null)
+                ViewInboxMenuItem.IsChecked = _inboxPanelVisible;
+            PersistInboxPanelVisible();
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(ViewInboxMenuItem_Click), ex); }
+    }
+
+    private void InboxPanelCloseButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _inboxPanelVisible = false;
+            SyncInboxPanel();
+            if (ViewInboxMenuItem is not null)
+                ViewInboxMenuItem.IsChecked = false;
+            PersistInboxPanelVisible();
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(InboxPanelCloseButton_Click), ex); }
+    }
+
+    private void InboxFilterBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        try
+        {
+            var text = InboxFilterBox?.Text ?? string.Empty;
+            _inboxPanel?.SetFilter(text);
+            if (InboxFilterClearButton is not null)
+                InboxFilterClearButton.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(InboxFilterBox_TextChanged), ex); }
+    }
+
+    private void InboxFilterClearButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (InboxFilterBox is not null)
+                InboxFilterBox.Text = string.Empty;
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(InboxFilterClearButton_Click), ex); }
+    }
+
+    private void InboxUnreadOnlyCheckBox_Checked(object sender, RoutedEventArgs e)
+    {
+        try { _inboxPanel?.SetUnreadOnly(true); }
+        catch (Exception ex) { HandleUiCallbackException(nameof(InboxUnreadOnlyCheckBox_Checked), ex); }
+    }
+
+    private void InboxUnreadOnlyCheckBox_Unchecked(object sender, RoutedEventArgs e)
+    {
+        try { _inboxPanel?.SetUnreadOnly(false); }
+        catch (Exception ex) { HandleUiCallbackException(nameof(InboxUnreadOnlyCheckBox_Unchecked), ex); }
+    }
+
     private void MaintenanceRunNowButton_Click(object sender, RoutedEventArgs e)
     {
         try { _ = StartMaintenanceCycleAsync(); }
@@ -14593,6 +14685,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         _noteItems  = _notesStore.LoadAll();
         _notesPanel?.Refresh(_noteItems);
 
+        _inboxStore = new InboxStore(_currentWorkspace.SquadFolderPath);
+
         ClearRuntimeIssue();
 
         var repairSw = Stopwatch.StartNew();
@@ -14656,7 +14750,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         RenderOrphanedAgentReports(reportsDir);
 
         // Fire-and-forget: prune expired pasted images for this workspace.
-        _ = _pastedImageStore.PruneAsync(_currentWorkspace?.FolderPath ?? string.Empty);
+        _ = _pastedImageStore.PruneAsync(
+            _currentWorkspace?.FolderPath ?? string.Empty,
+            isProtected: _inboxStore is not null ? _inboxStore.IsReferencedByInboxMessage : null);
 
         // Restore loop-queued-to-dequeue state from previous session.
         _loopQueued = _conversationManager.ConversationState.LoopQueuedToDequeue == true;
@@ -17220,6 +17316,28 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (HostCommandParser.TryExtract(text, out var body, out _))
             return body;
         return text;
+    }
+
+    private static string BuildInboxMessageId(DateTimeOffset timestamp, string subject)
+    {
+        var ts   = timestamp.UtcDateTime.ToString("yyyyMMdd-HHmmss");
+        var slug = BuildInboxSlug(subject);
+        return $"{ts}-{slug}";
+    }
+
+    private static string BuildInboxSlug(string subject)
+    {
+        if (string.IsNullOrWhiteSpace(subject))
+            return "message";
+
+        var sb = new System.Text.StringBuilder();
+        foreach (var c in subject.ToLowerInvariant())
+            sb.Append(char.IsLetterOrDigit(c) ? c : '-');
+
+        var slug = System.Text.RegularExpressions.Regex.Replace(sb.ToString(), "-+", "-").Trim('-');
+        if (slug.Length > 40)
+            slug = slug[..40].TrimEnd('-');
+        return string.IsNullOrWhiteSpace(slug) ? "message" : slug;
     }
 
     private static string StripAwaitInputSentinel(string text) =>
@@ -25390,6 +25508,15 @@ public partial class MainWindow : Window, ILiveElementLocator
                 ViewMaintenanceMenuItem.IsChecked = true;
         }
 
+        // Restore inbox panel visibility.
+        if (_docsPanelState.InboxPanelVisible == true)
+        {
+            _inboxPanelVisible = true;
+            SyncInboxPanel();
+            if (ViewInboxMenuItem is not null)
+                ViewInboxMenuItem.IsChecked = true;
+        }
+
         // Start idle detection so maintenance can fire automatically.
         if (_currentWorkspace?.FolderPath is string wPath)
             InitIdleDetection(wPath);
@@ -27098,6 +27225,53 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         var state = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
         _docsPanelState = state with { MaintenancePanelVisible = _maintenancePanelVisible };
+        _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
+    }
+
+    private void ShowInboxPanel()
+    {
+        _inboxPanelVisible = true;
+        SyncInboxPanel();
+        if (ViewInboxMenuItem is not null)
+            ViewInboxMenuItem.IsChecked = true;
+        PersistInboxPanelVisible();
+    }
+
+    private void SyncInboxPanel()
+    {
+        if (InboxPanelBorder is null) return;
+        InboxPanelBorder.Visibility = _inboxPanelVisible ? Visibility.Visible : Visibility.Collapsed;
+        if (!_inboxPanelVisible) return;
+
+        var workspacePath = _currentWorkspace?.FolderPath;
+
+        if (_inboxPanel is null)
+        {
+            _inboxStore ??= workspacePath is not null
+                ? new InboxStore(System.IO.Path.Combine(workspacePath, ".squad"))
+                : new InboxStore(string.Empty);
+
+            _inboxPanel = new InboxPanelController(
+                listPanel:              InboxListPanel!,
+                listScrollContainer:    (FrameworkElement)InboxListPanel!.Parent,
+                viewerBorder:           InboxViewerBorder!,
+                viewerSubjectLabel:     InboxViewerSubjectLabel!,
+                viewerMetaLabel:        InboxViewerMetaLabel!,
+                viewerAttachmentsPanel: InboxViewerAttachmentsPanel!,
+                viewerBody:             InboxViewerBody!,
+                markRead:               id => _inboxStore?.MarkRead(id),
+                archive:                id => _inboxStore?.Archive(id),
+                delete:                 id => _inboxStore?.Delete(id));
+
+            var messages = _inboxStore?.LoadAll() ?? [];
+            _inboxPanel.Refresh(messages);
+        }
+    }
+
+    private void PersistInboxPanelVisible()
+    {
+        var state = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
+        _docsPanelState = state with { InboxPanelVisible = _inboxPanelVisible };
         _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
     }
 

@@ -6,7 +6,7 @@ namespace SquadDash;
 internal static class TranscriptTextUtilities
 {
     internal static string SanitizeResponseText(string? text) =>
-        StripHostCommandBlock(StripAwaitInputSentinel(ToolTranscriptFormatter.StripSystemNotifications(text))).TrimEnd();
+        StripInboxMessageBlock(StripHostCommandBlock(StripAwaitInputSentinel(ToolTranscriptFormatter.StripSystemNotifications(text)))).TrimEnd();
 
     internal static string? SanitizeResponseTextOrNull(string? text)
     {
@@ -77,6 +77,13 @@ internal static class TranscriptTextUtilities
     private static string StripHostCommandBlock(string text)
     {
         if (HostCommandParser.TryExtract(text, out var body, out _))
+            return body;
+        return text;
+    }
+
+    private static string StripInboxMessageBlock(string text)
+    {
+        if (InboxMessageParser.TryExtract(text, out var body, out _))
             return body;
         return text;
     }
