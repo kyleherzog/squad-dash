@@ -180,7 +180,23 @@ internal sealed class MaintenanceRunner {
         };
 
         var inboxReminder = "\n\n" + MaintenanceInboxReminder;
-        return safetyPrefix + task.Instructions + inboxReminder;
+        var instructions  = SubstituteOptions(task.Instructions, task.Options);
+        return safetyPrefix + instructions + inboxReminder;
+    }
+
+    /// <summary>
+    /// Replaces <c>{{key}}</c> placeholders in <paramref name="instructions"/> with the
+    /// current option values parsed from maintenance.md. Unrecognised placeholders are left as-is.
+    /// </summary>
+    private static string SubstituteOptions(string instructions, IReadOnlyList<MaintenanceOption>? options) {
+        if (options is null or { Count: 0 })
+            return instructions;
+
+        var result = instructions;
+        foreach (var opt in options)
+            result = result.Replace($"{{{{{opt.Key}}}}}", opt.RawValue ?? string.Empty,
+                                    StringComparison.OrdinalIgnoreCase);
+        return result;
     }
 
     private static string ApplySafetyFloor(string globalSafety, string taskSafety) {
