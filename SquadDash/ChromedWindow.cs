@@ -62,9 +62,36 @@ internal class ChromedWindow : Window {
             BorderThickness = new Thickness(1.5),
             CornerRadius    = new CornerRadius(4),
         };
-        border.SetResourceReference(Border.BackgroundProperty,    backgroundResource);
-        border.SetResourceReference(Border.BorderBrushProperty,   "PanelBorder");
-        Content = border;
+        border.SetResourceReference(Border.BackgroundProperty,  backgroundResource);
+        border.SetResourceReference(Border.BorderBrushProperty, "PanelBorder");
+
+        // Close button floats in the top-right corner of the caption strip.
+        var closeBtnText = new TextBlock {
+            Text                = "\u2715",
+            VerticalAlignment   = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+        closeBtnText.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBody");
+
+        var closeBtn = new Button {
+            Width               = 38,
+            Height              = 34,
+            Padding             = new Thickness(0),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment   = VerticalAlignment.Top,
+            ToolTip             = "Close",
+            Content             = closeBtnText,
+        };
+        closeBtn.SetResourceReference(Button.StyleProperty, "CaptionCloseButtonStyle");
+        WindowChrome.SetIsHitTestVisibleInChrome(closeBtn, true);
+        closeBtn.Click += (_, _) => Close();
+
+        // Overlay grid: border fills the whole window area; close button is layered on top.
+        var overlay = new Grid();
+        overlay.Children.Add(border);
+        overlay.Children.Add(closeBtn);
+
+        Content = overlay;
         return border;
     }
 }
