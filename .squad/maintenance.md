@@ -1,6 +1,12 @@
 ---
 # Full documentation: docs/features/maintenance-mode.md
-# Task frequency is controlled by `frequency: daily`, `frequency: weekly`, `frequency: monthly`, `frequency: per-commit`, or `frequency: always`
+# Task frequency options:
+#   always        — run every maintenance session
+#   daily         — run at most once per calendar day (UTC)
+#   weekly        — run at most once per Monday–Sunday calendar week (UTC)
+#   monthly       — run at most once per calendar month (UTC year+month)
+#   after-commits — run once per new HEAD commit SHA
+#   per-commit    — backward-compat alias for after-commits
 # Set configured: true to enable maintenance mode.
 # Set enabled: true on individual tasks to activate them.
 # Global safety floor: per-task safety cannot be less safe than this value.
@@ -124,7 +130,7 @@ tasks:
             tooltip: List each smell — do not change any code
 
   - id: speed-improvements
-    enabled: false
+    enabled: true
     frequency: daily
     safety: branch
     title: Performance Improvements
