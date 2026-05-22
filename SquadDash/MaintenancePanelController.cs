@@ -306,7 +306,7 @@ internal sealed class MaintenancePanelController {
             empty.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
             _listPanel.Children.Add(empty);
         } else {
-            foreach (var task in _config.Tasks)
+            foreach (var task in _config.Tasks.OrderBy(t => t.Title, StringComparer.OrdinalIgnoreCase))
                 _listPanel.Children.Add(BuildTaskRow(task));
         }
 
@@ -466,7 +466,7 @@ internal sealed class MaintenancePanelController {
         var titleBlock = new TextBlock {
             Text         = task.Title,
             TextWrapping = TextWrapping.Wrap,
-            Margin       = new Thickness(0, 0, 0, 2),
+            Margin       = new Thickness(0, -3, 0, 2),
         };
         titleBlock.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBody");
         titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
