@@ -23,6 +23,7 @@ internal sealed class MaintenancePanelController {
     private readonly Action               _runNow;
     private readonly Action<string, bool> _toggleTaskEnabled;
     private readonly Action               _reloadPanel;
+    private readonly Action<string>       _openInMarkdownEditor;
 
     private MaintenanceMdConfig?   _config;
     private MaintenanceStateStore? _stateStore;
@@ -43,7 +44,8 @@ internal sealed class MaintenancePanelController {
         Func<string?>        getWorkspacePath,
         Action               runNow,
         Action<string, bool> toggleTaskEnabled,
-        Action               reloadPanel) {
+        Action               reloadPanel,
+        Action<string>       openInMarkdownEditor) {
 
         _listPanel              = listPanel;
         _statusLabel            = statusLabel;
@@ -53,6 +55,7 @@ internal sealed class MaintenancePanelController {
         _runNow                 = runNow;
         _toggleTaskEnabled      = toggleTaskEnabled;
         _reloadPanel            = reloadPanel;
+        _openInMarkdownEditor   = openInMarkdownEditor;
 
         _runNowButton.Click += (_, _) => _runNow();
         _enabledOnIdleCheckBox.Checked   += (_, _) => SetEnabledOnIdle(true);
@@ -79,7 +82,7 @@ internal sealed class MaintenancePanelController {
                 return;
             }
             try {
-                Process.Start(new ProcessStartInfo(mdPath) { UseShellExecute = true });
+                _openInMarkdownEditor(mdPath);
             } catch (Exception ex) {
                 SquadDashTrace.Write(TraceCategory.General,
                     $"MaintenancePanelController: failed to open maintenance file: {ex.Message}");

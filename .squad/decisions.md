@@ -4,6 +4,30 @@
 
 ---
 
+### 2026-05-21 — All `.md` files open in the internal MarkdownDocumentWindow editor
+
+**Decision:**
+
+> Whenever SquadDash opens a Markdown file — whether it is a charter file, a notes file, `maintenance.md`, `tasks.md`, `decisions.md`, or any other `.md` file — it **must** open it in the internal `MarkdownDocumentWindow` editor.  
+> Opening `.md` files via `Process.Start` / `UseShellExecute = true` (which would fall through to Notepad or the OS default) is **never** acceptable.
+
+**Rationale:** The internal editor provides syntax rendering, "Add to Chat", "Add to Notes", and AI revision capabilities. Bypassing it degrades the experience and breaks the consistent UX contract.
+
+**Implementation pattern:**
+
+```csharp
+MarkdownDocumentWindow.Show(
+    CanShowOwnedWindow() ? this : null,
+    title,
+    filePath,
+    showSource: true,
+    BuildMarkdownCaptureContext());
+```
+
+If the call site is inside a panel controller (not `MainWindow`), pass an `Action<string> openInMarkdownEditor` callback from `MainWindow` via the controller constructor, and call that instead of `Process.Start`.
+
+---
+
 ### 2026-05-18 — Process rule: never silently defer spec requirements without a visible checkpoint
 
 **Context:** During the Preferences grouped-TreeView implementation, the original spec called for splitting the Speech page into three separate pages: **Provider**, **Push to Talk**, and **Text Replacements**. The implementing agent deferred this split as a "later task" without flagging it visibly or offering a quick-reply choice to the user. The user noticed, and was rightly unhappy: the deferral was invisible and violated the spec without consent.

@@ -27504,7 +27504,13 @@ public partial class MainWindow : Window, ILiveElementLocator
                 getWorkspacePath:       () => _currentWorkspace?.FolderPath,
                 runNow:                 () => _ = StartMaintenanceCycleAsync(),
                 toggleTaskEnabled:      (taskId, enabled) => OnMaintenanceTaskToggled(taskId, enabled),
-                reloadPanel:            () => OnMaintenanceTaskToggled(string.Empty, false));
+                reloadPanel:            () => OnMaintenanceTaskToggled(string.Empty, false),
+                openInMarkdownEditor:   path => MarkdownDocumentWindow.Show(
+                    CanShowOwnedWindow() ? this : null,
+                    "maintenance.md",
+                    path,
+                    showSource: true,
+                    BuildMarkdownCaptureContext()));
         }
 
         var config = MaintenanceMdParser.Parse(Path.Combine(workspacePath, ".squad", "maintenance.md"));
