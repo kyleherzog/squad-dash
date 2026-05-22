@@ -243,20 +243,24 @@ internal sealed class InboxPanelController
         headerRow.Children.Add(subjectLabel);
         rowStack.Children.Add(headerRow);
 
-        // ── Meta row: from · relative timestamp ───────────────────────────────
-        var shortTime = FormatShortRelativeTimestamp(msg.Timestamp);
-        var metaLabel = new TextBlock
-        {
-            Text         = $"{msg.From} · {shortTime}",
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxWidth     = 230,
-            Margin       = new Thickness(12, 1, 0, 0),
-        };
-        metaLabel.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
-        metaLabel.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
-        rowStack.Children.Add(metaLabel);
-
         row.Child = rowStack;
+
+        // ── Hover preview: shows sender, time, and body as a popup ────────────
+        if (!string.IsNullOrWhiteSpace(msg.Body))
+            MarkdownHoverPopup.Attach(
+                row,
+                buildHeader: () => {
+                    var metaText = new TextBlock {
+                        Text   = $"{msg.From} · {FormatShortRelativeTimestamp(msg.Timestamp)}",
+                        Margin = new Thickness(0, 0, 0, 4),
+                    };
+                    metaText.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
+                    metaText.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+                    return metaText;
+                },
+                getMarkdown: () => msg.Body,
+                placement:   System.Windows.Controls.Primitives.PlacementMode.Left,
+                maxWidth:    560);
 
         row.MouseLeftButtonUp += (_, _) => SelectMessage(msg, row, dot, subjectLabel);
         row.ContextMenu        = BuildRowContextMenu(msg, row, dot, subjectLabel);
