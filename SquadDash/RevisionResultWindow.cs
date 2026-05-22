@@ -7,21 +7,20 @@ namespace SquadDash;
 /// Shown when the original selection has changed since Revise with AI was invoked,
 /// so the AI result can't be auto-applied.  Lets the user copy the result manually.
 /// </summary>
-internal sealed class RevisionResultWindow : Window
+internal sealed class RevisionResultWindow : ChromedWindow
 {
     internal RevisionResultWindow(string revisedText)
+        : base(captionHeight: 28, resizeMode: ResizeMode.CanResize)
     {
-        WindowStyle     = WindowStyle.ToolWindow;
-        ResizeMode      = ResizeMode.CanResize;
         SizeToContent   = SizeToContent.Manual;
         Width           = 520;
         Height          = 340;
         ShowInTaskbar   = false;
         Title           = "✏  AI Revision — Original text has changed";
 
-        this.SetResourceReference(BackgroundProperty, "CardSurface");
-
         var panel = new DockPanel { Margin = new Thickness(12) };
+        var outerBorder = ApplyOuterBorder();
+        outerBorder.Child = panel;
 
         var notice = new TextBlock {
             Text        = "The original selection was edited while AI was working. The revised text couldn't be applied automatically — copy it below.",
@@ -82,7 +81,5 @@ internal sealed class RevisionResultWindow : Window
         resultBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
         resultBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
         panel.Children.Add(resultBox);
-
-        Content = panel;
     }
 }

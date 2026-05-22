@@ -11,7 +11,7 @@ using System.Windows.Shapes;
 namespace SquadDash;
 
 /// <summary>Modeless pop-up window that displays a single <see cref="InboxMessage"/>.</summary>
-internal sealed class InboxMessageWindow : Window
+internal sealed class InboxMessageWindow : ChromedWindow
 {
     public string MessageId { get; }
 
@@ -21,12 +21,11 @@ internal sealed class InboxMessageWindow : Window
         InboxMessage message,
         Action<InboxAction, InboxMessage> onActionClicked,
         Func<string, TaskItem?>? lookupTask = null)
+        : base(captionHeight: 28, resizeMode: ResizeMode.CanResize)
     {
         _lookupTask             = lookupTask;
         MessageId               = message.Id;
         Title                   = message.Subject;
-        WindowStyle             = WindowStyle.ToolWindow;
-        ResizeMode              = ResizeMode.CanResize;
         SizeToContent           = SizeToContent.Manual;
         Width                   = 640;
         Height                  = 520;
@@ -35,7 +34,6 @@ internal sealed class InboxMessageWindow : Window
         Topmost                 = false;
         WindowStartupLocation   = WindowStartupLocation.CenterOwner;
         ShowInTaskbar           = true;
-        this.SetResourceReference(BackgroundProperty, "InputSurface");
 
         // Root grid: header / attachments / actions / body
         var root = new Grid();
@@ -43,7 +41,8 @@ internal sealed class InboxMessageWindow : Window
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // 1 attachments
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // 2 actions
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 3 body
-        Content = root;
+        var outerBorder = ApplyOuterBorder();
+        outerBorder.Child = root;
 
         // ── Header ────────────────────────────────────────────────────────────
         var headerPanel = new StackPanel

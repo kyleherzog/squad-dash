@@ -28,7 +28,7 @@ namespace SquadDash;
 /// "Insert Image". Multiple instances may be open simultaneously.
 /// <see cref="Result"/> is also set for convenience at the moment the event fires.
 /// </summary>
-internal sealed class ClipboardImageEditorWindow : Window {
+internal sealed class ClipboardImageEditorWindow : ChromedWindow {
     // ── Result / callback ─────────────────────────────────────────────────────
 
     internal BitmapSource? Result { get; private set; }
@@ -331,7 +331,8 @@ internal sealed class ClipboardImageEditorWindow : Window {
 
     // ────────────────────────────────────────────────────────────────────────
 
-    internal ClipboardImageEditorWindow(Window owner, BitmapSource clipboardImage, bool isPromptMode = false) {
+    internal ClipboardImageEditorWindow(Window owner, BitmapSource clipboardImage, bool isPromptMode = false)
+        : base(captionHeight: 36) {
         _clipboardImage = clipboardImage ?? throw new ArgumentNullException(nameof(clipboardImage));
 
         _workingImage = clipboardImage;
@@ -340,11 +341,8 @@ internal sealed class ClipboardImageEditorWindow : Window {
 
         // Owner is intentionally not set — this window is modeless and fully independent.
         Title = "Edit Clipboard Image";
-        WindowStyle = WindowStyle.SingleBorderWindow;
-        ResizeMode = ResizeMode.CanResizeWithGrip;
         ShowInTaskbar = true;
         WindowStartupLocation = WindowStartupLocation.Manual;
-        this.SetResourceReference(BackgroundProperty, "AppSurface");
 
         _textBoxPttAttachment = new PttTextBoxAttachment(() => new ApplicationSettingsStore().Load(), this, Dispatcher);
         Closed += (_, _) => _textBoxPttAttachment.Dispose();
@@ -760,7 +758,9 @@ internal sealed class ClipboardImageEditorWindow : Window {
         DockPanel.SetDock(toolbar, Dock.Bottom);
         root.Children.Add(toolbar);
         root.Children.Add(_scrollViewer);
-        Content = root;
+        System.Windows.Shell.WindowChrome.SetIsHitTestVisibleInChrome(_scrollViewer, true);
+        var outerBorder = ApplyOuterBorder();
+        outerBorder.Child = root;
 
         Loaded += (_, _) => {
             RefreshLayout();

@@ -12,25 +12,24 @@ internal enum ShutdownChoice { None, CloseNow, AfterCurrentTurn, AfterAllQueued 
 /// Custom shutdown-protection dialog shown when the user tries to close SquadDash
 /// while the coordinator is busy, a loop is running, or the prompt queue has items.
 /// </summary>
-internal sealed class ShutdownProtectionWindow : Window {
+internal sealed class ShutdownProtectionWindow : ChromedWindow {
     public ShutdownChoice Choice { get; private set; } = ShutdownChoice.None;
 
-    public ShutdownProtectionWindow(bool isRunning, bool hasQueue, bool isLoopRunning) {
+    public ShutdownProtectionWindow(bool isRunning, bool hasQueue, bool isLoopRunning)
+        : base(captionHeight: 28, resizeMode: ResizeMode.NoResize) {
         Title = "Close SquadDash?";
         Width = 440;
         SizeToContent = SizeToContent.Height;
         MinWidth = 380;
-        ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        WindowStyle = WindowStyle.ToolWindow;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        this.SetResourceReference(BackgroundProperty, "AppSurface");
         // Cascade the themed foreground to all TextBlock descendants that don't
         // set their own Foreground (Foreground is an inheritable DP in WPF).
         this.SetResourceReference(ForegroundProperty, "LabelText");
 
         var root = new StackPanel { Margin = new Thickness(20) };
-        Content = root;
+        var outerBorder = ApplyOuterBorder();
+        outerBorder.Child = root;
 
         // Header
         root.Children.Add(new TextBlock {

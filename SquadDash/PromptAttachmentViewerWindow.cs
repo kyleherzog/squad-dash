@@ -15,7 +15,7 @@ namespace SquadDash;
 /// Multiple attachments are displayed as tabs.
 /// Image attachments auto-size to fit the screen, support Ctrl+scroll zoom, and close on Escape or Enter.
 /// </summary>
-internal sealed class PromptAttachmentViewerWindow : Window
+internal sealed class PromptAttachmentViewerWindow : ChromedWindow
 {
     internal static void Show(IReadOnlyList<FollowUpAttachment> attachments, Window? owner)
     {
@@ -33,16 +33,13 @@ internal sealed class PromptAttachmentViewerWindow : Window
     }
 
     private PromptAttachmentViewerWindow(IReadOnlyList<FollowUpAttachment> attachments, Window? owner)
+        : base(captionHeight: 28, resizeMode: ResizeMode.CanResize)
     {
         Title         = attachments.Count == 1 ? "Prompt Attachment" : "Prompt Attachments";
         MinWidth      = 320;
         MinHeight     = 200;
-        WindowStyle   = WindowStyle.ToolWindow;
-        ResizeMode    = ResizeMode.CanResize;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-
-        this.SetResourceReference(BackgroundProperty, "CardSurface");
 
         KeyDown += (_, e) =>
         {
@@ -68,7 +65,9 @@ internal sealed class PromptAttachmentViewerWindow : Window
             content = tabs;
         }
 
-        Content = content;
+        System.Windows.Shell.WindowChrome.SetIsHitTestVisibleInChrome(content, true);
+        var outerBorder = ApplyOuterBorder();
+        outerBorder.Child = content;
 
         // Auto-size the window to the image when we have a single image attachment.
         if (singleImage is not null)
