@@ -12210,7 +12210,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             double? docsSourceWidth = IsDocSourceVisible() ? GetDocSourceSize() : (double?)null;
 
             var workspaceFolder = _currentWorkspace?.FolderPath;
-            _docsPanelState = new WorkspaceDocsPanelState
+            _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with
             {
                 Open = false,
                 ExpandedNodes = nodes,
