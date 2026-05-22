@@ -8,6 +8,8 @@ parent: Reference
 
 Loop files (`.squad/loop*.md`) support **template preprocessing** — a two-pass substitution system that runs before the prompt body is sent to Squad. Loop authors write a single file; SquadDash renders the right version based on the current UI settings. The agent only ever sees clean prose — no template tokens.
 
+> **Maintenance tasks use the same syntax.** The `{{#if}}` / `{{#unless}}` conditionals and `{{key}}` substitution described here apply equally to the `instructions:` field of tasks in `.squad/maintenance.md`. See [Maintenance Mode — task instructions](../features/maintenance-mode.md#task-instructions--template-preprocessing) for maintenance-specific examples.
+
 ---
 
 ## Processing Order

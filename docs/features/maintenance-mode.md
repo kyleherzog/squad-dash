@@ -67,6 +67,52 @@ Tasks may also include an `options:` block (same format as `loop.md`) to let use
 
 ---
 
+## Task instructions — template preprocessing
+
+The `instructions:` field supports the same **two-pass template preprocessing** used by loop files — conditional blocks evaluated first, then variable substitution. The agent only ever sees resolved prose; no template tokens appear in the final prompt.
+
+### Why use conditionals?
+
+When a task has an `options:` block with a picker value (e.g. `if_found` with choices `fix`, `branch`, `report`), a plain `{{if_found}}` substitution leaves the AI reading something like:
+
+> Take action according to fix: ...
+
+With `{{#if}}` blocks, only the relevant branch is included:
+
+```
+{{#if if_found == "fix"}}
+Implement fixes inline on the current branch.
+{{/if}}
+{{#if if_found == "branch"}}
+Create a maintenance branch and implement fixes there.
+{{/if}}
+{{#if if_found == "report"}}
+Do not change any code. Report findings to the Inbox using INBOX_MESSAGE_JSON.
+{{/if}}
+```
+
+### Quick syntax reference
+
+```
+{{#if key == "value"}}
+  Content included when the option key equals value.
+{{/if}}
+
+{{#unless key == "value"}}
+  Content included when the option key does NOT equal value.
+{{/unless}}
+```
+
+- **Pass 1:** conditional blocks are evaluated and removed or kept.
+- **Pass 2:** remaining `{{key}}` tokens are replaced with their current option values.
+- Values are always compared as **strings**. A boolean option set to `true` must be compared as `{{#if flag == "true"}}`.
+- Nesting is **not supported** — `{{#if}}` blocks may not contain other `{{#if}}` or `{{#unless}}` blocks.
+- An unknown key in a condition evaluates as **false** (block is silently removed).
+
+For the full syntax, all gotchas, and loop-file examples see [Loop File Templates — template preprocessing](../reference/loop-file-templates.md).
+
+---
+
 ## Enabling and disabling tasks
 
 ### In the file
@@ -333,3 +379,4 @@ SquadDash will wait for any currently-running prompt or Loop iteration to finish
 | Inbox messages   | `INBOX_MESSAGE_JSON` block at end of task output        |
 | Deferred actions | `actions` array in inbox messages; rendered as buttons  |
 | File location anchors | Structural signpost (class/method, heading path, key path, selector, excerpt) — not bare line numbers |
+| Conditionals in instructions | `{{#if key == "value"}}…{{/if}}` and `{{#unless …}}` — see [template preprocessing](#task-instructions--template-preprocessing) |
