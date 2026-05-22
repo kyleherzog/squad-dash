@@ -320,6 +320,15 @@ internal static class LoopMdParser {
                 if (opt.Type != "group")
                     values[opt.Key] = opt.RawValue;
 
+        return PreprocessConditionals(text, (IReadOnlyDictionary<string, string>)values);
+    }
+
+    /// <summary>
+    /// Overload that accepts an already-resolved key→value dictionary. Use this
+    /// when the caller has its own option type (e.g. <see cref="MaintenanceOption"/>).
+    /// </summary>
+    public static string PreprocessConditionals(string text, IReadOnlyDictionary<string, string> values)
+    {
         var lines = text.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
         var output = new List<string>(lines.Length);
         bool inBlock      = false;

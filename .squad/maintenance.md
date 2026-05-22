@@ -31,7 +31,7 @@
 idle_timeout: 15
 max_tasks_per_session: 5
 safety: branch
-enabled_on_idle: false
+enabled_on_idle: true
 configured: false  # ← change to true to activate
 tasks:
   - id: run-tests
@@ -43,12 +43,15 @@ tasks:
       Run all tests in the repository. Use the appropriate test runner for this
       project (e.g. `dotnet test`, `npm test`, `go test ./...`).
 
-      If failing tests are found, take action according to {{if_failing}}:
-      - If "fix": Diagnose each failing test. Fix the root cause in source (not by
-        deleting tests or weakening assertions). Commit all fixes to the branch.
-      - If "report": Do not change any code. Write a summary of every failing test,
-        the error message, and your diagnosis of the likely cause. Send the report
-        to the user's Inbox using an INBOX_MESSAGE_JSON block (from: "argus-weld").
+      {{#if if_failing == "fix"}}
+      Diagnose each failing test. Fix the root cause in source — do not delete
+      tests or weaken assertions. Commit all fixes to the branch.
+      {{/if}}
+      {{#if if_failing == "report"}}
+      Do not change any code. Write a summary of every failing test, the error
+      message, and your diagnosis of the likely cause. Send the report to the
+      user's Inbox using an INBOX_MESSAGE_JSON block (from: "argus-weld").
+      {{/if}}
     options:
       if_failing:
         type: radio
@@ -71,13 +74,18 @@ tasks:
       blocks, copy-pasted utility functions, repeated patterns that should be
       extracted. Focus on meaningful duplication (not trivial one-liners).
 
-      Take action according to {{if_found}}:
-      - If "fix": Refactor inline on the current branch. Extract shared logic,
-        update all call sites, ensure tests still pass.
-      - If "branch": Create a maintenance branch and refactor there.
-      - If "report": Do not change any code. List each duplication instance with
-        file paths, line ranges, and a brief description of the shared logic. Send
-        the report to the user's Inbox using an INBOX_MESSAGE_JSON block (from: "argus-weld").
+      {{#if if_found == "fix"}}
+      Refactor inline on the current branch. Extract shared logic, update all
+      call sites, ensure tests still pass.
+      {{/if}}
+      {{#if if_found == "branch"}}
+      Create a maintenance branch and refactor there.
+      {{/if}}
+      {{#if if_found == "report"}}
+      Do not change any code. List each duplication instance with file paths,
+      structural anchors, and a brief description of the shared logic. Send the
+      report to the user's Inbox using an INBOX_MESSAGE_JSON block (from: "argus-weld").
+      {{/if}}
     options:
       if_found:
         type: radio
@@ -102,12 +110,16 @@ tasks:
       concerns, leaky abstractions, god objects, circular dependencies, missing
       service boundaries, wrong layer responsibilities, etc.
 
-      Take action according to {{if_found}}:
-      - If "branch": Create a maintenance branch. Implement the improvements you
-        identify. Document your reasoning in commit messages.
-      - If "report": Do not change any code. Write a structured report of each
-        finding: problem description, affected files/layers, and a recommended fix.
-        Send the report to the user's Inbox using an INBOX_MESSAGE_JSON block (from: "argus-weld").
+      {{#if if_found == "branch"}}
+      Create a maintenance branch. Implement the improvements you identify.
+      Document your reasoning in commit messages.
+      {{/if}}
+      {{#if if_found == "report"}}
+      Do not change any code. Write a structured report of each finding:
+      problem description, affected files/layers, and a recommended fix.
+      Send the report to the user's Inbox using an INBOX_MESSAGE_JSON block
+      (from: "argus-weld").
+      {{/if}}
     options:
       if_found:
         type: radio
@@ -130,12 +142,17 @@ tasks:
       naming, overly complex conditionals, dead code, unnecessary abstraction,
       inefficient patterns, missing null checks, etc.
 
-      Take action according to {{if_found}}:
-      - If "fix": Address smells inline on the current branch.
-      - If "branch": Create a maintenance branch and address smells there.
-      - If "report": Do not change any code. List each smell with file path, line
-        number, category, and a brief description of the issue and suggested fix.
-        Send the report to the user's Inbox using an INBOX_MESSAGE_JSON block (from: "argus-weld").
+      {{#if if_found == "fix"}}
+      Address smells inline on the current branch.
+      {{/if}}
+      {{#if if_found == "branch"}}
+      Create a maintenance branch and address smells there.
+      {{/if}}
+      {{#if if_found == "report"}}
+      Do not change any code. List each smell with file path, structural anchor,
+      category, and a brief description of the issue and suggested fix. Send the
+      report to the user's Inbox using an INBOX_MESSAGE_JSON block (from: "argus-weld").
+      {{/if}}
     options:
       if_found:
         type: radio
@@ -161,13 +178,18 @@ tasks:
       synchronous I/O where async would improve throughput, LINQ queries that
       could be rewritten, N+1 query patterns, etc.
 
-      Take action according to {{if_found}}:
-      - If "fix": Implement optimisations inline on the current branch. Add a brief
-        comment explaining the change where the improvement is non-obvious.
-      - If "branch": Create a maintenance branch and implement improvements there.
-      - If "report": Do not change any code. Describe each opportunity, its likely
-        impact, and the recommended approach. Send the report to the user's Inbox
-        using an INBOX_MESSAGE_JSON block (from: "argus-weld").
+      {{#if if_found == "fix"}}
+      Implement optimisations inline on the current branch. Add a brief comment
+      explaining the change where the improvement is non-obvious.
+      {{/if}}
+      {{#if if_found == "branch"}}
+      Create a maintenance branch and implement improvements there.
+      {{/if}}
+      {{#if if_found == "report"}}
+      Do not change any code. Describe each opportunity, its likely impact, and
+      the recommended approach. Send the report to the user's Inbox using an
+      INBOX_MESSAGE_JSON block (from: "argus-weld").
+      {{/if}}
     options:
       if_found:
         type: radio
@@ -249,11 +271,14 @@ tasks:
       explanation) and hardcoded strings that belong in named constants or
       configuration (connection strings, URLs, thresholds, timeouts, limits, etc.).
 
-      Take action according to {{if_found}}:
-      - If "extract": Extract each magic value into a named constant or config
-        entry. Update all references. Commit to a maintenance branch.
-      - If "report": Do not change any code. List each instance with file path,
-        line number, the literal value, and a suggested constant name.
+      {{#if if_found == "extract"}}
+      Extract each magic value into a named constant or config entry. Update all
+      references. Commit to a maintenance branch.
+      {{/if}}
+      {{#if if_found == "report"}}
+      Do not change any code. List each instance with file path, structural anchor
+      (e.g. ClassName.MethodName), the literal value, and a suggested constant name.
+      {{/if}}
     options:
       if_found:
         type: radio
@@ -326,16 +351,20 @@ tasks:
          other page (no inbound links from within the docs tree). These may be
          forgotten or accidentally unpublished pages.
 
-      Take action according to {{if_found}}:
-      - If "report": Do not change any files. Produce a structured report grouped
-        by issue type, listing file path, line number, and a description of each
-        problem found. Include a severity: Warning for unpublished-page links and
-        dead links, Info for orphaned pages and accuracy concerns. Send the report
-        to the user's Inbox using an INBOX_MESSAGE_JSON block (from: "argus-weld").
-      - If "fix": Correct accuracy issues and fix broken links where possible
-        (e.g. update a link target, remove a dead link). Commit changes to a
-        maintenance branch. Items that require human judgment (accuracy rewrites,
-        missing images) should still be reported.
+      {{#if if_found == "report"}}
+      Do not change any files. Produce a structured report grouped by issue type,
+      listing file path, structural anchor (e.g. `## Section > ### Subsection`),
+      and a description of each problem found. Include a severity: Warning for
+      unpublished-page links and dead links, Info for orphaned pages and accuracy
+      concerns. Send the report to the user's Inbox using an INBOX_MESSAGE_JSON
+      block (from: "argus-weld").
+      {{/if}}
+      {{#if if_found == "fix"}}
+      Correct accuracy issues and fix broken links where possible (e.g. update a
+      link target, remove a dead link). Commit changes to a maintenance branch.
+      Items that require human judgment (accuracy rewrites, missing images) should
+      still be reported.
+      {{/if}}
     options:
       if_found:
         type: radio
@@ -361,12 +390,16 @@ tasks:
       - Abbreviations used in some places but not others
       - Test method naming inconsistencies
 
-      Take action according to {{if_found}}:
-      - If "fix": Rename inconsistencies directly on the current branch. Update all
-        references. Ensure the project still builds.
-      - If "report": Do not change any code. List each inconsistency with file
-        path, line number, current name, and suggested name. Send the report to
-        the user's Inbox using an INBOX_MESSAGE_JSON block (from: "argus-weld").
+      {{#if if_found == "fix"}}
+      Rename inconsistencies directly on the current branch. Update all
+      references. Ensure the project still builds.
+      {{/if}}
+      {{#if if_found == "report"}}
+      Do not change any code. List each inconsistency with file path, structural
+      anchor (e.g. ClassName.MethodName), current name, and suggested name.
+      Send the report to the user's Inbox using an INBOX_MESSAGE_JSON block
+      (from: "argus-weld").
+      {{/if}}
     options:
       if_found:
         type: radio

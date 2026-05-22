@@ -185,17 +185,21 @@ internal sealed class MaintenanceRunner {
     }
 
     /// <summary>
-    /// Replaces <c>{{key}}</c> placeholders in <paramref name="instructions"/> with the
-    /// current option values parsed from maintenance.md. Unrecognised placeholders are left as-is.
+    /// Evaluates <c>{{#if}}</c>/<c>{{#unless}}</c> conditional blocks and replaces
+    /// <c>{{key}}</c> placeholders in <paramref name="instructions"/> with the current
+    /// option values parsed from maintenance.md. Unrecognised placeholders are left as-is.
     /// </summary>
-    private static string SubstituteOptions(string instructions, IReadOnlyList<MaintenanceOption>? options) {
-        if (options is null or { Count: 0 })
-            return instructions;
+    internal static string SubstituteOptions(string instructions, IReadOnlyList<MaintenanceOption>? options) {
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (options is not null)
+            foreach (var opt in options)
+                values[opt.Key] = opt.RawValue ?? string.Empty;
 
-        var result = instructions;
-        foreach (var opt in options)
-            result = result.Replace($"{{{{{opt.Key}}}}}", opt.RawValue ?? string.Empty,
-                                    StringComparison.OrdinalIgnoreCase);
+        var result = LoopMdParser.PreprocessConditionals(instructions, (IReadOnlyDictionary<string, string>)values);
+
+        foreach (var kvp in values)
+            result = result.Replace($"{{{{{kvp.Key}}}}}", kvp.Value, StringComparison.OrdinalIgnoreCase);
+
         return result;
     }
 

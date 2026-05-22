@@ -538,4 +538,103 @@ internal sealed class MaintenanceRunnerTests {
         Assert.That(isRunningDuringTask, Is.True,  "IsRunning must be true while a task executes");
         Assert.That(runner.IsRunning,    Is.False,  "IsRunning must be false after completion");
     }
+
+    // ── SubstituteOptions — conditional directives ────────────────────────────
+
+    [Test]
+    public void SubstituteOptions_IfBlock_IncludesMatchingBranch() {
+        var opts = new[] {
+            new MaintenanceOption("if_found", "fix", "radio", null, null, null),
+        };
+        var instructions = """
+            Preamble.
+            {{#if if_found == "fix"}}
+            Apply the fix.
+            {{/if}}
+            {{#if if_found == "report"}}
+            Write a report.
+            {{/if}}
+            Postamble.
+            """;
+        var result = MaintenanceRunner.SubstituteOptions(instructions, opts);
+        Assert.That(result, Does.Contain("Apply the fix."));
+        Assert.That(result, Does.Not.Contain("Write a report."));
+        Assert.That(result, Does.Contain("Preamble."));
+        Assert.That(result, Does.Contain("Postamble."));
+    }
+
+    [Test]
+    public void SubstituteOptions_IfBlock_ExcludesNonMatchingBranch() {
+        var opts = new[] {
+            new MaintenanceOption("if_found", "report", "radio", null, null, null),
+        };
+        var instructions = """
+            {{#if if_found == "fix"}}
+            Apply the fix.
+            {{/if}}
+            {{#if if_found == "report"}}
+            Write a report.
+            {{/if}}
+            """;
+        var result = MaintenanceRunner.SubstituteOptions(instructions, opts);
+        Assert.That(result, Does.Not.Contain("Apply the fix."));
+        Assert.That(result, Does.Contain("Write a report."));
+    }
+
+    [Test]
+    public void SubstituteOptions_UnlessBlock_ExcludesMatchingValue() {
+        var opts = new[] {
+            new MaintenanceOption("if_found", "fix", "radio", null, null, null),
+        };
+        var instructions = """
+            {{#unless if_found == "fix"}}
+            This should be hidden.
+            {{/unless}}
+            Always shown.
+            """;
+        var result = MaintenanceRunner.SubstituteOptions(instructions, opts);
+        Assert.That(result, Does.Not.Contain("This should be hidden."));
+        Assert.That(result, Does.Contain("Always shown."));
+    }
+
+    [Test]
+    public void SubstituteOptions_PlainPlaceholder_StillSubstituted() {
+        var opts = new[] {
+            new MaintenanceOption("if_found", "branch", "radio", null, null, null),
+        };
+        var instructions = "Mode is {{if_found}}.";
+        var result = MaintenanceRunner.SubstituteOptions(instructions, opts);
+        Assert.That(result, Is.EqualTo("Mode is branch."));
+    }
+
+    [Test]
+    public void SubstituteOptions_NullOptions_ReturnsInstructionsUnchanged() {
+        const string instructions = "Do the thing.";
+        var result = MaintenanceRunner.SubstituteOptions(instructions, null);
+        Assert.That(result, Is.EqualTo(instructions));
+    }
+
+    [Test]
+    public void SubstituteOptions_ThreeBranchOptions_OnlySelectedBranchAppears() {
+        var opts = new[] {
+            new MaintenanceOption("if_found", "branch", "radio", null, null, null),
+        };
+        var instructions = """
+            Found issues.
+            {{#if if_found == "fix"}}
+            Fix inline.
+            {{/if}}
+            {{#if if_found == "branch"}}
+            Create a maintenance branch.
+            {{/if}}
+            {{#if if_found == "report"}}
+            Send report to Inbox.
+            {{/if}}
+            Done.
+            """;
+        var result = MaintenanceRunner.SubstituteOptions(instructions, opts);
+        Assert.That(result, Does.Not.Contain("Fix inline."));
+        Assert.That(result, Does.Contain("Create a maintenance branch."));
+        Assert.That(result, Does.Not.Contain("Send report to Inbox."));
+    }
 }
