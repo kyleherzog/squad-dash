@@ -2033,6 +2033,53 @@ internal sealed class PromptExecutionController {
             });
     }
 
+    /// <summary>
+    /// Runs a maintenance task as a named-agent direct turn in the target agent's own thread.
+    /// Does NOT write anything to the coordinator transcript — the coordinator only receives
+    /// the lightweight stub that MainWindow's <c>onTaskCompleted</c> callback appends after
+    /// this method returns.
+    /// </summary>
+    internal async Task ExecuteMaintenanceTurnAsync(
+        string targetAgentHandle,
+        string prompt) {
+        var workspace = _getCurrentWorkspace();
+        if (workspace is null) return;
+
+        _setIsPromptRunning(true);
+        _updateInteractiveControlState();
+        ActiveToolName = null;
+
+        try {
+            var configDirectory = _conversationManager.ConversationStore
+                .GetSessionConfigDirectory(workspace.FolderPath);
+            var currentSessionId = _conversationManager.CurrentSessionId;
+
+            await _runNamedAgentDirectAsync(
+                targetAgentHandle,
+                prompt,
+                null,
+                workspace.FolderPath,
+                currentSessionId,
+                configDirectory);
+
+            _clearRuntimeIssue();
+            _refreshAgentCards();
+            _refreshSidebar();
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) {
+            SquadDashTrace.Write("UI", $"ExecuteMaintenanceTurnAsync failed: {ex}");
+        }
+        finally {
+            await _waitForPostedUiActionsAsync();
+            _getCoordinatorThread().CurrentTurn = null;
+            _setIsPromptRunning(false);
+            _updateInteractiveControlState();
+            if (_isPromptTextBoxEnabled())
+                _focusPromptTextBox();
+        }
+    }
+
     private async Task ExecuteCoordinatorTurnAsync(
         string visiblePrompt,
         bool addToHistory,

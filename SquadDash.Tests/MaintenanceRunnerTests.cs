@@ -62,14 +62,14 @@ internal sealed class MaintenanceRunnerTests {
         Func<string, CancellationToken, Task<int>>? executePromptAsync = null,
         MaintenanceStateStore? stateStore = null,
         Action<string>? onTaskStarted = null,
-        Action<string, string, int>? onTaskCompleted = null,
+        Action<string, string, int, DateTimeOffset, TimeSpan>? onTaskCompleted = null,
         Action<MaintenanceReport>? onCompleted = null,
         Func<string, CancellationToken, Task<string?>>? getCommitShaAsync = null) {
         return new MaintenanceRunner(
             executePromptAsync: executePromptAsync ?? ((_, _) => Task.FromResult(-1)),
             stateStore:         stateStore ?? new MaintenanceStateStore(_stateDir),
             onTaskStarted:      onTaskStarted  ?? (_ => { }),
-            onTaskCompleted:    onTaskCompleted ?? ((_, _, _) => { }),
+            onTaskCompleted:    onTaskCompleted ?? ((_, _, _, _, _) => { }),
             onCompleted:        onCompleted    ?? (_ => { }),
             getCommitShaAsync:  getCommitShaAsync);
     }
@@ -294,7 +294,7 @@ internal sealed class MaintenanceRunnerTests {
             MakeTask("complete-me"),
         ]);
 
-        var runner = MakeRunner(onTaskCompleted: (id, _, _) => completedIds.Add(id));
+        var runner = MakeRunner(onTaskCompleted: (id, _, _, _, _) => completedIds.Add(id));
 
         await runner.StartAsync(config, _workspaceDir, CancellationToken.None);
 

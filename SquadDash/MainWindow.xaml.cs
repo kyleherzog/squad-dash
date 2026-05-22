@@ -27766,7 +27766,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                         var anchorIndex = -1;
                         if (_agentThreadRegistry.ThreadsByKey.TryGetValue("agent:argus-weld", out var argusThread))
                             anchorIndex = argusThread.PromptParagraphs.Count;
-                        await _pec.ExecutePromptAsync(prompt, addToHistory: true, clearPromptBox: false, sessionIdOverride: "argus-weld");
+                        await _pec.ExecuteMaintenanceTurnAsync("argus-weld", prompt);
                         tcs.TrySetResult(anchorIndex);
                     }
                     catch (OperationCanceledException) { tcs.TrySetCanceled(ct); }

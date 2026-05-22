@@ -71,7 +71,7 @@ internal sealed class MaintenanceCycleIntegrationTests {
             executePromptAsync: ExecutePromptStub,
             stateStore:         stateStore,
             onTaskStarted:      _ => { },
-            onTaskCompleted:    (_, _, _) => { },
+            onTaskCompleted:    (_, _, _, _, _) => { },
             onCompleted:        OnCompleted);
 
         // Fake IdleDetectionService: ForceIdle() fires IdleThresholdReached synchronously
