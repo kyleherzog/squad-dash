@@ -4,7 +4,7 @@ using System.Windows.Media;
 
 namespace SquadDash;
 
-internal sealed class ToolIconGalleryWindow : Window {
+internal sealed class ToolIconGalleryWindow : ChromedWindow {
     private static readonly (string ToolName, string ResourceKey, string Description)[] Icons = [
         ("grep",          "ToolIcon_grep",          "Search content — grep"),
         ("glob",          "ToolIcon_glob",          "Search filenames — glob"),
@@ -21,19 +21,17 @@ internal sealed class ToolIconGalleryWindow : Window {
         ("(default)",     "ToolIcon_default",        "Fallback for unmapped tools"),
     ];
 
-    private ToolIconGalleryWindow() {
+    private ToolIconGalleryWindow() : base(captionHeight: 36, resizeMode: ResizeMode.CanResize) {
         Title = "Tool Icon Gallery";
-        WindowStyle = WindowStyle.SingleBorderWindow;
-        ResizeMode = ResizeMode.CanResize;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
         Width = 480;
         MaxHeight = 700;
-        this.SetResourceReference(BackgroundProperty, "AppSurface");
 
         var root = new DockPanel { Margin = new Thickness(0, 0, 0, 12) };
-        Content = root;
+        var outerBorder = ApplyOuterBorder();
+        outerBorder.Child = root;
 
         // Title bar
         var titleBlock = new TextBlock {
@@ -45,19 +43,6 @@ internal sealed class ToolIconGalleryWindow : Window {
         titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
         DockPanel.SetDock(titleBlock, Dock.Top);
         root.Children.Add(titleBlock);
-
-        // Close button
-        var closeButton = new Button {
-            Content = "Close",
-            Width = 80,
-            Height = 28,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(20, 8, 20, 0)
-        };
-        closeButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
-        closeButton.Click += (_, _) => Close();
-        DockPanel.SetDock(closeButton, Dock.Bottom);
-        root.Children.Add(closeButton);
 
         // Scroll area
         var scroll = new ScrollViewer {

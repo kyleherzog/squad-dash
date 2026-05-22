@@ -591,6 +591,7 @@ internal sealed class PromptInteractionLogicTests {
     [TestCase("/approval")]
     [TestCase("/doctor")]
     [TestCase("/dropTasks")]
+    [TestCase("/health")]
     [TestCase("/help")]
     [TestCase("/hire")]
     [TestCase("/model")]
@@ -622,6 +623,7 @@ internal sealed class PromptInteractionLogicTests {
 
     [TestCase("/activate")]
     [TestCase("/deactivate")]
+    [TestCase("/health")]
     [TestCase("/retire")]
     public void CanSubmitWhilePromptRunning_ReturnsTrueForBusySafeCommands(string command) {
         Assert.That(LocalPromptSubmissionPolicy.CanSubmitWhilePromptRunning(command), Is.True);

@@ -429,10 +429,22 @@
                                         <ColumnDefinition Width="Auto" SharedSizeGroup="MenuItemIGTColumn"/>
                                         <ColumnDefinition Width="14"/>
                                     </Grid.ColumnDefinitions>
-                                    <ContentPresenter x:Name="Icon" Grid.Column="0"
-                                                      ContentSource="Icon"
-                                                      VerticalAlignment="Center"
-                                                      Margin="0,0,6,0"/>
+                                    <Grid Grid.Column="0" Margin="0,0,6,0">
+                                        <Border Width="{DynamicResource FontSizeNormal}"
+                                                Height="{DynamicResource FontSizeNormal}"/>
+                                        <ContentPresenter x:Name="Icon"
+                                                          ContentSource="Icon"
+                                                          VerticalAlignment="Center"/>
+                                        <Viewbox x:Name="CheckGlyph"
+                                                 Width="{DynamicResource FontSizeNormal}"
+                                                 Height="{DynamicResource FontSizeNormal}"
+                                                 Stretch="Uniform"
+                                                 Visibility="Collapsed">
+                                            <Path Data="M0,4 L3,7 L9,1"
+                                                  Stroke="{DynamicResource LabelText}"
+                                                  StrokeThickness="1.5"/>
+                                        </Viewbox>
+                                    </Grid>
                                     <ContentPresenter x:Name="HeaderHost" Grid.Column="1"
                                                       ContentSource="Header"
                                                       RecognizesAccessKey="True"
@@ -477,13 +489,7 @@
                                     <Setter Property="Foreground" Value="{DynamicResource SubtleText}"/>
                                 </Trigger>
                                 <Trigger Property="IsChecked" Value="True">
-                                    <Setter TargetName="Icon" Property="ContentTemplate">
-                                        <Setter.Value>
-                                            <DataTemplate>
-                                                <Path Data="M0,4 L3,7 L9,1" Stroke="{DynamicResource LabelText}" StrokeThickness="1.5" Width="12" Height="10"/>
-                                            </DataTemplate>
-                                        </Setter.Value>
-                                    </Setter>
+                                    <Setter TargetName="CheckGlyph" Property="Visibility" Value="Visible"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -511,10 +517,22 @@
                                         <ColumnDefinition Width="Auto" SharedSizeGroup="MenuItemIGTColumn"/>
                                         <ColumnDefinition Width="14"/>
                                     </Grid.ColumnDefinitions>
-                                    <ContentPresenter x:Name="Icon" Grid.Column="0"
-                                                      ContentSource="Icon"
-                                                      VerticalAlignment="Center"
-                                                      Margin="0,0,6,0"/>
+                                    <Grid Grid.Column="0" Margin="0,0,6,0">
+                                        <Border Width="{DynamicResource FontSizeNormal}"
+                                                Height="{DynamicResource FontSizeNormal}"/>
+                                        <ContentPresenter x:Name="Icon"
+                                                          ContentSource="Icon"
+                                                          VerticalAlignment="Center"/>
+                                        <Viewbox x:Name="CheckGlyph"
+                                                 Width="{DynamicResource FontSizeNormal}"
+                                                 Height="{DynamicResource FontSizeNormal}"
+                                                 Stretch="Uniform"
+                                                 Visibility="Collapsed">
+                                            <Path Data="M0,4 L3,7 L9,1"
+                                                  Stroke="{DynamicResource LabelText}"
+                                                  StrokeThickness="1.5"/>
+                                        </Viewbox>
+                                    </Grid>
                                     <ContentPresenter x:Name="HeaderHost" Grid.Column="1"
                                                       ContentSource="Header"
                                                       RecognizesAccessKey="True"
@@ -561,13 +579,7 @@
                                     <Setter Property="Foreground" Value="{DynamicResource SubtleText}"/>
                                 </Trigger>
                                 <Trigger Property="IsChecked" Value="True">
-                                    <Setter TargetName="Icon" Property="ContentTemplate">
-                                        <Setter.Value>
-                                            <DataTemplate>
-                                                <Path Data="M0,4 L3,7 L9,1" Stroke="{DynamicResource LabelText}" StrokeThickness="1.5" Width="12" Height="10"/>
-                                            </DataTemplate>
-                                        </Setter.Value>
-                                    </Setter>
+                                    <Setter TargetName="CheckGlyph" Property="Visibility" Value="Visible"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>

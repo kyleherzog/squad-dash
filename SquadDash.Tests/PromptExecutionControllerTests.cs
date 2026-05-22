@@ -348,6 +348,7 @@ internal sealed class PromptExecutionControllerTests {
     [TestCase("/deactivate")]
     [TestCase("/doctor")]
     [TestCase("/dropTasks")]
+    [TestCase("/health")]
     [TestCase("/help")]
     [TestCase("/hire")]
     [TestCase("/model")]

@@ -1135,6 +1135,7 @@ internal sealed class TranscriptConversationManager {
                             ContentBlock     = a.ContentBlock,
                             ImagePath        = a.ImagePath,
                             ImageSubmittedAt = a.ImageSubmittedAt?.ToString("O"),
+                            InboxMessageId   = a.InboxMessageId,
                         })
                         .ToList();
                 }

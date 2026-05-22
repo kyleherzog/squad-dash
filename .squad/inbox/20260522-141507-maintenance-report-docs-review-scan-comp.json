@@ -3,7 +3,7 @@
   "subject": "Maintenance report: docs-review scan complete",
   "from": "argus-weld",
   "timestamp": "2026-05-22T14:15:07.4286441+00:00",
-  "read": false,
+  "read": true,
   "body": "# Docs Review \u2014 2026-05-22\n\nI completed a scan of the documentation in \u0060D:\\Drive\\Source\\SquadDash-public\\docs\u0060.\n\n## Findings\n\n### \u2705 Healthy\n- All internal links in \u0060getting-started/installation.md\u0060 resolve correctly\n- No orphaned images found\n\n### \u26A0\uFE0F Needs attention\n- **\u0060docs/features/annotation-editor.md\u0060** \u2014 references a screenshot at \u0060images/measure-line-toolbar.png\u0060 that does not exist on disk yet\n- **\u0060docs/getting-started/installation.md\u0060** \u2014 external link to the WinGet manifest repo returns 404 (manifest not yet submitted)\n\n### \uD83D\uDCCB Suggestions\n- The measurement line tool added this sprint has no documentation entry yet\n- Consider adding a \u0060docs/features/inbox.md\u0060 page now that the Inbox system is live\n\n---\n*This is a simulated maintenance report to test the inbox popup window and action buttons.*",
   "attachments": [
     {

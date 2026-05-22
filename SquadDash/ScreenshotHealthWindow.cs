@@ -3,7 +3,6 @@ using System.Linq;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shell;
 using SquadDash.Screenshots;
@@ -14,11 +13,11 @@ namespace SquadDash;
 /// Floating panel that runs the screenshot structural health check and displays
 /// per-definition results — pass/warning/error/not-captured — with issue details.
 ///
-/// <para>Open via <c>open_panel health</c> or the host command; close with the Close button.
+/// <para>Open via <c>open_panel health</c> or the host command; close with the × button.
 /// Follows the singleton floating-window pattern used by <see cref="TasksStatusWindow"/>
 /// and <see cref="TraceWindow"/>.</para>
 /// </summary>
-internal sealed class ScreenshotHealthWindow : Window
+internal sealed class ScreenshotHealthWindow : ChromedWindow
 {
     private readonly ScreenshotHealthChecker _checker;
     private readonly Button                  _runButton;
@@ -36,57 +35,24 @@ internal sealed class ScreenshotHealthWindow : Window
         Height             = 500;
         MinWidth           = 420;
         MinHeight          = 320;
-        WindowStyle        = WindowStyle.None;
-        AllowsTransparency = true;
-        Background         = Brushes.Transparent;
-        ResizeMode         = ResizeMode.CanResizeWithGrip;
         ShowInTaskbar      = false;
         ShowActivated      = false;
         Topmost            = false;
 
-        WindowChrome.SetWindowChrome(this, new WindowChrome
-        {
-            CaptionHeight         = 36,
-            ResizeBorderThickness = new Thickness(4),
-            GlassFrameThickness   = new Thickness(0),
-            UseAeroCaptionButtons = false,
-        });
-
-        SourceInitialized += (_, _) =>
-            NativeMethods.DisableRoundedCorners(new WindowInteropHelper(this).Handle);
-
         // ── Outer shell ─────────────────────────────────────────────────────────
 
-        var outerBorder = new Border { BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(4) };
-        outerBorder.SetResourceReference(Border.BackgroundProperty, "AppSurface");
-        outerBorder.SetResourceReference(Border.BorderBrushProperty, "PanelBorder");
-
-        var root = new Grid { Margin = new Thickness(12) };
+        var root = new Grid { Margin = new Thickness(12, CloseButtonHeight, 12, 12) };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                          // header
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                          // hint
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                          // summary
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });     // results
-        outerBorder.Child = root;
-        Content           = outerBorder;
+        ApplyOuterBorder().Child = root;
 
         // ── Header ──────────────────────────────────────────────────────────────
 
         var header = new DockPanel { LastChildFill = false, Background = Brushes.Transparent };
         Grid.SetRow(header, 0);
         root.Children.Add(header);
-
-        var closeButton = new Button
-        {
-            Content             = "Close",
-            MinWidth            = 76,
-            Height              = 30,
-            HorizontalAlignment = HorizontalAlignment.Right,
-        };
-        closeButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
-        WindowChrome.SetIsHitTestVisibleInChrome(closeButton, true);
-        closeButton.Click += (_, _) => Close();
-        DockPanel.SetDock(closeButton, Dock.Right);
-        header.Children.Add(closeButton);
 
         _runButton = new Button
         {

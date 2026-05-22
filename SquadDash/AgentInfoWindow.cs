@@ -6,20 +6,19 @@ using System.Windows.Media.Imaging;
 
 namespace SquadDash;
 
-internal sealed class AgentInfoWindow : Window {
-    private AgentInfoWindow(AgentStatusCard card, string? workspaceFolderPath, string agentImageAssetsDirectory) {
+internal sealed class AgentInfoWindow : ChromedWindow {
+    private AgentInfoWindow(AgentStatusCard card, string? workspaceFolderPath, string agentImageAssetsDirectory)
+        : base(captionHeight: 28, resizeMode: ResizeMode.NoResize) {
         Title = card.Name;
-        WindowStyle = WindowStyle.SingleBorderWindow;
-        ResizeMode = ResizeMode.NoResize;
         SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
         MaxWidth = 520;
         Width = 520;
-        this.SetResourceReference(BackgroundProperty, "AppSurface");
 
         var root = new StackPanel();
-        Content = root;
+        var outerBorder = ApplyOuterBorder();
+        outerBorder.Child = root;
 
         // Portrait image
         var imageSource = ResolveImage(card, workspaceFolderPath, agentImageAssetsDirectory);
@@ -90,17 +89,6 @@ internal sealed class AgentInfoWindow : Window {
             root.Children.Add(scrollViewer);
         }
 
-        // Close button
-        var closeButton = new Button {
-            Content = "Close",
-            Width = 88,
-            Height = 30,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 8, 0, 20)
-        };
-        closeButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
-        closeButton.Click += (_, _) => Close();
-        root.Children.Add(closeButton);
     }
 
     public static void Show(Window owner, AgentStatusCard card, string? workspaceFolderPath, string agentImageAssetsDirectory) {

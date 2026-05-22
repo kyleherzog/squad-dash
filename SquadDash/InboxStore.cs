@@ -1,0 +1,208 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+
+namespace SquadDash;
+
+/// <summary>
+/// Manages per-workspace inbox messages stored at <c>{squadFolder}/inbox/{id}.json</c>.
+/// Thread-safe; all file I/O is guarded by a lock.
+/// </summary>
+public class InboxStore
+{
+    private const string InboxSubfolder    = "inbox";
+    private const string ArchiveSubfolder  = "archive";
+
+    private readonly string _squadFolder;
+    private readonly string _inboxFolder;
+    private readonly string _workspaceFolder;
+    private readonly object _sync = new();
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented            = true,
+        PropertyNameCaseInsensitive = true,
+    };
+
+    public InboxStore(string squadFolder)
+    {
+        _squadFolder     = squadFolder;
+        _inboxFolder     = Path.Combine(squadFolder, InboxSubfolder);
+        _workspaceFolder = Path.GetDirectoryName(squadFolder) ?? squadFolder;
+    }
+
+    /// <summary>Returns all messages sorted newest-first.</summary>
+    public IReadOnlyList<InboxMessage> LoadAll()
+    {
+        lock (_sync)
+        {
+            EnsureInboxDirectory();
+            return Directory
+                .EnumerateFiles(_inboxFolder, "*.json", SearchOption.TopDirectoryOnly)
+                .Select(TryReadMessage)
+                .Where(m => m is not null)
+                .Cast<InboxMessage>()
+                .OrderByDescending(m => m.Timestamp)
+                .ToList()
+                .AsReadOnly();
+        }
+    }
+
+    /// <summary>Writes or overwrites the message file for <paramref name="message"/>.</summary>
+    public void Save(InboxMessage message)
+    {
+        lock (_sync)
+        {
+            EnsureInboxDirectory();
+            var json = JsonSerializer.Serialize(message, JsonOptions);
+            JsonFileStorage.AtomicWrite(GetFilePath(message.Id), json);
+        }
+    }
+
+    /// <summary>Loads the message, sets <see cref="InboxMessage.Read"/> = true, and saves.</summary>
+    public void MarkRead(string id)
+    {
+        lock (_sync)
+        {
+            var msg = TryReadMessage(GetFilePath(id));
+            if (msg is null) return;
+            var updated = msg with { Read = true };
+            var json    = JsonSerializer.Serialize(updated, JsonOptions);
+            JsonFileStorage.AtomicWrite(GetFilePath(id), json);
+        }
+    }
+
+    /// <summary>Loads the message, sets <see cref="InboxMessage.Read"/> = false, and saves.</summary>
+    public void MarkUnread(string id)
+    {
+        lock (_sync)
+        {
+            var msg = TryReadMessage(GetFilePath(id));
+            if (msg is null) return;
+            var updated = msg with { Read = false };
+            var json    = JsonSerializer.Serialize(updated, JsonOptions);
+            JsonFileStorage.AtomicWrite(GetFilePath(id), json);
+        }
+    }
+
+    /// <summary>Deletes the message file.</summary>
+    public void Delete(string id)
+    {
+        lock (_sync)
+        {
+            var path = GetFilePath(id);
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    /// <summary>Moves the message file to <c>inbox/archive/</c>.</summary>
+    public void Archive(string id)
+    {
+        lock (_sync)
+        {
+            var src = GetFilePath(id);
+            if (!File.Exists(src)) return;
+
+            var archiveDir = Path.Combine(_inboxFolder, ArchiveSubfolder);
+            Directory.CreateDirectory(archiveDir);
+
+            var dst = Path.Combine(archiveDir, Path.GetFileName(src));
+            File.Move(src, dst, overwrite: true);
+        }
+    }
+
+    /// <summary>Records that the user clicked an action; persists the update to disk.</summary>
+    public void MarkActionUsed(string messageId, string actionLabel)
+    {
+        lock (_sync)
+        {
+            var msg = GetById(messageId);
+            if (msg is null) return;
+
+            if (msg.UsedActions.Contains(actionLabel)) return;
+
+            var updated = msg with { UsedActions = [.. msg.UsedActions, actionLabel] };
+            Save(updated);
+
+            // Replace in-memory too if callers have a reference
+            // (callers should re-call LoadAll() to refresh)
+        }
+    }
+
+    /// <summary>Returns the message with the given <paramref name="id"/>, or null if not found.</summary>
+    public InboxMessage? GetById(string id)
+    {
+        lock (_sync)
+        {
+            return TryReadMessage(GetFilePath(id));
+        }
+    }
+
+    /// <summary>
+    /// Returns true if any inbox message attachment references the given absolute file path.
+    /// Attachment paths that are relative are resolved against the workspace folder.
+    /// </summary>
+    public bool IsReferencedByInboxMessage(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            return false;
+
+        try
+        {
+            var normalizedTarget = Path.GetFullPath(filePath);
+
+            lock (_sync)
+            {
+                if (!Directory.Exists(_inboxFolder))
+                    return false;
+
+                foreach (var file in Directory.EnumerateFiles(_inboxFolder, "*.json", SearchOption.TopDirectoryOnly))
+                {
+                    var msg = TryReadMessage(file);
+                    if (msg is null) continue;
+
+                    foreach (var att in msg.Attachments)
+                    {
+                        if (string.IsNullOrWhiteSpace(att.Path)) continue;
+
+                        try
+                        {
+                            var resolved = Path.IsPathRooted(att.Path)
+                                ? Path.GetFullPath(att.Path)
+                                : Path.GetFullPath(Path.Combine(_workspaceFolder, att.Path));
+
+                            if (string.Equals(resolved, normalizedTarget, StringComparison.OrdinalIgnoreCase))
+                                return true;
+                        }
+                        catch { /* skip malformed paths */ }
+                    }
+                }
+            }
+
+            return false;
+        }
+        catch { return false; }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private string GetFilePath(string id) =>
+        Path.Combine(_inboxFolder, $"{id}.json");
+
+    private void EnsureInboxDirectory() =>
+        Directory.CreateDirectory(_inboxFolder);
+
+    private static InboxMessage? TryReadMessage(string path)
+    {
+        if (!File.Exists(path)) return null;
+        try
+        {
+            var json = File.ReadAllText(path);
+            return JsonSerializer.Deserialize<InboxMessage>(json, JsonOptions);
+        }
+        catch { return null; }
+    }
+}

@@ -805,6 +805,8 @@ internal sealed class ApplicationSettingsStore {
                 NotesPanelVisible = state.NotesPanelVisible ?? existing.NotesPanelVisible,
                 LoopPanelVisible = state.LoopPanelVisible ?? existing.LoopPanelVisible,
                 MaintenancePanelVisible = state.MaintenancePanelVisible ?? existing.MaintenancePanelVisible,
+                InboxPanelVisible = state.InboxPanelVisible ?? existing.InboxPanelVisible,
+                OpenInboxMessageIds = state.OpenInboxMessageIds ?? existing.OpenInboxMessageIds,
                 DraftFollowUpsJson = state.DraftFollowUpsJson ?? existing.DraftFollowUpsJson,
                 SelectedLoopFile = state.SelectedLoopFile ?? existing.SelectedLoopFile,
                 NotesSortOrder = state.NotesSortOrder ?? existing.NotesSortOrder,
@@ -813,6 +815,8 @@ internal sealed class ApplicationSettingsStore {
                 ApprovalsPanelFilter = state.ApprovalsPanelFilter ?? existing.ApprovalsPanelFilter,
                 TasksPanelFilter = state.TasksPanelFilter ?? existing.TasksPanelFilter,
                 NotesPanelFilter = state.NotesPanelFilter ?? existing.NotesPanelFilter,
+                InboxShowUnreadOnly = state.InboxShowUnreadOnly ?? existing.InboxShowUnreadOnly,
+                InboxFilterText = state.InboxFilterText ?? existing.InboxFilterText,
             };
         }
         dict[key] = state;
@@ -872,6 +876,18 @@ internal sealed record WorkspaceDocsPanelState
     public bool? MaintenancePanelVisible { get; init; }
 
     /// <summary>
+    /// Whether the Inbox inline panel was visible.
+    /// <c>null</c> or <c>false</c> = hidden (default). <c>true</c> = user had the panel open.
+    /// </summary>
+    public bool? InboxPanelVisible { get; init; }
+
+    /// <summary>
+    /// IDs of inbox messages that were open in popup viewer windows at shutdown.
+    /// Restored on next startup. <c>null</c> = none open.
+    /// </summary>
+    public IReadOnlyList<string>? OpenInboxMessageIds { get; init; }
+
+    /// <summary>
     /// Follow-up attachments on the active draft tab. Persisted so they survive restart.
     /// JSON-serialized list of <see cref="FollowUpAttachmentDto"/>. Null when no attachments are present.
     /// </summary>
@@ -916,7 +932,17 @@ internal sealed record WorkspaceDocsPanelState
     public string? NotesPanelFilter { get; init; }
 
     /// <summary>
-    /// Legacy single-item follow-up fields — kept for reading old settings files.
+    /// Whether the Inbox "Unread Only" filter is active. Null / false = off (default).
+    /// </summary>
+    public bool? InboxShowUnreadOnly { get; init; }
+
+    /// <summary>
+    /// Last filter text entered in the Inbox panel filter box. Null = no filter.
+    /// </summary>
+    public string? InboxFilterText { get; init; }
+
+    /// <summary>
+    /// Legacy single-item follow-up fields— kept for reading old settings files.
     /// New writes use <see cref="DraftFollowUpsJson"/> instead.
     /// </summary>
     public string? DraftFollowUpCommitSha { get; init; }
@@ -1469,7 +1495,7 @@ internal sealed record ApplicationSettingsSnapshot(
             RcPersistentPort = RcPersistentPort,
             ApprovalShowApproved = ApprovalShowApproved,
             ApprovalShowRejected = ApprovalShowRejected,
-            CleanupPrompt = string.IsNullOrWhiteSpace(CleanupPrompt)
+            CleanupPrompt= string.IsNullOrWhiteSpace(CleanupPrompt)
                 ? "Clean up and clarify this text."
                 : CleanupPrompt,
             SpeechProvider = SpeechProvider,

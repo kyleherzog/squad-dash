@@ -50,10 +50,11 @@ internal sealed class MaintenanceStateStore {
             case "always":
                 return true;
 
-            case "per-commit":
+            case "after-commits":
+            case "per-commit":   // backward-compat alias
                 if (commitSha is null) {
                     SquadDashTrace.Write(TraceCategory.General,
-                        $"MaintenanceStateStore: per-commit git fallback — commit SHA unavailable, treating task '{taskId}' as daily");
+                        $"MaintenanceStateStore: after-commits git fallback — commit SHA unavailable, treating task '{taskId}' as daily");
                     goto case "daily";
                 }
                 if (!_tasks.TryGetValue(taskId, out var commitState))
@@ -66,7 +67,7 @@ internal sealed class MaintenanceStateStore {
                     return true;
                 if (weeklyState.LastRunAt is null)
                     return true;
-                return weeklyState.LastRunAt.Value < DateTime.UtcNow.AddDays(-7);
+                return weeklyState.LastRunAt.Value < StartOfCurrentWeekUtc();
 
             case "monthly":
                 if (!_tasks.TryGetValue(taskId, out var monthlyState))
@@ -146,6 +147,15 @@ internal sealed class MaintenanceStateStore {
         if (el.TryGetProperty("lastCommitSha", out var sha) && sha.ValueKind == JsonValueKind.String)
             s.LastCommitSha = sha.GetString();
         return s;
+    }
+
+    /// <summary>Returns the UTC DateTime for the start of the current ISO week (Monday 00:00:00).</summary>
+    private static DateTime StartOfCurrentWeekUtc()
+    {
+        var today = DateTime.UtcNow.Date;
+        // DayOfWeek: Sunday=0, Monday=1 … Saturday=6; we want Monday=0
+        int daysSinceMonday = ((int)today.DayOfWeek + 6) % 7;
+        return today.AddDays(-daysSinceMonday);
     }
 
     private sealed class TaskState {

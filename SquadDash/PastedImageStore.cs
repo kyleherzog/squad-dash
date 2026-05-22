@@ -74,8 +74,10 @@ internal sealed class PastedImageStore
     /// Fire-and-forget: deletes images whose submission sidecar is older than 14 days,
     /// and orphaned images (no sidecar) older than 30 days by file creation time.
     /// Never throws.
+    /// If <paramref name="isProtected"/> is supplied, any file for which it returns true
+    /// is skipped (inbox attachment retention takes priority over the 14-day pruning window).
     /// </summary>
-    public Task PruneAsync(string workspaceFolder) => Task.Run(() =>
+    public Task PruneAsync(string workspaceFolder, Func<string, bool>? isProtected = null) => Task.Run(() =>
     {
         try
         {
@@ -95,6 +97,7 @@ internal sealed class PastedImageStore
                         if (DateTime.TryParse(text, out var submittedAt)
                             && now - submittedAt >= RetentionAfterSubmission)
                         {
+                            if (isProtected?.Invoke(png) == true) continue;
                             File.Delete(png);
                             File.Delete(sidecar);
                         }
@@ -103,7 +106,10 @@ internal sealed class PastedImageStore
                     {
                         var created = File.GetCreationTimeUtc(png);
                         if (now - created >= TimeSpan.FromDays(30))
+                        {
+                            if (isProtected?.Invoke(png) == true) continue;
                             File.Delete(png);
+                        }
                     }
                 }
                 catch { /* skip individual file errors */ }

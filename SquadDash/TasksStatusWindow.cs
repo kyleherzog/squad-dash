@@ -1,6 +1,5 @@
 using System.Text.RegularExpressions;
 using System.Windows;
-using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -8,7 +7,7 @@ using System.Windows.Shell;
 
 namespace SquadDash;
 
-internal sealed class TasksStatusWindow : Window {
+internal sealed class TasksStatusWindow : ChromedWindow {
     private readonly RichTextBox _contentRichBox;
     private string _rawContent = string.Empty;
 
@@ -21,37 +20,17 @@ internal sealed class TasksStatusWindow : Window {
         Height = 420;
         MinWidth = 420;
         MinHeight = 260;
-        WindowStyle = WindowStyle.None;
-        AllowsTransparency = true;
-        Background = Brushes.Transparent;
-        ResizeMode = ResizeMode.CanResizeWithGrip;
         ShowInTaskbar = false;
         ShowActivated = false;
         Topmost = false;
 
-        WindowChrome.SetWindowChrome(this, new WindowChrome
-        {
-            CaptionHeight         = 36,
-            ResizeBorderThickness = new Thickness(4),
-            GlassFrameThickness   = new Thickness(0),
-            UseAeroCaptionButtons = false,
-        });
-
-        SourceInitialized += (_, _) =>
-            NativeMethods.DisableRoundedCorners(new WindowInteropHelper(this).Handle);
-
-        var outerBorder = new Border { BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(4) };
-        outerBorder.SetResourceReference(Border.BackgroundProperty, "AppSurface");
-        outerBorder.SetResourceReference(Border.BorderBrushProperty, "PanelBorder");
-
         var root = new Grid {
-            Margin = new Thickness(12)
+            Margin = new Thickness(12, 8, 12, 12)
         };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        outerBorder.Child = root;
-        Content = outerBorder;
+        ApplyOuterBorder().Child = root;
 
         var header = new DockPanel {
             LastChildFill = false,
@@ -60,24 +39,13 @@ internal sealed class TasksStatusWindow : Window {
         Grid.SetRow(header, 0);
         root.Children.Add(header);
 
-        var closeButton = new Button {
-            Content = "Close",
-            MinWidth = 76,
-            Height = 30,
-            HorizontalAlignment = HorizontalAlignment.Right
-        };
-        closeButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
-        WindowChrome.SetIsHitTestVisibleInChrome(closeButton, true);
-        closeButton.Click += (_, _) => Close();
-        DockPanel.SetDock(closeButton, Dock.Right);
-        header.Children.Add(closeButton);
-
+        // Copy button docked right, with margin to align its right edge with the close button's left edge.
+        // Close button = 38px wide; root right margin = 12px → offset = 38 - 12 = 26px.
         var copyButton = new Button {
-            Content = "Copy",
+            Content  = "Copy",
             MinWidth = 76,
-            Height = 30,
-            Margin = new Thickness(0, 0, 8, 0),
-            HorizontalAlignment = HorizontalAlignment.Right
+            Height   = 30,
+            Margin   = new Thickness(0, 0, 26, 0),
         };
         copyButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
         WindowChrome.SetIsHitTestVisibleInChrome(copyButton, true);
@@ -89,12 +57,14 @@ internal sealed class TasksStatusWindow : Window {
         header.Children.Add(copyButton);
 
         var titleBlock = new TextBlock {
-            Text = "Live Tasks",
-            FontSize = (double)Application.Current.Resources["FontSizeSubtitle"],
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center
+            Text              = "Live Tasks",
+            FontSize          = (double)Application.Current.Resources["FontSizeSubtitle"],
+            FontWeight        = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(0, 0, 8, 0),
         };
-        titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "ImportantText");
+        titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+        DockPanel.SetDock(titleBlock, Dock.Left);
         header.Children.Add(titleBlock);
 
         var hintBlock = new TextBlock {

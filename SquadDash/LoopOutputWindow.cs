@@ -1,7 +1,6 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shell;
 
@@ -10,9 +9,9 @@ namespace SquadDash;
 /// <summary>
 /// Floating window that streams loop output in real time.
 /// Open via right-click "Show Loop Output" on the Loop panel, or auto-shown
-/// when loop output first arrives.  Dismiss with the × button or "Close" (hides, preserves history).
+/// when loop output first arrives.  Dismiss with the × button (hides, preserves history).
 /// </summary>
-internal sealed class LoopOutputWindow : Window
+internal sealed class LoopOutputWindow : ChromedWindow
 {
     private readonly TextBox _logTextBox = null!;
 
@@ -23,34 +22,14 @@ internal sealed class LoopOutputWindow : Window
         Height     = 480;
         MinWidth   = 320;
         MinHeight  = 200;
-        WindowStyle        = WindowStyle.None;
-        AllowsTransparency = true;
-        Background         = Brushes.Transparent;
-        ResizeMode         = ResizeMode.CanResizeWithGrip;
         ShowInTaskbar      = false;
         ShowActivated      = false;
         Topmost            = false;
 
-        WindowChrome.SetWindowChrome(this, new WindowChrome
-        {
-            CaptionHeight         = 36,
-            ResizeBorderThickness = new Thickness(4),
-            GlassFrameThickness   = new Thickness(0),
-            UseAeroCaptionButtons = false,
-        });
-
-        SourceInitialized += (_, _) =>
-            NativeMethods.DisableRoundedCorners(new WindowInteropHelper(this).Handle);
-
-        var outerBorder = new Border { BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(4) };
-        outerBorder.SetResourceReference(Border.BackgroundProperty, "AppSurface");
-        outerBorder.SetResourceReference(Border.BorderBrushProperty, "PanelBorder");
-
         var root = new Grid { Margin = new Thickness(12) };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        outerBorder.Child = root;
-        Content = outerBorder;
+        ApplyOuterBorder().Child = root;
 
         // ── Header ──────────────────────────────────────────────────────────────────────────
 
@@ -58,12 +37,17 @@ internal sealed class LoopOutputWindow : Window
         Grid.SetRow(header, 0);
         root.Children.Add(header);
 
-        var closeButton = new Button { Content = "Close", MinWidth = 76, Height = 30 };
-        closeButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
-        WindowChrome.SetIsHitTestVisibleInChrome(closeButton, true);
-        closeButton.Click += (_, _) => Hide();
-        DockPanel.SetDock(closeButton, Dock.Right);
-        header.Children.Add(closeButton);
+        var titleBlock = new TextBlock
+        {
+            Text              = "Loop Output",
+            FontSize          = (double)Application.Current.Resources["FontSizeSubtitle"],
+            FontWeight        = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(0, 0, 8, 0),
+        };
+        titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+        DockPanel.SetDock(titleBlock, Dock.Left);
+        header.Children.Add(titleBlock);
 
         var copyButton = new Button { Content = "Copy", MinWidth = 76, Height = 30, Margin = new Thickness(0, 0, 8, 0) };
         copyButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
@@ -73,25 +57,15 @@ internal sealed class LoopOutputWindow : Window
             if (!string.IsNullOrEmpty(_logTextBox.Text))
                 Clipboard.SetText(_logTextBox.Text);
         };
-        DockPanel.SetDock(copyButton, Dock.Right);
+        DockPanel.SetDock(copyButton, Dock.Left);
         header.Children.Add(copyButton);
 
         var clearButton = new Button { Content = "Clear", MinWidth = 76, Height = 30, Margin = new Thickness(0, 0, 8, 0) };
         clearButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
         WindowChrome.SetIsHitTestVisibleInChrome(clearButton, true);
         clearButton.Click += (_, _) => SaveAndClear();
-        DockPanel.SetDock(clearButton, Dock.Right);
+        DockPanel.SetDock(clearButton, Dock.Left);
         header.Children.Add(clearButton);
-
-        var titleBlock = new TextBlock
-        {
-            Text              = "Loop Output",
-            FontSize = (double)Application.Current.Resources["FontSizeSubtitle"],
-            FontWeight        = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "ImportantText");
-        header.Children.Add(titleBlock);
 
         // ── Log area ────────────────────────────────────────────────────────────────────────
 
@@ -156,5 +130,12 @@ internal sealed class LoopOutputWindow : Window
         if (!string.IsNullOrWhiteSpace(text))
             LoopOutputStore.SaveLog(text);
         _logTextBox.Clear();
+    }
+
+    /// <summary>Hides rather than closes the window so output history is preserved for re-opening.</summary>
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        e.Cancel = true;
+        Hide();
     }
 }

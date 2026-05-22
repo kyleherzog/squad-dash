@@ -6,7 +6,7 @@ namespace SquadDash;
 internal static class TranscriptTextUtilities
 {
     internal static string SanitizeResponseText(string? text) =>
-        StripHostCommandBlock(StripAwaitInputSentinel(ToolTranscriptFormatter.StripSystemNotifications(text))).TrimEnd();
+        StripInboxMessageBlock(StripHostCommandBlock(StripAwaitInputSentinel(ToolTranscriptFormatter.StripSystemNotifications(text)))).TrimEnd();
 
     internal static string? SanitizeResponseTextOrNull(string? text)
     {
@@ -78,6 +78,20 @@ internal static class TranscriptTextUtilities
     {
         if (HostCommandParser.TryExtract(text, out var body, out _))
             return body;
+        return text;
+    }
+
+    private static string StripInboxMessageBlock(string text)
+    {
+        // Strip complete block (already handled by parser).
+        if (InboxMessageParser.TryExtract(text, out var body, out _))
+            return body;
+
+        // Strip partial block (still streaming — sentinel present but closing brace not yet arrived).
+        var sentinelIdx = text.IndexOf("INBOX_MESSAGE_JSON:", StringComparison.Ordinal);
+        if (sentinelIdx >= 0)
+            return text[..sentinelIdx].TrimEnd();
+
         return text;
     }
 

@@ -212,6 +212,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private Dictionary<string, string> _agentHandleByDisplayName = new(StringComparer.OrdinalIgnoreCase);
     private string[] _agentDisplayNames = [];
     private string[] _tasksAgentSuggestions = [];
+    private string[] _inboxAgentSuggestions = [];
     private string[] _currentQuickReplyOptions = [];
     private DateTime _quickRepliesShownAt = DateTime.MinValue;
     private const int QuickReplyReadWindowMs = 400;
@@ -251,11 +252,16 @@ public partial class MainWindow : Window, ILiveElementLocator
     private MaintenanceReportWriter?    _maintenanceReportWriter;
     private MaintenanceReport?          _pendingMaintenanceBannerReport;
     private DispatcherTimer?            _maintenanceBannerTimer;
+    private InboxStore?                 _inboxStore;
+    private InboxPanelController?       _inboxPanel;
+    private bool                        _inboxPanelVisible = false;
+    private bool                        _inboxSavedForCurrentTurn;
     // Set true while we are programmatically moving a floating window so its
     // LocationChanged does not overwrite the saved offset.
     private bool _movingFloatingWindow;
     private bool _isInstallingSquad;
     private bool _isClosing;
+    private readonly List<InboxMessageWindow> _openInboxWindows = new();
     private bool _mainWindowClosingInProgress; // set at the very start of Closing, before ShowDialog
     private bool _isPromptRunning;
     private bool _queueDrainActive;  // true while an auto-dispatched queue item is executing
@@ -293,6 +299,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private Border? _dropIndicator;           // Narrow vertical bar shown between tabs during drag
     private const double DragThreshold = 4.0; // px of movement before drag mode activates
     private bool _restartPending;
+    private bool _userCloseRequested;
     private bool _clipboardEditorOpen; // true while any ClipboardImageEditorWindow is open; defers restart
     private int  _clipboardEditorCount; // number of ClipboardImageEditorWindows currently open
     private bool _pendingShutdown;     // true when a close was requested while ClipboardImageEditorWindow was open
@@ -480,6 +487,12 @@ public partial class MainWindow : Window, ILiveElementLocator
     private TranscriptThreadState CoordinatorThread => _coordinatorThread ??= CreateCoordinatorTranscriptThread();
     private bool IsLoopRunning => _pec is { IsLoopRunning: true };
     private bool IsNativeLoopRunning => IsLoopRunning && _activeLoopMode == LoopMode.NativeAgents;
+
+    /// <summary>
+    /// The per-workspace inbox store, accessible to panel controllers (e.g. InboxPanelController).
+    /// Null until a workspace is opened.
+    /// </summary>
+    internal InboxStore? InboxStore => _inboxStore;
     private TranscriptTurnView? _currentTurn
     {
         get => CoordinatorThread.CurrentTurn;
@@ -1090,6 +1103,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                     // Clear stale completion timestamp AND remove the "Completed N ago" footer
                     // paragraph so it doesn't linger while the new turn is streaming.
                     MaybeReactivateThread(CoordinatorThread);
+                    _inboxSavedForCurrentTurn = false;
                 }
                 else
                 {
@@ -1187,6 +1201,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             hideTasksStatusWindow: () => HideTasksStatusWindow(),
             showApprovalWindow: () => ShowApprovalPanel(),
             showLiveTraceWindow: () => ShowTraceWindow(),
+            showScreenshotHealthWindow: () => ShowScreenshotHealthWindow(),
             runDoctor: () => RunDoctorButton_Click(null!, null!),
             showHireAgentWindow: () => ShowHireAgentWindow(),
             enqueuePrompt: (text, isSystemInjected) => EnqueuePrompt(text, isSystemInjected),
@@ -1995,6 +2010,30 @@ public partial class MainWindow : Window, ILiveElementLocator
                     await DispatchRightmostQueuedTabAsQuickReplyAsync(_activeTabId);
                     return;
                 }
+
+                // A slash command in a queued tab must execute immediately regardless of
+                // queue state — remove the slot, restore the main draft, then dispatch.
+                var queuedText = PromptTextBox.Text.Trim();
+                if (LocalPromptSubmissionPolicy.IsImmediateLocalCommand(queuedText))
+                {
+                    var capturedId = _activeTabId;
+                    _promptQueue.Remove(capturedId);
+                    _activeTabId = null;
+                    SetPromptTextBoxLogicalBuffer(
+                        _queuePreEditDraft ?? string.Empty,
+                        _queuePreEditDraftCaretIndex,
+                        _queuePreEditDraftSelectionStart,
+                        _queuePreEditDraftSelectionLength,
+                        "slash-command-from-queued-tab");
+                    _queuePreEditDraft = null;
+                    UpdateFollowUpStrip();
+                    SyncQueuePanel();
+                    SquadDashTrace.Write("UI", $"Slash command {queuedText} executed from queued tab — slot removed");
+                    await _pec.ExecutePromptAsync(queuedText, addToHistory: true, clearPromptBox: false);
+                    SyncPromptTextBoxSimBorder();
+                    return;
+                }
+
                 if (_isPromptRunning || IsNativeLoopRunning || _queueManuallyPaused || HasPendingDirectQuickReplyAgentFollowUp())
                 {
                     OnQueueTabClicked(null);
@@ -4295,6 +4334,9 @@ public partial class MainWindow : Window, ILiveElementLocator
                             }
                         }
                     }
+
+                    // Process INBOX_MESSAGE_JSON blocks from this turn's response.
+                    TrySaveInboxMessageFromResponse(rawResponse);
                 }
                 if (_pendingRcRestartAfterReset)
                 {
@@ -6558,6 +6600,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 case "tasks": ShowTasksStatusWindow(); break;
                 case "trace": ShowTraceWindow(); break;
                 case "health": ShowScreenshotHealthWindow(); break;
+                case "inbox": ShowInboxPanel(); break;
             }
         }));
         _hostCommandExecutor.Register(new Commands.InjectTextCommandHandler(_ =>
@@ -6688,7 +6731,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private static readonly string[] SlashCommands = [
         "/activate", "/add-dir", "/agents", "/allow-all", "/approval", "/changelog", "/clear",
         "/context", "/copy", "/delegate", "/deactivate", "/diff", "/doctor", "/experimental", "/feedback",
-        "/fleet", "/dropTasks", "/help", "/hire", "/ide", "/init", "/instructions", "/login", "/logout",
+        "/fleet", "/dropTasks", "/health", "/help", "/hire", "/ide", "/init", "/instructions", "/login", "/logout",
         "/lsp", "/mcp", "/model", "/new", "/plan", "/pr", "/queue-sim", "/research", "/restart",
         "/resume", "/review", "/rewind", "/rename", "/retire", "/session", "/sessions", "/share", "/skills",
         "/status", "/tasks", "/test-queue", "/trace", "/update", "/usage", "/version"
@@ -10194,6 +10237,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
         _agentHandleByDisplayName = dict;
         _agentDisplayNames = [.. dict.Keys.OrderBy(k => k)];
+        _inboxAgentSuggestions = _agentDisplayNames;
     }
 
     /// <summary>
@@ -10274,6 +10318,35 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (activated is not null)
             {
                 _intelliSenseOwnerBox = TasksFilterBox;
+                _intelliSenseState = IntelliSenseController.UpdateFromText(activated, text, caret);
+                UpdateIntelliSensePopup();
+            }
+        }
+    }
+
+    private void TryUpdateInboxIntelliSense()
+    {
+        if (_isApplyingIntelliSenseAccept) return;
+
+        var text  = InboxFilterBox.Text;
+        var caret = InboxFilterBox.CaretIndex;
+
+        if (_intelliSenseState is not null && _intelliSenseOwnerBox == InboxFilterBox)
+        {
+            _intelliSenseState = IntelliSenseController.UpdateFromText(_intelliSenseState, text, caret);
+            UpdateIntelliSensePopup();
+            return;
+        }
+
+        if (_intelliSenseState is not null) return;
+
+        var atPos = FindAtTriggerPosition(text, caret);
+        if (atPos >= 0 && _inboxAgentSuggestions.Length > 0)
+        {
+            var activated = IntelliSenseController.TryActivate('@', atPos, _inboxAgentSuggestions);
+            if (activated is not null)
+            {
+                _intelliSenseOwnerBox = InboxFilterBox;
                 _intelliSenseState = IntelliSenseController.UpdateFromText(activated, text, caret);
                 UpdateIntelliSensePopup();
             }
@@ -11465,12 +11538,20 @@ public partial class MainWindow : Window, ILiveElementLocator
             ToolIconGalleryMenuItem.Visibility = shiftDown ? Visibility.Visible : Visibility.Collapsed;
         if (ToolIconGallerySeparator is not null)
             ToolIconGallerySeparator.Visibility = shiftDown ? Visibility.Visible : Visibility.Collapsed;
-        if (ViewLoopPanelMenuItem is not null)
-            ViewLoopPanelMenuItem.IsChecked = _loopPanelVisible;
-        if (ViewTasksMenuItem is not null)
-            ViewTasksMenuItem.IsChecked = _tasksPanelVisible;
-        if (ViewCommitApprovalsMenuItem is not null)
-            ViewCommitApprovalsMenuItem.IsChecked = _approvalPanelVisible;
+    }
+
+    private void PanelsMenuItem_SubmenuOpened(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (ViewLoopPanelMenuItem       is not null) ViewLoopPanelMenuItem.IsChecked       = _loopPanelVisible;
+            if (ViewTasksMenuItem           is not null) ViewTasksMenuItem.IsChecked           = _tasksPanelVisible;
+            if (ViewCommitApprovalsMenuItem is not null) ViewCommitApprovalsMenuItem.IsChecked = _approvalPanelVisible;
+            if (ViewInboxMenuItem           is not null) ViewInboxMenuItem.IsChecked           = _inboxPanelVisible;
+            if (ViewNotesMenuItem           is not null) ViewNotesMenuItem.IsChecked           = _notesPanelVisible;
+            if (ViewMaintenanceMenuItem     is not null) ViewMaintenanceMenuItem.IsChecked     = _maintenancePanelVisible;
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(PanelsMenuItem_SubmenuOpened), ex); }
     }
 
     private async void RecentFolderMenuItem_Click(object sender, RoutedEventArgs e)
@@ -12038,6 +12119,102 @@ public partial class MainWindow : Window, ILiveElementLocator
         catch (Exception ex) { HandleUiCallbackException(nameof(MaintenancePanelCloseButton_Click), ex); }
     }
 
+    private void MaintenanceFilterBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        try
+        {
+            var text = MaintenanceFilterBox?.Text ?? string.Empty;
+            _maintenancePanel?.SetFilter(text);
+            if (MaintenanceFilterClearButton is not null)
+                MaintenanceFilterClearButton.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(MaintenanceFilterBox_TextChanged), ex); }
+    }
+
+    private void MaintenanceFilterClearButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (MaintenanceFilterBox is not null)
+            {
+                MaintenanceFilterBox.Text = string.Empty;
+                MaintenanceFilterBox.Focus();
+            }
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(MaintenanceFilterClearButton_Click), ex); }
+    }
+
+    private void ViewInboxMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _inboxPanelVisible = !_inboxPanelVisible;
+            SyncInboxPanel();
+            if (ViewInboxMenuItem is not null)
+                ViewInboxMenuItem.IsChecked = _inboxPanelVisible;
+            PersistInboxPanelVisible();
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(ViewInboxMenuItem_Click), ex); }
+    }
+
+    private void InboxPanelCloseButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _inboxPanelVisible = false;
+            SyncInboxPanel();
+            if (ViewInboxMenuItem is not null)
+                ViewInboxMenuItem.IsChecked = false;
+            PersistInboxPanelVisible();
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(InboxPanelCloseButton_Click), ex); }
+    }
+
+    private void InboxFilterBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        try
+        {
+            var text = InboxFilterBox?.Text ?? string.Empty;
+            _inboxPanel?.SetFilter(text);
+            TryUpdateInboxIntelliSense();
+            if (InboxFilterClearButton is not null)
+                InboxFilterClearButton.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with { InboxFilterText = text.Length > 0 ? text : string.Empty };
+            _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(InboxFilterBox_TextChanged), ex); }
+    }
+
+    private void InboxFilterClearButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (InboxFilterBox is not null)
+                InboxFilterBox.Text = string.Empty;
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(InboxFilterClearButton_Click), ex); }
+    }
+
+    private void InboxUnreadOnlyCheckBox_Checked(object sender, RoutedEventArgs e)
+    {
+        try {
+            _inboxPanel?.SetUnreadOnly(true);
+            _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with { InboxShowUnreadOnly = true };
+            _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(InboxUnreadOnlyCheckBox_Checked), ex); }
+    }
+
+    private void InboxUnreadOnlyCheckBox_Unchecked(object sender, RoutedEventArgs e)
+    {
+        try {
+            _inboxPanel?.SetUnreadOnly(false);
+            _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with { InboxShowUnreadOnly = false };
+            _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(InboxUnreadOnlyCheckBox_Unchecked), ex); }
+    }
+
     private void MaintenanceRunNowButton_Click(object sender, RoutedEventArgs e)
     {
         try { _ = StartMaintenanceCycleAsync(); }
@@ -12117,7 +12294,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             double? docsSourceWidth = IsDocSourceVisible() ? GetDocSourceSize() : (double?)null;
 
             var workspaceFolder = _currentWorkspace?.FolderPath;
-            _docsPanelState = new WorkspaceDocsPanelState
+            _docsPanelState = (_docsPanelState ?? new WorkspaceDocsPanelState()) with
             {
                 Open = false,
                 ExpandedNodes = nodes,
@@ -14593,6 +14770,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         _noteItems  = _notesStore.LoadAll();
         _notesPanel?.Refresh(_noteItems);
 
+        _inboxStore = new InboxStore(_currentWorkspace.SquadFolderPath);
+
         ClearRuntimeIssue();
 
         var repairSw = Stopwatch.StartNew();
@@ -14656,7 +14835,9 @@ public partial class MainWindow : Window, ILiveElementLocator
         RenderOrphanedAgentReports(reportsDir);
 
         // Fire-and-forget: prune expired pasted images for this workspace.
-        _ = _pastedImageStore.PruneAsync(_currentWorkspace?.FolderPath ?? string.Empty);
+        _ = _pastedImageStore.PruneAsync(
+            _currentWorkspace?.FolderPath ?? string.Empty,
+            isProtected: _inboxStore is not null ? _inboxStore.IsReferencedByInboxMessage : null);
 
         // Restore loop-queued-to-dequeue state from previous session.
         _loopQueued = _conversationManager.ConversationState.LoopQueuedToDequeue == true;
@@ -14699,7 +14880,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                             a.TranscriptQuote,
                             a.ContentBlock,
                             a.ImagePath,
-                            a.ImageSubmittedAt is not null && DateTime.TryParse(a.ImageSubmittedAt, out var dt2) ? dt2 : null))
+                            a.ImageSubmittedAt is not null && DateTime.TryParse(a.ImageSubmittedAt, out var dt2) ? dt2 : null,
+                            a.InboxMessageId))
                         .ToList();
                 }
             }
@@ -17222,6 +17404,28 @@ public partial class MainWindow : Window, ILiveElementLocator
         return text;
     }
 
+    private static string BuildInboxMessageId(DateTimeOffset timestamp, string subject)
+    {
+        var ts   = timestamp.UtcDateTime.ToString("yyyyMMdd-HHmmss");
+        var slug = BuildInboxSlug(subject);
+        return $"{ts}-{slug}";
+    }
+
+    private static string BuildInboxSlug(string subject)
+    {
+        if (string.IsNullOrWhiteSpace(subject))
+            return "message";
+
+        var sb = new System.Text.StringBuilder();
+        foreach (var c in subject.ToLowerInvariant())
+            sb.Append(char.IsLetterOrDigit(c) ? c : '-');
+
+        var slug = System.Text.RegularExpressions.Regex.Replace(sb.ToString(), "-+", "-").Trim('-');
+        if (slug.Length > 40)
+            slug = slug[..40].TrimEnd('-');
+        return string.IsNullOrWhiteSpace(slug) ? "message" : slug;
+    }
+
     private static string StripAwaitInputSentinel(string text) =>
         text.Replace(PromptExecutionController.QueueAwaitInputSentinel, string.Empty,
                      StringComparison.Ordinal);
@@ -17506,7 +17710,12 @@ public partial class MainWindow : Window, ILiveElementLocator
                     link.Click  += (_, _) =>
                     {
                         if (capturedAttachments.Count > 0)
-                            PromptAttachmentViewerWindow.Show(capturedAttachments, CanShowOwnedWindow() ? this : null);
+                        {
+                            if (capturedAttachments.Count == 1 && capturedAttachments[0].InboxMessageId is { } msgId)
+                                OpenOrFocusInboxMessage(msgId);
+                            else
+                                PromptAttachmentViewerWindow.Show(capturedAttachments, CanShowOwnedWindow() ? this : null);
+                        }
                     };
                     promptParagraph.Inlines.Add(link);
                 }
@@ -20476,7 +20685,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         block.Turn.ToolEntries.Add(entry);
         block.ToolEntries.Add(entry);
 
-        expander.ContextMenu = CreateThinkingContextMenu(block.Turn);
+        expander.ContextMenu = CreateToolBlockContextMenu(entry);
         headerPanel.ContextMenu = CreateThinkingContextMenu(block.Turn);
         iconTextBlock.ContextMenu = CreateThinkingContextMenu(block.Turn);
         emojiImage.ContextMenu = CreateThinkingContextMenu(block.Turn);
@@ -20486,18 +20695,6 @@ public partial class MainWindow : Window, ILiveElementLocator
         transcriptButton.Click += OpenToolTranscriptButton_Click;
         SyncTaskToolTranscriptLink(entry);
 
-        var openButton = new Button
-        {
-            Content = "Open Details Window",
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Margin = new Thickness(0, 0, 0, 8),
-            Padding = new Thickness(8, 2, 8, 2),
-            Tag = entry
-        };
-        openButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
-        openButton.Click += OpenToolDetailsButton_Click;
-
-        detailPanel.Children.Add(openButton);
         detailPanel.Children.Add(detailTextBox);
         expander.Content = detailPanel;
 
@@ -20706,6 +20903,20 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void RenderToolMessage(ToolTranscriptEntry entry)
     {
         var iconKey = $"ToolIcon_{entry.Descriptor.ToolName.Trim()}";
+        if (entry.Descriptor.ToolName.Trim() == "read_powershell" && entry.ArgsJson is { } argsJsonForIcon)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(argsJsonForIcon);
+                if (doc.RootElement.TryGetProperty("delay", out var delayEl) &&
+                    delayEl.TryGetDouble(out var delayVal) &&
+                    delayVal >= 30)
+                {
+                    iconKey = "ToolIcon_read_powershell_waiting";
+                }
+            }
+            catch { }
+        }
         entry.EmojiImage.Source = (TryFindResource(iconKey) ?? TryFindResource("ToolIcon_default"))
             as System.Windows.Media.ImageSource;
         entry.EmojiImage.Visibility = entry.EmojiImage.Source is not null
@@ -20828,6 +21039,64 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             HandleUiCallbackException(nameof(OpenToolDetailsButton_Click), ex);
         }
+    }
+
+    private ContextMenu CreateToolBlockContextMenu(ToolTranscriptEntry entry)
+    {
+        string GetDetailText() =>
+            entry.DetailContent ?? ToolTranscriptFormatter.BuildDetailContent(new ToolTranscriptDetail(
+                entry.Descriptor,
+                entry.ArgsJson,
+                entry.OutputText,
+                entry.StartedAt,
+                entry.FinishedAt,
+                entry.ProgressText,
+                entry.IsCompleted,
+                entry.Success));
+
+        var openDetailsItem = new MenuItem
+        {
+            Header = "Open Details Window",
+            Style  = (Style)FindResource("ThemedMenuItemStyle")
+        };
+        openDetailsItem.Click += (_, _) =>
+        {
+            try
+            {
+                ShowTextWindow(
+                    $"{ToolTranscriptFormatter.HumanizeToolName(entry.Descriptor.ToolName)} Tool Details",
+                    GetDetailText());
+            }
+            catch (Exception ex)
+            {
+                HandleUiCallbackException(nameof(CreateToolBlockContextMenu), ex);
+            }
+        };
+
+        var copyItem = new MenuItem
+        {
+            Header = "Copy",
+            Style  = (Style)FindResource("ThemedMenuItemStyle")
+        };
+        copyItem.Click += (_, _) =>
+        {
+            try
+            {
+                var text = GetDetailText();
+                if (!string.IsNullOrEmpty(text))
+                    Clipboard.SetText(text);
+            }
+            catch (Exception ex)
+            {
+                HandleUiCallbackException(nameof(CreateToolBlockContextMenu), ex);
+            }
+        };
+
+        var menu = new ContextMenu();
+        menu.SetResourceReference(ContextMenu.StyleProperty, "ThemedContextMenuStyle");
+        menu.Items.Add(openDetailsItem);
+        menu.Items.Add(copyItem);
+        return menu;
     }
 
     private ToolTranscriptDescriptor CreateToolDescriptor(SquadSdkEvent evt)
@@ -21786,10 +22055,13 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         try
         {
+            _userCloseRequested = true;
+            SquadDashTrace.Write("Shutdown", "Caption close button clicked.");
             SystemCommands.CloseWindow(this);
         }
         catch (Exception ex)
         {
+            _userCloseRequested = false;
             HandleUiCallbackException(nameof(CloseButton_Click), ex);
         }
     }
@@ -21966,6 +22238,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         try
         {
             _mainWindowClosingInProgress = true;
+            var userCloseRequested = _userCloseRequested;
+            _userCloseRequested = false;
 
             // If the restart-request watcher has not fired yet, adopt the persisted request
             // here so an automated launcher close cannot fall through to the manual-close dialog.
@@ -21974,7 +22248,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             // If a deferred shutdown was already scheduled and has now fired, honour it — skip dialog.
             // Also skip dialog for rebuild-triggered restarts: the launcher wants to reload the new
             // binary immediately; queue items will resume in the reloaded instance.
-            bool isDeferredClose = _deferredShutdown != DeferredShutdownMode.None || _restartPending;
+            bool isDeferredClose = _deferredShutdown != DeferredShutdownMode.None ||
+                                   (_restartPending && !userCloseRequested);
 
             if (_pttState == PttState.Active || _pttDraining)
             {
@@ -22013,7 +22288,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 return;
             }
 
-            if (_restartPending && DeferPendingRestartIfBlocked("window-closing"))
+            if (_restartPending && !userCloseRequested && DeferPendingRestartIfBlocked("window-closing"))
             {
                 e.Cancel = true;
                 EmergencySaveAfterDrainingBridgeEvents("restart-close-deferred");
@@ -22133,6 +22408,23 @@ public partial class MainWindow : Window, ILiveElementLocator
             _pendingUtilityWindowState = (
                 _tasksStatusWindow is { IsVisible: true },
                 _traceWindow is { IsVisible: true });
+
+            // Persist open inbox viewer IDs.
+            if (_inboxStore is not null)
+            {
+                var openIds = _openInboxWindows
+                    .Select(w => w.MessageId)
+                    .Where(id => !string.IsNullOrEmpty(id))
+                    .ToList();
+                var inboxState = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
+                _docsPanelState = inboxState with
+                {
+                    InboxPanelVisible = _inboxPanelVisible,
+                    OpenInboxMessageIds = openIds.Count > 0 ? openIds : [],
+                };
+                _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
+            }
+
             // Capture docs panel state (only when panel is open; closed state is already
             // written by SetDocumentationMode when the user toggles it off).
             if (_documentationModeEnabled)
@@ -23512,6 +23804,13 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
 
         DrainPendingBridgeEventsForShutdown(reason);
+
+        // Safety net: if the turn ended without a "done" bridge event (e.g. the app is closing
+        // while a response is still streaming), attempt to flush any complete INBOX_MESSAGE_JSON
+        // block that has accumulated in the current turn's response text.
+        if (!_inboxSavedForCurrentTurn)
+            TrySaveInboxMessageFromResponse(CoordinatorThread.CurrentTurn?.ResponseTextBuilder.ToString());
+
         _conversationManager.EmergencySave(reason);
     }
 
@@ -25376,6 +25675,46 @@ public partial class MainWindow : Window, ILiveElementLocator
                 ViewMaintenanceMenuItem.IsChecked = true;
         }
 
+        // Restore inbox panel visibility.
+        if (_docsPanelState.InboxPanelVisible == true)
+        {
+            _inboxPanelVisible = true;
+            SyncInboxPanel();
+            if (ViewInboxMenuItem is not null)
+                ViewInboxMenuItem.IsChecked = true;
+        }
+
+        // Restore any inbox viewer windows that were open at last shutdown.
+        if (_docsPanelState.OpenInboxMessageIds is { Count: > 0 } openIds)
+        {
+            _inboxStore ??= _currentWorkspace?.FolderPath is string wPath2
+                ? new InboxStore(System.IO.Path.Combine(wPath2, ".squad"))
+                : null;
+            if (_inboxStore is not null)
+            {
+                foreach (var id in openIds)
+                {
+                    var msg = _inboxStore.GetById(id);
+                    if (msg is not null)
+                    {
+                        // Opening the window is equivalent to reading the message — mark it
+                        // read now so it doesn't re-surface as unread after this session.
+                        if (!msg.Read)
+                            _inboxStore.MarkRead(id);
+
+                        var win = new InboxMessageWindow(msg, DispatchInboxAction, LookupTaskById);
+                        win.Owner = this;
+                        _openInboxWindows.Add(win);
+                        win.Closed += (_, _) => _openInboxWindows.Remove(win);
+                        win.Show();
+                    }
+                }
+
+                // Refresh the panel so any newly-read messages are rendered at lower opacity.
+                _inboxPanel?.Refresh(_inboxStore.LoadAll());
+            }
+        }
+
         // Start idle detection so maintenance can fire automatically.
         if (_currentWorkspace?.FolderPath is string wPath)
             InitIdleDetection(wPath);
@@ -25418,7 +25757,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                         d.TranscriptQuote,
                         d.ContentBlock,
                         d.ImagePath,
-                        d.ImageSubmittedAt is not null && DateTime.TryParse(d.ImageSubmittedAt, out var dt1) ? dt1 : null)));
+                        d.ImageSubmittedAt is not null && DateTime.TryParse(d.ImageSubmittedAt, out var dt1) ? dt1 : null,
+                        d.InboxMessageId)));
             }
             catch { /* corrupt data — ignore */ }
         }
@@ -26711,8 +27051,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private static int StripTypedAttachmentHeaders(string prompt) =>
         AttachmentBlockFormatter.StripTypedAttachmentHeaders(prompt);
 
-    private void AttachContextFollowUp(string description, string contentBlock)
-    {
+    private void AttachContextFollowUp(string description, string contentBlock)    {
         var list = GetOrCreateFollowUpList(_activeTabId ?? "");
         // Deduplicate by description.
         if (list.Count >= 15 || list.Any(a => a.Description == description)) return;
@@ -26724,6 +27063,46 @@ public partial class MainWindow : Window, ILiveElementLocator
         UpdateFollowUpStrip();
         SyncQueuePanel();
         if (_activeTabId is null) PersistDraftFollowUp();
+    }
+
+    private void AttachInboxMessageFollowUp(InboxMessage msg)
+    {
+        var list = GetOrCreateFollowUpList(_activeTabId ?? "");
+        if (list.Count >= 15 || list.Any(a => a.InboxMessageId == msg.Id)) return;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"From: {msg.From}");
+        sb.AppendLine($"Date: {msg.Timestamp:g}");
+        sb.AppendLine();
+        sb.Append(msg.Body.Trim());
+        var contentBlock = BuildTypedAttachmentBlock("inbox-message", msg.Subject, sb.ToString().TrimEnd());
+        list.Add(new FollowUpAttachment(
+            CommitSha:      string.Empty,
+            Description:    msg.Subject,
+            OriginalPrompt: null,
+            ContentBlock:   contentBlock,
+            InboxMessageId: msg.Id));
+        UpdateFollowUpStrip();
+        SyncQueuePanel();
+        if (_activeTabId is null) PersistDraftFollowUp();
+    }
+
+    private void OpenOrFocusInboxMessage(string messageId)
+    {
+        var existing = _openInboxWindows.FirstOrDefault(w => w.MessageId == messageId);
+        if (existing is not null)
+        {
+            if (existing.WindowState == WindowState.Minimized)
+                existing.WindowState = WindowState.Normal;
+            existing.Activate();
+            return;
+        }
+        var msg = _inboxStore?.LoadAll().FirstOrDefault(m => m.Id == messageId);
+        if (msg is null) return;
+        var win = new InboxMessageWindow(msg, DispatchInboxAction, LookupTaskById);
+        win.Owner = CanShowOwnedWindow() ? this : null;
+        _openInboxWindows.Add(win);
+        win.Closed += (_, _) => _openInboxWindows.Remove(win);
+        win.Show();
     }
 
     private void AttachFollowUpToActiveTab(CommitApprovalItem item)
@@ -26788,7 +27167,18 @@ public partial class MainWindow : Window, ILiveElementLocator
                 label.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeSmall");
                 label.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
 
-                if (att.ImagePath != null)
+                if (att.InboxMessageId != null)
+                {
+                    var icon    = new Run("📧 ");
+                    var descRun = new Run(att.Description);
+                    descRun.SetResourceReference(Run.ForegroundProperty, "LabelText");
+                    label.Inlines.Add(icon);
+                    label.Inlines.Add(descRun);
+                    label.Cursor = System.Windows.Input.Cursors.Hand;
+                    var capturedMsgId = att.InboxMessageId;
+                    label.MouseLeftButtonUp += (_, _) => OpenOrFocusInboxMessage(capturedMsgId);
+                }
+                else if (att.ImagePath != null)
                 {
                     int imgIndex = list.Take(i + 1).Count(a => a.ImagePath != null);
                     var icon    = new Run("📷 ");
@@ -26939,6 +27329,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 ContentBlock     = a.ContentBlock,
                 ImagePath        = a.ImagePath,
                 ImageSubmittedAt = a.ImageSubmittedAt?.ToString("O"),
+                InboxMessageId   = a.InboxMessageId,
             }).ToList();
             _docsPanelState = state with
             {
@@ -27085,6 +27476,131 @@ public partial class MainWindow : Window, ILiveElementLocator
         var state = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
         _docsPanelState = state with { MaintenancePanelVisible = _maintenancePanelVisible };
         _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
+    }
+
+    private void ShowInboxPanel()
+    {
+        _inboxPanelVisible = true;
+        SyncInboxPanel();
+        if (ViewInboxMenuItem is not null)
+            ViewInboxMenuItem.IsChecked = true;
+        PersistInboxPanelVisible();
+    }
+
+    private void SyncInboxPanel()
+    {
+        if (InboxPanelBorder is null) return;
+        InboxPanelBorder.Visibility = _inboxPanelVisible ? Visibility.Visible : Visibility.Collapsed;
+        if (!_inboxPanelVisible) return;
+
+        var workspacePath = _currentWorkspace?.FolderPath;
+
+        if (_inboxPanel is null)
+        {
+            _inboxStore ??= workspacePath is not null
+                ? new InboxStore(System.IO.Path.Combine(workspacePath, ".squad"))
+                : new InboxStore(string.Empty);
+
+            _inboxPanel = new InboxPanelController(
+                listPanel:              InboxListPanel!,
+                listScrollContainer:    (FrameworkElement)InboxListPanel!.Parent,
+                viewerBorder:           InboxViewerBorder!,
+                viewerSubjectLabel:     InboxViewerSubjectLabel!,
+                viewerMetaLabel:        InboxViewerMetaLabel!,
+                viewerAttachmentsPanel: InboxViewerAttachmentsPanel!,
+                viewerBody:             InboxViewerBody!,
+                markRead:               id => _inboxStore?.MarkRead(id),
+                markUnread:             id => _inboxStore?.MarkUnread(id),
+                archive:                id => _inboxStore?.Archive(id),
+                delete:                 id => _inboxStore?.Delete(id),
+                viewerActionsPanel:     InboxViewerActionsPanel!,
+                onActionClicked:        DispatchInboxAction,
+                openMessageWindow:      msg => OpenOrFocusInboxMessage(msg.Id),
+                lookupTask:             LookupTaskById,
+                addToChat:              msg => AttachInboxMessageFollowUp(msg));
+
+            var messages = _inboxStore?.LoadAll() ?? [];
+            _inboxPanel.Refresh(messages);
+
+            var inboxWorkspaceState = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
+            if (inboxWorkspaceState.InboxShowUnreadOnly == true) {
+                InboxUnreadOnlyCheckBox.IsChecked = true;
+                _inboxPanel.SetUnreadOnly(true);
+            }
+            if (inboxWorkspaceState.InboxFilterText is { Length: > 0 } savedFilter) {
+                if (InboxFilterBox is not null) InboxFilterBox.Text = savedFilter;
+            }
+        }
+    }
+
+    private void PersistInboxPanelVisible()
+    {
+        var state = _docsPanelState ?? _settingsStore.GetDocsPanelState(_currentWorkspace?.FolderPath);
+        _docsPanelState = state with { InboxPanelVisible = _inboxPanelVisible };
+        _settingsSnapshot = _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, _docsPanelState);
+    }
+
+    private TaskItem? LookupTaskById(string taskId)
+    {
+        var path = _currentWorkspace is null
+            ? null
+            : Path.Combine(_currentWorkspace.SquadFolderPath, "tasks.md");
+        if (path is null || !File.Exists(path)) return null;
+        var lines  = File.ReadAllLines(path);
+        var result = TasksPanelParser.Parse(lines);
+        var allItems = result.OpenGroups.SelectMany(g => g.Items)
+            .Concat(result.CompletedItems);
+        return allItems.FirstOrDefault(t =>
+            t.Text.Contains(taskId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void DispatchInboxAction(InboxAction action, InboxMessage message)
+    {
+        _inboxStore?.MarkActionUsed(message.Id, action.Label);
+
+        if (action.RouteMode == "done" || string.IsNullOrWhiteSpace(action.Prompt))
+            return;
+
+        string prompt = action.Prompt;
+
+        if (action.RouteMode == "start_named_agent" && !string.IsNullOrWhiteSpace(action.TargetAgent))
+            prompt = $"[Deferred inbox action — route to @{action.TargetAgent}]\n\n{prompt}";
+
+        EnqueuePrompt(prompt, isSystemInjected: true);
+    }
+
+    /// <summary>
+    /// Saves any INBOX_MESSAGE_JSON block found in <paramref name="rawResponse"/> to the inbox store
+    /// and refreshes the panel. No-ops if already saved for this turn, if no block is found, or if
+    /// the inbox store is unavailable.
+    /// </summary>
+    private void TrySaveInboxMessageFromResponse(string? rawResponse)
+    {
+        if (_inboxSavedForCurrentTurn || string.IsNullOrWhiteSpace(rawResponse))
+            return;
+
+        if (_inboxStore is null)
+            return;
+
+        if (!InboxMessageParser.TryExtract(rawResponse, out _, out var dto) || dto is null)
+            return;
+
+        var message = new InboxMessage
+        {
+            Id          = Guid.NewGuid().ToString("N"),
+            Subject     = dto.Subject,
+            From        = dto.From,
+            Body        = dto.Body,
+            Timestamp   = DateTimeOffset.Now,
+            Attachments = dto.Attachments,
+            Actions     = dto.Actions,
+        };
+
+        _inboxStore.Save(message);
+        _inboxSavedForCurrentTurn = true;
+
+        if (_inboxPanel is not null)
+            _inboxPanel.Refresh(_inboxStore.LoadAll());
     }
 
     private void DismissMaintenanceBadge()
@@ -27437,6 +27953,40 @@ public partial class MainWindow : Window, ILiveElementLocator
             }
         }
         catch (Exception ex) { HandleUiCallbackException(nameof(ApprovalFilterClearButton_Click), ex); }
+    }
+
+    private void InboxFilterBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        try
+        {
+            if (_intelliSenseState is null || _intelliSenseOwnerBox != InboxFilterBox) return;
+            switch (e.Key)
+            {
+                case Key.Up:
+                    _intelliSenseState = IntelliSenseController.MoveSelection(_intelliSenseState, -1);
+                    UpdateIntelliSensePopup();
+                    e.Handled = true;
+                    break;
+                case Key.Down:
+                    _intelliSenseState = IntelliSenseController.MoveSelection(_intelliSenseState, +1);
+                    UpdateIntelliSensePopup();
+                    e.Handled = true;
+                    break;
+                case Key.Return:
+                case Key.Tab:
+                    ApplyIntelliSenseAccept(andSubmit: false);
+                    e.Handled = true;
+                    break;
+                case Key.Escape:
+                    _intelliSenseState = null;
+                    _intelliSenseOwnerBox = null;
+                    UpdateIntelliSensePopup();
+                    _inboxPanel?.SetFilter(InboxFilterBox.Text.Trim());
+                    e.Handled = true;
+                    break;
+            }
+        }
+        catch (Exception ex) { HandleUiCallbackException(nameof(InboxFilterBox_PreviewKeyDown), ex); }
     }
 
     private void TasksFilterBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)

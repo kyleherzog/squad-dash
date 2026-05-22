@@ -22,7 +22,7 @@ namespace SquadDash;
 
 internal sealed record MarkdownDocumentSpec(string TabTitle, string FilePath);
 
-internal sealed class MarkdownDocumentWindow : Window {
+internal sealed class MarkdownDocumentWindow : ChromedWindow {
     private static readonly List<MarkdownDocumentWindow> _openWindows = [];
     private static readonly TimeSpan EditorUpdateDebounce = TimeSpan.FromMilliseconds(350);
     private const int EditorTextChangedSlowTraceMs = 50;
@@ -108,7 +108,8 @@ internal sealed class MarkdownDocumentWindow : Window {
     private int _editorFindCurrentIndex = -1;
 
     private MarkdownDocumentWindow(string title, IReadOnlyList<MarkdownDocumentSpec> documents,
-        NoteEditContext? noteContext = null, LoopEditContext? loopEditContext = null) {
+        NoteEditContext? noteContext = null, LoopEditContext? loopEditContext = null)
+        : base(captionHeight: 36, resizeMode: ResizeMode.CanResize) {
         if (documents.Count == 0)
             throw new ArgumentException("At least one markdown document is required.", nameof(documents));
 
@@ -127,13 +128,13 @@ internal sealed class MarkdownDocumentWindow : Window {
         Height = 820;
         MinWidth = 760;
         MinHeight = 560;
-        this.SetResourceReference(BackgroundProperty, "AppSurface");
 
         _rootPanel = new DockPanel();
-        Content = _rootPanel;
+        var outerBorder = ApplyOuterBorder();
+        outerBorder.Child = _rootPanel;
 
         var toolBar = new DockPanel {
-            Margin = new Thickness(12, 12, 12, 8),
+            Margin = new Thickness(12, CloseButtonHeight, 12, 8),
             LastChildFill = true
         };
         DockPanel.SetDock(toolBar, Dock.Top);
@@ -155,6 +156,7 @@ internal sealed class MarkdownDocumentWindow : Window {
         };
         _backButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
         _backButton.Click += BackButton_Click;
+        System.Windows.Shell.WindowChrome.SetIsHitTestVisibleInChrome(_backButton, true);
         actionPanel.Children.Add(_backButton);
 
         _showSourceButton = new Button {
@@ -166,6 +168,7 @@ internal sealed class MarkdownDocumentWindow : Window {
         _showSourceButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
         _showSourceButton.SetResourceReference(TextElement.FontSizeProperty, "FontSizeNormal");
         _showSourceButton.Click += ShowSourceButton_Click;
+        System.Windows.Shell.WindowChrome.SetIsHitTestVisibleInChrome(_showSourceButton, true);
         actionPanel.Children.Add(_showSourceButton);
 
         _saveButton = new Button {
@@ -176,6 +179,7 @@ internal sealed class MarkdownDocumentWindow : Window {
         };
         _saveButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
         _saveButton.Click += SaveButton_Click;
+        System.Windows.Shell.WindowChrome.SetIsHitTestVisibleInChrome(_saveButton, true);
         actionPanel.Children.Add(_saveButton);
 
         _statusTextBlock = new TextBlock {
@@ -522,6 +526,25 @@ internal sealed class MarkdownDocumentWindow : Window {
 
         _openWindows.Add(window);
         window.Closed += (_, _) => _openWindows.Remove(window);
+        window.Show();
+    }
+
+    /// <summary>Opens the viewer for an in-memory Markdown string (no backing file).</summary>
+    public static void ShowContent(Window? owner, string title, string content) {
+        var tmp = Path.ChangeExtension(Path.GetTempFileName(), ".md");
+        try { File.WriteAllText(tmp, content, System.Text.Encoding.UTF8); }
+        catch { MessageBox.Show(content, title); return; }
+
+        var window = new MarkdownDocumentWindow(title, [new MarkdownDocumentSpec(title, tmp)]);
+        window._autoSave = false;
+        window._backButton!.Visibility = Visibility.Collapsed;
+        window._saveButton.Visibility  = Visibility.Collapsed;
+        if (owner is not null) window.Owner = owner;
+        _openWindows.Add(window);
+        window.Closed += (_, _) => {
+            _openWindows.Remove(window);
+            try { File.Delete(tmp); } catch { }
+        };
         window.Show();
     }
 

@@ -18,7 +18,7 @@ internal sealed record AbortAgentsConfirmationTarget(
     string? ToolCallId = null,
     string TaskIdSource = "unknown");
 
-internal sealed class AbortAgentsConfirmationWindow : Window {
+internal sealed class AbortAgentsConfirmationWindow : ChromedWindow {
     private readonly List<AbortAgentsConfirmationTarget> _items = [];
     private readonly Func<IReadOnlyList<AbortAgentsConfirmationTarget>> _getTargets;
     private readonly DispatcherTimer _refreshTimer;
@@ -34,7 +34,7 @@ internal sealed class AbortAgentsConfirmationWindow : Window {
     public AbortAgentsConfirmationWindow(
         IReadOnlyList<AbortAgentsConfirmationTarget> targets,
         Func<IReadOnlyList<AbortAgentsConfirmationTarget>>? getTargets = null,
-        Rect anchorScreenRect = default) {
+        Rect anchorScreenRect = default) : base(captionHeight: 36, resizeMode: ResizeMode.NoResize) {
         ArgumentNullException.ThrowIfNull(targets);
 
         _getTargets = getTargets ?? (() => targets);
@@ -44,9 +44,7 @@ internal sealed class AbortAgentsConfirmationWindow : Window {
         SizeToContent = SizeToContent.Height;
         MinWidth = 420;
         MaxHeight = 560;
-        ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        this.SetResourceReference(BackgroundProperty, "AppSurface");
 
         if (anchorScreenRect == default)
         {
@@ -76,7 +74,8 @@ internal sealed class AbortAgentsConfirmationWindow : Window {
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        Content = root;
+        var outerBorder = ApplyOuterBorder();
+        outerBorder.Child = root;
 
         var headerPanel = new StackPanel {
             Margin = new Thickness(0, 0, 0, 14)

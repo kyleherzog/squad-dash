@@ -5,7 +5,6 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shell;
 using System.Windows.Threading;
@@ -18,12 +17,12 @@ namespace SquadDash;
 /// Floating developer/debug tool that shows a running log of trace entries from
 /// <see cref="TranscriptScrollController"/> and <see cref="SquadDashTrace"/>.
 ///
-/// <para>Open via the <c>/trace</c> slash command; close with the × button or the Close button.
+/// <para>Open via the <c>/trace</c> slash command; close with the × button.
 /// When closed, <see cref="TranscriptScrollController.TraceTarget"/> and
 /// <see cref="SquadDashTrace.TraceTarget"/> are automatically cleared so tracing has zero
 /// overhead while the window is not visible.</para>
 /// </summary>
-internal sealed class TraceWindow : Window, ILiveTraceTarget
+internal sealed class TraceWindow : ChromedWindow, ILiveTraceTarget
 {
     private const int MaxFlushEntries = 200;
     private const int MaxLogTextChars = 250_000;
@@ -45,45 +44,16 @@ internal sealed class TraceWindow : Window, ILiveTraceTarget
         Height = 440;
         MinWidth = 380;
         MinHeight = 280;
-        WindowStyle = WindowStyle.None;
-        AllowsTransparency = true;
-        Background = Brushes.Transparent;
-        ResizeMode = ResizeMode.CanResizeWithGrip;
         ShowInTaskbar = false;
         ShowActivated = false;
         Topmost = false;
 
-        // WindowChrome removes the bright non-client WPF border that appears with
-        // WindowStyle.None. CaptionHeight covers the header row so the entire top
-        // strip is a drag zone — no MouseLeftButtonDown handler needed. Buttons are
-        // marked IsHitTestVisibleInChrome=true so they still receive clicks.
-        // ResizeBorderThickness keeps a thin resize hit-area at every edge.
-        WindowChrome.SetWindowChrome(this, new WindowChrome
-        {
-            CaptionHeight          = 36,
-            ResizeBorderThickness  = new Thickness(4),
-            GlassFrameThickness    = new Thickness(0),
-            UseAeroCaptionButtons  = false,
-        });
-
-        // Disable Windows 11 DWM rounded corners — they expose the desktop
-        // behind the window corners when using WindowStyle.None.
-        SourceInitialized += (_, _) =>
-            NativeMethods.DisableRoundedCorners(new WindowInteropHelper(this).Handle);
-
-        // Outer border gives the window its background color and a 1.5px themed edge with
-        // a slight corner radius so the corners render visibly at all DPI scales.
-        var outerBorder = new Border { BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(4) };
-        outerBorder.SetResourceReference(Border.BackgroundProperty, "AppSurface");
-        outerBorder.SetResourceReference(Border.BorderBrushProperty, "PanelBorder");
-
-        var root = new Grid { Margin = new Thickness(12) };
+        var root = new Grid { Margin = new Thickness(12, 8, 12, 12) };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // header
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // hint
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // checkboxes
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });  // log
-        outerBorder.Child = root;
-        Content = outerBorder;
+        ApplyOuterBorder().Child = root;
 
         // ── Header ──────────────────────────────────────────────────────────────────────────
 
@@ -92,26 +62,28 @@ internal sealed class TraceWindow : Window, ILiveTraceTarget
         Grid.SetRow(header, 0);
         root.Children.Add(header);
 
-        var closeButton = new Button
+        // Buttons docked right; added before the title so DockPanel stacks them from the right.
+        // Clear is rightmost — margin aligns its right edge with close button's left edge
+        // (close = 38px wide, root right margin = 12px → offset = 26px).
+        var clearButton = new Button
         {
-            Content = "Close",
+            Content  = "Clear",
             MinWidth = 76,
-            Height = 30,
-            HorizontalAlignment = HorizontalAlignment.Right,
+            Height   = 30,
+            Margin   = new Thickness(0, 0, 26, 0),
         };
-        closeButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
-        WindowChrome.SetIsHitTestVisibleInChrome(closeButton, true);
-        closeButton.Click += (_, _) => Close();
-        DockPanel.SetDock(closeButton, Dock.Right);
-        header.Children.Add(closeButton);
+        clearButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
+        WindowChrome.SetIsHitTestVisibleInChrome(clearButton, true);
+        clearButton.Click += (_, _) => _logTextBox.Clear();
+        DockPanel.SetDock(clearButton, Dock.Right);
+        header.Children.Add(clearButton);
 
         var copyButton = new Button
         {
-            Content = "Copy",
+            Content  = "Copy",
             MinWidth = 76,
-            Height = 30,
-            Margin = new Thickness(0, 0, 8, 0),
-            HorizontalAlignment = HorizontalAlignment.Right,
+            Height   = 30,
+            Margin   = new Thickness(0, 0, 8, 0),
         };
         copyButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
         WindowChrome.SetIsHitTestVisibleInChrome(copyButton, true);
@@ -124,28 +96,16 @@ internal sealed class TraceWindow : Window, ILiveTraceTarget
         DockPanel.SetDock(copyButton, Dock.Right);
         header.Children.Add(copyButton);
 
-        var clearButton = new Button
-        {
-            Content = "Clear",
-            MinWidth = 76,
-            Height = 30,
-            Margin = new Thickness(0, 0, 8, 0),
-            HorizontalAlignment = HorizontalAlignment.Right,
-        };
-        clearButton.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
-        WindowChrome.SetIsHitTestVisibleInChrome(clearButton, true);
-        clearButton.Click += (_, _) => _logTextBox.Clear();
-        DockPanel.SetDock(clearButton, Dock.Right);
-        header.Children.Add(clearButton);
-
         var titleBlock = new TextBlock
         {
-            Text = "Trace",
-            FontSize = (double)Application.Current.Resources["FontSizeSubtitle"],
-            FontWeight = FontWeights.SemiBold,
+            Text              = "Trace",
+            FontSize          = (double)Application.Current.Resources["FontSizeSubtitle"],
+            FontWeight        = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(0, 0, 8, 0),
         };
-        titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "ImportantText");
+        titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+        DockPanel.SetDock(titleBlock, Dock.Left);
         header.Children.Add(titleBlock);
 
         // ── Hint ────────────────────────────────────────────────────────────────────────────

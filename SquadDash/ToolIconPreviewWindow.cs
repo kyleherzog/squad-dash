@@ -10,13 +10,11 @@ namespace SquadDash;
 /// Live preview of every ToolIcon_* DrawingImage registered in the application resources.
 /// Open from View > Tool Icon Gallery...
 /// </summary>
-internal sealed class ToolIconPreviewWindow : Window {
+internal sealed class ToolIconPreviewWindow : ChromedWindow {
     private static readonly double[] PreviewSizes = [16, 24, 32, 48];
 
-    private ToolIconPreviewWindow(Window owner) {
+    private ToolIconPreviewWindow(Window owner) : base(captionHeight: 36, resizeMode: ResizeMode.CanResize) {
         Title = "Tool Icon Preview";
-        WindowStyle = WindowStyle.SingleBorderWindow;
-        ResizeMode = ResizeMode.CanResize;
         SizeToContent = SizeToContent.Height;
         Width = 640;
         MinWidth = 400;
@@ -24,17 +22,18 @@ internal sealed class ToolIconPreviewWindow : Window {
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
         Owner = owner;
-        this.SetResourceReference(BackgroundProperty, "AppSurface");
 
         var scroll = new ScrollViewer {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Padding = new Thickness(16)
         };
+        System.Windows.Shell.WindowChrome.SetIsHitTestVisibleInChrome(scroll, true);
 
         var root = new StackPanel { Margin = new Thickness(0) };
         scroll.Content = root;
-        Content = scroll;
+        var outerBorder = ApplyOuterBorder();
+        outerBorder.Child = scroll;
 
         var entries = CollectIcons(owner);
 
