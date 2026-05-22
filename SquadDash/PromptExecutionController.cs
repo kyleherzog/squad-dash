@@ -141,6 +141,15 @@ internal sealed class PromptExecutionController {
         "- `\"file\"` — `{ \"type\": \"file\", \"label\": \"...\", \"path\": \"relative/path/to/file\" }`\n" +
         "- `\"text\"` — `{ \"type\": \"text\", \"label\": \"...\", \"content\": \"Markdown text content\" }`\n" +
         "\n" +
+        "An optional `actions` array adds deferred quick-reply buttons to the message. Use this when you want " +
+        "to offer the user choices but cannot wait for a response (e.g. during maintenance mode).\n" +
+        "Each action:\n" +
+        "- `\"label\"` — button text shown to the user\n" +
+        "- `\"routeMode\"` — `\"start_named_agent\"`, `\"start_coordinator\"`, or `\"done\"` (dismiss, no prompt)\n" +
+        "- `\"targetAgent\"` — agent handle (required when routeMode is `\"start_named_agent\"`)\n" +
+        "- `\"prompt\"` — **fully self-contained** prompt injected when the user clicks the button. " +
+        "Must include all context (file paths, symptoms, findings) — no conversation history will be available.\n" +
+        "\n" +
         "The `from` field must be `\"coordinator\"` for Coordinator responses or `\"argus-weld\"` for maintenance agent responses.\n" +
         "\n" +
         "INBOX_MESSAGE_JSON blocks are stripped from the displayed transcript and delivered silently to the Inbox panel.\n" +

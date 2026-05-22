@@ -140,7 +140,28 @@ internal sealed class MaintenanceRunner {
 
     private const string MaintenanceInboxReminder =
         "<maintenance_inbox_reminder>\n" +
-        "If this task has safety: report-only, send your findings as an inbox message using INBOX_MESSAGE_JSON with `\"from\": \"argus-weld\"`. The subject should be the task title. The body should be your full report in Markdown.\n" +
+        "You are running in maintenance mode — the user is not present. Follow these rules:\n" +
+        "\n" +
+        "1. Do NOT emit QUICK_REPLIES_JSON. Live quick replies require the user to be present and will block the queue.\n" +
+        "\n" +
+        "2. Instead, embed any decision points as deferred actions in your INBOX_MESSAGE_JSON block.\n" +
+        "   Use the `actions` array so the user can make choices later when they review the message.\n" +
+        "\n" +
+        "3. Each action MUST have a self-contained `prompt` (except routeMode `\"done\"` which is a dismiss).\n" +
+        "   Write the prompt as a complete briefing — include file paths, line numbers, symptoms, and all\n" +
+        "   context you discovered. Assume the reader has NO memory of this session.\n" +
+        "\n" +
+        "4. For report-only tasks: send findings as an inbox message with `\"from\": \"argus-weld\"`.\n" +
+        "   Subject = task title. Body = full Markdown report. Actions = any follow-up choices.\n" +
+        "\n" +
+        "Example actions array:\n" +
+        "  \"actions\": [\n" +
+        "    { \"label\": \"Fix this\", \"routeMode\": \"start_named_agent\", \"targetAgent\": \"arjun-sen\",\n" +
+        "      \"prompt\": \"Arjun: during maintenance on [date] I found X in [file:line]. Please fix it. [full context]\" },\n" +
+        "    { \"label\": \"Add to backlog\", \"routeMode\": \"start_coordinator\",\n" +
+        "      \"prompt\": \"Add a task: [description discovered during maintenance on [date]]\" },\n" +
+        "    { \"label\": \"Dismiss\", \"routeMode\": \"done\" }\n" +
+        "  ]\n" +
         "</maintenance_inbox_reminder>";
 
     // ── Helpers ────────────────────────────────────────────────────────────────
@@ -156,9 +177,7 @@ internal sealed class MaintenanceRunner {
             _             => string.Empty,
         };
 
-        var inboxReminder = effectiveSafety == "report-only"
-            ? "\n\n" + MaintenanceInboxReminder
-            : string.Empty;
+        var inboxReminder = "\n\n" + MaintenanceInboxReminder;
         return safetyPrefix + task.Instructions + inboxReminder;
     }
 
