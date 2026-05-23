@@ -27708,7 +27708,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (string.IsNullOrWhiteSpace(rawResponse) || _inboxStore is null)
             return null;
 
-        if (!InboxMessageParser.TryExtract(rawResponse, out _, out var dto) || dto is null)
+        // Strip <system_notification> tags first — the parser regex requires the JSON block at the
+        // very end (\s*$), so trailing system_notification tags (appended by sub-agents) break it.
+        var responseForParsing = ToolTranscriptFormatter.StripSystemNotifications(rawResponse);
+
+        if (!InboxMessageParser.TryExtract(responseForParsing, out _, out var dto) || dto is null)
             return null;
 
         var message = new InboxMessage

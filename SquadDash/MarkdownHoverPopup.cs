@@ -94,8 +94,9 @@ internal static class MarkdownHoverPopup {
                     MaxHeight                   = EffectiveMaxHeight(),
                     Margin                      = header is null ? new Thickness(0) : new Thickness(0, 6, 0, 0),
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                    Background                  = Brushes.Transparent,
                 };
+                // Use the popup's own surface color so text in LabelText is always readable.
+                viewer.SetResourceReference(Control.BackgroundProperty, "PopupSurface");
                 contentStack.Children.Add(viewer);
             } else if (header is null) {
                 var noContent = new TextBlock { Text = "No content", FontStyle = FontStyles.Italic, Opacity = 0.6 };
