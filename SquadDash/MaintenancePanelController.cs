@@ -2,8 +2,6 @@ namespace SquadDash;
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -24,6 +22,7 @@ internal sealed class MaintenancePanelController {
     private readonly Action<string, bool> _toggleTaskEnabled;
     private readonly Action               _reloadPanel;
     private readonly Action<string>       _openInMarkdownEditor;
+    private readonly Action               _showInboxPanel;
 
     private MaintenanceMdConfig?   _config;
     private MaintenanceStateStore? _stateStore;
@@ -45,7 +44,8 @@ internal sealed class MaintenancePanelController {
         Action               runNow,
         Action<string, bool> toggleTaskEnabled,
         Action               reloadPanel,
-        Action<string>       openInMarkdownEditor) {
+        Action<string>       openInMarkdownEditor,
+        Action               showInboxPanel) {
 
         _listPanel              = listPanel;
         _statusLabel            = statusLabel;
@@ -55,6 +55,7 @@ internal sealed class MaintenancePanelController {
         _toggleTaskEnabled      = toggleTaskEnabled;
         _reloadPanel            = reloadPanel;
         _openInMarkdownEditor   = openInMarkdownEditor;
+        _showInboxPanel         = showInboxPanel;
 
         _enabledOnIdlePicker = new CompactPickerButton(
             headerText:     "Maintenance Tasks:",
@@ -308,104 +309,23 @@ internal sealed class MaintenancePanelController {
     }
 
     private void AppendReportsSection() {
-        var workspacePath = _getWorkspacePath();
-        IReadOnlyList<string> reportPaths = workspacePath is null
-            ? []
-            : new MaintenanceReportWriter(workspacePath).GetReportPaths();
-
         var separator = new Separator { Margin = new Thickness(0, 8, 0, 4) };
         separator.SetResourceReference(Separator.BackgroundProperty, "SubtleText");
         _listPanel.Children.Add(separator);
 
-        var headerLabel = new TextBlock { Text = "Recent Reports" };
-        headerLabel.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeSmall");
-        headerLabel.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
-
-        var expander = new Expander {
-            Header     = "Recent Reports",
-            IsExpanded = false,
-            Margin     = new Thickness(0, 0, 0, 4),
-        };
-        expander.SetResourceReference(Expander.StyleProperty, "ThemedExpanderStyle");
-
-        var contentPanel = new StackPanel { Margin = new Thickness(8, 4, 0, 4) };
-
-        if (reportPaths.Count == 0) {
-            var noReports = new TextBlock {
-                Text      = "No reports yet.",
-                FontStyle = FontStyles.Italic,
-            };
-            noReports.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeSmall");
-            noReports.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
-            contentPanel.Children.Add(noReports);
-        } else {
-            foreach (var path in reportPaths) {
-                var (dt, taskCount) = ParseReportSummary(path);
-                contentPanel.Children.Add(BuildReportRow(path, dt, taskCount));
-            }
-        }
-
-        expander.Content = contentPanel;
-        _listPanel.Children.Add(expander);
-    }
-
-    private static (DateTimeOffset dt, int taskCount) ParseReportSummary(string path) {
-        var baseName = Path.GetFileNameWithoutExtension(path);
-        DateTimeOffset dt = DateTimeOffset.MinValue;
-        if (baseName.Length >= 15 &&
-            DateTime.TryParseExact(baseName[..15], "yyyyMMdd-HHmmss",
-                CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
-            dt = new DateTimeOffset(parsed, TimeZoneInfo.Local.GetUtcOffset(parsed));
-
-        int taskCount = 0;
-        try {
-            var lines = File.ReadAllLines(path);
-            bool inTasksSection = false;
-            foreach (var line in lines) {
-                if (line.TrimEnd() == "## Tasks Run") {
-                    inTasksSection = true;
-                    continue;
-                }
-                if (inTasksSection) {
-                    if (line.StartsWith("## ", StringComparison.Ordinal)) break;
-                    if (line.StartsWith("- ", StringComparison.Ordinal) &&
-                        !line.Contains("No tasks were run this session."))
-                        taskCount++;
-                }
-            }
-        } catch { /* ignore read errors */ }
-
-        return (dt, taskCount);
-    }
-
-    private static Button BuildReportRow(string path, DateTimeOffset dt, int taskCount) {
-        var taskWord = taskCount == 1 ? "task" : "tasks";
-        var label = dt != DateTimeOffset.MinValue
-            ? $"{dt.LocalDateTime:yyyy-MM-dd HH:mm}  •  {taskCount} {taskWord}"
-            : $"{Path.GetFileNameWithoutExtension(path)}  •  {taskCount} {taskWord}";
-
-        var btn = new Button {
-            Content                    = label,
+        var inboxBtn = new Button {
+            Content                    = "Inbox",
             HorizontalContentAlignment = HorizontalAlignment.Left,
             BorderThickness            = new Thickness(0),
             Padding                    = new Thickness(4, 3, 4, 3),
-            Margin                     = new Thickness(0, 1, 0, 1),
+            Margin                     = new Thickness(0, 0, 0, 4),
             Cursor                     = Cursors.Hand,
         };
-        btn.SetResourceReference(Button.StyleProperty, "FlatButtonStyle");
-        btn.SetResourceReference(Button.FontSizeProperty, "FontSizeSmall");
-        btn.SetResourceReference(Button.ForegroundProperty, "BodyText");
-        btn.Click += (_, _) => OpenReport(path);
-        return btn;
-    }
-
-    private static void OpenReport(string path) {
-        try {
-            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
-        } catch (Exception ex) {
-            SquadDashTrace.Write(TraceCategory.General,
-                $"MaintenancePanelController: failed to open report {path}: {ex.Message}");
-        }
+        inboxBtn.SetResourceReference(Button.StyleProperty,    "FlatButtonStyle");
+        inboxBtn.SetResourceReference(Button.FontSizeProperty, "FontSizeSmall");
+        inboxBtn.SetResourceReference(Button.ForegroundProperty, "SubtleText");
+        inboxBtn.Click += (_, _) => _showInboxPanel();
+        _listPanel.Children.Add(inboxBtn);
     }
 
     private Border BuildTaskRow(MaintenanceTask task) {
@@ -501,8 +421,9 @@ internal sealed class MaintenancePanelController {
         }
 
         // Radio options (if present and task is enabled)
+        StackPanel? optionsPanel = null;
         if (task.Enabled && task.Options is { Count: > 0 }) {
-            var optionsPanel = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
+            optionsPanel = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
             foreach (var opt in task.Options) {
                 if (opt.Label is { Length: > 0 }) {
                     var labelBlock = new TextBlock {
@@ -542,6 +463,17 @@ internal sealed class MaintenancePanelController {
                 }
             }
             rightPanel.Children.Add(optionsPanel);
+        }
+
+        // Double-click the row to expand or collapse the options panel.
+        if (optionsPanel is not null) {
+            row.MouseLeftButtonDown += (_, e) => {
+                if (e.ClickCount != 2) return;
+                optionsPanel.Visibility = optionsPanel.Visibility == Visibility.Visible
+                    ? Visibility.Collapsed
+                    : Visibility.Visible;
+                e.Handled = true;
+            };
         }
 
         return row;

@@ -27579,7 +27579,8 @@ public partial class MainWindow : Window, ILiveElementLocator
                     "maintenance.md",
                     path,
                     showSource: true,
-                    BuildMarkdownCaptureContext()));
+                    BuildMarkdownCaptureContext()),
+                showInboxPanel:         () => ShowInboxPanel());
         }
 
         var config = MaintenanceMdParser.Parse(Path.Combine(workspacePath, ".squad", "maintenance.md"));
