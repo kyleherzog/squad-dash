@@ -1513,23 +1513,38 @@ internal sealed class MarkdownDocumentWindow : ChromedWindow {
     }
 
     private void RenderPreview(MarkdownDocumentTabState document, bool preserveScroll = false) {
+        SquadDashTrace.Write(TraceCategory.UI,
+            $"[RenderPreview] enter file='{document.FileName}' textLen={document.WorkingText?.Length ?? -1} " +
+            $"isDark={AgentStatusCard.IsDarkTheme} preserveScroll={preserveScroll}");
+
         document.PendingScrollFraction = preserveScroll
             ? CaptureWebBrowserScroll(document.WebBrowser)
             : null;
 
         document.FallbackViewer.Document = MarkdownFlowDocumentBuilder.Build(document.WorkingText);
+        SquadDashTrace.Write(TraceCategory.UI, "[RenderPreview] FlowDocument built for FallbackViewer");
 
         try {
             var html = MarkdownHtmlBuilder.Build(document.WorkingText, document.FileName, document.FilePath,
                 isDark: AgentStatusCard.IsDarkTheme);
+            SquadDashTrace.Write(TraceCategory.UI,
+                $"[RenderPreview] HTML built len={html?.Length ?? -1} preview='{html?[..Math.Min(80, html?.Length ?? 0)].Replace('\n', ' ')}'");
             document.WebBrowser.Visibility = Visibility.Visible;
             document.FallbackViewer.Visibility = Visibility.Collapsed;
             document.WebBrowser.NavigateToString(html);
+            SquadDashTrace.Write(TraceCategory.UI, "[RenderPreview] NavigateToString called → WebBrowser visible");
         }
-        catch {
+        catch (Exception ex) {
+            SquadDashTrace.Write(TraceCategory.UI,
+                $"[RenderPreview] EXCEPTION building/navigating HTML: {ex.GetType().Name}: {ex.Message} → FallbackViewer");
             document.WebBrowser.Visibility = Visibility.Collapsed;
             document.FallbackViewer.Visibility = Visibility.Visible;
         }
+
+        SquadDashTrace.Write(TraceCategory.UI,
+            $"[RenderPreview] exit WebBrowserVis={document.WebBrowser.Visibility} FallbackVis={document.FallbackViewer.Visibility} " +
+            $"_singlePreviewHost.Content={((_singlePreviewHost.Content != null) ? "set" : "null")} " +
+            $"_singlePreviewHost.Vis={_singlePreviewHost.Visibility}");
     }
 
     private void SetupWebBrowser(WebBrowser browser) {
