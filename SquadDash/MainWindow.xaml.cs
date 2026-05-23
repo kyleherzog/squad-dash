@@ -18355,7 +18355,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         var rawText = entry.RawTextBuilder.ToString();
         var sanitizedText = SanitizeResponseText(rawText);
-        bool hadInboxBlock = rawText.Contains("INBOX_MESSAGE_JSON:", StringComparison.Ordinal);
+        var rawTextForInboxParsing = ToolTranscriptFormatter.StripSystemNotifications(rawText);
+        bool hadInboxBlock = InboxMessageParser.TryExtract(rawTextForInboxParsing, out _, out _);
 
         var newBlocks = BuildResponseBlocks(entry, sanitizedText, entry.AllowQuickReplies).ToList();
         if (newBlocks.Count == 0)
@@ -27813,6 +27814,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             return;
         }
 
+        string? latestMaintenanceThreadId = null;
+
         _maintenanceRunner = new MaintenanceRunner(
             executePromptAsync: (prompt, ct) =>
             {
@@ -27822,9 +27825,13 @@ public partial class MainWindow : Window, ILiveElementLocator
                     try
                     {
                         var anchorIndex = -1;
-                        if (_agentThreadRegistry.ThreadsByKey.TryGetValue("agent:argus-weld", out var argusThread))
-                            anchorIndex = argusThread.PromptParagraphs.Count;
+                        latestMaintenanceThreadId = null;
                         await _pec.ExecuteMaintenanceTurnAsync("argus-weld", prompt);
+                        if (FindLatestArgusWeldRunThread() is { } argusThread)
+                        {
+                            latestMaintenanceThreadId = argusThread.ThreadId;
+                            anchorIndex = argusThread.PromptParagraphs.Count - 1;
+                        }
                         tcs.TrySetResult(anchorIndex);
                     }
                     catch (OperationCanceledException) { tcs.TrySetCanceled(ct); }
@@ -27839,7 +27846,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             }),
             onTaskCompleted: (id, title, anchorIndex, startedAt, duration) => Dispatcher.InvokeAsync(() => {
                 _maintenancePanel?.OnRunnerCompleted();
-                AppendMaintenanceStub(title, anchorIndex, startedAt, duration);
+                AppendMaintenanceStub(title, latestMaintenanceThreadId, anchorIndex, startedAt, duration);
             }),
             onCompleted:     report =>
             {
@@ -27929,7 +27936,26 @@ public partial class MainWindow : Window, ILiveElementLocator
     /// maintenance task. The stub shows a wrench emoji and a clickable link that navigates
     /// to the corresponding turn in Argus Weld's thread.
     /// </summary>
-    private void AppendMaintenanceStub(string taskTitle, int anchorIndex, DateTimeOffset startedAt, TimeSpan duration)
+    private TranscriptThreadState? FindLatestArgusWeldRunThread()
+    {
+        return _agentThreadRegistry.ThreadOrder
+            .Where(thread =>
+                !thread.IsPlaceholderThread &&
+                (thread.PromptParagraphs.Count > 0 || thread.SavedTurns.Count > 0 || thread.CurrentTurn is not null) &&
+                (string.Equals(thread.AgentId, "argus-weld", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(thread.AgentName, "argus-weld", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(thread.AgentDisplayName, "Argus Weld", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(thread.Title, "Argus Weld", StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(thread => thread.LastObservedActivityAt ?? thread.CompletedAt ?? thread.StartedAt)
+            .FirstOrDefault();
+    }
+
+    private void AppendMaintenanceStub(
+        string taskTitle,
+        string? threadId,
+        int anchorIndex,
+        DateTimeOffset startedAt,
+        TimeSpan duration)
     {
         var paragraph = CreateTranscriptParagraph();
 
@@ -27944,7 +27970,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             Cursor          = Cursors.Hand,
         };
         link.SetResourceReference(TextElement.ForegroundProperty, "ActionLinkText");
-        link.Click += (_, _) => NavigateToArgusWeldTask(anchorIndex);
+        link.Click += (_, _) => NavigateToArgusWeldTask(threadId, anchorIndex);
         paragraph.Inlines.Add(link);
 
         // Rebuild tooltip on each open so the relative timestamp ("3 minutes ago") stays current.
@@ -27964,11 +27990,13 @@ public partial class MainWindow : Window, ILiveElementLocator
     /// Opens Argus Weld's transcript panel (secondary or primary) and scrolls it to the
     /// prompt paragraph at <paramref name="anchorIndex"/>.
     /// </summary>
-    private void NavigateToArgusWeldTask(int anchorIndex)
+    private void NavigateToArgusWeldTask(string? threadId, int anchorIndex)
     {
-        const string argusWeldThreadId = "agent:argus-weld";
-        var thread = _agentThreadRegistry.ThreadOrder.FirstOrDefault(t =>
-            string.Equals(t.ThreadId, argusWeldThreadId, StringComparison.OrdinalIgnoreCase));
+        var thread = !string.IsNullOrWhiteSpace(threadId)
+            ? _agentThreadRegistry.ThreadOrder.FirstOrDefault(t =>
+                string.Equals(t.ThreadId, threadId, StringComparison.OrdinalIgnoreCase))
+            : null;
+        thread ??= FindLatestArgusWeldRunThread();
         if (thread is null) return;
 
         var card = FindAgentCardForThread(thread);

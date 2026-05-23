@@ -38,6 +38,11 @@ internal static partial class InboxMessageParser
         RegexOptions.CultureInvariant)]
     private static partial Regex InboxMessageJsonRegex();
 
+    [GeneratedRegex(
+        @"(?s)^(?<body>.*?)(?:\n|^)\s*```\w*\s*\n\s*INBOX_MESSAGE_JSON:\s*(?<json>\{[\s\S]*\})\s*```\s*$",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex FencedInboxMessageJsonRegex();
+
     private static readonly JsonSerializerOptions ParseOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -58,6 +63,8 @@ internal static partial class InboxMessageParser
 
         var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
         var match      = InboxMessageJsonRegex().Match(normalized);
+        if (!match.Success)
+            match = FencedInboxMessageJsonRegex().Match(normalized);
         if (!match.Success)
             return false;
 

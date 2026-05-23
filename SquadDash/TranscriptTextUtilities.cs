@@ -87,12 +87,45 @@ internal static class TranscriptTextUtilities
         if (InboxMessageParser.TryExtract(text, out var body, out _))
             return body;
 
-        // Strip partial block (still streaming — sentinel present but closing brace not yet arrived).
-        var sentinelIdx = text.IndexOf("INBOX_MESSAGE_JSON:", StringComparison.Ordinal);
+        // Strip partial block (still streaming), but only when the sentinel is on its
+        // own top-level line. Inline references and code-fenced examples must remain visible.
+        var sentinelIdx = FindTopLevelInboxSentinelIndex(text);
         if (sentinelIdx >= 0)
             return text[..sentinelIdx].TrimEnd();
 
         return text;
+    }
+
+    private static int FindTopLevelInboxSentinelIndex(string text)
+    {
+        const string sentinel = "INBOX_MESSAGE_JSON:";
+
+        var inFence = false;
+        var offset  = 0;
+
+        while (offset < text.Length)
+        {
+            var lineEnd = text.IndexOf('\n', offset);
+            if (lineEnd < 0)
+                lineEnd = text.Length;
+
+            var lineLength = lineEnd - offset;
+            if (lineLength > 0 && text[offset + lineLength - 1] == '\r')
+                lineLength--;
+
+            var line = text.Substring(offset, lineLength);
+            var leadingWhitespace = line.Length - line.TrimStart().Length;
+            var trimmed = line[leadingWhitespace..];
+
+            if (trimmed.StartsWith("```", StringComparison.Ordinal))
+                inFence = !inFence;
+            else if (!inFence && trimmed.StartsWith(sentinel, StringComparison.Ordinal))
+                return offset + leadingWhitespace;
+
+            offset = lineEnd == text.Length ? text.Length : lineEnd + 1;
+        }
+
+        return -1;
     }
 
     private static string StripAwaitInputSentinel(string text) =>

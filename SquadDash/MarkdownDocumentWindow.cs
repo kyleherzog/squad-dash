@@ -113,6 +113,10 @@ internal sealed class MarkdownDocumentWindow : ChromedWindow {
         if (documents.Count == 0)
             throw new ArgumentException("At least one markdown document is required.", nameof(documents));
 
+        // WPF WebBrowser (HwndHost) does not render inside AllowsTransparency=true windows.
+        // Override the ChromedWindow default so the preview pane is visible.
+        AllowsTransparency = false;
+
         _baseTitle = title;
         _documents = documents
             .Select(spec => MarkdownDocumentTabState.Load(spec.TabTitle, spec.FilePath))
@@ -1513,38 +1517,23 @@ internal sealed class MarkdownDocumentWindow : ChromedWindow {
     }
 
     private void RenderPreview(MarkdownDocumentTabState document, bool preserveScroll = false) {
-        SquadDashTrace.Write(TraceCategory.UI,
-            $"[RenderPreview] enter file='{document.FileName}' textLen={document.WorkingText?.Length ?? -1} " +
-            $"isDark={AgentStatusCard.IsDarkTheme} preserveScroll={preserveScroll}");
-
         document.PendingScrollFraction = preserveScroll
             ? CaptureWebBrowserScroll(document.WebBrowser)
             : null;
 
         document.FallbackViewer.Document = MarkdownFlowDocumentBuilder.Build(document.WorkingText);
-        SquadDashTrace.Write(TraceCategory.UI, "[RenderPreview] FlowDocument built for FallbackViewer");
 
         try {
             var html = MarkdownHtmlBuilder.Build(document.WorkingText, document.FileName, document.FilePath,
                 isDark: AgentStatusCard.IsDarkTheme);
-            SquadDashTrace.Write(TraceCategory.UI,
-                $"[RenderPreview] HTML built len={html?.Length ?? -1} preview='{html?[..Math.Min(80, html?.Length ?? 0)].Replace('\n', ' ')}'");
             document.WebBrowser.Visibility = Visibility.Visible;
             document.FallbackViewer.Visibility = Visibility.Collapsed;
             document.WebBrowser.NavigateToString(html);
-            SquadDashTrace.Write(TraceCategory.UI, "[RenderPreview] NavigateToString called → WebBrowser visible");
         }
-        catch (Exception ex) {
-            SquadDashTrace.Write(TraceCategory.UI,
-                $"[RenderPreview] EXCEPTION building/navigating HTML: {ex.GetType().Name}: {ex.Message} → FallbackViewer");
+        catch {
             document.WebBrowser.Visibility = Visibility.Collapsed;
             document.FallbackViewer.Visibility = Visibility.Visible;
         }
-
-        SquadDashTrace.Write(TraceCategory.UI,
-            $"[RenderPreview] exit WebBrowserVis={document.WebBrowser.Visibility} FallbackVis={document.FallbackViewer.Visibility} " +
-            $"_singlePreviewHost.Content={((_singlePreviewHost.Content != null) ? "set" : "null")} " +
-            $"_singlePreviewHost.Vis={_singlePreviewHost.Visibility}");
     }
 
     private void SetupWebBrowser(WebBrowser browser) {
@@ -1889,14 +1878,9 @@ internal sealed class MarkdownDocumentWindow : ChromedWindow {
     }
 
     private void WebBrowser_Navigating(object sender, System.Windows.Navigation.NavigatingCancelEventArgs e) {
-        if (e.Uri == null || e.Uri.Scheme is "about" or "res") {
-            SquadDashTrace.Write(TraceCategory.UI,
-                $"[Navigating] allowed — Uri={(e.Uri?.ToString() ?? "null")} scheme={e.Uri?.Scheme ?? "null"}");
+        if (e.Uri == null || e.Uri.Scheme is "about" or "res")
             return;
-        }
 
-        SquadDashTrace.Write(TraceCategory.UI,
-            $"[Navigating] CANCELLED — Uri={e.Uri} scheme={e.Uri.Scheme}");
         e.Cancel = true;
     }
 
@@ -1958,22 +1942,8 @@ internal sealed class MarkdownDocumentWindow : ChromedWindow {
     }
 
     private void WebBrowser_LoadCompleted(object sender, System.Windows.Navigation.NavigationEventArgs e) {
-        if (sender is not WebBrowser browser || browser.Tag is not MarkdownDocumentTabState doc) {
-            SquadDashTrace.Write(TraceCategory.UI, "[LoadCompleted] fired but Tag mismatch — ignored");
+        if (sender is not WebBrowser browser || browser.Tag is not MarkdownDocumentTabState doc)
             return;
-        }
-        try {
-            var bodyLen = browser.InvokeScript("eval", new object[] { "document.body ? document.body.innerHTML.length : -1" });
-            var colors  = browser.InvokeScript("eval", new object[] {
-                "JSON.stringify({bg:window.getComputedStyle(document.body).backgroundColor,fg:window.getComputedStyle(document.body).color})"
-            });
-            SquadDashTrace.Write(TraceCategory.UI,
-                $"[LoadCompleted] file='{doc.FileName}' Uri={e.Uri} body.innerHTML.length={bodyLen} colors={colors}");
-        }
-        catch (Exception ex) {
-            SquadDashTrace.Write(TraceCategory.UI,
-                $"[LoadCompleted] file='{doc.FileName}' Uri={e.Uri} — InvokeScript failed: {ex.Message}");
-        }
         if (doc.PendingScrollFraction is double fraction && fraction >= 0.001) {
             doc.PendingScrollFraction = null;
             RestoreWebBrowserScroll(browser, fraction);

@@ -43,7 +43,9 @@ internal sealed class MaintenancePanelControllerTests {
             getWorkspacePath:  () => null,
             runNow:            () => { },
             toggleTaskEnabled: (_, _) => { },
-            reloadPanel:       () => { });
+            reloadPanel:       () => { },
+            openInMarkdownEditor: _ => { },
+            showInboxPanel:    () => { });
         return (controller, listPanel, statusLabel, runNowButton);
     }
 
@@ -312,7 +314,9 @@ internal sealed class MaintenancePanelControllerTests {
             getWorkspacePath:  () => workspacePath,
             runNow:            () => { },
             toggleTaskEnabled: (_, _) => { },
-            reloadPanel:       () => { });
+            reloadPanel:       () => { },
+            openInMarkdownEditor: _ => { },
+            showInboxPanel:    () => { });
         return (controller, listPanel, statusLabel, runNowButton);
     }
 
@@ -547,7 +551,9 @@ internal sealed class MaintenancePanelControllerTests {
             getWorkspacePath:  () => workspacePath,
             runNow:            () => { },
             toggleTaskEnabled: (id, en) => toggleCalls.Add((id, en)),
-            reloadPanel:       () => { });
+            reloadPanel:       () => { },
+            openInMarkdownEditor: _ => { },
+            showInboxPanel:    () => { });
         return (controller, toggleCalls);
     }
 

@@ -350,6 +350,21 @@ internal sealed class MaintenanceRunnerTests {
             "report-only prompt must not instruct the agent to commit directly");
     }
 
+    [Test]
+    public async Task StartAsync_ReportOnlyTask_PromptWarnsInboxBlockMustNotBeFenced() {
+        var capturedPrompt = string.Empty;
+        var config = MakeConfig(
+            tasks: [MakeTask("analysis", safety: "report-only", instructions: "Analyse the diff.")],
+            safety: "report-only");
+
+        var runner = MakeRunner(
+            executePromptAsync: (prompt, _) => { capturedPrompt = prompt; return Task.FromResult(-1); });
+
+        await runner.StartAsync(config, _workspaceDir, CancellationToken.None);
+
+        Assert.That(capturedPrompt, Does.Contain("do not wrap it in markdown code fences").IgnoreCase);
+    }
+
     // ── Safety prompt injection — branch ─────────────────────────────────────
 
     [Test]

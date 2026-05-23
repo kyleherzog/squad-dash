@@ -155,6 +155,7 @@ internal sealed class MaintenanceRunner {
         "\n" +
         "4. For report-only tasks: send findings as an inbox message with `\"from\": \"argus-weld\"`.\n" +
         "   Subject = task title. Body = full Markdown report. Actions = any follow-up choices.\n" +
+        "   Put INBOX_MESSAGE_JSON on a bare top-level line; do not wrap it in markdown code fences.\n" +
         "\n" +
         "Example actions array:\n" +
         "  \"actions\": [\n" +
