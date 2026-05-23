@@ -23081,7 +23081,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         powershellMenuItem.Click += PowerShellMenuItem_Click;
         WorkspaceMenuItem.Items.Add(powershellMenuItem);
 
-        ConfigureInboxWatcher(Path.Combine(squadRoot, "decisions", "inbox"));
+        ConfigureInboxWatcher(Path.Combine(squadRoot, "inbox"));
         UpdateInteractiveControlState();
         SyncTasksPanel();
     }
@@ -23260,8 +23260,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private void ConfigureInboxWatcher(string inboxPath)
     {
         DisposeInboxWatcher();
-        if (!Directory.Exists(inboxPath))
-            return;
+        Directory.CreateDirectory(inboxPath); // ensure it exists so the watcher can start immediately
 
         _inboxWatcher = new FileSystemWatcher(inboxPath)
         {
