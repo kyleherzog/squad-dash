@@ -1964,8 +1964,11 @@ internal sealed class MarkdownDocumentWindow : ChromedWindow {
         }
         try {
             var bodyLen = browser.InvokeScript("eval", new object[] { "document.body ? document.body.innerHTML.length : -1" });
+            var colors  = browser.InvokeScript("eval", new object[] {
+                "JSON.stringify({bg:window.getComputedStyle(document.body).backgroundColor,fg:window.getComputedStyle(document.body).color})"
+            });
             SquadDashTrace.Write(TraceCategory.UI,
-                $"[LoadCompleted] file='{doc.FileName}' Uri={e.Uri} body.innerHTML.length={bodyLen}");
+                $"[LoadCompleted] file='{doc.FileName}' Uri={e.Uri} body.innerHTML.length={bodyLen} colors={colors}");
         }
         catch (Exception ex) {
             SquadDashTrace.Write(TraceCategory.UI,

@@ -47,6 +47,9 @@ internal static class MarkdownHtmlBuilder {
         var sbThumbHov   = BrushHex("ScrollBarThumbHoverBrush")  ?? (isDark ? "#777777"  : "#888888");
         var sbThumbAct   = BrushHex("ScrollBarThumbPressedBrush")?? (isDark ? "#999999"  : "#666666");
 
+        SquadDashTrace.Write(TraceCategory.UI,
+            $"[HtmlBuilder] isDark={isDark} bg={bg} fg={fg} heading={headingColor} code={code}");
+
         return $$"""
 <!DOCTYPE html>
 <html>
