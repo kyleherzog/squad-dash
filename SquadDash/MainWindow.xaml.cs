@@ -252,6 +252,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private MaintenanceReportWriter?    _maintenanceReportWriter;
     private MaintenanceReport?          _pendingMaintenanceBannerReport;
     private DispatcherTimer?            _maintenanceBannerTimer;
+    private bool                        _argusWeldSessionGapAppended;
     private InboxStore?                 _inboxStore;
     private InboxPanelController?       _inboxPanel;
     private bool                        _inboxPanelVisible = false;
@@ -7497,13 +7498,21 @@ public partial class MainWindow : Window, ILiveElementLocator
         (byte)(a.B + (b.B - a.B) * t));
 
     /// <summary>
-    /// Re-paints all session-gap stripe borders in the coordinator transcript with fresh
-    /// brushes for the current theme.  Called from <see cref="ApplyTheme"/> on every
-    /// theme switch so that live dark↔light toggling works correctly.
+    /// Re-paints all session-gap stripe borders in the coordinator transcript (and the
+    /// Argus Weld transcript if it exists) with fresh brushes for the current theme.
+    /// Called from <see cref="ApplyTheme"/> on every theme switch.
     /// </summary>
     private void RefreshSessionGapStripes()
     {
-        foreach (var block in CoordinatorThread.Document.Blocks)
+        RefreshSessionGapStripesInDocument(CoordinatorThread.Document);
+        const string argusKey = "agent:argus-weld";
+        if (_agentThreadRegistry.ThreadsByKey.TryGetValue(argusKey, out var argusThread))
+            RefreshSessionGapStripesInDocument(argusThread.Document);
+    }
+
+    private void RefreshSessionGapStripesInDocument(FlowDocument doc)
+    {
+        foreach (var block in doc.Blocks)
         {
             if (block is BlockUIContainer { Child: Border border }
                 && border.Tag is string tag && tag == "SessionGapStripe")
@@ -7513,6 +7522,50 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
     }
 
+    /// <summary>
+    /// Appends a session-gap stripe to Argus Weld's transcript document, unless the
+    /// document is empty (first-ever session) or the last block is already a stripe
+    /// (consolidation — avoids double-banners on rapid restarts).
+    /// </summary>
+    private void AppendArgusWeldSessionGapIfNeeded(TranscriptThreadState thread)
+    {
+        var doc = thread.Document;
+        if (doc.Blocks.Count == 0) return;
+
+        // Consolidate: skip if the last block is already a session-gap stripe.
+        if (doc.Blocks.LastBlock is BlockUIContainer { Child: Border lastBorder }
+            && lastBorder.Tag is string lastTag && lastTag == "SessionGapStripe")
+            return;
+
+        var startupTime = DateTimeOffset.Now;
+        var tooltip = new ToolTip { Padding = new Thickness(8, 6, 8, 6) };
+        tooltip.SetResourceReference(Control.BackgroundProperty, "PopupSurface");
+        tooltip.SetResourceReference(Control.BorderBrushProperty, "ActivePanelBorder");
+        tooltip.BorderThickness = new Thickness(1);
+        tooltip.Opened += (_, _) =>
+        {
+            var panel = new StackPanel { Margin = new Thickness(2) };
+            var tb = new TextBlock { TextWrapping = TextWrapping.NoWrap };
+            tb.Inlines.Add(new System.Windows.Documents.Bold(new System.Windows.Documents.Run("Session: ")));
+            tb.Inlines.Add(new System.Windows.Documents.Run(StatusTimingPresentation.FormatRelativeTimestamp(startupTime)));
+            tb.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+            panel.Children.Add(tb);
+            tooltip.Content = panel;
+        };
+
+        var border = new Border
+        {
+            Height              = 10,
+            Margin              = new Thickness(0, 10, 0, 10),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Background          = BuildSessionGapStripeBrush(),
+            ToolTip             = tooltip,
+            Cursor              = Cursors.Arrow,
+            Tag                 = "SessionGapStripe",
+        };
+        ToolTipService.SetInitialShowDelay(border, 200);
+        doc.Blocks.Add(new BlockUIContainer(border) { Margin = new Thickness(0) });
+    }
 
     private void AppendQrCode(string url)
     {
@@ -27834,8 +27887,17 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void EnsureArgusWeldRegistered(string workspacePath) {
         const string threadKey = "agent:argus-weld";
-        if (_agentThreadRegistry.ThreadsByKey.ContainsKey(threadKey))
+        if (_agentThreadRegistry.ThreadsByKey.ContainsKey(threadKey)) {
+            // Thread already exists (restored from a previous session). On the first
+            // maintenance task of this app session, append a session-gap stripe so the
+            // transcript shows a clear visual break between sessions.
+            if (!_argusWeldSessionGapAppended) {
+                var existingThread = _agentThreadRegistry.ThreadsByKey[threadKey];
+                AppendArgusWeldSessionGapIfNeeded(existingThread);
+                _argusWeldSessionGapAppended = true;
+            }
             return;
+        }
 
         string? charter = null;
         var charterPath = Path.Combine(workspacePath, ".squad", "agents", "argus-weld", "charter.md");
@@ -27853,6 +27915,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             status:           null,
             prompt:           charter,
             startedAt:        DateTimeOffset.UtcNow.ToString("O"));
+        // Brand-new thread — no gap stripe needed; mark handled so subsequent calls skip.
+        _argusWeldSessionGapAppended = true;
     }
 
     /// <summary>
