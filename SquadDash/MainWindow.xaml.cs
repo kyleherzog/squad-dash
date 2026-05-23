@@ -4707,14 +4707,15 @@ public partial class MainWindow : Window, ILiveElementLocator
         thread.DetailText = !string.IsNullOrWhiteSpace(thread.LatestResponse)
             ? BuildThreadPreview(thread.LatestResponse!)
             : thread.DetailText;
-        FinalizeCurrentTurnResponse(thread);
-        thread.ResponseStreamed = false;
-
-        // Save any INBOX_MESSAGE_JSON block from this sub-agent turn.
+        // Save inbox message BEFORE finalizing/rendering so the indicator paragraph is rendered
+        // with a valid messageId (clickable link) rather than null (grey plain text).
         var rawResponse = thread.CurrentTurn?.ResponseTextBuilder.ToString();
         var messageId = TrySaveInboxMessage(rawResponse);
         if (messageId is not null && thread.CurrentTurn?.ResponseEntries.Count > 0)
             thread.CurrentTurn.ResponseEntries[^1].InboxMessageId = messageId;
+
+        FinalizeCurrentTurnResponse(thread);
+        thread.ResponseStreamed = false;
 
         SyncThreadChip(thread);
         UpdateAgentCardFromThread(thread);
