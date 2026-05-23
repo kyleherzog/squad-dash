@@ -4710,6 +4710,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         // Save inbox message BEFORE finalizing/rendering so the indicator paragraph is rendered
         // with a valid messageId (clickable link) rather than null (grey plain text).
         var rawResponse = thread.CurrentTurn?.ResponseTextBuilder.ToString();
+        SquadDashTrace.Write(TraceCategory.General,
+            $"INBOX_SAVE: HandleSubagentMessage agent={thread.AgentId ?? thread.Title} currentTurnNull={thread.CurrentTurn is null} rawLen={rawResponse?.Length ?? -1}");
         var messageId = TrySaveInboxMessage(rawResponse);
         if (messageId is not null && thread.CurrentTurn?.ResponseEntries.Count > 0)
             thread.CurrentTurn.ResponseEntries[^1].InboxMessageId = messageId;
@@ -27707,20 +27709,51 @@ public partial class MainWindow : Window, ILiveElementLocator
     /// <returns>The saved message ID, or null if no INBOX_MESSAGE_JSON was found/saved.</returns>
     private string? TrySaveInboxMessage(string? rawResponse)
     {
-        if (string.IsNullOrWhiteSpace(rawResponse) || _inboxStore is null)
+        if (string.IsNullOrWhiteSpace(rawResponse))
+        {
+            SquadDashTrace.Write(TraceCategory.General, "INBOX_SAVE: skipped — rawResponse is null/empty");
             return null;
+        }
+        if (_inboxStore is null)
+        {
+            SquadDashTrace.Write(TraceCategory.General, "INBOX_SAVE: skipped — _inboxStore is null");
+            return null;
+        }
+
+        bool hasBlock = rawResponse.Contains("INBOX_MESSAGE_JSON", StringComparison.Ordinal);
+        SquadDashTrace.Write(TraceCategory.General,
+            $"INBOX_SAVE: rawResponse len={rawResponse.Length} hasBlock={hasBlock}");
 
         // The inbox parser regex requires the INBOX_MESSAGE_JSON block to be at the very end of the
         // text (\s*$). Strip all known structured tail blocks that the model may append after it:
         // <system_notification> tags, QUICK_REPLIES_JSON, and HOST_COMMAND_JSON.
         var responseForParsing = ToolTranscriptFormatter.StripSystemNotifications(rawResponse);
+        SquadDashTrace.Write(TraceCategory.General,
+            $"INBOX_SAVE: after StripSystemNotifications len={responseForParsing.Length} hasBlock={responseForParsing.Contains("INBOX_MESSAGE_JSON", StringComparison.Ordinal)}");
+
         if (QuickReplyOptionParser.TryExtract(responseForParsing, out var withoutQuickReplies, out _))
+        {
+            SquadDashTrace.Write(TraceCategory.General,
+                $"INBOX_SAVE: QuickReplyOptionParser stripped — before={responseForParsing.Length} after={withoutQuickReplies.Length} hasBlock={withoutQuickReplies.Contains("INBOX_MESSAGE_JSON", StringComparison.Ordinal)}");
             responseForParsing = withoutQuickReplies;
+        }
         if (HostCommandParser.TryExtract(responseForParsing, out var withoutHostCommands, out _))
+        {
+            SquadDashTrace.Write(TraceCategory.General,
+                $"INBOX_SAVE: HostCommandParser stripped — before={responseForParsing.Length} after={withoutHostCommands.Length} hasBlock={withoutHostCommands.Contains("INBOX_MESSAGE_JSON", StringComparison.Ordinal)}");
             responseForParsing = withoutHostCommands;
+        }
 
         if (!InboxMessageParser.TryExtract(responseForParsing, out _, out var dto) || dto is null)
+        {
+            // Log the tail of the text so we can see what the parser is seeing
+            var tail = responseForParsing.Length > 500
+                ? responseForParsing[^500..]
+                : responseForParsing;
+            SquadDashTrace.Write(TraceCategory.General,
+                $"INBOX_SAVE: InboxMessageParser failed — finalLen={responseForParsing.Length} tail=«{tail}»");
             return null;
+        }
 
         var message = new InboxMessage
         {
@@ -27734,6 +27767,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         };
 
         _inboxStore.Save(message);
+        SquadDashTrace.Write(TraceCategory.General,
+            $"INBOX_SAVE: saved id={message.Id} subject=\"{message.Subject}\" panelVisible={_inboxPanel is not null}");
 
         if (_inboxPanel is not null)
             _inboxPanel.Refresh(_inboxStore.LoadAll());
