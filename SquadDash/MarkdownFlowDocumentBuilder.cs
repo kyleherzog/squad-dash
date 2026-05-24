@@ -242,7 +242,7 @@ internal static class MarkdownFlowDocumentBuilder {
 
         var columnCount = rows.Max(row => row.Length);
         for (var index = 0; index < columnCount; index++)
-            table.Columns.Add(new TableColumn());
+            table.Columns.Add(new TableColumn { Width = GridLength.Auto });
 
         var group = new TableRowGroup();
         table.RowGroups.Add(group);
@@ -254,7 +254,8 @@ internal static class MarkdownFlowDocumentBuilder {
             for (var columnIndex = 0; columnIndex < columnCount; columnIndex++) {
                 var text = columnIndex < rows[rowIndex].Length ? rows[rowIndex][columnIndex] : string.Empty;
                 var paragraph = new Paragraph {
-                    Margin = new Thickness(0)
+                    Margin = new Thickness(0),
+                    TextAlignment = TextAlignment.Left,
                 };
                 AddInlineText(paragraph.Inlines, text);
 
