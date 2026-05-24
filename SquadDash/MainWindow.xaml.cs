@@ -253,6 +253,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private MaintenanceReport?          _pendingMaintenanceBannerReport;
     private DispatcherTimer?            _maintenanceBannerTimer;
     private bool                        _argusWeldSessionGapAppended;
+    // Tracks sidecar paths already rendered this session (live or restored) to prevent duplicate stubs.
+    private readonly HashSet<string>    _renderedSidecarPaths = new(StringComparer.OrdinalIgnoreCase);
     private InboxStore?                 _inboxStore;
     private InboxPanelController?       _inboxPanel;
     private bool                        _inboxPanelVisible = false;
@@ -27926,6 +27928,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                     {
                         _maintenanceReportWriter?.WriteStubSidecar(reportPath, stubRecords);
                         var sidecarPath = System.IO.Path.ChangeExtension(reportPath, ".json");
+                        _renderedSidecarPaths.Add(sidecarPath);
                         var stubState = new MaintenanceStubStateStore(System.IO.Path.Combine(workspacePath, ".squad"));
                         stubState.LastRenderedSidecarPath = sidecarPath;
                         stubState.Save();
@@ -28041,14 +28044,18 @@ public partial class MainWindow : Window, ILiveElementLocator
         prefix.SetResourceReference(TextElement.ForegroundProperty, "SubtleText");
         paragraph.Inlines.Add(prefix);
 
-        var link = new Hyperlink(new Run(taskTitle))
+        var link = new Run(taskTitle)
         {
             FontWeight      = FontWeights.Normal,
-            TextDecorations = null,
+            TextDecorations = TextDecorations.Underline,
             Cursor          = Cursors.Hand,
         };
         link.SetResourceReference(TextElement.ForegroundProperty, "ActionLinkText");
-        link.Click += (_, _) => NavigateToArgusWeldTask(threadId, anchorIndex);
+        link.MouseLeftButtonDown += (_, e) =>
+        {
+            NavigateToArgusWeldTask(threadId, anchorIndex);
+            e.Handled = true;
+        };
         paragraph.Inlines.Add(link);
 
         // Rebuild tooltip on each open so the relative timestamp ("3 minutes ago") stays current.
@@ -28082,6 +28089,9 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (string.Equals(stubState.LastRenderedSidecarPath, sidecarPath, StringComparison.OrdinalIgnoreCase))
                 return; // already rendered this session
 
+            if (_renderedSidecarPaths.Contains(sidecarPath))
+                return; // already rendered live in this session
+
             var stubs = writer.TryReadStubSidecar(System.IO.Path.ChangeExtension(sidecarPath, ".md"));
             if (stubs is null || stubs.Count == 0) return;
 
@@ -28091,6 +28101,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
             stubState.LastRenderedSidecarPath = sidecarPath;
             stubState.Save();
+            _renderedSidecarPaths.Add(sidecarPath);
         }
         catch (Exception ex)
         {
