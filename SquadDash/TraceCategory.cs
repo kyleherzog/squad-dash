@@ -17,5 +17,6 @@ internal enum TraceCategory
     Unhandled,
     Workspace,
     Sound,
+    Inbox,
     General,      // catch-all for unknown sources
 }

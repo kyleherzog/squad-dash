@@ -27711,35 +27711,35 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         if (string.IsNullOrWhiteSpace(rawResponse))
         {
-            SquadDashTrace.Write(TraceCategory.General, "INBOX_SAVE: skipped — rawResponse is null/empty");
+            SquadDashTrace.Write(TraceCategory.Inbox, "INBOX_SAVE: skipped — rawResponse is null/empty");
             return null;
         }
         if (_inboxStore is null)
         {
-            SquadDashTrace.Write(TraceCategory.General, "INBOX_SAVE: skipped — _inboxStore is null");
+            SquadDashTrace.Write(TraceCategory.Inbox, "INBOX_SAVE: skipped — _inboxStore is null");
             return null;
         }
 
         bool hasBlock = rawResponse.Contains("INBOX_MESSAGE_JSON", StringComparison.Ordinal);
-        SquadDashTrace.Write(TraceCategory.General,
+        SquadDashTrace.Write(TraceCategory.Inbox,
             $"INBOX_SAVE: rawResponse len={rawResponse.Length} hasBlock={hasBlock}");
 
         // The inbox parser regex requires the INBOX_MESSAGE_JSON block to be at the very end of the
         // text (\s*$). Strip all known structured tail blocks that the model may append after it:
         // <system_notification> tags, QUICK_REPLIES_JSON, and HOST_COMMAND_JSON.
         var responseForParsing = ToolTranscriptFormatter.StripSystemNotifications(rawResponse);
-        SquadDashTrace.Write(TraceCategory.General,
+        SquadDashTrace.Write(TraceCategory.Inbox,
             $"INBOX_SAVE: after StripSystemNotifications len={responseForParsing.Length} hasBlock={responseForParsing.Contains("INBOX_MESSAGE_JSON", StringComparison.Ordinal)}");
 
         if (QuickReplyOptionParser.TryExtract(responseForParsing, out var withoutQuickReplies, out _))
         {
-            SquadDashTrace.Write(TraceCategory.General,
+            SquadDashTrace.Write(TraceCategory.Inbox,
                 $"INBOX_SAVE: QuickReplyOptionParser stripped — before={responseForParsing.Length} after={withoutQuickReplies.Length} hasBlock={withoutQuickReplies.Contains("INBOX_MESSAGE_JSON", StringComparison.Ordinal)}");
             responseForParsing = withoutQuickReplies;
         }
         if (HostCommandParser.TryExtract(responseForParsing, out var withoutHostCommands, out _))
         {
-            SquadDashTrace.Write(TraceCategory.General,
+            SquadDashTrace.Write(TraceCategory.Inbox,
                 $"INBOX_SAVE: HostCommandParser stripped — before={responseForParsing.Length} after={withoutHostCommands.Length} hasBlock={withoutHostCommands.Contains("INBOX_MESSAGE_JSON", StringComparison.Ordinal)}");
             responseForParsing = withoutHostCommands;
         }
@@ -27750,7 +27750,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             var tail = responseForParsing.Length > 500
                 ? responseForParsing[^500..]
                 : responseForParsing;
-            SquadDashTrace.Write(TraceCategory.General,
+            SquadDashTrace.Write(TraceCategory.Inbox,
                 $"INBOX_SAVE: InboxMessageParser failed — finalLen={responseForParsing.Length} tail=«{tail}»");
             return null;
         }
@@ -27767,7 +27767,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         };
 
         _inboxStore.Save(message);
-        SquadDashTrace.Write(TraceCategory.General,
+        SquadDashTrace.Write(TraceCategory.Inbox,
             $"INBOX_SAVE: saved id={message.Id} subject=\"{message.Subject}\" panelVisible={_inboxPanel is not null}");
 
         if (_inboxPanel is not null)
