@@ -133,6 +133,43 @@ internal sealed class BackgroundTaskPresenterTests {
     }
 
     [Test]
+    public void HasBackgroundTasks_ReturnsFalse_WhenOnlyTerminalBackgroundAgentPresent() {
+        var presenter = MakePresenter();
+        presenter.BackgroundAgents = [new SquadBackgroundAgentInfo { AgentId = "done-agent", Status = "completed" }];
+
+        Assert.That(presenter.HasBackgroundTasks(), Is.False);
+    }
+
+    [Test]
+    public void HasBackgroundTasks_ReturnsFalse_WhenOnlyTerminalBackgroundShellPresent() {
+        var presenter = MakePresenter();
+        presenter.BackgroundShells = [new SquadBackgroundShellInfo { ShellId = "done-shell", Status = "cancelled" }];
+
+        Assert.That(presenter.HasBackgroundTasks(), Is.False);
+    }
+
+    [Test]
+    public void BuildBackgroundTaskReport_ExcludesTerminalSnapshotTasksFromInProgress() {
+        var presenter = MakePresenter();
+        var now = new DateTimeOffset(2026, 5, 23, 15, 0, 0, TimeSpan.Zero);
+        presenter.BackgroundAgents = [
+            new SquadBackgroundAgentInfo { AgentId = "done-agent", AgentDisplayName = "Done Agent", Status = "completed" }
+        ];
+        presenter.BackgroundShells = [
+            new SquadBackgroundShellInfo { ShellId = "done-shell", Description = "Finished shell", Status = "cancelled" }
+        ];
+
+        var report = presenter.BuildBackgroundTaskReport(now);
+
+        Assert.Multiple(() => {
+            Assert.That(report, Does.Contain("No live background tasks."));
+            Assert.That(report, Does.Not.Contain("In progress:"));
+            Assert.That(report, Does.Not.Contain("Done Agent"));
+            Assert.That(report, Does.Not.Contain("Finished shell"));
+        });
+    }
+
+    [Test]
     public void HasRestartBlockingBackgroundWork_ReturnsTrue_ForCurrentNonTerminalAgentThread() {
         var registry = MakeRegistry();
         var presenter = MakePresenter(registry);

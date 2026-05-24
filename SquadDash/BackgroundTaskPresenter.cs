@@ -194,7 +194,7 @@ internal sealed class BackgroundTaskPresenter {
     // ── Public-facing query ──────────────────────────────────────────────────
 
     internal bool HasBackgroundTasks() =>
-        _backgroundAgents.Count > 0 || _backgroundShells.Count > 0 || GetFallbackLiveBackgroundThreads().Count > 0;
+        HasLiveSnapshotBackgroundTasks() || GetFallbackLiveBackgroundThreads().Count > 0;
 
     internal bool HasRestartBlockingBackgroundWork() =>
         _backgroundAgents.Any(agent => !IsTerminalBackgroundStatus(agent.Status)) ||
@@ -282,14 +282,14 @@ internal sealed class BackgroundTaskPresenter {
     }
 
     private string BuildBackgroundTaskStatusText() {
-        var agentLabels = _backgroundAgents
+        var agentLabels = GetLiveBackgroundAgents()
             .Take(2)
             .Select(ResolveBackgroundAgentDisplayLabel)
             .Where(label => !string.IsNullOrWhiteSpace(label))
             .Concat(GetFallbackLiveBackgroundThreads().Select(BuildBackgroundAgentLabel))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(2)
-            .Concat(_backgroundShells.Take(1).Select(BuildBackgroundShellLabel))
+            .Concat(GetLiveBackgroundShells().Take(1).Select(BuildBackgroundShellLabel))
             .ToArray();
 
         if (agentLabels.Length == 0)
@@ -471,16 +471,18 @@ internal sealed class BackgroundTaskPresenter {
             lines.Add(string.Empty);
         }
 
-        if (_backgroundAgents.Count > 0 || _backgroundShells.Count > 0 || fallbackThreads.Count > 0) {
+        var liveAgents = GetLiveBackgroundAgents();
+        var liveShells = GetLiveBackgroundShells();
+        if (liveAgents.Count > 0 || liveShells.Count > 0 || fallbackThreads.Count > 0) {
             lines.Add("In progress:");
 
-            foreach (var agent in _backgroundAgents)
+            foreach (var agent in liveAgents)
                 lines.Add("• " + BuildBackgroundAgentReportLine(agent, now));
 
             foreach (var thread in fallbackThreads)
                 lines.Add("• " + BuildFallbackBackgroundThreadReportLine(thread, now));
 
-            foreach (var shell in _backgroundShells)
+            foreach (var shell in liveShells)
                 lines.Add("• " + BuildBackgroundShellReportLine(shell, now));
         }
         else {
@@ -528,6 +530,20 @@ internal sealed class BackgroundTaskPresenter {
         labels.Length == 0
             ? "(none)"
             : string.Join(", ", labels);
+
+    private bool HasLiveSnapshotBackgroundTasks() =>
+        _backgroundAgents.Any(agent => !IsTerminalBackgroundStatus(agent.Status)) ||
+        _backgroundShells.Any(shell => !IsTerminalBackgroundStatus(shell.Status));
+
+    private IReadOnlyList<SquadBackgroundAgentInfo> GetLiveBackgroundAgents() =>
+        _backgroundAgents
+            .Where(agent => !IsTerminalBackgroundStatus(agent.Status))
+            .ToArray();
+
+    private IReadOnlyList<SquadBackgroundShellInfo> GetLiveBackgroundShells() =>
+        _backgroundShells
+            .Where(shell => !IsTerminalBackgroundStatus(shell.Status))
+            .ToArray();
 
     // ── Removed-task handling ────────────────────────────────────────────────
 

@@ -332,6 +332,53 @@ internal sealed class SquadBridgePromptBuilderTests {
     }
 
     [Test]
+    public void Build_DoesNotAddStrongRoutingHint_WhenQuickReplyContinuesCurrentAgent() {
+        using var workspace = new TestWorkspace();
+        workspace.CreateFile(".squad/team.md", """
+            # Squad Team
+
+            ## Members
+
+            | Name | Role | Charter | Status |
+            |------|------|---------|--------|
+            | Lyra Morn | UI Specialist | agents/lyra-morn/charter.md | active |
+            | Arjun Sen | Backend Specialist | agents/arjun-sen/charter.md | active |
+            """);
+        workspace.CreateFile(".squad/routing.md", """
+            # Work Routing
+
+            ## Routing Table
+
+            | Work Type | Route To | Examples |
+            |-----------|----------|----------|
+            | UI | Lyra Morn | `MainWindow.xaml`, transcript rendering |
+            | Backend | Arjun Sen | prompt routing, bridge prompts |
+            """);
+        workspace.CreateFile(".squad/agents/lyra-morn/charter.md", """
+            # Lyra Morn
+            - Own `MainWindow.xaml`
+            """);
+        workspace.CreateFile(".squad/agents/arjun-sen/charter.md", """
+            # Arjun Sen
+            - Own bridge prompt routing
+            """);
+
+        var built = SquadBridgePromptBuilder.Build(
+            "Please keep going on MainWindow.xaml.",
+            "Quick replies enabled.",
+            null,
+            "continue_current_agent",
+            "@arjun-sen Continue this thread.",
+            workspace.RootPath);
+
+        Assert.Multiple(() => {
+            Assert.That(built.PromptText, Does.Not.Contain("direct ownership clues for"));
+            Assert.That(built.RoutingSummary, Does.Contain("quick-reply-continue-current-agent"));
+            Assert.That(built.PromptText, Does.Contain("@arjun-sen Continue this thread."));
+        });
+    }
+
+    [Test]
     public void Build_IgnoresTeammateNamesFromCharterProse_WhenMatchingOwnershipSignals() {
         using var workspace = new TestWorkspace();
         workspace.CreateFile(".squad/team.md", """

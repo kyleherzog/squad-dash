@@ -127,8 +127,8 @@ internal static class SquadBridgePromptBuilder {
             summaryParts.Add("explicit-mention");
         if (strongInstruction is not null)
             summaryParts.Add("strong-match");
-        if (IsForcedNamedAgentQuickReply(quickReplyRouteMode))
-            summaryParts.Add("quick-reply-start-named-agent");
+        if (GetForcedNamedAgentQuickReplySummary(quickReplyRouteMode) is { } quickReplySummary)
+            summaryParts.Add(quickReplySummary);
 
         return new RoutingContext(
             genericInstruction,
@@ -264,8 +264,18 @@ internal static class SquadBridgePromptBuilder {
                 token.Any(char.IsUpper));
     }
 
-    private static bool IsForcedNamedAgentQuickReply(string? quickReplyRouteMode) =>
-        string.Equals(quickReplyRouteMode?.Trim(), "start_named_agent", StringComparison.OrdinalIgnoreCase);
+    private static bool IsForcedNamedAgentQuickReply(string? quickReplyRouteMode) {
+        var normalizedMode = quickReplyRouteMode?.Trim();
+        return string.Equals(normalizedMode, "start_named_agent", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(normalizedMode, "continue_current_agent", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? GetForcedNamedAgentQuickReplySummary(string? quickReplyRouteMode) =>
+        quickReplyRouteMode?.Trim().ToLowerInvariant() switch {
+            "start_named_agent" => "quick-reply-start-named-agent",
+            "continue_current_agent" => "quick-reply-continue-current-agent",
+            _ => null
+        };
 
     private static TeamRoutingMember[] LoadTeamMembers(string teamPath, string workspaceFolder) {
         if (!File.Exists(teamPath))
