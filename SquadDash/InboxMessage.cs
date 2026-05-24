@@ -90,4 +90,8 @@ public sealed record InboxAction
     /// </summary>
     [JsonPropertyName("prompt")]
     public string? Prompt { get; init; }
+
+    /// <summary>Optional tooltip hint shown on the action button.</summary>
+    [JsonPropertyName("hint")]
+    public string? Hint { get; init; }
 }
