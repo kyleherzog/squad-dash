@@ -234,41 +234,58 @@ internal static class MarkdownFlowDocumentBuilder {
         return rows.Count > 0;
     }
 
-    private static Table BuildTable(IReadOnlyList<string[]> rows, Brush tableRule, Brush tableHeader) {
-        var table = new Table {
-            CellSpacing = 0,
-            Margin = new Thickness(0, 2, 0, 12)
+    private static Block BuildTable(IReadOnlyList<string[]> rows, Brush tableRule, Brush tableHeader) {
+        var columnCount = rows.Max(row => row.Length);
+
+        var foreground = Res("LabelText", DefaultForegroundBrush);
+        var fontSize   = Application.Current?.Resources["FontSizeMedium"] as double? ?? 13.0;
+
+        var grid = new Grid {
+            HorizontalAlignment = HorizontalAlignment.Left,
         };
 
-        var columnCount = rows.Max(row => row.Length);
-        for (var index = 0; index < columnCount; index++)
-            table.Columns.Add(new TableColumn { Width = GridLength.Auto });
+        for (var c = 0; c < columnCount; c++)
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var group = new TableRowGroup();
-        table.RowGroups.Add(group);
+        for (var r = 0; r < rows.Count; r++)
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++) {
-            var row = new TableRow();
-            group.Rows.Add(row);
-
             for (var columnIndex = 0; columnIndex < columnCount; columnIndex++) {
                 var text = columnIndex < rows[rowIndex].Length ? rows[rowIndex][columnIndex] : string.Empty;
-                var paragraph = new Paragraph {
-                    Margin = new Thickness(0),
-                    TextAlignment = TextAlignment.Left,
-                };
-                AddInlineText(paragraph.Inlines, text);
 
-                row.Cells.Add(new TableCell(paragraph) {
-                    BorderBrush = tableRule,
-                    BorderThickness = new Thickness(0.5),
-                    Padding = new Thickness(8, 5, 8, 5),
-                    Background = rowIndex == 0 ? tableHeader : Brushes.Transparent
-                });
+                var tb = new TextBlock {
+                    Text              = text,
+                    TextWrapping      = TextWrapping.Wrap,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground        = foreground,
+                    FontSize          = fontSize,
+                };
+
+                var cell = new Border {
+                    BorderBrush     = tableRule,
+                    BorderThickness = new Thickness(0, 0, 0.5, 0.5),
+                    Padding         = new Thickness(8, 5, 8, 5),
+                    Background      = rowIndex == 0 ? tableHeader : Brushes.Transparent,
+                    Child           = tb,
+                };
+
+                Grid.SetRow(cell, rowIndex);
+                Grid.SetColumn(cell, columnIndex);
+                grid.Children.Add(cell);
             }
         }
 
-        return table;
+        var outerBorder = new Border {
+            BorderBrush         = tableRule,
+            BorderThickness     = new Thickness(0.5, 0.5, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Child               = grid,
+        };
+
+        return new BlockUIContainer(outerBorder) {
+            Margin = new Thickness(0, 2, 0, 12),
+        };
     }
 
     private static bool IsTableRow(string line) {
