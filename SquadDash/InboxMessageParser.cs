@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 
 namespace SquadDash;
 
@@ -31,17 +30,9 @@ internal sealed class InboxMessageDto
 /// Detects and extracts <c>INBOX_MESSAGE_JSON:</c> sentinel blocks from AI responses.
 /// Uses the same structural pattern as <see cref="HostCommandParser"/>.
 /// </summary>
-internal static partial class InboxMessageParser
+internal static class InboxMessageParser
 {
-    [GeneratedRegex(
-        @"(?s)^(?<body>.*?)(?:\n|^)\s*INBOX_MESSAGE_JSON:\s*(?<json>\{[\s\S]*\})\s*$",
-        RegexOptions.CultureInvariant)]
-    private static partial Regex InboxMessageJsonRegex();
-
-    [GeneratedRegex(
-        @"(?s)^(?<body>.*?)(?:\n|^)\s*```\w*\s*\n\s*INBOX_MESSAGE_JSON:\s*(?<json>\{[\s\S]*\})\s*```\s*$",
-        RegexOptions.CultureInvariant)]
-    private static partial Regex FencedInboxMessageJsonRegex();
+    private const string Marker = "INBOX_MESSAGE_JSON:";
 
     private static readonly JsonSerializerOptions ParseOptions = new()
     {
@@ -51,7 +42,10 @@ internal static partial class InboxMessageParser
     /// <summary>
     /// Attempts to extract an INBOX_MESSAGE_JSON block from <paramref name="text"/>.
     /// Returns true when the sentinel is found and the JSON is valid.
-    /// <paramref name="body"/> receives the text before the block; <paramref name="dto"/> the parsed payload.
+    /// <paramref name="body"/> receives the text before the block (trimmed);
+    /// <paramref name="dto"/> receives the parsed payload.
+    /// Tolerates arbitrary prose appearing after the closing brace.
+    /// When multiple markers are present the last one is used.
     /// </summary>
     internal static bool TryExtract(string text, out string body, out InboxMessageDto? dto)
     {
@@ -62,24 +56,79 @@ internal static partial class InboxMessageParser
             return false;
 
         var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
-        var match      = InboxMessageJsonRegex().Match(normalized);
-        if (!match.Success)
-            match = FencedInboxMessageJsonRegex().Match(normalized);
-        if (!match.Success)
+
+        // Use the last occurrence so that multiple blocks resolve to the final one.
+        int markerIdx = normalized.LastIndexOf(Marker, StringComparison.Ordinal);
+        if (markerIdx < 0)
             return false;
+
+        int braceStart = normalized.IndexOf('{', markerIdx + Marker.Length);
+        if (braceStart < 0)
+            return false;
+
+        // Walk the JSON using brace depth so we stop at the true closing brace,
+        // regardless of whatever prose or markdown follows it.
+        int depth    = 0;
+        int braceEnd = -1;
+        bool inString = false;
+        bool escaped  = false;
+        for (int i = braceStart; i < normalized.Length; i++)
+        {
+            char c = normalized[i];
+            if (escaped)
+            {
+                escaped = false;
+                continue;
+            }
+            if (c == '\\' && inString) { escaped = true; continue; }
+            if (c == '"') { inString = !inString; continue; }
+            if (inString) continue;
+
+            if      (c == '{') depth++;
+            else if (c == '}')
+            {
+                depth--;
+                if (depth == 0) { braceEnd = i; break; }
+            }
+        }
+
+        if (braceEnd < 0)
+            return false;
+
+        var jsonText = normalized[braceStart..(braceEnd + 1)];
 
         try
         {
-            dto = JsonSerializer.Deserialize<InboxMessageDto>(match.Groups["json"].Value, ParseOptions);
+            dto = JsonSerializer.Deserialize<InboxMessageDto>(jsonText, ParseOptions);
             if (dto is null)
                 return false;
 
-            body = match.Groups["body"].Value.TrimEnd();
+            body = StripTrailingCodeFence(normalized[..markerIdx].TrimEnd());
             return true;
         }
         catch (JsonException)
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Strips a trailing code-fence opening line (``` or ```lang) if present,
+    /// so that <c>body</c> does not contain the fence that wraps the INBOX block.
+    /// </summary>
+    private static string StripTrailingCodeFence(string text)
+    {
+        if (text.Length == 0)
+            return text;
+
+        int lastNewline = text.LastIndexOf('\n');
+        var lastLine    = lastNewline < 0 ? text : text[(lastNewline + 1)..];
+        var trimmed     = lastLine.TrimStart();
+        if (trimmed.StartsWith("```", StringComparison.Ordinal))
+        {
+            var before = lastNewline < 0 ? string.Empty : text[..lastNewline];
+            return before.TrimEnd();
+        }
+        return text;
     }
 }

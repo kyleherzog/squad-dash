@@ -12,14 +12,18 @@ internal sealed class TranscriptTextUtilitiesTests {
         Assert.That(sanitized, Is.EqualTo(text));
     }
 
+    /// <summary>
+    /// Previously this was expected not to strip (old end-anchor behavior). Now that the parser
+    /// is intentionally tolerant of trailing prose, even a fenced example block is stripped.
+    /// </summary>
     [Test]
-    public void SanitizeResponseText_CodeFencedExampleWithTrailingText_DoesNotStripText() {
+    public void SanitizeResponseText_CodeFencedExampleWithTrailingText_NowStrips() {
         const string text = """
             Example:
 
             ```json
             INBOX_MESSAGE_JSON:
-            { "subject": "Example" }
+            { "subject": "Example", "from": "", "body": "", "attachments": [] }
             ```
 
             The real response continues here.
@@ -27,7 +31,7 @@ internal sealed class TranscriptTextUtilitiesTests {
 
         var sanitized = TranscriptTextUtilities.SanitizeResponseText(text);
 
-        Assert.That(sanitized, Is.EqualTo(text.TrimEnd()));
+        Assert.That(sanitized, Is.EqualTo("Example:"));
     }
 
     [Test]
