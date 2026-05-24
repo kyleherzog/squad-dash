@@ -16,6 +16,21 @@
   Re-run the duplication scan (or examine git history from that session) to identify what DUP-007
   was and whether it still needs addressing.
 
+- [ ] **[Routing] Add hard-coded argus-weld file-path guard in BuildStrongMatchRoutingInstruction** *(Owner: Arjun Sen)*
+  Orion Vale architectural review (2026-05-24) identified that Argus Weld can be falsely triggered
+  by any prompt mentioning a C# source file with "maintenance" in the name (e.g. MaintenanceRunner.cs).
+  Fix: in SquadBridgePromptBuilder.BuildStrongMatchRoutingInstruction, add a hard-coded guard —
+  if the candidate agent handle is "argus-weld", discard all matched signals unless at least one
+  signal is a path starting with ".squad/maintenance" and ending with ".md".
+  Must ship in the binary so it applies to ALL workspaces on upgrade.
+  File: SquadDash/SquadBridgePromptBuilder.cs
+
+- [ ] **[Routing] ADR — routing.md cannot express negative ownership signals** *(Owner: Mira Quill)*
+  Orion Vale (2026-05-24) found a structural gap: ExtractOwnershipTokens harvests ALL backtick
+  tokens as positive signals — no way to say "not this file" in the Examples column.
+  Record as ADR in .squad/decisions.md. Orion's recommended option: a routing: file-pattern-only
+  metadata field in team.md/charter that restricts strong-match to file-path signals only.
+
 - [ ] **[Orion audit] `_isPromptRunning` — move ownership to PromptExecutionController** *(Owner: Arjun Sen)*
   `_isPromptRunning` is declared in MainWindow, mutated by PEC via setter delegate, read by
   `BackgroundTaskPresenter` via getter delegate, and read directly by MainWindow at 8 call sites.
