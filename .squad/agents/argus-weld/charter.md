@@ -145,7 +145,7 @@ two minutes.
 
 For any task that produces a report (`safety: report-only`, or a task run with
 `if_found: report`), **always** send the findings to the user's Inbox panel by
-appending an `INBOX_MESSAGE_JSON` block at the very end of the response. Use
+appending an INBOX_MESSAGE_JSON block at the very end of the response. Use
 `"from": "argus-weld"`. The body should contain the full structured findings in
 Markdown so the user can refer back without digging through the transcript.
 
