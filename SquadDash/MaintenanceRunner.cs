@@ -170,8 +170,14 @@ internal sealed class MaintenanceRunner {
         "  \"subject\": \"<Short descriptive title — no 'Maintenance Report:' prefix, no date>\",\n" +
         "  \"from\": \"argus-weld\",\n" +
         "  \"body\": \"## <Task Title>\\n\\n<Your full findings in Markdown>\",\n" +
-        "  \"attachments\": []\n" +
-        "}\n\n";
+        "  \"attachments\": [],\n" +
+        "  \"actions\": [\n" +
+        "    { \"label\": \"Fix this\", \"routeMode\": \"start_named_agent\", \"targetAgent\": \"...\", \"prompt\": \"...\" },\n" +
+        "    { \"label\": \"Dismiss\", \"routeMode\": \"done\", \"hint\": \"Acknowledge — no action will be taken\" }\n" +
+        "  ]\n" +
+        "}\n" +
+        "Each action may include an optional \"hint\" field — a short tooltip string shown when the user hovers over the button.\n" +
+        "For routeMode \"done\" actions, including a hint is encouraged (e.g. \"hint\": \"Acknowledge — no action will be taken\").\n\n";
 
     /// <summary>
     /// Appended to report-only prompts as a final reminder checklist so the model cannot
@@ -199,6 +205,8 @@ internal sealed class MaintenanceRunner {
         "   Write the prompt as a complete briefing — include file paths, class names, method names, symptoms, and all\n" +
         "   context you discovered. Prefer stable identifiers (class/method names) over line numbers, which go stale.\n" +
         "   Assume the reader has NO memory of this session.\n" +
+        "   Each action may also include an optional `\"hint\"` field — a short tooltip string shown when the user hovers\n" +
+        "   over the button. For routeMode `\"done\"` actions, including a hint is encouraged.\n" +
         "\n" +
         "4. For report-only tasks: send findings as an inbox message with `\"from\": \"argus-weld\"`.\n" +
         "   Subject = short descriptive title (no 'Maintenance Report:' prefix, no date). Body = full Markdown report. Actions = any follow-up choices.\n" +
@@ -210,7 +218,7 @@ internal sealed class MaintenanceRunner {
         "      \"prompt\": \"Arjun: during maintenance on [date] I found X in [file:line]. Please fix it. [full context]\" },\n" +
         "    { \"label\": \"Add to backlog\", \"routeMode\": \"start_coordinator\",\n" +
         "      \"prompt\": \"Add a task: [description discovered during maintenance on [date]]\" },\n" +
-        "    { \"label\": \"Dismiss\", \"routeMode\": \"done\" }\n" +
+        "    { \"label\": \"Dismiss\", \"routeMode\": \"done\", \"hint\": \"Acknowledge — no action will be taken\" }\n" +
         "  ]\n" +
         "</maintenance_inbox_reminder>";
 
@@ -253,8 +261,14 @@ internal sealed class MaintenanceRunner {
         "  \"subject\": \"<Short descriptive title — no 'Maintenance Report:' prefix, no date>\",\n" +
         "  \"from\": \"argus-weld\",\n" +
         "  \"body\": \"<your full findings in Markdown>\",\n" +
-        "  \"attachments\": []\n" +
-        "}";
+        "  \"attachments\": [],\n" +
+        "  \"actions\": [\n" +
+        "    { \"label\": \"Fix this\", \"routeMode\": \"start_named_agent\", \"targetAgent\": \"...\", \"prompt\": \"...\" },\n" +
+        "    { \"label\": \"Dismiss\", \"routeMode\": \"done\", \"hint\": \"Acknowledge — no action will be taken\" }\n" +
+        "  ]\n" +
+        "}\n" +
+        "Each action may include an optional \"hint\" field — a short tooltip shown when the user hovers over the button.\n" +
+        "For routeMode \"done\" actions, including a hint is encouraged (e.g. \"hint\": \"Acknowledge — no action will be taken\").";
 
     /// <summary>
     /// Evaluates <c>{{#if}}</c>/<c>{{#unless}}</c> conditional blocks and replaces
