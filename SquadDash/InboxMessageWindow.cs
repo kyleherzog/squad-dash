@@ -106,11 +106,13 @@ internal sealed class InboxMessageWindow : ChromedWindow
         // ── Body ──────────────────────────────────────────────────────────────
         var bodyViewer = new FlowDocumentScrollViewer
         {
-            Margin             = new Thickness(8, 6, 8, 8),
-            VerticalAlignment  = VerticalAlignment.Stretch,
+            Margin              = new Thickness(8, 6, 8, 8),
+            Padding             = new Thickness(10, 8, 10, 8),
+            VerticalAlignment   = VerticalAlignment.Stretch,
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            Document           = MarkdownFlowDocumentBuilder.Build(message.Body ?? string.Empty),
+            Document            = MarkdownFlowDocumentBuilder.Build(message.Body ?? string.Empty),
         };
+        bodyViewer.SetResourceReference(FlowDocumentScrollViewer.BackgroundProperty, "CardSurface");
         Grid.SetRow(bodyViewer, 3);
         root.Children.Add(bodyViewer);
     }
