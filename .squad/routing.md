@@ -18,7 +18,7 @@ How to decide who handles what.
 | Architectural code review | Orion Vale | Staff-level review for architectural governance across all layers |
 | Scope & priorities | Orion Vale | What to build next, trade-offs, decomposing epics into phases |
 | Session logging | Scribe | Automatic — never needs routing |
-| Maintenance orchestration (idle tasks) | Argus Weld | `.squad/maintenance.md` task list, idle-window scheduling, session reports |
+| Maintenance orchestration (idle tasks) | Argus Weld | `.squad/maintenance.md` task list, idle-window scheduling, session reports. **File ownership is limited to `.squad/maintenance*.md` files only.** Source files with "maintenance" in the name (e.g. `MaintenanceRunner.cs`, `MaintenancePanelController.cs`) are owned by the appropriate specialist (Arjun Sen, Lyra Morn, etc.) — not Argus Weld. |
 | Squad markdown files & configuration | Malik Graves | `.squad/*.md` files, `maintenance.md` task blocks, `loop*.md` options, `tasks.md` structure, frontmatter correctness |
 
 ## Issue Routing
