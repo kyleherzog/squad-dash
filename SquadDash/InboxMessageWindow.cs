@@ -142,6 +142,14 @@ internal sealed class InboxMessageWindow : ChromedWindow
         btn.SetResourceReference(Button.ForegroundProperty,   "QuickReplyText");
         btn.SetResourceReference(Button.BorderBrushProperty,  "QuickReplyBorder");
 
+        // Show hint as a tooltip. For routeMode "done" with no hint, use a sensible default.
+        var hint = action.Hint;
+        if (string.IsNullOrWhiteSpace(hint) &&
+            string.Equals(action.RouteMode, "done", StringComparison.OrdinalIgnoreCase))
+            hint = "Acknowledge — no action will be taken";
+        if (!string.IsNullOrWhiteSpace(hint))
+            btn.ToolTip = hint;
+
         bool alreadyUsed = msg.UsedActions.Contains(action.Label);
         if (alreadyUsed)
             btn.IsEnabled = false;
