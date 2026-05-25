@@ -33,6 +33,31 @@ max_tasks_per_session: 5
 safety: branch
 enabled_on_idle: true
 configured: false  # ← change to true to activate
+# ─────────────────────────────────────────────
+# DECOMPOSE POLICY
+#
+# For branch-capable tasks, the AI chooses one of two execution paths:
+#
+# PATH 1 — Implement directly (single pass) — use when ALL of:
+#   • ≤ 5 files affected
+#   • No ordering dependencies between changes
+#   • Limited blast radius (no cross-cutting / public API changes)
+#   • A single pass can leave the build green
+#
+# PATH 2 — Decompose (emit TASKS_JSON) — use when ANY of:
+#   • > 5 files affected
+#   • Changes have ordering dependencies
+#   • High blast radius (cross-cutting changes, public API modifications)
+#   • Mid-pass breakage risk (build would be red between steps)
+#
+# When decomposing:
+#   • Do NOT make any code changes in the analysis pass
+#   • Design 2–25 discrete steps, each leaving the build green when done
+#   • Write fully self-contained step descriptions (no shared context assumed)
+#   • Use dependsOn to enforce ordering between steps
+#   • Set branch to {{branch}} (same branch for all steps)
+#   • Emit TASKS_JSON as the last content in your response
+# ─────────────────────────────────────────────
 tasks:
   - id: architectural-practices
     enabled: true
@@ -120,7 +145,7 @@ tasks:
 
   - id: docs-review
     enabled: true
-    frequency: daily
+    frequency: weekly
     safety: report-only
     title: Documentation Review
     instructions: |
