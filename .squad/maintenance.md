@@ -31,78 +31,12 @@
 idle_timeout: 15
 max_tasks_per_session: 5
 safety: branch
-enabled_on_idle: false
+enabled_on_idle: true
 configured: false  # ← change to true to activate
 tasks:
-  - id: run-tests
-    enabled: false
-    frequency: daily
-    safety: branch
-    title: Run Tests
-    instructions: |
-      Run all tests in the repository. Use the appropriate test runner for this
-      project (e.g. `dotnet test`, `npm test`, `go test ./...`).
-
-      {{#if if_failing == "fix"}}
-      Diagnose each failing test. Fix the root cause in source — do not delete
-      tests or weaken assertions. Commit all fixes to the branch.
-      {{/if}}
-      {{#if if_failing == "report"}}
-      Do not change any code. Write a summary of every failing test, the error
-      message, and your diagnosis of the likely cause. Send the report to the
-      user's Inbox using an INBOX_MESSAGE_JSON block (from: "argus-weld").
-      {{/if}}
-    options:
-      if_failing:
-        type: radio
-        label: If failing tests are found
-        tooltip: "Fix failures or only report them"
-        value: fix
-        choices:
-          - value: fix
-            tooltip: Fix each failing test; commit fixes to the branch
-          - value: report
-            tooltip: Report failures only — do not change any code
-
-  - id: eliminate-duplication
-    enabled: false
-    frequency: daily
-    safety: branch
-    title: Eliminate Code Duplication
-    instructions: |
-      Scan the codebase for duplicated logic — identical or near-identical code
-      blocks, copy-pasted utility functions, repeated patterns that should be
-      extracted. Focus on meaningful duplication (not trivial one-liners).
-
-      {{#if if_found == "fix"}}
-      Refactor inline on the current branch. Extract shared logic, update all
-      call sites, ensure tests still pass.
-      {{/if}}
-      {{#if if_found == "branch"}}
-      Create a maintenance branch and refactor there.
-      {{/if}}
-      {{#if if_found == "report"}}
-      Do not change any code. List each duplication instance with file paths,
-      structural anchors, and a brief description of the shared logic. Send the
-      report to the user's Inbox using an INBOX_MESSAGE_JSON block (from: "argus-weld").
-      {{/if}}
-    options:
-      if_found:
-        type: radio
-        label: If duplication is found
-        tooltip: "Refactor now, create a branch, or just report"
-        value: report
-        choices:
-          - value: fix
-            tooltip: Refactor inline on the current branch
-          - value: branch
-            tooltip: Create a maintenance branch and refactor there
-          - value: report
-            tooltip: List each instance — do not change any code
-
   - id: architectural-practices
-    enabled: false
-    frequency: daily
+    enabled: true
+    frequency: monthly
     safety: report-only
     title: Architectural Practice Review
     instructions: |
@@ -133,9 +67,9 @@ tasks:
             tooltip: Write a report — do not change any code
 
   - id: code-smells
-    enabled: false
-    frequency: daily
-    safety: branch
+    enabled: true
+    frequency: weekly
+    safety: report-only
     title: Code Smell Cleanup
     instructions: |
       Scan the codebase for code smells: poor readability, long methods, unclear
@@ -167,68 +101,6 @@ tasks:
           - value: report
             tooltip: List each smell — do not change any code
 
-  - id: speed-improvements
-    enabled: true
-    frequency: daily
-    safety: branch
-    title: Performance Improvements
-    instructions: |
-      Review the codebase for performance opportunities: inefficient algorithms,
-      unnecessary allocations, repeated expensive operations, missing caching,
-      synchronous I/O where async would improve throughput, LINQ queries that
-      could be rewritten, N+1 query patterns, etc.
-
-      {{#if if_found == "fix"}}
-      Implement optimisations inline on the current branch. Add a brief comment
-      explaining the change where the improvement is non-obvious.
-      {{/if}}
-      {{#if if_found == "branch"}}
-      Create a maintenance branch and implement improvements there.
-      {{/if}}
-      {{#if if_found == "report"}}
-      Do not change any code. Describe each opportunity, its likely impact, and
-      the recommended approach. Send the report to the user's Inbox using an
-      INBOX_MESSAGE_JSON block (from: "argus-weld").
-      {{/if}}
-    options:
-      if_found:
-        type: radio
-        label: If performance opportunities are found
-        tooltip: "Implement optimisations or report opportunities"
-        value: report
-        choices:
-          - value: fix
-            tooltip: Implement optimisations inline on the current branch
-          - value: branch
-            tooltip: Create a maintenance branch for the optimisations
-          - value: report
-            tooltip: Describe each opportunity — do not change any code
-
-  - id: todo-fixme-scan
-    enabled: false
-    frequency: per-commit
-    safety: direct
-    title: TODO / FIXME / HACK Scanner
-    instructions: |
-      Scan all source files for TODO, FIXME, HACK, XXX, and NOTE comments.
-      For each comment found, create a task entry in `.squad/tasks.md` if one
-      does not already exist for that comment. Include the file path, line number,
-      and the full comment text in the task description.
-
-      Do not modify any source files. Only append to `.squad/tasks.md`.
-
-  - id: prune-tasks
-    enabled: false
-    frequency: monthly
-    safety: direct
-    title: Prune Completed Tasks
-    instructions: |
-      Open `.squad/tasks.md`. Remove all items that are marked as completed
-      (`[x]`) and have no open sub-tasks. Archive removed items to
-      `.squad/tasks-archive.md` (append, do not overwrite) with a timestamp.
-
-      Do not modify any source files.
-
   - id: commit-review
     enabled: false
     frequency: per-commit
@@ -246,84 +118,8 @@ tasks:
       Write a structured review report. Do not change any code. Send the report
       to the user's Inbox using an INBOX_MESSAGE_JSON block (from: "argus-weld").
 
-  - id: xml-doc-coverage
-    enabled: false
-    frequency: daily
-    safety: report-only
-    title: XML Doc Comment Coverage
-    instructions: |
-      Scan all public types, methods, properties, and interfaces in the C# source
-      for missing XML doc comments (`<summary>`, `<param>`, `<returns>`).
-      Produce a coverage report grouped by file, listing each undocumented member.
-      Do not change any code. Send the report to the user's Inbox using an
-      INBOX_MESSAGE_JSON block (from: "argus-weld").
-
-      If this is not a C# project, adapt to the equivalent docstring convention
-      (JSDoc for TypeScript/JavaScript, docstrings for Python, godoc for Go).
-
-  - id: magic-numbers
-    enabled: false
-    frequency: daily
-    safety: branch
-    title: Extract Magic Numbers and Hardcoded Strings
-    instructions: |
-      Scan the codebase for magic numbers (numeric literals used in logic without
-      explanation) and hardcoded strings that belong in named constants or
-      configuration (connection strings, URLs, thresholds, timeouts, limits, etc.).
-
-      {{#if if_found == "extract"}}
-      Extract each magic value into a named constant or config entry. Update all
-      references. Commit to a maintenance branch.
-      {{/if}}
-      {{#if if_found == "report"}}
-      Do not change any code. List each instance with file path, structural anchor
-      (e.g. ClassName.MethodName), the literal value, and a suggested constant name.
-      {{/if}}
-    options:
-      if_found:
-        type: radio
-        label: If magic numbers or hardcoded strings are found
-        tooltip: "Extract to constants or report them"
-        value: report
-        choices:
-          - value: extract
-            tooltip: Extract to named constants; commit to a maintenance branch
-          - value: report
-            tooltip: List each instance — do not change any code
-
-  - id: readme-currency
-    enabled: false
-    frequency: daily
-    safety: report-only
-    title: README Currency Check
-    instructions: |
-      Compare README.md (and any other top-level docs) against the current state
-      of the codebase. Check for:
-      - Setup or build instructions that no longer match the actual commands
-      - Outdated dependency versions or requirements
-      - References to files, directories, or features that no longer exist
-      - Missing documentation for significant new features or changed APIs
-
-      Write a gap report. Do not change any files. Send the report to the user's
-      Inbox using an INBOX_MESSAGE_JSON block (from: "argus-weld").
-
-  - id: unused-dependencies
-    enabled: false
-    frequency: daily
-    safety: report-only
-    title: Unused Dependency Scan
-    instructions: |
-      Check for NuGet packages (*.csproj), npm packages (package.json), or other
-      dependency manifests in the repository. Identify packages that appear to be
-      unused (not referenced in source or only referenced transitively).
-
-      Write a report listing each potentially unused dependency, the manifest file
-      it appears in, and a note on how to verify and remove it. Do not change any
-      files. Send the report to the user's Inbox using an INBOX_MESSAGE_JSON block
-      (from: "argus-weld").
-
   - id: docs-review
-    enabled: false
+    enabled: true
     frequency: daily
     safety: report-only
     title: Documentation Review
@@ -377,6 +173,72 @@ tasks:
           - value: fix
             tooltip: Fix auto-correctable issues on a maintenance branch; report the rest
 
+  - id: eliminate-duplication
+    enabled: false
+    frequency: daily
+    safety: report-only
+    title: Eliminate Code Duplication
+    instructions: |
+      Scan the codebase for duplicated logic — identical or near-identical code
+      blocks, copy-pasted utility functions, repeated patterns that should be
+      extracted. Focus on meaningful duplication (not trivial one-liners).
+
+      {{#if if_found == "fix"}}
+      Refactor inline on the current branch. Extract shared logic, update all
+      call sites, ensure tests still pass.
+      {{/if}}
+      {{#if if_found == "branch"}}
+      Create a maintenance branch and refactor there.
+      {{/if}}
+      {{#if if_found == "report"}}
+      Do not change any code. List each duplication instance with file paths,
+      structural anchors, and a brief description of the shared logic. Send the
+      report to the user's Inbox using an INBOX_MESSAGE_JSON block (from: "argus-weld").
+      {{/if}}
+    options:
+      if_found:
+        type: radio
+        label: If duplication is found
+        tooltip: "Refactor now, create a branch, or just report"
+        value: report
+        choices:
+          - value: fix
+            tooltip: Refactor inline on the current branch
+          - value: branch
+            tooltip: Create a maintenance branch and refactor there
+          - value: report
+            tooltip: List each instance — do not change any code
+
+  - id: magic-numbers
+    enabled: false
+    frequency: daily
+    safety: report-only
+    title: Extract Magic Numbers and Hardcoded Strings
+    instructions: |
+      Scan the codebase for magic numbers (numeric literals used in logic without
+      explanation) and hardcoded strings that belong in named constants or
+      configuration (connection strings, URLs, thresholds, timeouts, limits, etc.).
+
+      {{#if if_found == "extract"}}
+      Extract each magic value into a named constant or config entry. Update all
+      references. Commit to a maintenance branch.
+      {{/if}}
+      {{#if if_found == "report"}}
+      Do not change any code. List each instance with file path, structural anchor
+      (e.g. ClassName.MethodName), the literal value, and a suggested constant name.
+      {{/if}}
+    options:
+      if_found:
+        type: radio
+        label: If magic numbers or hardcoded strings are found
+        tooltip: "Extract to constants or report them"
+        value: report
+        choices:
+          - value: extract
+            tooltip: Extract to named constants; commit to a maintenance branch
+          - value: report
+            tooltip: List each instance — do not change any code
+
   - id: naming-conventions
     enabled: false
     frequency: daily
@@ -411,6 +273,102 @@ tasks:
             tooltip: Rename directly on the current branch; update all references
           - value: report
             tooltip: List each inconsistency — do not change any code
+
+  - id: speed-improvements
+    enabled: false
+    frequency: daily
+    safety: report-only
+    title: Performance Improvements
+    instructions: |
+      Review the codebase for performance opportunities: inefficient algorithms,
+      unnecessary allocations, repeated expensive operations, missing caching,
+      synchronous I/O where async would improve throughput, LINQ queries that
+      could be rewritten, N+1 query patterns, etc.
+
+      {{#if if_found == "fix"}}
+      Implement optimisations inline on the current branch. Add a brief comment
+      explaining the change where the improvement is non-obvious.
+      {{/if}}
+      {{#if if_found == "branch"}}
+      Create a maintenance branch and implement improvements there.
+      {{/if}}
+      {{#if if_found == "report"}}
+      Do not change any code. Describe each opportunity, its likely impact, and
+      the recommended approach. Send the report to the user's Inbox using an
+      INBOX_MESSAGE_JSON block (from: "argus-weld").
+      {{/if}}
+    options:
+      if_found:
+        type: radio
+        label: If performance opportunities are found
+        tooltip: "Implement optimisations or report opportunities"
+        value: report
+        choices:
+          - value: fix
+            tooltip: Implement optimisations inline on the current branch
+          - value: branch
+            tooltip: Create a maintenance branch for the optimisations
+          - value: report
+            tooltip: Describe each opportunity — do not change any code
+
+  - id: prune-tasks
+    enabled: false
+    frequency: monthly
+    safety: direct
+    title: Prune Completed Tasks
+    instructions: |
+      Open `.squad/tasks.md`. Remove all items that are marked as completed
+      (`[x]`) and have no open sub-tasks. Archive removed items to
+      `.squad/tasks-archive.md` (append, do not overwrite) with a timestamp.
+
+      Do not modify any source files.
+
+  - id: readme-currency
+    enabled: false
+    frequency: daily
+    safety: report-only
+    title: README Currency Check
+    instructions: |
+      Compare README.md (and any other top-level docs) against the current state
+      of the codebase. Check for:
+      - Setup or build instructions that no longer match the actual commands
+      - Outdated dependency versions or requirements
+      - References to files, directories, or features that no longer exist
+      - Missing documentation for significant new features or changed APIs
+
+      Write a gap report. Do not change any files. Send the report to the user's
+      Inbox using an INBOX_MESSAGE_JSON block (from: "argus-weld").
+
+  - id: run-tests
+    enabled: false
+    frequency: daily
+    safety: branch
+    title: Run Tests
+    instructions: |
+      Run all tests in the repository. Use the appropriate test runner for this
+      project (e.g. `dotnet test`, `npm test`, `go test ./...`).
+
+      {{#if if_failing == "fix"}}
+      Diagnose each failing test. Fix the root cause in source — do not delete
+      tests or weaken assertions. Commit all fixes to the branch.
+      {{/if}}
+      {{#if if_failing == "report"}}
+      Do not change any code. Write a summary of every failing test, the error
+      message, and your diagnosis of the likely cause. Send the report to the
+      user's Inbox using an INBOX_MESSAGE_JSON block (from: "argus-weld").
+      {{/if}}
+    options:
+      if_failing:
+        type: radio
+        label: If failing tests are found
+        tooltip: "Fix failures or only report them"
+        value: fix
+        choices:
+          - value: fix
+            tooltip: Fix each failing test; commit fixes to the branch
+          - value: report
+            tooltip: Report failures only — do not change any code
+
   - id: security-audit
     enabled: false
     frequency: weekly
@@ -452,4 +410,47 @@ tasks:
             tooltip: Write a report — do not change any files
           - value: fix
             tooltip: Auto-patch safe fixes on a maintenance branch; report the rest
+
+  - id: todo-fixme-scan
+    enabled: false
+    frequency: per-commit
+    safety: direct
+    title: TODO / FIXME / HACK Scanner
+    instructions: |
+      Scan all source files for TODO, FIXME, HACK, XXX, and NOTE comments.
+      For each comment found, create a task entry in `.squad/tasks.md` if one
+      does not already exist for that comment. Include the file path, line number,
+      and the full comment text in the task description.
+
+      Do not modify any source files. Only append to `.squad/tasks.md`.
+
+  - id: unused-dependencies
+    enabled: false
+    frequency: daily
+    safety: report-only
+    title: Unused Dependency Scan
+    instructions: |
+      Check for NuGet packages (*.csproj), npm packages (package.json), or other
+      dependency manifests in the repository. Identify packages that appear to be
+      unused (not referenced in source or only referenced transitively).
+
+      Write a report listing each potentially unused dependency, the manifest file
+      it appears in, and a note on how to verify and remove it. Do not change any
+      files. Send the report to the user's Inbox using an INBOX_MESSAGE_JSON block
+      (from: "argus-weld").
+
+  - id: xml-doc-coverage
+    enabled: false
+    frequency: daily
+    safety: report-only
+    title: XML Doc Comment Coverage
+    instructions: |
+      Scan all public types, methods, properties, and interfaces in the C# source
+      for missing XML doc comments (`<summary>`, `<param>`, `<returns>`).
+      Produce a coverage report grouped by file, listing each undocumented member.
+      Do not change any code. Send the report to the user's Inbox using an
+      INBOX_MESSAGE_JSON block (from: "argus-weld").
+
+      If this is not a C# project, adapt to the equivalent docstring convention
+      (JSDoc for TypeScript/JavaScript, docstrings for Python, godoc for Go).
 ---
