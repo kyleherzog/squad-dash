@@ -245,7 +245,7 @@ internal static class MarkdownFlowDocumentBuilder {
         };
 
         for (var c = 0; c < columnCount; c++)
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, MaxWidth = 300 });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         for (var r = 0; r < rows.Count; r++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -257,6 +257,7 @@ internal static class MarkdownFlowDocumentBuilder {
                 var tb = new TextBlock {
                     Text              = text,
                     TextWrapping      = TextWrapping.Wrap,
+                    MaxWidth          = 300,
                     VerticalAlignment = VerticalAlignment.Center,
                     Foreground        = foreground,
                     FontSize          = fontSize,
