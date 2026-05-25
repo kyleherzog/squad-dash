@@ -216,77 +216,123 @@ tasks:
     title: Error Handling Audit
     instructions: |
       Audit the codebase for error-handling gaps and unsafe exception patterns.
-      Examine every area listed below. For each finding, record: file path,
-      structural anchor (class + method), category (from the list), severity
-      (Critical / High / Medium / Low), and a concrete description of the problem
-      and the recommended fix.
+      This task is designed to work with any language, framework, or platform —
+      desktop, web, mobile, CLI, or server. Begin by identifying the tech stack
+      (language, UI framework if any, async model, logging infrastructure) so you
+      can apply the relevant sub-checks below accurately.
+
+      For each finding, record: file path, structural anchor (function/class/method),
+      category (from the list), severity (Critical / High / Medium / Low), and a
+      concrete description of the problem and the recommended fix.
 
       **Categories to check:**
 
-      1. **Silent catch blocks** — `catch { }` or `catch (Exception)` with an empty
-         body, a comment only, or a `/* best-effort */` marker that suppresses a
-         genuinely important failure. Distinguish truly best-effort (e.g. UI cleanup
-         on shutdown) from silently swallowed errors that users or callers need to
-         know about.
+      1. **Silent error suppression** — catch or error-handler blocks that swallow
+         failures with no logging, no rethrow, and no user notification. Examples
+         across stacks:
+         - C#: `catch { }` or `catch (Exception ex) { }` with empty body
+         - JavaScript/TypeScript: `.catch(() => {})` or empty `catch (e) {}`
+         - Python: bare `except: pass` or `except Exception: pass`
+         - Go: `if err != nil { _ = err }` (error discarded)
+         - Swift/Kotlin: `try? ...` or `try { } catch { }` with no handling
+         Distinguish genuine best-effort suppression (e.g. cleanup during shutdown)
+         from silently dropped failures that callers or users need to know about.
 
-      2. **Catch-and-return-null / false** — methods that catch internally and return
-         a sentinel value (null, false, -1) with no out-param, no log, and no way for
-         the caller to distinguish "not found" from "threw unexpectedly". Callers
-         silently proceed as if nothing happened.
+      2. **Catch-and-return-sentinel** — functions that catch internally and return
+         a sentinel value (null, false, undefined, -1, empty string) with no log and
+         no way for the caller to distinguish "legitimately absent" from "threw
+         unexpectedly". Callers proceed as if nothing went wrong.
 
-      3. **WPF event handlers without try-catch** — Button.Click, Loaded, Timer.Tick,
-         DispatcherTimer.Tick, and similar UI callbacks. Unhandled exceptions here
-         reach `App_DispatcherUnhandledException` but only if the dispatcher is still
-         running; partial failures may leave UI in inconsistent state. Each handler
-         should catch, log, and surface or recover gracefully.
+      3. **UI event/callback handlers without error guards** — handlers that run
+         in response to user interaction or framework lifecycle events and are not
+         wrapped in error handling. An unguarded exception here typically crashes
+         or freezes the UI without a meaningful message. Applies to:
+         - Desktop (WPF/WinForms/MAUI): event handlers, DispatcherTimer callbacks
+         - Web front-end (React/Vue/Angular/Svelte): onClick, useEffect, lifecycle
+           hooks, component error boundaries missing where subtrees can fail
+         - Mobile (Android/iOS/Flutter): Activity/Fragment callbacks, lifecycle
+           methods, gesture handlers, widget build methods
+         - Node.js/Express: route handlers and middleware without next(err) calls
+         Each handler should catch, log, and recover or degrade gracefully.
 
-      4. **`async void` methods** — any `async void` that is not a WPF/legacy event
-         handler is dangerous: exceptions escape all await chains and cannot be
-         caught by callers. Flag non-event-handler `async void` methods and evaluate
-         whether they should be `async Task`. Also flag `async void` event handlers
-         that have no internal try-catch, since exceptions in those escape to the
-         `DispatcherUnhandledException` handler with no contextual recovery.
+      4. **Unguarded async / concurrent entry points** — language-specific patterns
+         where exceptions escape the normal error-propagation chain:
+         - C#: `async void` (non-event-handler); fire-and-forget `_ = Task.Run(...)`
+           or unawaited calls; lost exceptions only surface via
+           `TaskScheduler.UnobservedTaskException`
+         - JavaScript/TypeScript: unhandled Promise rejections (`.then()` without
+           `.catch()`, `async` functions called without `await` or `.catch()`);
+           missing `process.on('unhandledRejection')` / `window.onunhandledrejection`
+         - Python: background threads or `asyncio` tasks whose exceptions are never
+           retrieved; `asyncio.create_task()` results that are dropped
+         - Go: goroutines without a deferred `recover()`; errors from goroutines
+           that are never sent back over a channel
+         - Swift: `Task { }` blocks where thrown errors are silently discarded
+         - Kotlin: `launch { }` coroutines without a `CoroutineExceptionHandler`
+         Flag each case and evaluate whether the exception needs to surface.
 
-      5. **Fire-and-forget tasks** — `Task.Run(...)`, `_ = SomeAsync()`, or
-         `SomeAsync().ConfigureAwait(false)` that discard the task without attaching
-         a `.ContinueWith` error handler or `await`-ing inside a safe context. Lost
-         task exceptions are only surfaced via `TaskScheduler.UnobservedTaskException`
-         which may fire too late to be useful.
+      5. **Missing resource cleanup on error paths** — code that acquires a resource
+         (file handle, network connection, lock, database transaction, event
+         subscription, native handle) without guaranteeing release on all exit paths:
+         - C#: missing `using` / `IDisposable` or `finally`
+         - JavaScript: missing `finally` or manual cleanup after `try`
+         - Python: missing `with` / context manager or `finally`
+         - Go: missing `defer` for `Close()` / `Unlock()` / `rows.Close()`
+         - Java/Kotlin: missing try-with-resources or `finally`
+         - Swift: missing `defer` for cleanup
+         An exception partway through leaves resources leaked or state corrupted.
 
-      6. **Missing `finally` / `using` for resource cleanup** — code paths that
-         acquire a lock, open a file, start an operation, or subscribe an event
-         handler inside a try block but do not guarantee cleanup in a `finally` or
-         via `using`/`IDisposable`. An exception partway through leaves resources
-         leaked or handlers registered forever.
+      6. **Overly broad exception catches** — catching the most general error type
+         when a narrower type would be more appropriate. Broad catches can mask
+         programming errors (null dereferences, type errors, logic bugs) that should
+         propagate and be fixed. Examples:
+         - C#: `catch (Exception)` instead of `catch (IOException)`
+         - JavaScript: `catch (e)` on code that should only handle `NetworkError`
+         - Python: `except Exception` instead of `except ValueError`
+         - Go: not applicable (explicit error types), but note any pattern of
+           comparing `err != nil` without inspecting the error type where type
+           matters
 
-      7. **Overly broad exception catches** — `catch (Exception)` used where a
-         narrower type (e.g. `IOException`, `JsonException`, `OperationCanceledException`)
-         would be more appropriate. Broad catches can mask programming errors (e.g.
-         `NullReferenceException`, `ArgumentException`) that should propagate and be
-         fixed rather than swallowed.
+      7. **Exception / error messages missing context** — throw or log sites where
+         the message does not include enough information to diagnose the failure:
+         operation name, input value, file path, object identity, or state at the
+         time of failure. A bare "parsing failed" or "unexpected error" is not
+         actionable. The message should answer: what was being done, on what input,
+         and what went wrong specifically.
 
-      8. **Exception messages missing context** — throw/catch sites that construct
-         exception messages or log entries without including the relevant context:
-         operation name, file path, input value, object identity, or state at the
-         time of failure. A bare `"Parsing failed"` is not actionable; include the
-         source, the content, and the position if known.
+      8. **Background / worker errors not surfaced to the user** — exceptions on
+         background threads, worker processes, service workers, web workers, or async
+         tasks that are logged (or not) but never result in any user-visible feedback.
+         Silent background failures leave the application in an inconsistent state
+         with no indication to the user. Check for appropriate error-reporting
+         callbacks, status indicators, or toast/notification dispatch after failure.
 
-      9. **Background-thread exceptions not marshaled to UI** — code running on
-         `ThreadPool`, `Task.Run`, or explicit `Thread` instances that catches
-         exceptions and logs them without also dispatching a user-visible notification.
-         Silent background failures leave the UI in an inconsistent state with no
-         indication to the user that something went wrong.
+      9. **Global error handler gaps** — applications that do not register (or
+         register incompletely) a last-resort unhandled-error handler:
+         - C#: `AppDomain.UnhandledException`, `TaskScheduler.UnobservedTaskException`,
+           `Dispatcher.UnhandledException` (WPF) / `Application.ThreadException` (WinForms)
+         - JavaScript browser: `window.onerror`, `window.onunhandledrejection`
+         - Node.js: `process.on('uncaughtException')`, `process.on('unhandledRejection')`
+         - Python: `sys.excepthook`, logging of unhandled asyncio exceptions
+         - Android: `Thread.setDefaultUncaughtExceptionHandler`
+         - iOS: `NSSetUncaughtExceptionHandler`, signal handlers for SIGABRT/SIGSEGV
+         - Flutter: `FlutterError.onError`, `PlatformDispatcher.instance.onError`
+         Missing handlers mean crashes produce no diagnostic information.
 
-      10. **OperationCanceledException swallowed** — `OperationCanceledException`
-          and `TaskCanceledException` should usually not be caught silently; they
-          represent intentional cancellation and callers/awaiters need to observe
-          them. Flag catch blocks that swallow these without rethrowing or
-          propagating through the cancellation chain.
+      10. **Cancellation / interruption signals swallowed** — language-specific
+          cancellation mechanisms that are silently consumed rather than propagated:
+          - C#: `OperationCanceledException` / `TaskCanceledException` caught without
+            rethrow; `CancellationToken` passed to a method but never checked
+          - JavaScript: `AbortController` / `AbortSignal` ignored in fetch/async code
+          - Python: `asyncio.CancelledError` caught and not re-raised (required in
+            Python ≥ 3.8); `KeyboardInterrupt` swallowed in a bare `except`
+          - Go: `ctx.Done()` channel never selected on in long-running goroutines
+          Swallowing cancellation breaks cooperative shutdown and resource cleanup.
 
       {{#if if_found == "report"}}
       Do not change any code. Produce a structured report grouped by category,
       then by severity within each category. For each finding include:
-      - File path and structural anchor (ClassName.MethodName or similar)
+      - File path and structural anchor (ClassName.MethodName or equivalent)
       - Severity: Critical / High / Medium / Low
       - Description of the problem
       - Recommended fix
@@ -299,12 +345,13 @@ tasks:
       {{/if}}
       {{#if if_found == "fix"}}
       Fix issues that are safe to patch automatically on a maintenance branch:
-      - Add logging to silent catch blocks where the failure is non-trivial
-      - Wrap bare async-void event handlers in try-catch with trace logging
-      - Add `using` or `finally` for obviously leaked resources
+      - Add logging to silent catch/error blocks where the failure is non-trivial
+      - Wrap bare UI event handlers in try-catch / .catch() with appropriate logging
+      - Add resource-cleanup guards (using / finally / defer / with) for obvious leaks
       Issues requiring design decisions (restructuring callers, changing return
-      types, async void→Task conversions with call-site changes) should be
-      reported instead in an INBOX_MESSAGE_JSON block (from: "argus-weld").
+      types, async void→Task conversions with call-site changes, adding global
+      error handlers) should be reported instead in an INBOX_MESSAGE_JSON block
+      (from: "argus-weld").
       {{/if}}
     options:
       if_found:
