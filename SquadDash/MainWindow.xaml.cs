@@ -27775,6 +27775,20 @@ public partial class MainWindow : Window, ILiveElementLocator
                 : responseForParsing;
             SquadDashTrace.Write(TraceCategory.Inbox,
                 $"INBOX_SAVE: InboxMessageParser failed — finalLen={responseForParsing.Length} tail=«{tail}»");
+
+            // If the marker was present but parsing failed, surface the error so the user
+            // can see the raw text and diagnose rather than silently discarding the message.
+            if (responseForParsing.Contains("INBOX_MESSAGE_JSON", StringComparison.Ordinal))
+            {
+                var rawSample = responseForParsing.Length > 3000
+                    ? "...(truncated)...\n" + responseForParsing[^3000..]
+                    : responseForParsing;
+                var parseEx = new InvalidOperationException(
+                    $"INBOX_MESSAGE_JSON was present in the response but could not be parsed as valid JSON.\n\n" +
+                    $"Response length: {responseForParsing.Length} chars\n\n" +
+                    $"--- Raw response (tail) ---\n{rawSample}");
+                ReportUnhandledUiException("Inbox parse", parseEx);
+            }
             return null;
         }
 
