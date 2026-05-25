@@ -30,13 +30,13 @@ internal class ChromedWindow : Window {
     /// </param>
     /// <param name="resizeMode">Defaults to CanResizeWithGrip.</param>
     /// <param name="resizeBorderThickness">
-    /// Width of the invisible resize hit-test border. Default 4. Pass 0 for
+    /// Width of the invisible resize hit-test border. Default 6. Pass 0 for
     /// non-resizable windows (ResizeMode.NoResize) to suppress the hit-test region.
     /// </param>
     protected ChromedWindow(
         double     captionHeight          = 36,
         ResizeMode resizeMode             = ResizeMode.CanResizeWithGrip,
-        double     resizeBorderThickness  = 4) {
+        double     resizeBorderThickness  = 6) {
 
         WindowStyle        = WindowStyle.None;
         AllowsTransparency = true;
