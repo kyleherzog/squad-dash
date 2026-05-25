@@ -27809,9 +27809,15 @@ public partial class MainWindow : Window, ILiveElementLocator
             SquadDashTrace.Write(TraceCategory.Inbox,
                 $"INBOX_SAVE: InboxMessageParser failed — finalLen={responseForParsing.Length} tail=«{tail}»");
 
-            // If the marker was present but parsing failed, surface the error so the user
-            // can see the raw text and diagnose rather than silently discarding the message.
-            if (responseForParsing.Contains("INBOX_MESSAGE_JSON", StringComparison.Ordinal))
+            // If the sentinel plus an opening brace was present the AI intended to emit a block
+            // but the JSON was malformed — surface the error so the user can diagnose it.
+            // A plain prose mention of "INBOX_MESSAGE_JSON" (e.g. in backtick code spans or
+            // AI narration) lacks the colon+brace sequence and must NOT trigger the error panel.
+            const string sentinel = "INBOX_MESSAGE_JSON:";
+            int sentinelIdx = responseForParsing.IndexOf(sentinel, StringComparison.Ordinal);
+            bool hasActualBlock = sentinelIdx >= 0 &&
+                responseForParsing.IndexOf('{', sentinelIdx + sentinel.Length) >= 0;
+            if (hasActualBlock)
             {
                 var rawSample = responseForParsing.Length > 3000
                     ? "...(truncated)...\n" + responseForParsing[^3000..]
