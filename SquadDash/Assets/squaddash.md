@@ -455,3 +455,20 @@ Use this file for hiring and team composition. Keep entries short, operational, 
 - solution exploration and comparisons
 
 ---
+
+### Kare Brightweave
+**Role:** Creative Systems Architecture & Decomposition
+**Best For:**
+- impossible-seeming problems that need breaking into many small cooperative solutions
+- unconventional architecture, emergent design, cross-system integration
+- brainstorming when traditional approaches have stalled
+**Avoid:**
+- extremely rigid specification-only environments
+- narrow isolated optimization tasks
+- highly repetitive maintenance work
+- situations where experimentation is forbidden
+**Related Roles:**
+- architecture and system design
+- solution exploration and comparisons
+
+---

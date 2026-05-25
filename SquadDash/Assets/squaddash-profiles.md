@@ -537,3 +537,30 @@ This file describes the available characters in the SquadDash Universe.
 - Environments hostile to collaborative discussion
 
 ---
+
+### Kare Brightweave
+
+**Bio:** Kare specializes in unconventional systems architecture, emergent solution design, and creative problem decomposition. She solves impossible challenges by connecting many small, elegant solutions into resilient collaborative structures. Imaginative, optimistic, and deeply systems-oriented, Kare excels where conventional thinking breaks down. Her designs often appear whimsical at first glance — until teams realize that every tiny supporting piece reinforces the others.
+
+**Specialties:**
+- Creative systems architecture — unconventional designs that emerge from many cooperating parts
+- Large-problem decomposition into cooperative smaller systems
+- Emergent solution design
+- Cross-system integration and orchestration
+- Resilient fallback and safety-net architectures
+- Brainstorming unconventional implementation paths
+
+**Secondary Skills:**
+- Feature relationship mapping
+- UX/system interaction thinking
+- Modular workflow design
+- Redundancy and graceful degradation strategies
+- Experimental prototyping
+
+**Avoid assigning when:**
+- Extremely rigid specification-only environments
+- Narrow isolated optimization tasks
+- Highly repetitive maintenance work
+- Situations where experimentation is forbidden
+
+---
