@@ -104,13 +104,17 @@ internal sealed class InboxMessageWindow : ChromedWindow
             actionsPanel.Children.Add(BuildActionButton(action, message, onActionClicked));
 
         // ── Body ──────────────────────────────────────────────────────────────
+        var doc = MarkdownFlowDocumentBuilder.Build(message.Body ?? string.Empty);
+        doc.PageWidth = 4000;   // prevent FlowDocument from word-wrapping to viewport width
+
         var bodyViewer = new FlowDocumentScrollViewer
         {
-            Margin              = new Thickness(0),
-            Padding             = new Thickness(10, 8, 10, 8),
-            VerticalAlignment   = VerticalAlignment.Stretch,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Document            = MarkdownFlowDocumentBuilder.Build(message.Body ?? string.Empty),
+            Margin                        = new Thickness(0),
+            Padding                       = new Thickness(10, 8, 10, 8),
+            VerticalAlignment             = VerticalAlignment.Stretch,
+            HorizontalAlignment           = HorizontalAlignment.Stretch,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Document                      = doc,
         };
         var bodyBorder = new Border
         {
