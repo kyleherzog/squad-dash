@@ -203,7 +203,7 @@ internal sealed class InboxPanelController
             Tag        = msg,
             Cursor     = Cursors.Hand,
             Padding    = new Thickness(4, 5, 4, 5),
-            Opacity    = msg.Read ? 0.6 : 1.0,
+            Opacity    = 1.0,
         };
 
         row.MouseEnter += (_, _) => row.SetResourceReference(Border.BackgroundProperty, "HoverSurface");
@@ -296,7 +296,7 @@ internal sealed class InboxPanelController
     {
         msg.Read = true;
         _markRead(msg.Id);
-        row.Opacity            = 0.6;
+        row.Opacity            = 1.0;
         dot.Visibility         = Visibility.Hidden;
         subjectLabel.FontWeight = FontWeights.Normal;
         subjectLabel.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
