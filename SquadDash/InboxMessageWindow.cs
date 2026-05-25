@@ -105,7 +105,6 @@ internal sealed class InboxMessageWindow : ChromedWindow
 
         // ── Body ──────────────────────────────────────────────────────────────
         var doc = MarkdownFlowDocumentBuilder.Build(message.Body ?? string.Empty);
-        doc.PageWidth = 4000;   // prevent FlowDocument from word-wrapping to viewport width
 
         var bodyViewer = new FlowDocumentScrollViewer
         {
@@ -113,6 +112,8 @@ internal sealed class InboxMessageWindow : ChromedWindow
             Padding                       = new Thickness(10, 8, 10, 8),
             VerticalAlignment             = VerticalAlignment.Stretch,
             HorizontalAlignment           = HorizontalAlignment.Stretch,
+            // Auto shows a horizontal scrollbar only when content (e.g. a wide table)
+            // genuinely overflows the viewport. Text paragraphs reflow normally.
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             Document                      = doc,
         };
