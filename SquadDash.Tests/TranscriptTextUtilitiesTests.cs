@@ -68,4 +68,42 @@ internal sealed class TranscriptTextUtilitiesTests {
 
         Assert.That(sanitized, Is.EqualTo("Report ready."));
     }
+
+    [Test]
+    public void MergeStreamingAndFinalResponse_AppendsTail_WhenFinalStartsWithStreamedText() {
+        const string streamed = "Okay, now I have everything I need to solve the problem.";
+        const string final = """
+            Okay, now I have everything I need to solve the problem.
+
+            ## Findings
+
+            The report continues with the actual analysis.
+            """;
+
+        var merged = TranscriptTextUtilities.MergeStreamingAndFinalResponse(
+            streamed,
+            final,
+            out var tail);
+
+        Assert.Multiple(() => {
+            Assert.That(merged, Is.EqualTo(final));
+            Assert.That(tail, Does.Contain("## Findings"));
+        });
+    }
+
+    [Test]
+    public void MergeStreamingAndFinalResponse_UsesLongerFinal_WhenStreamedTextIsIncomplete() {
+        const string streamed = "Short partial opening.";
+        const string final = "Full final response with more detail, but a slightly different opening.";
+
+        var merged = TranscriptTextUtilities.MergeStreamingAndFinalResponse(
+            streamed,
+            final,
+            out var tail);
+
+        Assert.Multiple(() => {
+            Assert.That(merged, Is.EqualTo(final));
+            Assert.That(tail, Is.Null);
+        });
+    }
 }

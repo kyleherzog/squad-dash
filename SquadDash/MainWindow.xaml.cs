@@ -4717,10 +4717,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (!string.IsNullOrWhiteSpace(evt.ReasoningText))
             AppendThinkingText(thread, evt.ReasoningText!, thread.Title);
 
-        if (!thread.ResponseStreamed && !string.IsNullOrWhiteSpace(evt.Text))
-        {
-            AppendText(thread, evt.Text!);
-        }
+        if (!string.IsNullOrWhiteSpace(evt.Text))
+            ReconcileFinalSubagentResponseText(thread, evt.Text!);
 
         thread.LatestResponse = GetSanitizedTurnResponseTextOrNull(thread.CurrentTurn);
         thread.DetailText = !string.IsNullOrWhiteSpace(thread.LatestResponse)
@@ -4734,7 +4732,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (string.IsNullOrWhiteSpace(rawResponse) && thread.ResponseStreamed)
             SquadDashTrace.Write(TraceCategory.Inbox,
                 $"INBOX_SAVE: HandleSubagentMessage — ResponseTextBuilder empty despite streaming for agent={thread.AgentId ?? thread.Title}");
-        var messageId = TrySaveInboxMessage(rawResponse);
+        var messageId = TrySaveInboxMessageFromResponse(rawResponse);
         if (messageId is not null && thread.CurrentTurn?.ResponseEntries.Count > 0)
             thread.CurrentTurn.ResponseEntries[^1].InboxMessageId = messageId;
 
@@ -4745,6 +4743,38 @@ public partial class MainWindow : Window, ILiveElementLocator
         UpdateAgentCardFromThread(thread);
         _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, "subagent_message");
         _conversationManager.SaveAgentThreadToConversation(thread, DateTimeOffset.UtcNow);
+    }
+
+    private void ReconcileFinalSubagentResponseText(TranscriptThreadState thread, string finalText)
+    {
+        if (string.IsNullOrWhiteSpace(finalText))
+            return;
+
+        _agentThreadRegistry.EnsureAgentThreadTurnStarted(thread);
+        var builder = thread.CurrentTurn?.ResponseTextBuilder;
+        if (builder is null)
+        {
+            thread.LatestResponse = SanitizeResponseTextOrNull(finalText);
+            return;
+        }
+
+        var current = builder.ToString();
+        var merged = TranscriptTextUtilities.MergeStreamingAndFinalResponse(
+            current,
+            finalText,
+            out var tailToAppend);
+
+        if (!string.IsNullOrEmpty(tailToAppend))
+        {
+            AppendText(thread, tailToAppend);
+        }
+        else if (!string.Equals(merged, current, StringComparison.Ordinal))
+        {
+            builder.Clear();
+            builder.Append(merged);
+        }
+
+        thread.LatestResponse = SanitizeResponseTextOrNull(merged);
     }
 
     private void HandleSubagentToolStart(SquadSdkEvent evt)
@@ -4835,6 +4865,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
 
         var thread = _agentThreadRegistry.GetOrCreateAgentThread(evt);
+        if (!string.IsNullOrWhiteSpace(evt.LatestResponse))
+            ReconcileFinalSubagentResponseText(thread, evt.LatestResponse!);
         _agentThreadRegistry.UpdateAgentThreadLifecycle(thread, evt, statusText: "Completed", detailText: AgentThreadRegistry.BuildThreadCompletionDetail(thread, evt));
         _agentThreadRegistry.FinalizeAgentThread(thread);
         UpdateCompletedTimeFooters();
@@ -27716,13 +27748,14 @@ public partial class MainWindow : Window, ILiveElementLocator
     /// and refreshes the panel. No-ops if already saved for this turn, if no block is found, or if
     /// the inbox store is unavailable.
     /// </summary>
-    private void TrySaveInboxMessageFromResponse(string? rawResponse)
+    private string? TrySaveInboxMessageFromResponse(string? rawResponse)
     {
         if (_inboxSavedForCurrentTurn)
-            return;
+            return null;
         var messageId = TrySaveInboxMessage(rawResponse);
         if (messageId is not null)
             _inboxSavedForCurrentTurn = true;
+        return messageId;
     }
 
     /// <summary>
@@ -27802,6 +27835,13 @@ public partial class MainWindow : Window, ILiveElementLocator
             Attachments = dto.Attachments,
             Actions     = dto.Actions,
         };
+
+        if (_inboxStore.FindRecentSimilarMessage(message, TimeSpan.FromMinutes(5)) is { } existing)
+        {
+            SquadDashTrace.Write(TraceCategory.Inbox,
+                $"INBOX_SAVE: skipped duplicate id={existing.Id} subject=\"{existing.Subject}\"");
+            return existing.Id;
+        }
 
         _inboxStore.Save(message);
         SquadDashTrace.Write(TraceCategory.Inbox,
@@ -27909,6 +27949,9 @@ public partial class MainWindow : Window, ILiveElementLocator
                         {
                             latestMaintenanceThreadId = argusThread.ThreadId;
                             anchorIndex = argusThread.PromptParagraphs.Count - 1;
+                            TrySaveInboxMessageFromResponse(
+                                argusThread.CurrentTurn?.ResponseTextBuilder.ToString()
+                                ?? argusThread.LatestResponse);
                         }
                         tcs.TrySetResult(anchorIndex);
                     }
@@ -27937,7 +27980,13 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 Dispatcher.InvokeAsync(async () =>
                 {
-                    var reportPath = _maintenanceReportWriter?.WriteReport(report) ?? "";
+                    // Skip the report file when nothing actually ran (e.g. all tasks skipped
+                    // or maintenance.md has configured: false). Empty reports add noise.
+                    var hasActivity = report.TaskResults.Any(
+                        t => t.Outcome != MaintenanceTaskOutcome.Skipped);
+                    var reportPath = hasActivity
+                        ? (_maintenanceReportWriter?.WriteReport(report) ?? "")
+                        : "";
                     if (!string.IsNullOrEmpty(reportPath) && stubRecords.Count > 0)
                     {
                         _maintenanceReportWriter?.WriteStubSidecar(reportPath, stubRecords);

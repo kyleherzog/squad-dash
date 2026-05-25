@@ -375,3 +375,6 @@ FodyWeavers.xsd
 
 # SquadDash — maintenance state (auto-managed)
 maintenance-state.json
+
+# SquadDash — maintenance reports (runtime, not for version control)
+.squad/maintenance-reports/

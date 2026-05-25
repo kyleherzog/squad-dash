@@ -44,6 +44,55 @@ internal static class TranscriptTextUtilities
         return collapsed[..117] + "...";
     }
 
+    internal static string MergeStreamingAndFinalResponse(
+        string? streamingResponse,
+        string? finalResponse,
+        out string? tailToAppend)
+    {
+        tailToAppend = null;
+
+        var current = streamingResponse ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(finalResponse))
+            return current;
+
+        var final = finalResponse!;
+        if (string.IsNullOrEmpty(current))
+        {
+            tailToAppend = final;
+            return final;
+        }
+
+        if (string.Equals(current, final, StringComparison.Ordinal))
+            return current;
+
+        if (final.StartsWith(current, StringComparison.Ordinal))
+        {
+            tailToAppend = final[current.Length..];
+            return final;
+        }
+
+        var trimmedCurrent = current.TrimEnd();
+        if (trimmedCurrent.Length > 0 &&
+            final.StartsWith(trimmedCurrent, StringComparison.Ordinal))
+        {
+            tailToAppend = final[trimmedCurrent.Length..];
+            return final;
+        }
+
+        if (current.StartsWith(final, StringComparison.Ordinal))
+            return current;
+
+        var overlap = FindSuffixPrefixOverlap(current, final);
+        if (overlap >= Math.Min(64, current.Length / 2) &&
+            overlap < final.Length)
+        {
+            tailToAppend = final[overlap..];
+            return current + tailToAppend;
+        }
+
+        return final.Length > current.Length ? final : current;
+    }
+
     internal static string BuildTimedStatusText(
         string? statusText,
         DateTimeOffset? startedAt,
@@ -134,4 +183,15 @@ internal static class TranscriptTextUtilities
 
     private static string RemoveQuickReplySuffix(string text) =>
         QuickReplyOptionParser.TryExtract(text, out var body, out _) ? body : text;
+
+    private static int FindSuffixPrefixOverlap(string left, string right)
+    {
+        var max = Math.Min(left.Length, right.Length);
+        for (var length = max; length > 0; length--)
+            if (left.AsSpan(left.Length - length, length)
+                    .SequenceEqual(right.AsSpan(0, length)))
+                return length;
+
+        return 0;
+    }
 }

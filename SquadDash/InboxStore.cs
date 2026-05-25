@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace SquadDash;
 
@@ -64,6 +65,36 @@ public class InboxStore
             EnsureInboxDirectory();
             var json = JsonSerializer.Serialize(message, JsonOptions);
             JsonFileStorage.AtomicWrite(GetFilePath(message.Id), json);
+        }
+    }
+
+    public InboxMessage? FindRecentSimilarMessage(InboxMessage message, TimeSpan window)
+    {
+        if (message is null)
+            return null;
+
+        var normalizedSubject = NormalizeSubject(message.Subject ?? string.Empty);
+        var normalizedFrom    = (message.From ?? string.Empty).Trim();
+        var timestamp         = message.Timestamp;
+
+        lock (_sync)
+        {
+            if (!Directory.Exists(_inboxFolder))
+                return null;
+
+            return Directory
+                .EnumerateFiles(_inboxFolder, "*.json", SearchOption.TopDirectoryOnly)
+                .Select(TryReadMessage)
+                .Where(existing => existing is not null)
+                .Cast<InboxMessage>()
+                .Where(existing =>
+                    string.Equals(NormalizeSubject(existing.Subject ?? string.Empty), normalizedSubject, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals((existing.From ?? string.Empty).Trim(), normalizedFrom, StringComparison.OrdinalIgnoreCase) &&
+                    timestamp - existing.Timestamp <= window &&
+                    existing.Timestamp - timestamp <= window &&
+                    AreBodiesSimilar(existing.Body, message.Body))
+                .OrderByDescending(existing => existing.Timestamp)
+                .FirstOrDefault();
         }
     }
 
@@ -260,4 +291,45 @@ public class InboxStore
         }
         catch { return null; }
     }
+
+    private static bool AreBodiesSimilar(string? first, string? second)
+    {
+        var firstNormalized  = NormalizeBodyForDuplicateCheck(first);
+        var secondNormalized = NormalizeBodyForDuplicateCheck(second);
+
+        if (string.IsNullOrWhiteSpace(firstNormalized) || string.IsNullOrWhiteSpace(secondNormalized))
+            return string.Equals(firstNormalized, secondNormalized, StringComparison.Ordinal);
+
+        if (string.Equals(firstNormalized, secondNormalized, StringComparison.Ordinal))
+            return true;
+
+        if (firstNormalized.Length >= 120 &&
+            secondNormalized.Length >= 120 &&
+            (firstNormalized.Contains(secondNormalized, StringComparison.Ordinal) ||
+             secondNormalized.Contains(firstNormalized, StringComparison.Ordinal)))
+            return true;
+
+        var firstWords  = ExtractComparableWords(firstNormalized);
+        var secondWords = ExtractComparableWords(secondNormalized);
+        if (firstWords.Count == 0 || secondWords.Count == 0)
+            return false;
+
+        var overlap = firstWords.Count(word => secondWords.Contains(word));
+        var coverage = overlap / (double)Math.Min(firstWords.Count, secondWords.Count);
+        return coverage >= 0.75;
+    }
+
+    private static string NormalizeBodyForDuplicateCheck(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            return string.Empty;
+
+        return Regex.Replace(body.ToLowerInvariant(), @"\s+", " ").Trim();
+    }
+
+    private static HashSet<string> ExtractComparableWords(string text) =>
+        Regex.Matches(text, @"[a-z0-9_]{3,}")
+            .Select(match => match.Value)
+            .Take(4000)
+            .ToHashSet(StringComparer.Ordinal);
 }

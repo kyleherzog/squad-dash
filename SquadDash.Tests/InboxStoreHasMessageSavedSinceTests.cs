@@ -91,4 +91,46 @@ internal sealed class InboxStoreHasMessageSavedSinceTests {
         Assert.That(result, Is.True,
             "Should return true when at least one message post-dates 'since'");
     }
+
+    [Test]
+    public void FindRecentSimilarMessage_ReturnsExisting_WhenSubjectSenderAndBodyOverlap() {
+        var existing = new InboxMessage {
+            Id        = "existing",
+            Subject   = "Maintenance Report: Design Spec v2 - 2026-05-25",
+            From      = "argus-weld",
+            Timestamp = DateTimeOffset.Now,
+            Body      = "Design spec overview. TASKS_JSON protocol. Continuous context threading. Cycle detection. Failure handling."
+        };
+        var candidate = existing with {
+            Id        = "candidate",
+            Subject   = "Design Spec v2",
+            Timestamp = existing.Timestamp.AddMinutes(1),
+            Body      = "Design spec overview. TASKS_JSON protocol. Continuous context threading. Cycle detection. Failure handling. Extra wording."
+        };
+        _store.Save(existing);
+
+        var duplicate = _store.FindRecentSimilarMessage(candidate, TimeSpan.FromMinutes(5));
+
+        Assert.That(duplicate?.Id, Is.EqualTo("existing"));
+    }
+
+    [Test]
+    public void FindRecentSimilarMessage_ReturnsNull_WhenSimilarMessageIsOutsideWindow() {
+        var existing = new InboxMessage {
+            Id        = "existing-old",
+            Subject   = "Design Spec v2",
+            From      = "argus-weld",
+            Timestamp = DateTimeOffset.Now.AddMinutes(-10),
+            Body      = "same body content"
+        };
+        var candidate = existing with {
+            Id        = "candidate-new",
+            Timestamp = DateTimeOffset.Now,
+        };
+        _store.Save(existing);
+
+        var duplicate = _store.FindRecentSimilarMessage(candidate, TimeSpan.FromMinutes(5));
+
+        Assert.That(duplicate, Is.Null);
+    }
 }

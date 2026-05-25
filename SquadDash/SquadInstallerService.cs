@@ -269,34 +269,46 @@ internal sealed class SquadInstallerService {
     }
 
     /// <summary>
-    /// Ensures <c>maintenance-state.json</c> has an entry in the workspace
-    /// <c>.gitignore</c>. Creates the file if absent. Returns <c>true</c>
-    /// if the file was modified, <c>false</c> if the entry was already present.
+    /// Ensures SquadDash runtime files are excluded from version control by adding
+    /// any missing entries to the workspace <c>.gitignore</c>. Creates the file if
+    /// absent. Returns <c>true</c> if the file was modified.
     /// </summary>
     internal static bool EnsureMaintenanceStateInGitIgnore(string workspaceFolder) {
-        const string entry = "maintenance-state.json";
+        // Each tuple: (gitignore entry, comment line written above it on first add)
+        (string Entry, string Comment)[] required = [
+            ("maintenance-state.json",       "# SquadDash — maintenance state (auto-managed)"),
+            (".squad/maintenance-reports/",  "# SquadDash — maintenance reports (runtime, not for version control)"),
+        ];
+
         var gitIgnorePath = Path.Combine(workspaceFolder, ".gitignore");
 
         try {
-            if (File.Exists(gitIgnorePath)) {
-                var lines = File.ReadAllLines(gitIgnorePath);
-                if (lines.Any(line => string.Equals(line.Trim(), entry, StringComparison.OrdinalIgnoreCase)))
-                    return false;   // already present
+            var existing = File.Exists(gitIgnorePath)
+                ? new HashSet<string>(
+                    File.ReadAllLines(gitIgnorePath).Select(l => l.Trim()),
+                    StringComparer.OrdinalIgnoreCase)
+                : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-                File.AppendAllText(
-                    gitIgnorePath,
-                    $"{Environment.NewLine}# SquadDash — maintenance state (auto-managed){Environment.NewLine}{entry}{Environment.NewLine}",
-                    Encoding.UTF8);
+            var missing = required.Where(r => !existing.Contains(r.Entry)).ToList();
+            if (missing.Count == 0)
+                return false;
+
+            var sb = new System.Text.StringBuilder();
+            foreach (var (entry, comment) in missing) {
+                sb.AppendLine();
+                sb.AppendLine(comment);
+                sb.AppendLine(entry);
             }
-            else {
-                File.WriteAllText(
-                    gitIgnorePath,
-                    $"# SquadDash — maintenance state (auto-managed){Environment.NewLine}{entry}{Environment.NewLine}",
-                    Encoding.UTF8);
-            }
+            var toAppend = sb.ToString();
+
+            if (!File.Exists(gitIgnorePath))
+                File.WriteAllText(gitIgnorePath, toAppend.TrimStart(), Encoding.UTF8);
+            else
+                File.AppendAllText(gitIgnorePath, toAppend, Encoding.UTF8);
 
             SquadDashTrace.Write(TraceCategory.General,
-                $"SquadInstallerService: appended '{entry}' to {gitIgnorePath}");
+                $"SquadInstallerService: added {missing.Count} entry(s) to {gitIgnorePath}: " +
+                string.Join(", ", missing.Select(r => r.Entry)));
             return true;
         }
         catch (Exception ex) {

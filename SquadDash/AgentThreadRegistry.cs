@@ -609,6 +609,19 @@ internal sealed class AgentThreadRegistry {
                     _finalizeCurrentTurnResponse(thread);
                     thread.ResponseStreamed = false;
                 }
+                else if (thread.CurrentTurn?.ResponseTextBuilder is { } builder) {
+                    var merged = TranscriptTextUtilities.MergeStreamingAndFinalResponse(
+                        builder.ToString(),
+                        agent.LatestResponse,
+                        out var tailToAppend);
+                    if (!string.IsNullOrEmpty(tailToAppend)) {
+                        _appendText(thread, tailToAppend);
+                    }
+                    else if (!string.Equals(merged, builder.ToString(), StringComparison.Ordinal)) {
+                        builder.Clear();
+                        builder.Append(merged);
+                    }
+                }
 
                 thread.LatestResponse = SanitizeResponseTextOrNull(agent.LatestResponse);
             }
