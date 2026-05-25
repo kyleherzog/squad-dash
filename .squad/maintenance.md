@@ -209,6 +209,115 @@ tasks:
           - value: report
             tooltip: List each instance — do not change any code
 
+  - id: error-handling-audit
+    enabled: true
+    frequency: weekly
+    safety: report-only
+    title: Error Handling Audit
+    instructions: |
+      Audit the codebase for error-handling gaps and unsafe exception patterns.
+      Examine every area listed below. For each finding, record: file path,
+      structural anchor (class + method), category (from the list), severity
+      (Critical / High / Medium / Low), and a concrete description of the problem
+      and the recommended fix.
+
+      **Categories to check:**
+
+      1. **Silent catch blocks** — `catch { }` or `catch (Exception)` with an empty
+         body, a comment only, or a `/* best-effort */` marker that suppresses a
+         genuinely important failure. Distinguish truly best-effort (e.g. UI cleanup
+         on shutdown) from silently swallowed errors that users or callers need to
+         know about.
+
+      2. **Catch-and-return-null / false** — methods that catch internally and return
+         a sentinel value (null, false, -1) with no out-param, no log, and no way for
+         the caller to distinguish "not found" from "threw unexpectedly". Callers
+         silently proceed as if nothing happened.
+
+      3. **WPF event handlers without try-catch** — Button.Click, Loaded, Timer.Tick,
+         DispatcherTimer.Tick, and similar UI callbacks. Unhandled exceptions here
+         reach `App_DispatcherUnhandledException` but only if the dispatcher is still
+         running; partial failures may leave UI in inconsistent state. Each handler
+         should catch, log, and surface or recover gracefully.
+
+      4. **`async void` methods** — any `async void` that is not a WPF/legacy event
+         handler is dangerous: exceptions escape all await chains and cannot be
+         caught by callers. Flag non-event-handler `async void` methods and evaluate
+         whether they should be `async Task`. Also flag `async void` event handlers
+         that have no internal try-catch, since exceptions in those escape to the
+         `DispatcherUnhandledException` handler with no contextual recovery.
+
+      5. **Fire-and-forget tasks** — `Task.Run(...)`, `_ = SomeAsync()`, or
+         `SomeAsync().ConfigureAwait(false)` that discard the task without attaching
+         a `.ContinueWith` error handler or `await`-ing inside a safe context. Lost
+         task exceptions are only surfaced via `TaskScheduler.UnobservedTaskException`
+         which may fire too late to be useful.
+
+      6. **Missing `finally` / `using` for resource cleanup** — code paths that
+         acquire a lock, open a file, start an operation, or subscribe an event
+         handler inside a try block but do not guarantee cleanup in a `finally` or
+         via `using`/`IDisposable`. An exception partway through leaves resources
+         leaked or handlers registered forever.
+
+      7. **Overly broad exception catches** — `catch (Exception)` used where a
+         narrower type (e.g. `IOException`, `JsonException`, `OperationCanceledException`)
+         would be more appropriate. Broad catches can mask programming errors (e.g.
+         `NullReferenceException`, `ArgumentException`) that should propagate and be
+         fixed rather than swallowed.
+
+      8. **Exception messages missing context** — throw/catch sites that construct
+         exception messages or log entries without including the relevant context:
+         operation name, file path, input value, object identity, or state at the
+         time of failure. A bare `"Parsing failed"` is not actionable; include the
+         source, the content, and the position if known.
+
+      9. **Background-thread exceptions not marshaled to UI** — code running on
+         `ThreadPool`, `Task.Run`, or explicit `Thread` instances that catches
+         exceptions and logs them without also dispatching a user-visible notification.
+         Silent background failures leave the UI in an inconsistent state with no
+         indication to the user that something went wrong.
+
+      10. **OperationCanceledException swallowed** — `OperationCanceledException`
+          and `TaskCanceledException` should usually not be caught silently; they
+          represent intentional cancellation and callers/awaiters need to observe
+          them. Flag catch blocks that swallow these without rethrowing or
+          propagating through the cancellation chain.
+
+      {{#if if_found == "report"}}
+      Do not change any code. Produce a structured report grouped by category,
+      then by severity within each category. For each finding include:
+      - File path and structural anchor (ClassName.MethodName or similar)
+      - Severity: Critical / High / Medium / Low
+      - Description of the problem
+      - Recommended fix
+
+      At the end, include a brief summary: total findings by severity, and the
+      two or three highest-priority items to address first.
+
+      Send the report to the user's Inbox using an INBOX_MESSAGE_JSON block
+      (from: "argus-weld").
+      {{/if}}
+      {{#if if_found == "fix"}}
+      Fix issues that are safe to patch automatically on a maintenance branch:
+      - Add logging to silent catch blocks where the failure is non-trivial
+      - Wrap bare async-void event handlers in try-catch with trace logging
+      - Add `using` or `finally` for obviously leaked resources
+      Issues requiring design decisions (restructuring callers, changing return
+      types, async void→Task conversions with call-site changes) should be
+      reported instead in an INBOX_MESSAGE_JSON block (from: "argus-weld").
+      {{/if}}
+    options:
+      if_found:
+        type: radio
+        label: If error-handling gaps are found
+        tooltip: "Produce a report or patch safe fixes automatically"
+        value: report
+        choices:
+          - value: report
+            tooltip: Write a structured report — do not change any code
+          - value: fix
+            tooltip: Patch safe fixes on a maintenance branch; report the rest
+
   - id: magic-numbers
     enabled: false
     frequency: daily
@@ -370,7 +479,7 @@ tasks:
             tooltip: Report failures only — do not change any code
 
   - id: security-audit
-    enabled: false
+    enabled: true
     frequency: weekly
     safety: report-only
     title: Security Vulnerability Audit
