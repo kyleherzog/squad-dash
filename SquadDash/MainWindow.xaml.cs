@@ -27591,6 +27591,12 @@ public partial class MainWindow : Window, ILiveElementLocator
                     var isInboxExcerpt = att.ContentBlock.Contains("type=\"inbox-excerpt\"", StringComparison.Ordinal)
                         && att.InboxMessageId != null;
 
+                    Trace.WriteLine($"[EXCERPT ATTACH] Creating attachment - isInboxExcerpt={isInboxExcerpt}, hasInboxMessageId={att.InboxMessageId != null}, hasContentBlock={att.ContentBlock != null}");
+                    if (isInboxExcerpt)
+                    {
+                        Trace.WriteLine($"[EXCERPT ATTACH] ContentBlock preview: {att.ContentBlock!.Substring(0, Math.Min(200, att.ContentBlock.Length))}");
+                    }
+
                     if (att.Description.StartsWith("Note: ", StringComparison.Ordinal))
                     {
                         var icon = new Run("📝 ");
@@ -27620,7 +27626,9 @@ public partial class MainWindow : Window, ILiveElementLocator
                         // For inbox-excerpt: open the message window and select the excerpt
                         label.MouseLeftButtonUp += (_, _) =>
                         {
+                            Trace.WriteLine($"[EXCERPT CLICK] Attachment clicked! InboxMessageId={capturedContent.InboxMessageId}");
                             var excerptText = ExtractExcerptTextFromAttachment(capturedContent.ContentBlock!);
+                            Trace.WriteLine($"[EXCERPT CLICK] Extracted excerpt text: '{excerptText}'");
                             OpenOrFocusInboxMessageAndSelectText(capturedContent.InboxMessageId!, excerptText);
                         };
                     }
