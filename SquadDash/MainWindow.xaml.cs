@@ -27435,6 +27435,57 @@ public partial class MainWindow : Window, ILiveElementLocator
         win.Show();
     }
 
+    private void OpenOrFocusInboxMessageAndSelectText(string messageId, string excerptText)
+    {
+        var existing = _openInboxWindows.FirstOrDefault(w => w.MessageId == messageId);
+        if (existing is not null)
+        {
+            if (existing.WindowState == WindowState.Minimized)
+                existing.WindowState = WindowState.Normal;
+            existing.Activate();
+            existing.SelectAndScrollToText(excerptText);
+            return;
+        }
+
+        var msg = _inboxStore?.LoadAll().FirstOrDefault(m => m.Id == messageId);
+        if (msg is null) return;
+        var win = new InboxMessageWindow(
+            msg, 
+            DispatchInboxAction, 
+            LookupTaskById,
+            attachSelectedTextToChat: AttachInboxMessageSelectedTextFollowUp);
+        win.Owner = CanShowOwnedWindow() ? this : null;
+        _openInboxWindows.Add(win);
+        win.Closed += (_, _) => _openInboxWindows.Remove(win);
+        win.Show();
+        
+        // Select text after window is shown (ensures layout is complete)
+        win.SelectAndScrollToText(excerptText);
+    }
+
+    private static string ExtractExcerptTextFromAttachment(string contentBlock)
+    {
+        // Extract the content from the attachment block
+        var content = AttachmentBlockFormatter.ExtractAttachmentContent(contentBlock);
+        
+        // Find the "Selected excerpt:" section followed by "---"
+        var excerptMarker = "Selected excerpt:";
+        var excerptStart = content.IndexOf(excerptMarker, StringComparison.Ordinal);
+        if (excerptStart < 0) return string.Empty;
+
+        excerptStart += excerptMarker.Length;
+        
+        // Skip past the separator line "---"
+        var separatorStart = content.IndexOf("---", excerptStart, StringComparison.Ordinal);
+        if (separatorStart < 0) return string.Empty;
+        
+        separatorStart += 3; // Move past "---"
+        
+        // Extract the text after the separator (this is the actual excerpt)
+        var excerptText = content[separatorStart..].Trim();
+        return excerptText;
+    }
+
     private void AttachFollowUpToActiveTab(CommitApprovalItem item)
     {
         var list = GetOrCreateFollowUpList(_activeTabId ?? "");
@@ -27523,6 +27574,10 @@ public partial class MainWindow : Window, ILiveElementLocator
                 }
                 else if (att.ContentBlock != null)
                 {
+                    // Check if this is an inbox-excerpt attachment
+                    var isInboxExcerpt = att.ContentBlock.Contains("type=\"inbox-excerpt\"", StringComparison.Ordinal)
+                        && att.InboxMessageId != null;
+
                     if (att.Description.StartsWith("Note: ", StringComparison.Ordinal))
                     {
                         var icon = new Run("📝 ");
@@ -27546,8 +27601,22 @@ public partial class MainWindow : Window, ILiveElementLocator
                     }
                     label.Cursor = System.Windows.Input.Cursors.Hand;
                     var capturedContent = capturedAtt;
-                    label.MouseLeftButtonUp += (_, _) =>
-                        PromptAttachmentViewerWindow.Show(new[] { capturedContent }, CanShowOwnedWindow() ? this : null);
+
+                    if (isInboxExcerpt)
+                    {
+                        // For inbox-excerpt: open the message window and select the excerpt
+                        label.MouseLeftButtonUp += (_, _) =>
+                        {
+                            var excerptText = ExtractExcerptTextFromAttachment(capturedContent.ContentBlock!);
+                            OpenOrFocusInboxMessageAndSelectText(capturedContent.InboxMessageId!, excerptText);
+                        };
+                    }
+                    else
+                    {
+                        // For other content blocks: show the viewer window
+                        label.MouseLeftButtonUp += (_, _) =>
+                            PromptAttachmentViewerWindow.Show(new[] { capturedContent }, CanShowOwnedWindow() ? this : null);
+                    }
                 }
                 else if (att.TranscriptQuote != null)
                 {

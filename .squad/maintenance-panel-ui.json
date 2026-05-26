@@ -1,3 +1,7 @@
 {
-  "expandedTaskIds": []
+  "expandedTaskIds": [
+    "docs-review",
+    "error-handling-audit",
+    "architectural-practices"
+  ]
 }

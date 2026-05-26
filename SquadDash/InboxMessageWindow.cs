@@ -20,6 +20,7 @@ internal sealed class InboxMessageWindow : ChromedWindow
     private readonly Func<string, TaskItem?>? _lookupTask;
     private readonly Action<string, InboxMessage>? _attachSelectedTextToChat;
     private readonly InboxMessage _message;
+    private readonly FlowDocumentScrollViewer _bodyViewer;
 
     public InboxMessageWindow(
         InboxMessage message,
@@ -113,7 +114,7 @@ internal sealed class InboxMessageWindow : ChromedWindow
         // ── Body ──────────────────────────────────────────────────────────────
         var doc = MarkdownFlowDocumentBuilder.Build(message.Body ?? string.Empty);
 
-        var bodyViewer = new FlowDocumentScrollViewer
+        _bodyViewer = new FlowDocumentScrollViewer
         {
             Margin                        = new Thickness(0),
             Padding                       = new Thickness(10, 8, 10, 8),
@@ -128,7 +129,7 @@ internal sealed class InboxMessageWindow : ChromedWindow
         // Fix for code block copying: FlowDocument's default copy handler can skip
         // Paragraph elements with backgrounds (code blocks). Intercept the copy event
         // to extract plain text from the selection, preserving all content.
-        DataObject.AddCopyingHandler(bodyViewer, OnFlowDocumentCopying);
+        DataObject.AddCopyingHandler(_bodyViewer, OnFlowDocumentCopying);
 
         // Add context menu for "Add to Chat" on text selection
         if (_attachSelectedTextToChat is not null)
@@ -137,7 +138,7 @@ internal sealed class InboxMessageWindow : ChromedWindow
             var attachMenuItem = new MenuItem { Header = "Add to Chat" };
             attachMenuItem.Click += (_, _) =>
             {
-                var selection = bodyViewer.Selection;
+                var selection = _bodyViewer.Selection;
                 if (!selection.IsEmpty)
                 {
                     var selectedText = selection.Text;
@@ -147,11 +148,11 @@ internal sealed class InboxMessageWindow : ChromedWindow
             contextMenu.Items.Add(attachMenuItem);
 
             // Explicitly set the custom context menu and suppress default behavior
-            bodyViewer.ContextMenu = contextMenu;
-            bodyViewer.ContextMenuOpening += (_, e) =>
+            _bodyViewer.ContextMenu = contextMenu;
+            _bodyViewer.ContextMenuOpening += (_, e) =>
             {
                 // If no text is selected, cancel the context menu entirely
-                if (bodyViewer.Selection.IsEmpty)
+                if (_bodyViewer.Selection.IsEmpty)
                 {
                     e.Handled = true;
                 }
@@ -162,7 +163,7 @@ internal sealed class InboxMessageWindow : ChromedWindow
         var bodyBorder = new Border
         {
             Margin = new Thickness(8, 6, 8, 8),
-            Child  = bodyViewer,
+            Child  = _bodyViewer,
         };
         bodyBorder.SetResourceReference(Border.BackgroundProperty, "InboxBodySurface");
         Grid.SetRow(bodyBorder, 3);
@@ -393,5 +394,70 @@ internal sealed class InboxMessageWindow : ChromedWindow
         }
 
         return chip;
+    }
+
+    /// <summary>
+    /// Selects the specified text in the body viewer and scrolls it into view.
+    /// Used when clicking on an inbox-excerpt attachment to highlight the referenced text.
+    /// </summary>
+    public void SelectAndScrollToText(string excerptText)
+    {
+        if (string.IsNullOrWhiteSpace(excerptText))
+            return;
+
+        var doc = _bodyViewer.Document;
+        if (doc is null)
+            return;
+
+        // Search the document for the excerpt text
+        var docStart = doc.ContentStart;
+        var docEnd = doc.ContentEnd;
+
+        // Find the text in the document
+        var foundRange = FindTextInRange(docStart, docEnd, excerptText);
+        if (foundRange is not null)
+        {
+            // Select the found text
+            _bodyViewer.Selection.Select(foundRange.Start, foundRange.End);
+
+            // Scroll the selection into view using BringIntoView
+            foundRange.Start.Paragraph?.BringIntoView();
+        }
+    }
+
+    /// <summary>
+    /// Searches for text within a TextRange and returns the matching TextPointer range.
+    /// Returns null if the text is not found.
+    /// </summary>
+    private static TextRange? FindTextInRange(TextPointer start, TextPointer end, string searchText)
+    {
+        if (string.IsNullOrEmpty(searchText))
+            return null;
+
+        var current = start;
+        
+        while (current is not null && current.CompareTo(end) < 0)
+        {
+            if (current.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.Text)
+            {
+                var textRun = current.GetTextInRun(LogicalDirection.Forward);
+                
+                // Check if the search text appears in this text run
+                var index = textRun.IndexOf(searchText, StringComparison.Ordinal);
+                if (index >= 0)
+                {
+                    // Found it! Create a TextRange for the match
+                    var matchStart = current.GetPositionAtOffset(index);
+                    var matchEnd = matchStart?.GetPositionAtOffset(searchText.Length);
+                    
+                    if (matchStart is not null && matchEnd is not null)
+                        return new TextRange(matchStart, matchEnd);
+                }
+            }
+            
+            current = current.GetNextContextPosition(LogicalDirection.Forward);
+        }
+
+        return null;
     }
 }
