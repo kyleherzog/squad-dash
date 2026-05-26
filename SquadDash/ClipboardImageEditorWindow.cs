@@ -1875,8 +1875,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                     new Point(baseX + px * HeadHalf, baseY + py * HeadHalf),
                     new Point(baseX - px * HeadHalf, baseY - py * HeadHalf)
                 };
-                // Show crosshair at the future pivot center (ArrowLength × 0.9 past the tip).
-                ShowCrosshair(headPt.X + ux2 * _defaultArrowLength * 0.9, headPt.Y + uy2 * _defaultArrowLength * 0.9);
+                HideCrosshair();
             }
             else {
                 HideCrosshair();
@@ -3129,26 +3128,23 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         var ux = (tailPt.X - headPt.X) / dist;
         var uy = (tailPt.Y - headPt.Y) / dist;
 
-        double arrowLen = _defaultArrowLength;
-        // TailLength represents the shaft length from center to tail-end.
-        // With center placed at headPt - ux*arrowLen, tailX = center + ux*(arrowLen+tailLen).
-        // We want tailX == tailPt, so: tailLen = dist (not dist - arrowLen).
-        double tailLen = Math.Max(20.0, dist);
+        double tailLen  = Math.Max(20.0, dist);
 
         // ux = sin(rad), uy = -cos(rad) => rad = atan2(ux, -uy)
         double angleDeg = Math.Atan2(ux, -uy) * 180.0 / Math.PI;
 
-        // Center such that ahX = center.X + ux*arrowLen = headPt.X
-        double centerX = headPt.X - ux * arrowLen;
-        double centerY = headPt.Y - uy * arrowLen;
-
+        // Pivot = arrowhead tip. ArrowLength = 0 so arrowhead is exactly at the pivot;
+        // tail end = center + ux * tailLen = headPt + ux * dist = tailPt.
+        double centerX = headPt.X;
+        double centerY = headPt.Y;
         var targetBounds = new Rect(centerX - 1, centerY - 1, 2, 2);
 
-        var savedAngle = _defaultArrowAngleDeg;
-        var savedTailLen = _defaultTailLength;
+        var savedAngle    = _defaultArrowAngleDeg;
+        var savedTailLen  = _defaultTailLength;
+        var savedArrowLen = _defaultArrowLength;
         _defaultArrowAngleDeg = angleDeg;
-        _defaultTailLength = tailLen;
-
+        _defaultTailLength    = tailLen;
+        _defaultArrowLength   = 0;   // arrowhead tip at pivot — no offset
         var arrow = CreateArrow(targetBounds);
 
         // Remember this drag's angle and tail length for subsequent click-without-drag placement.
@@ -3156,7 +3152,8 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         _lastDragArrowTailLength = tailLen;
 
         _defaultArrowAngleDeg = savedAngle;
-        _defaultTailLength = savedTailLen;
+        _defaultTailLength    = savedTailLen;
+        _defaultArrowLength   = savedArrowLen;
 
         SelectArrow(arrow);
         if (_inArrowMultiDropMode) {
