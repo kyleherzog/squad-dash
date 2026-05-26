@@ -17,7 +17,7 @@ internal sealed class MaintenanceRunner {
     private readonly Action<MaintenanceReport>                   _onCompleted;
     private readonly Func<string, CancellationToken, Task<string?>> _getCommitShaAsync;
     private readonly Func<DateTimeOffset, bool>?                 _wasInboxSavedSince;
-    private readonly Action<string>?                             _onDecomposeGroupReady;
+    private readonly Action<DecomposedTaskGroup>?                _onDecomposeGroupReady;
 
     private volatile bool _isRunning;
 
@@ -32,7 +32,7 @@ internal sealed class MaintenanceRunner {
         Func<string, CancellationToken, Task<string?>>? getCommitShaAsync = null,
         Func<DateTimeOffset, bool>?                     wasInboxSavedSince = null,
         Func<string, CancellationToken, Task<(int, string)>>? executePromptAndCaptureAsync = null,
-        Action<string>?                                       onDecomposeGroupReady = null) {
+        Action<DecomposedTaskGroup>?                                  onDecomposeGroupReady = null) {
 
         _executePromptAsync            = executePromptAsync;
         _executePromptAndCaptureAsync  = executePromptAndCaptureAsync;
@@ -133,7 +133,7 @@ internal sealed class MaintenanceRunner {
 
                         SquadDashTrace.Write(TraceCategory.General,
                             $"MaintenanceRunner: TASKS_JSON found for group '{decomposeGroup.GroupId}' — notifying caller.");
-                        _onDecomposeGroupReady(decomposeGroup.GroupId);
+                        _onDecomposeGroupReady(decomposeGroup);
                     }
 
                     var elapsed = Stopwatch.GetElapsedTime(taskStart);

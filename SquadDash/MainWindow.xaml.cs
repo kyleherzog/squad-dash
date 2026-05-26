@@ -4319,13 +4319,30 @@ public partial class MainWindow : Window, ILiveElementLocator
                     _ = _pushNotificationService.NotifyEventAsync("assistant_turn_complete", "SquadDash", notifMessage);
                     SoundNotifications.Play(SoundEvent.PromptComplete);
 
+                    // Process INBOX_MESSAGE_JSON blocks from this turn's response before handling
+                    // any loop commands — the inbox must be persisted prior to command dispatch.
+                    SquadDashTrace.Write(TraceCategory.Inbox,
+                        $"INBOX_SAVE: done-event doneCurrentTurnNull={doneCurrentTurn is null} rawLen={rawResponse?.Length ?? -1}");
+
+                    // For maintenance named-agent-direct runs, CoordinatorThread.CurrentTurn is null
+                    // (BeginTranscriptTurn is never called), so rawResponse is null. Fall back to the
+                    // latest Argus Weld sub-agent thread response which holds the INBOX_MESSAGE_JSON block.
+                    if (rawResponse is null && FindLatestArgusWeldRunThread() is { } argusThread)
+                    {
+                        var argusResponse = argusThread.CurrentTurn?.ResponseTextBuilder.ToString();
+                        if (!string.IsNullOrWhiteSpace(argusResponse))
+                        {
+                            SquadDashTrace.Write(TraceCategory.Inbox,
+                                "INBOX_SAVE: done-event rawResponse was null — falling back to argus-weld thread response");
+                            TrySaveInboxMessageFromResponse(argusResponse);
+                        }
+                    }
+
+                    TrySaveInboxMessageFromResponse(rawResponse);
+
                     // Handle SquadDash loop commands embedded in the AI response.
                     if (squadashPayload?.Command is string cmd)
                         HandleSquadashCommand(cmd);
-
-                    // Process HOST_COMMAND_JSON commands from this turn's response.
-                    // Strip <system_notification> tags first — the parser regex requires the JSON
-                    // block at the very end (\s*$), so trailing system_notification tags break it.
                     if (_hostCommandExecutor is not null && rawResponse is not null)
                     {
                         var rawForCommandParsing = ToolTranscriptFormatter.StripSystemNotifications(rawResponse);
@@ -4347,26 +4364,6 @@ public partial class MainWindow : Window, ILiveElementLocator
                             }
                         }
                     }
-
-                    // Process INBOX_MESSAGE_JSON blocks from this turn's response.
-                    SquadDashTrace.Write(TraceCategory.Inbox,
-                        $"INBOX_SAVE: done-event doneCurrentTurnNull={doneCurrentTurn is null} rawLen={rawResponse?.Length ?? -1}");
-
-                    // For maintenance named-agent-direct runs, CoordinatorThread.CurrentTurn is null
-                    // (BeginTranscriptTurn is never called), so rawResponse is null. Fall back to the
-                    // latest Argus Weld sub-agent thread response which holds the INBOX_MESSAGE_JSON block.
-                    if (rawResponse is null && FindLatestArgusWeldRunThread() is { } argusThread)
-                    {
-                        var argusResponse = argusThread.CurrentTurn?.ResponseTextBuilder.ToString();
-                        if (!string.IsNullOrWhiteSpace(argusResponse))
-                        {
-                            SquadDashTrace.Write(TraceCategory.Inbox,
-                                "INBOX_SAVE: done-event rawResponse was null — falling back to argus-weld thread response");
-                            TrySaveInboxMessageFromResponse(argusResponse);
-                        }
-                    }
-
-                    TrySaveInboxMessageFromResponse(rawResponse);
                 }
                 if (_pendingRcRestartAfterReset)
                 {
@@ -6322,7 +6319,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
     }
 
-    private async Task StartDecomposeLoopAsync(string groupId)
+    private async Task StartDecomposeLoopAsync(string groupId, DecomposedTaskGroup? group = null)
     {
         if (_currentWorkspace is null) return;
 
@@ -6350,6 +6347,20 @@ public partial class MainWindow : Window, ILiveElementLocator
         _maintenanceGroupRunner = new MaintenanceGroupRunner(
             new DecomposedTasksWriter(),
             System.IO.Path.Combine(_currentWorkspace.SquadFolderPath, "tasks.md"));
+
+        // When the full group object is available, run cycle detection and write the group to
+        // tasks.md before starting the loop.  If a cycle is detected, surface an inbox message
+        // and abort — do not start the loop.
+        if (group is not null && !_maintenanceGroupRunner.TryStartGroup(group, out var inboxErrorJson))
+        {
+            SquadDashTrace.Write(TraceCategory.General,
+                $"StartDecomposeLoopAsync: cycle detected in group '{groupId}' — aborting loop start.");
+            _maintenanceGroupRunner  = null;
+            _activeDecomposeGroupId  = null;
+            if (inboxErrorJson is not null)
+                TrySaveInboxMessageFromResponse(inboxErrorJson);
+            return;
+        }
 
         BackupAndClearLoopOutput();
         await _loopController.StartAsync(config, continuousContext: true,
@@ -28107,10 +28118,10 @@ public partial class MainWindow : Window, ILiveElementLocator
                 });
                 return tcs.Task;
             },
-            onDecomposeGroupReady: groupId => Dispatcher.InvokeAsync(() =>
+            onDecomposeGroupReady: group => Dispatcher.InvokeAsync(() =>
             {
                 if (!_loopController.IsRunning)
-                    _ = StartDecomposeLoopAsync(groupId);
+                    _ = StartDecomposeLoopAsync(group.GroupId, group);
             }));
 
         _idleDetectionService?.SetRunnerActive(true);
