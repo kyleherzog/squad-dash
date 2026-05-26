@@ -135,6 +135,10 @@ internal sealed class InboxMessageWindow : ChromedWindow
         if (_attachSelectedTextToChat is not null)
         {
             var contextMenu = new ContextMenu();
+            
+            // Apply themed context menu style
+            contextMenu.Style = (Style)Application.Current.Resources["ThemedContextMenuStyle"];
+            
             var attachMenuItem = new MenuItem { Header = "Add to Chat" };
             attachMenuItem.Click += (_, _) =>
             {
