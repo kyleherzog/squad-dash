@@ -463,6 +463,36 @@ internal sealed class InboxMessageParserTests {
     }
 
     [Test]
+    public void TryExtract_ActionPromptWithCodeFenceAndInterpolatedString_ParsesSuccessfully()
+    {
+        const string text = """
+            INBOX_MESSAGE_JSON:
+            {
+              "subject": "Error-Handling Audit",
+              "from": "argus-weld",
+              "body": "## Error-Handling Audit\n\nAdd a fault continuation to this pattern.",
+              "attachments": [],
+              "actions": [
+                {
+                  "label": "Fix fire-and-forget reset",
+                  "routeMode": "start_named_agent",
+                  "targetAgent": "arjun-sen",
+                  "prompt": "Arjun: fix `RestartBridgeForNewSettings()`.\n\nUse this shape:\n```csharp\n_ = ResetProcess(new OperationCanceledException(\"The Squad bridge was restarted before the prompt completed.\"))\n    .ContinueWith(\n        t => SquadDashTrace.Write(\"Bridge\", $\"RestartBridgeForNewSettings faulted: {t.Exception}\"),\n        TaskContinuationOptions.OnlyOnFaulted);\n```\n\nDo not change other logic."
+                }
+              ]
+            }
+            """;
+
+        var result = InboxMessageParser.TryExtract(text, out _, out var dto);
+
+        Assert.That(result, Is.True);
+        Assert.That(dto, Is.Not.Null);
+        Assert.That(dto!.Actions, Has.Count.EqualTo(1));
+        Assert.That(dto.Actions[0].Prompt, Does.Contain("RestartBridgeForNewSettings faulted"));
+        Assert.That(dto.Actions[0].Prompt, Does.Contain("{t.Exception}"));
+    }
+
+    [Test]
     public void TryExtract_NoLiteralNewlines_StillParses()
     {
         // Regression: valid JSON with proper escape sequences must still work
