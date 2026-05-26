@@ -26,7 +26,7 @@ Node.js is required for the Squad CLI that SquadDash manages on your behalf. If 
 
 ## Download
 
-Head to the [GitHub Releases page](https://github.com/bradygaster/SquadDash/releases) and download the latest `SquadDash-Setup-x.x.x.exe` asset from the most recent release.
+Head to the [GitHub Releases page](https://github.com/MillerMark/squad-dash/releases) and download the latest `SquadDash-Setup-x.x.x.exe` asset from the most recent release.
 
 ### WinGet (experimental)
 
@@ -100,6 +100,6 @@ When the final screen appears, click **Finish**. SquadDash will launch automatic
 
 ## Updating
 
-To update to a newer version, download the latest installer from the [Releases page](https://github.com/bradygaster/SquadDash/releases) and run it over your existing installation. The installer detects the previous version and upgrades in place.
+To update to a newer version, download the latest installer from the [Releases page](https://github.com/MillerMark/squad-dash/releases) and run it over your existing installation. The installer detects the previous version and upgrades in place.
 
 **Your settings and workspaces are preserved.** The upgrade does not touch `%APPDATA%\SquadDash` (where preferences and session data are stored) or any `.squad/` directories inside your repositories.
