@@ -126,3 +126,26 @@
 
 📌 Team update (2026-05-26T15:31:00Z): Clipboard copy bug fixed in inbox message viewer — decided by Lyra Morn
 
+📌 Attachment text styling consistency fix (2026-05-11): Fixed approval attachments to use consistent text styling with all other attachment types.
+
+**Issue:** Approval attachments were using `SubtleText` for their description text while all other attachment types (inbox-message, image, inbox-excerpt, task-ref, note, transcript quote) used `LabelText`. This created a visual inconsistency where approval attachment text appeared too subtle/low-contrast compared to other attachments.
+
+**Fix:** Changed line 27666 in `MainWindow.xaml.cs` (`AppendCommitFollowUpInlines` method) from `suffix.SetResourceReference(Run.ForegroundProperty, "SubtleText")` to `suffix.SetResourceReference(Run.ForegroundProperty, "LabelText")`.
+
+**Audit results:** Verified all attachment types now consistently use `LabelText` for description text:
+- inbox-message (line 27555) ✅
+- image (line 27567) ✅
+- inbox-excerpt (lines 27585, 27598) ✅
+- task-ref/topic-ref/file/text/url (line 27598) ✅
+- note (line 27585) ✅
+- transcript quote (line 27626) ✅
+- approval (line 27666) ✅ FIXED
+
+**Pattern:** The UI maintains visual hierarchy with:
+- `ImportantText` (#53371E light / #E5D5C0 dark) - Highest priority elements (titles)
+- `LabelText` (#3C2B1E light / #D8C8B0 dark) - Standard labels & attachment descriptions
+- `BodyText` - Lower emphasis text
+- `SubtleText` - Lowest emphasis (icons, prefixes like "↩")
+
+**Files:** MainWindow.xaml.cs (line 27666). Commit: `4b39b04`. Build: 0 errors, 0 warnings.
+
