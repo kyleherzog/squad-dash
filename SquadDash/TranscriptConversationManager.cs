@@ -1128,7 +1128,9 @@ internal sealed class TranscriptConversationManager {
         bool queueRightmostHeld = false,
         bool loopQueuedToDequeue = false,
         (string SimResponse, int SimDelaySeconds)? activeDraftSimEntry = null,
-        int? activeTabIndex = null) {
+        int? activeTabIndex = null,
+        int? queueDayCounter = null,
+        string? queueCounterDate = null) {
         IReadOnlyList<QueuedPromptEntry>? entries = null;
         if (items.Count > 0)
         {
@@ -1159,6 +1161,8 @@ internal sealed class TranscriptConversationManager {
             QueuedPromptEntries        = entries,
             QueueRightmostHeld         = queueRightmostHeld ? true : null,
             QueueActiveTabIndex        = activeTabIndex,
+            QueueDayCounter            = queueDayCounter ?? _conversationState.QueueDayCounter,
+            QueueCounterDate           = queueCounterDate ?? _conversationState.QueueCounterDate,
             LoopQueuedToDequeue        = loopQueuedToDequeue ? true : null,
             ActiveDraftSimResponse     = activeDraftSimEntry?.SimResponse,
             ActiveDraftSimDelaySeconds = activeDraftSimEntry?.SimDelaySeconds,
@@ -1185,6 +1189,8 @@ internal sealed class TranscriptConversationManager {
         !QueuedPromptEntriesEqual(previous.QueuedPromptEntries, current.QueuedPromptEntries) ||
         previous.QueueRightmostHeld         != current.QueueRightmostHeld ||
         previous.QueueActiveTabIndex        != current.QueueActiveTabIndex ||
+        previous.QueueDayCounter            != current.QueueDayCounter ||
+        previous.QueueCounterDate           != current.QueueCounterDate ||
         previous.LoopQueuedToDequeue        != current.LoopQueuedToDequeue ||
         previous.ActiveDraftSimResponse     != current.ActiveDraftSimResponse ||
         previous.ActiveDraftSimDelaySeconds != current.ActiveDraftSimDelaySeconds;

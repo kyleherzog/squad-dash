@@ -292,6 +292,8 @@ internal sealed class WorkspaceConversationStore {
             QueueRightmostHeld       = state.QueueRightmostHeld == true ? true : null,
             QueueLastChangedAt       = state.QueueLastChangedAt?.ToUniversalTime(),
             QueueActiveTabIndex      = state.QueueActiveTabIndex,
+            QueueDayCounter          = state.QueueDayCounter,
+            QueueCounterDate         = state.QueueCounterDate,
             LoopQueuedToDequeue      = state.LoopQueuedToDequeue == true ? true : null,
             LoopMode                 = state.LoopMode,
             LoopContinuousContext    = state.LoopContinuousContext,
@@ -643,6 +645,10 @@ internal sealed record WorkspaceConversationState(
     public DateTimeOffset? QueueLastChangedAt { get; init; }
     /// <summary>Zero-based index of the active queued-tab at last shutdown. Null when the main draft tab was active.</summary>
     public int? QueueActiveTabIndex { get; init; }
+    /// <summary>The last queue number assigned for <see cref="QueueCounterDate"/>. Persisted so numbering continues across sessions within the same day.</summary>
+    public int? QueueDayCounter { get; init; }
+    /// <summary>Local date (yyyy-MM-dd) for which <see cref="QueueDayCounter"/> was last incremented. Null means counter is stale.</summary>
+    public string? QueueCounterDate { get; init; }
     /// <summary>When true, the loop was paused waiting to dequeue prompts at last shutdown. Auto-resumes after queue drains on next launch.</summary>
     public bool? LoopQueuedToDequeue { get; init; }
     public LoopMode? LoopMode { get; init; }

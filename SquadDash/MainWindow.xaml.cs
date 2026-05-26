@@ -279,7 +279,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _queuePausePending;
     private bool _bridgeStallShowing;
     private int _promptQueueSeq;
-    private int _queueItemNumber;  // session-unique, never reset, never renumbered
+    private int    _queueDayCounter;      // per-day, per-workspace queue sequence number
+    private string _queueCounterDate = ""; // local date string "yyyy-MM-dd" for _queueDayCounter
     private readonly HostCommandRegistry _hostCommandRegistry = new();
     private HostCommandExecutor? _hostCommandExecutor;
     private string? _queuePreEditDraft;
@@ -1187,7 +1188,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             setPromptBoxText: text => SetPromptTextBoxLogicalBuffer(text, text.Length, reason: "test-queue-draft"),
             enqueueSimItem: item => {
                 item.SequenceNumber = ++_promptQueueSeq;
-                item.QueueNumber    = ++_queueItemNumber;
+                item.QueueNumber    = NextQueueNumber();
                 _promptQueue.EnqueueItem(item);
                 SyncQueuePanel();
                 _ = DrainQueueIfNeededAsync();
@@ -2112,7 +2113,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         var item = new PromptQueueItem {
             Text             = text,
             SequenceNumber   = ++_promptQueueSeq,
-            QueueNumber      = ++_queueItemNumber,
+            QueueNumber      = NextQueueNumber(),
             IsSystemInjected = isSystemInjected,
         };
         if (isSystemInjected && _activeTabId is null && !_queueManuallyPaused) {
@@ -2139,8 +2140,8 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         _promptQueue.Enqueue(text, ++_promptQueueSeq, isDictated);
         var item = _promptQueue.Items[^1];
-        item.QueueNumber = ++_queueItemNumber;
-        SquadDashTrace.Write("Queue", $"Enqueued current prompt {DescribeQueueItemForTrace(item)} queueCount={_promptQueue.Count}");
+        item.QueueNumber = NextQueueNumber();
+        SquadDashTrace.Write("Queue", $"Enqueued current prompt {DescribeQueueItemForTrace(item)}queueCount={_promptQueue.Count}");
         _loopFollowUpTcs?.TrySetResult(true);
 
         // Transfer any draft follow-up attachments to the new queue item.
@@ -2160,7 +2161,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         if (string.IsNullOrWhiteSpace(text)) return;
         _promptQueue.Enqueue(text, ++_promptQueueSeq, isFromRemote: true);
-        _promptQueue.Items[^1].QueueNumber = ++_queueItemNumber;
+        _promptQueue.Items[^1].QueueNumber = NextQueueNumber();
         SquadDashTrace.Write("Queue", $"Enqueued remote prompt {DescribeQueueItemForTrace(_promptQueue.Items[^1])} queueCount={_promptQueue.Count}");
         SyncQueuePanel();
         _ = DrainQueueIfNeededAsync();
@@ -2185,7 +2186,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             _promptHasVoiceInput = false;
 
             var item = _promptQueue.EnqueueAtFront(text, ++_promptQueueSeq);
-            item.QueueNumber = ++_queueItemNumber;
+            item.QueueNumber = NextQueueNumber();
             _promptQueue.RenumberSequentially();
 
             if (_followUpAttachments.TryGetValue("", out var draftList) && draftList.Count > 0)
@@ -2225,6 +2226,21 @@ public partial class MainWindow : Window, ILiveElementLocator
                     "prioritize-restore-active-tab");
             }
         }
+    }
+
+    /// <summary>
+    /// Returns the next queue number for today (local time). Resets to 1 whenever the
+    /// local date changes since the last call (midnight rollover handled lazily).
+    /// </summary>
+    private int NextQueueNumber()
+    {
+        var today = DateTime.Now.ToString("yyyy-MM-dd");
+        if (_queueCounterDate != today)
+        {
+            _queueDayCounter  = 0;
+            _queueCounterDate = today;
+        }
+        return ++_queueDayCounter;
     }
 
     private void AddEmptyQueueSlot()
@@ -2802,7 +2818,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
 
         SyncQueueTabHint();
-        _conversationManager.UpdateQueuedPromptsState(items, _followUpAttachments, queueRightmostHeld: IsRightmostQueueTabActive(), loopQueuedToDequeue: _loopQueued, activeDraftSimEntry: _pec.ActiveDraftSimEntry, activeTabIndex: GetActiveQueueTabIndex());
+        _conversationManager.UpdateQueuedPromptsState(items, _followUpAttachments, queueRightmostHeld: IsRightmostQueueTabActive(), loopQueuedToDequeue: _loopQueued, activeDraftSimEntry: _pec.ActiveDraftSimEntry, activeTabIndex: GetActiveQueueTabIndex(), queueDayCounter: _queueDayCounter, queueCounterDate: _queueCounterDate);
         SyncSendButton();
         BuildShortcutsHint();
         // Keep play/pause button icon/label in sync with current paused state.
@@ -15059,6 +15075,17 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         // Restore loop-queued-to-dequeue state from previous session.
         _loopQueued = _conversationManager.ConversationState.LoopQueuedToDequeue == true;
+
+        // Restore day counter if saved date matches today; otherwise start fresh.
+        var savedDate    = _conversationManager.ConversationState.QueueCounterDate ?? "";
+        var savedCounter = _conversationManager.ConversationState.QueueDayCounter ?? 0;
+        var today        = DateTime.Now.ToString("yyyy-MM-dd");
+        if (savedDate == today)
+        {
+            _queueDayCounter  = savedCounter;
+            _queueCounterDate = today;
+        }
+        // else: fields stay at defaults ("" / 0) — NextQueueNumber() will init on first call
 
         // Restore queued prompts saved before last shutdown.
         var savedEntries = _conversationManager.ConversationState.QueuedPromptEntries;
