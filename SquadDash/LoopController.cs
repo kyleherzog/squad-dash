@@ -115,13 +115,15 @@ internal sealed class LoopController {
         int iteration = resumeFromIteration;
 
         try {
+          try {
             while (!_stopRequested && !ct.IsCancellationRequested) {
                 // Drain any queued prompts before firing this iteration.
                 // A stray exception from the hook (e.g. an aborted queued item whose
                 // cancellation escapes the delegate) must not kill the loop.
                 try {
                     await _onBeforeIteration();
-                } catch (Exception) {
+                } catch (Exception ex) {
+                    SquadDashTrace.Write("Loop", $"_onBeforeIteration threw: {ex.Message}");
                     if (_stopRequested || ct.IsCancellationRequested) break;
                     continue;
                 }
@@ -179,12 +181,17 @@ internal sealed class LoopController {
                 await Task.Delay(TimeSpan.FromMinutes(config.IntervalMinutes), ct);
             }
         }
-        finally {
-            IsRunning = false;
-            if (StopState == LoopStopState.Aborted)
-                _onError("Loop aborted.");
-            else
-                _onStopped();
+          finally {
+              IsRunning = false;
+              if (StopState == LoopStopState.Aborted)
+                  _onError("Loop aborted.");
+              else
+                  _onStopped();
+          }
+        } catch (Exception ex) {
+            if (_cts?.IsCancellationRequested != true)
+                _onError($"Loop crashed unexpectedly: {ex.Message}");
+            SquadDashTrace.Write("Loop", $"RunLoopAsync unhandled: {ex}");
         }
     }
 
