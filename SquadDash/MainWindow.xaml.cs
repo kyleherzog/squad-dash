@@ -4872,6 +4872,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
 
         var thread = _agentThreadRegistry.GetOrCreateAgentThread(evt);
+        if (IsArgusWeldThread(thread))
+            thread.SuppressCoordinatorPromotion = true;
         if (!string.IsNullOrWhiteSpace(evt.LatestResponse))
             ReconcileFinalSubagentResponseText(thread, evt.LatestResponse!);
         _agentThreadRegistry.UpdateAgentThreadLifecycle(thread, evt, statusText: "Completed", detailText: AgentThreadRegistry.BuildThreadCompletionDetail(thread, evt));
@@ -27926,7 +27928,40 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (_inboxPanel is not null)
             _inboxPanel.Refresh(_inboxStore.LoadAll());
 
+        AppendInboxReceivedEntry(message.Subject, message.Id);
+
         return message.Id;
+    }
+
+    /// <summary>
+    /// Appends a "📬 Inbox message received: [subject]" paragraph to the Coordinator
+    /// transcript. Clicking it opens the message in the inbox viewer.
+    /// </summary>
+    private void AppendInboxReceivedEntry(string? subject, string messageId)
+    {
+        var paragraph = CreateTranscriptParagraph();
+
+        var prefix = new Run("📬 ");
+        prefix.SetResourceReference(TextElement.ForegroundProperty, "SubtleText");
+        paragraph.Inlines.Add(prefix);
+
+        var displaySubject = string.IsNullOrWhiteSpace(subject) ? "(no subject)" : subject;
+        var link = new Run($"Inbox message received: {displaySubject}")
+        {
+            FontWeight      = FontWeights.Normal,
+            TextDecorations = TextDecorations.Underline,
+            Cursor          = Cursors.Hand,
+        };
+        link.SetResourceReference(TextElement.ForegroundProperty, "ActionLinkText");
+        link.MouseLeftButtonDown += (_, e) =>
+        {
+            OpenOrFocusInboxMessage(messageId);
+            e.Handled = true;
+        };
+        paragraph.Inlines.Add(link);
+
+        CoordinatorThread.Document.Blocks.Add(paragraph);
+        ScrollToEndIfAtBottom(CoordinatorThread);
     }
 
     private void DismissMaintenanceBadge()
@@ -28183,6 +28218,15 @@ public partial class MainWindow : Window, ILiveElementLocator
         // Brand-new thread — no gap stripe needed; mark handled so subsequent calls skip.
         _argusWeldSessionGapAppended = true;
     }
+
+    /// <summary>
+    /// Returns true when the thread belongs to the Argus Weld maintenance agent.
+    /// </summary>
+    private static bool IsArgusWeldThread(TranscriptThreadState thread) =>
+        string.Equals(thread.AgentId, "argus-weld", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(thread.AgentName, "argus-weld", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(thread.AgentDisplayName, "Argus Weld", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(thread.Title, "Argus Weld", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Appends a lightweight stub paragraph to the Coordinator transcript for a completed
