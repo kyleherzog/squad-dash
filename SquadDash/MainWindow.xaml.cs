@@ -279,6 +279,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _queuePausePending;
     private bool _bridgeStallShowing;
     private int _promptQueueSeq;
+    private int _queueItemNumber;  // session-unique, never reset, never renumbered
     private readonly HostCommandRegistry _hostCommandRegistry = new();
     private HostCommandExecutor? _hostCommandExecutor;
     private string? _queuePreEditDraft;
@@ -1185,6 +1186,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             setPromptBoxText: text => SetPromptTextBoxLogicalBuffer(text, text.Length, reason: "test-queue-draft"),
             enqueueSimItem: item => {
                 item.SequenceNumber = ++_promptQueueSeq;
+                item.QueueNumber    = ++_queueItemNumber;
                 _promptQueue.EnqueueItem(item);
                 SyncQueuePanel();
                 _ = DrainQueueIfNeededAsync();
@@ -2109,6 +2111,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         var item = new PromptQueueItem {
             Text             = text,
             SequenceNumber   = ++_promptQueueSeq,
+            QueueNumber      = ++_queueItemNumber,
             IsSystemInjected = isSystemInjected,
         };
         if (isSystemInjected && _activeTabId is null && !_queueManuallyPaused) {
@@ -2135,6 +2138,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         _promptQueue.Enqueue(text, ++_promptQueueSeq, isDictated);
         var item = _promptQueue.Items[^1];
+        item.QueueNumber = ++_queueItemNumber;
         SquadDashTrace.Write("Queue", $"Enqueued current prompt {DescribeQueueItemForTrace(item)} queueCount={_promptQueue.Count}");
         _loopFollowUpTcs?.TrySetResult(true);
 
@@ -2155,6 +2159,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         if (string.IsNullOrWhiteSpace(text)) return;
         _promptQueue.Enqueue(text, ++_promptQueueSeq, isFromRemote: true);
+        _promptQueue.Items[^1].QueueNumber = ++_queueItemNumber;
         SquadDashTrace.Write("Queue", $"Enqueued remote prompt {DescribeQueueItemForTrace(_promptQueue.Items[^1])} queueCount={_promptQueue.Count}");
         SyncQueuePanel();
         _ = DrainQueueIfNeededAsync();
@@ -2179,6 +2184,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             _promptHasVoiceInput = false;
 
             var item = _promptQueue.EnqueueAtFront(text, ++_promptQueueSeq);
+            item.QueueNumber = ++_queueItemNumber;
             _promptQueue.RenumberSequentially();
 
             if (_followUpAttachments.TryGetValue("", out var draftList) && draftList.Count > 0)
@@ -2438,7 +2444,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _promptQueue.Remove(item.Id);
         SyncQueuePanel();
 
-        AppendLine("📤 Dispatching queued item…", (Brush)FindResource("SubtleText"));
+        AppendLine($"📤 Dispatching queued item #{item.QueueNumber}…", (Brush)FindResource("SubtleText"));
 
         try
         {
@@ -2528,7 +2534,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             _promptQueue.Remove(item.Id);
             SyncQueuePanel();
 
-            AppendLine("📤 Dispatching queued item…", (Brush)FindResource("SubtleText"));
+            AppendLine($"📤 Dispatching queued item #{item.QueueNumber}…", (Brush)FindResource("SubtleText"));
 
             try
             {

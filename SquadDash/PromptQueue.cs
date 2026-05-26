@@ -12,6 +12,8 @@ internal sealed class PromptQueueItem {
     public bool   IsEditing      { get; set; }
     public bool   IsSystemInjected { get; set; }  // true for auto-injected follow-ups (not user-typed)
     public int    SequenceNumber { get; set; }
+    /// <summary>Session-unique creation number. Assigned once at enqueue; never renumbered.</summary>
+    public int    QueueNumber    { get; set; }
     public int    CaretIndex     { get; set; }
     public int    SelectionStart { get; set; }
     public int    SelectionLength { get; set; }
