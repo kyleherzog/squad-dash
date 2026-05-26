@@ -215,7 +215,7 @@ internal static class MaintenanceMdParser {
         FinalizeCurrentTask(current, optionKeys, optionBuilders, tasks);
 
         var builtTasks = tasks
-            .Select(t => t.Build(safety))
+            .Select(t => t.Build(safety, maintenanceMdPath))
             .ToList();
 
         return new MaintenanceMdConfig(configured, enabledOnIdle, idleTimeout, maxTasks, safety, builtTasks);
@@ -481,6 +481,119 @@ internal static class MaintenanceMdParser {
     }
 
     /// <summary>
+    /// Replaces the task block identified by <paramref name="taskId"/> in the maintenance
+    /// file at <paramref name="filePath"/> with the values from <paramref name="updated"/>.
+    /// Preserves all file content outside the task block (other tasks, global config, comments,
+    /// blank lines, YAML body below the closing ---).
+    /// </summary>
+    public static void UpdateTask(string filePath, string taskId, MaintenanceTask updated) {
+        if (!File.Exists(filePath)) return;
+
+        string raw;
+        try { raw = File.ReadAllText(filePath); }
+        catch { return; }
+
+        var lineEnding = raw.Contains("\r\n") ? "\r\n" : "\n";
+        var lines = raw.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+
+        // Find frontmatter opening ---
+        int fmStart = -1;
+        for (int i = 0; i < lines.Length; i++) {
+            if (lines[i].Trim() == "---") { fmStart = i; break; }
+        }
+        if (fmStart < 0) return;
+
+        // Find frontmatter closing ---
+        int fmEnd = -1;
+        for (int i = fmStart + 1; i < lines.Length; i++) {
+            if (lines[i].Trim() == "---") { fmEnd = i; break; }
+        }
+        if (fmEnd < 0) return;
+
+        // Find the task block: "  - id: {taskId}" at indent 2
+        int taskStart = -1;
+        for (int i = fmStart + 1; i < fmEnd; i++) {
+            var line = lines[i];
+            if (line.Length >= 4 && line[0] == ' ' && line[1] == ' ' && line[2] == '-' && line[3] == ' ') {
+                var rest = line[4..].TrimStart();
+                if (rest.StartsWith("id:", StringComparison.Ordinal)) {
+                    var idVal = rest["id:".Length..].Trim().Trim('"', '\'');
+                    if (string.Equals(idVal, taskId, StringComparison.Ordinal)) {
+                        taskStart = i;
+                        break;
+                    }
+                }
+            }
+        }
+        if (taskStart < 0) return;
+
+        // Find end of task block: next "  - " task entry or the closing ---
+        int taskEnd = fmEnd;
+        for (int i = taskStart + 1; i < fmEnd; i++) {
+            var line = lines[i];
+            if (line.Length >= 4 && line[0] == ' ' && line[1] == ' ' && line[2] == '-' && line[3] == ' ') {
+                taskEnd = i;
+                break;
+            }
+        }
+
+        // Serialize updated task to YAML lines
+        var newTaskLines = SerializeTask(updated);
+
+        // Reconstruct file lines
+        var result = new List<string>(lines.Length - (taskEnd - taskStart) + newTaskLines.Count);
+        for (int i = 0; i < taskStart; i++)
+            result.Add(lines[i]);
+        result.AddRange(newTaskLines);
+        for (int i = taskEnd; i < lines.Length; i++)
+            result.Add(lines[i]);
+
+        try { File.WriteAllText(filePath, string.Join(lineEnding, result)); }
+        catch { /* best-effort */ }
+    }
+
+    private static List<string> SerializeTask(MaintenanceTask t) {
+        var lines = new List<string>();
+        lines.Add($"  - id: {t.Id}");
+        lines.Add($"    enabled: {t.Enabled.ToString().ToLower()}");
+        lines.Add($"    frequency: {t.Frequency}");
+        lines.Add($"    safety: {t.Safety}");
+        lines.Add($"    title: {t.Title}");
+        lines.Add("    instructions: |");
+
+        // Instructions block scalar: content indented 6 spaces
+        var instrText = t.Instructions ?? "";
+        var instrLines = instrText.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+        foreach (var instrLine in instrLines)
+            lines.Add($"      {instrLine}");
+
+        if (t.Options is { Count: > 0 }) {
+            lines.Add("    options:");
+            foreach (var opt in t.Options) {
+                lines.Add($"      {opt.Key}:");
+                if (!string.IsNullOrEmpty(opt.Type))
+                    lines.Add($"        type: {opt.Type}");
+                if (!string.IsNullOrEmpty(opt.Label))
+                    lines.Add($"        label: {opt.Label}");
+                if (!string.IsNullOrEmpty(opt.Tooltip))
+                    lines.Add($"        tooltip: {opt.Tooltip}");
+                if (!string.IsNullOrEmpty(opt.RawValue))
+                    lines.Add($"        value: {opt.RawValue}");
+                if (opt.Choices is { Count: > 0 }) {
+                    lines.Add("        choices:");
+                    foreach (var choice in opt.Choices) {
+                        lines.Add($"          - value: {choice.Value}");
+                        if (!string.IsNullOrEmpty(choice.Tooltip))
+                            lines.Add($"            tooltip: {choice.Tooltip}");
+                    }
+                }
+            }
+        }
+
+        return lines;
+    }
+
+    /// <summary>
     /// Finds the task with <paramref name="taskId"/> in the maintenance.md frontmatter and
     /// updates its <c>frequency:</c> value, then writes the file back. Does nothing if the
     /// file or task is not found.
@@ -545,15 +658,16 @@ internal static class MaintenanceMdParser {
         public string  Instructions { get; set; } = "";
         public List<MaintenanceOption>? BuiltOptions { get; set; }
 
-        public MaintenanceTask Build(string globalSafety) =>
+        public MaintenanceTask Build(string globalSafety, string sourceFilePath = "") =>
             new(
-                Id:           Id,
-                Enabled:      Enabled,
-                Frequency:    Frequency,
-                Safety:       EnforceSafetyFloor(globalSafety, Safety),
-                Title:        Title.Length > 0 ? Title : Id,
-                Instructions: Instructions,
-                Options:      BuiltOptions);
+                Id:             Id,
+                Enabled:        Enabled,
+                Frequency:      Frequency,
+                Safety:         EnforceSafetyFloor(globalSafety, Safety),
+                Title:          Title.Length > 0 ? Title : Id,
+                Instructions:   Instructions,
+                Options:        BuiltOptions,
+                SourceFilePath: sourceFilePath);
     }
 
     private sealed class MaintenanceOptionBuilder {

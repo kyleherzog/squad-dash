@@ -76,7 +76,7 @@ internal sealed class MaintenancePanelController {
     // ── Context menu ──────────────────────────────────────────────────────────
 
     private void WireListPanelContextMenu() {
-        var editItem = new MenuItem { Header = "Edit Maintenance File" };
+        var editItem = new MenuItem { Header = "Edit Maintenance File…" };
         editItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
         editItem.Click += (_, _) => {
             var workspacePath = _getWorkspacePath();
@@ -629,6 +629,25 @@ internal sealed class MaintenancePanelController {
                 e.Handled = true;
             };
         }
+
+        // Per-task context menu — "Edit Task"
+        var taskMenu    = new ContextMenu();
+        taskMenu.SetResourceReference(ContextMenu.StyleProperty, "ThemedContextMenuStyle");
+        var editTaskItem = new MenuItem { Header = "Edit Task" };
+        editTaskItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+        editTaskItem.Click += (_, _) => {
+            var ownerWindow = Window.GetWindow(_listPanel);
+            if (ownerWindow is null) return;
+            var capturedTask = task;
+            new MaintenanceTaskEditorWindow(
+                ownerWindow,
+                capturedTask,
+                () => new ApplicationSettingsStore().Load(),
+                _reloadPanel)
+                .ShowDialog();
+        };
+        taskMenu.Items.Add(editTaskItem);
+        row.ContextMenu = taskMenu;
 
         return row;
     }

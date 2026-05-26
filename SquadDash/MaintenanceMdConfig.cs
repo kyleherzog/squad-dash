@@ -19,4 +19,5 @@ internal sealed record MaintenanceTask(
     string                   Safety,
     string                   Title,
     string                   Instructions,
-    IReadOnlyList<MaintenanceOption>? Options = null);
+    IReadOnlyList<MaintenanceOption>? Options = null,
+    string                   SourceFilePath = "");
