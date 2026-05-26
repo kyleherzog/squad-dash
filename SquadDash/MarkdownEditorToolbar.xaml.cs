@@ -155,11 +155,27 @@ public partial class MarkdownEditorToolbar : UserControl
     private void TableButton_Click(object sender, RoutedEventArgs e) =>
         Dispatch(MarkdownEditorCommands.InsertTable, MarkdownEditorCommands.InsertTable);
 
-    private void InlineCodeButton_Click(object sender, RoutedEventArgs e) =>
-        Dispatch(MarkdownEditorCommands.InsertInlineCode, MarkdownEditorCommands.InsertInlineCode);
-
-    private void CodeBlockButton_Click(object sender, RoutedEventArgs e) =>
-        Dispatch(MarkdownEditorCommands.InsertCodeBlock, MarkdownEditorCommands.InsertCodeBlock);
+    private void SmartCodeButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Try smart function first (works with selection)
+        bool handled = false;
+        if (TargetRichTextBox is { } rtb)
+        {
+            handled = MarkdownEditorCommands.ApplyInlineCodeOrFence(rtb);
+            rtb.Focus();
+        }
+        else if (TargetTextBox is { } tb)
+        {
+            handled = MarkdownEditorCommands.ApplyInlineCodeOrFence(tb);
+            tb.Focus();
+        }
+        
+        // Fallback: if no selection, insert empty backticks
+        if (!handled)
+        {
+            Dispatch(MarkdownEditorCommands.InsertInlineCode, MarkdownEditorCommands.InsertInlineCode);
+        }
+    }
 
     private void HrButton_Click(object sender, RoutedEventArgs e) =>
         Dispatch(MarkdownEditorCommands.InsertHorizontalRule, MarkdownEditorCommands.InsertHorizontalRule);

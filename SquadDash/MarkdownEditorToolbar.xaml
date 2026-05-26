@@ -51,20 +51,12 @@
         </Button>
         <Separator Width="1" Height="18" Margin="2,0,4,0"
                    Background="{DynamicResource PanelBorder}" />
-        <!-- Inline code -->
-        <Button Style="{StaticResource ThemedButtonStyle}"
-                Width="34" Height="29"
-                Padding="0" Margin="0,0,2,0"
-                ToolTip="Inline code"
-                Click="InlineCodeButton_Click">
-            <TextBlock FontFamily="Consolas" FontSize="{DynamicResource FontSizeMedium}" Text="`" />
-        </Button>
-        <!-- Code block -->
+        <!-- Smart code formatting -->
         <Button Style="{StaticResource ThemedButtonStyle}"
                 Width="34" Height="29"
                 Padding="0" Margin="0,0,0,0"
-                ToolTip="Code block"
-                Click="CodeBlockButton_Click">
+                ToolTip="Smart code formatting (inline or block)"
+                Click="SmartCodeButton_Click">
             <TextBlock FontFamily="Consolas" FontSize="{DynamicResource FontSizeNormal}" Text="&lt;/&gt;" />
         </Button>
         <!-- HR separator + button (conditional) -->
