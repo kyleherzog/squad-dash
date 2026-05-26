@@ -67,7 +67,7 @@ internal static class MarkdownFlowDocumentBuilder {
             }
 
             if (trimmed.StartsWith("> ", StringComparison.Ordinal)) {
-                document.Blocks.Add(BuildQuote(trimmed[2..].Trim(), quoteFill, quoteBorder, foreground));
+                document.Blocks.Add(BuildQuote(trimmed[2..].Trim(), quoteFill, foreground));
                 continue;
             }
 
@@ -147,27 +147,17 @@ internal static class MarkdownFlowDocumentBuilder {
         return paragraph;
     }
 
-    private static BlockUIContainer BuildQuote(string text, Brush quoteFill, Brush quoteBorder, Brush foreground) {
+    private static Block BuildQuote(string text, Brush quoteFill, Brush foreground) {
+        // Use a flow Paragraph (not BlockUIContainer) so the text is included in
+        // FlowDocumentScrollViewer selection/copy operations.
         var paragraph = new Paragraph {
-            Margin = new Thickness(0)
+            Background = quoteFill,
+            Padding    = new Thickness(12, 8, 12, 8),
+            Margin     = new Thickness(0, 2, 0, 10),
+            Foreground = foreground,
         };
         AddInlineText(paragraph.Inlines, text);
-
-        return new BlockUIContainer(new Border {
-            Background = quoteFill,
-            BorderBrush = quoteBorder,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(12, 8, 12, 8),
-            Margin = new Thickness(0, 2, 0, 10),
-            Child = new RichTextBox {
-                Document = new FlowDocument(paragraph) { Foreground = foreground },
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                IsReadOnly = true,
-                IsDocumentEnabled = true
-            }
-        });
+        return paragraph;
     }
 
     private static List BuildList(IEnumerable<string> items) {
@@ -187,31 +177,24 @@ internal static class MarkdownFlowDocumentBuilder {
         return list;
     }
 
-    private static BlockUIContainer BuildCodeBlock(string code) {
-        var textBox = new TextBox {
-            Text = code,
-            IsReadOnly = true,
-            AcceptsReturn = true,
-            AcceptsTab = true,
-            TextWrapping = TextWrapping.NoWrap,
-            BorderThickness = new Thickness(0),
-            Background = Brushes.Transparent,
+    private static Block BuildCodeBlock(string code) {
+        // Use a flow Paragraph (not BlockUIContainer wrapping a TextBox) so the text
+        // participates in FlowDocumentScrollViewer selection and is included when the
+        // user copies a selection that spans the code block.
+        var paragraph = new Paragraph {
+            Padding    = new Thickness(12, 10, 12, 10),
+            Margin     = new Thickness(0, 2, 0, 10),
             FontFamily = new FontFamily("Consolas"),
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
         };
-        textBox.SetResourceReference(Control.ForegroundProperty, "CodeText");
+        paragraph.SetResourceReference(TextElement.BackgroundProperty, "CodeSurface");
+        paragraph.SetResourceReference(TextElement.ForegroundProperty, "CodeText");
 
-        var border = new Border {
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(12, 10, 12, 10),
-            Margin = new Thickness(0, 2, 0, 10),
-            Child = textBox
-        };
-        border.SetResourceReference(Border.BackgroundProperty, "CodeSurface");
-        border.SetResourceReference(Border.BorderBrushProperty, "InputBorder");
-        return new BlockUIContainer(border);
+        var codeLines = code.Split('\n');
+        for (var i = 0; i < codeLines.Length; i++) {
+            if (i > 0) paragraph.Inlines.Add(new LineBreak());
+            paragraph.Inlines.Add(new Run(codeLines[i]));
+        }
+        return paragraph;
     }
 
     private static bool TryReadTable(string[] lines, ref int index, out List<string[]> rows) {

@@ -1,8 +1,10 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -117,6 +119,12 @@ internal sealed class InboxMessageWindow : ChromedWindow
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             Document                      = doc,
         };
+
+        // Fix for code block copying: FlowDocument's default copy handler can skip
+        // Paragraph elements with backgrounds (code blocks). Intercept the copy event
+        // to extract plain text from the selection, preserving all content.
+        DataObject.AddCopyingHandler(bodyViewer, OnFlowDocumentCopying);
+
         var bodyBorder = new Border
         {
             Margin = new Thickness(8, 6, 8, 8),
@@ -125,6 +133,33 @@ internal sealed class InboxMessageWindow : ChromedWindow
         bodyBorder.SetResourceReference(Border.BackgroundProperty, "InboxBodySurface");
         Grid.SetRow(bodyBorder, 3);
         root.Children.Add(bodyBorder);
+    }
+
+    private static void OnFlowDocumentCopying(object sender, DataObjectCopyingEventArgs e)
+    {
+        if (sender is not FlowDocumentScrollViewer viewer)
+            return;
+
+        var selection = viewer.Selection;
+        if (selection.IsEmpty)
+            return;
+
+        // Extract plain text from the selection. The default TextRange.Text property
+        // properly handles all inlines within the range, including those in Paragraphs
+        // with background colors (code blocks).
+        try
+        {
+            var plainText = selection.Text;
+            if (!string.IsNullOrEmpty(plainText))
+            {
+                Clipboard.SetText(plainText);
+                e.CancelCommand(); // Prevent the default copy operation
+            }
+        }
+        catch
+        {
+            // Clipboard contention — let default behavior proceed
+        }
     }
 
     private static Button BuildActionButton(
