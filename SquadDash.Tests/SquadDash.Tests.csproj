@@ -218,6 +218,12 @@
     <Compile Include="..\SquadDash\MaintenancePanelController.cs" Link="Source\MaintenancePanelController.cs" />
     <Compile Include="..\SquadDash\IdleDetectionService.cs"       Link="Source\IdleDetectionService.cs" />
 
+    <!-- Maintenance Mode — Decompose Mode (Phase 2) -->
+    <Compile Include="..\SquadDash\DecomposedTaskGroup.cs"   Link="Source\DecomposedTaskGroup.cs" />
+    <Compile Include="..\SquadDash\TasksJsonParser.cs"       Link="Source\TasksJsonParser.cs" />
+    <Compile Include="..\SquadDash\DecomposedTasksWriter.cs" Link="Source\DecomposedTasksWriter.cs" />
+    <Compile Include="..\SquadDash\MaintenanceGroupRunner.cs" Link="Source\MaintenanceGroupRunner.cs" />
+
     <!-- Maintenance Mode — Phase 2 tests (auto-included by SDK glob) -->
   </ItemGroup>
 
