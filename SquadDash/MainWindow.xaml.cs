@@ -27784,6 +27784,28 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (ViewInboxMenuItem is not null)
             ViewInboxMenuItem.IsChecked = true;
         PersistInboxPanelVisible();
+
+        // Flash the inbox panel border so the user knows where it appeared (or is already open).
+        if (InboxPanelBorder is not null)
+        {
+            var accentColor = GetActiveAgentAccentColor();
+            // Use a layout pass so the border is visible before the animation starts.
+            _ = Dispatcher.BeginInvoke(DispatcherPriority.Loaded,
+                () => FlashGlowHighlight(InboxPanelBorder, accentColor));
+        }
+    }
+
+    /// <summary>Returns the accent color of the currently selected transcript thread,
+    /// falling back to CornflowerBlue for the coordinator.</summary>
+    private System.Windows.Media.Color GetActiveAgentAccentColor()
+    {
+        if (_selectedTranscriptThread is { Kind: not TranscriptThreadKind.Coordinator } agentThread)
+        {
+            var card = FindAgentCardForThread(agentThread);
+            if (card is not null)
+                return ColorFromHex(card.AccentColorHex);
+        }
+        return System.Windows.Media.Colors.CornflowerBlue;
     }
 
     private void SyncInboxPanel()
