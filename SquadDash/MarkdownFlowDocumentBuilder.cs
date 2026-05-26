@@ -25,11 +25,12 @@ internal static class MarkdownFlowDocumentBuilder {
         var tableHeader  = Res("TableHeaderSurface",  DefaultTableHeaderBrush);
 
         var document = new FlowDocument {
-            FontFamily   = new FontFamily("Segoe UI, Segoe UI Emoji"),
-            FontSize     = (double)Application.Current.Resources["FontSizeMedium"],
-            Foreground   = foreground,
-            Background   = Brushes.Transparent,   // let the viewer's background show through the page
-            PagePadding  = new Thickness(18)
+            FontFamily    = new FontFamily("Segoe UI, Segoe UI Emoji"),
+            FontSize      = (double)Application.Current.Resources["FontSizeMedium"],
+            Foreground    = foreground,
+            Background    = Brushes.Transparent,   // let the viewer's background show through the page
+            PagePadding   = new Thickness(18),
+            TextAlignment = TextAlignment.Left     // left align text; never use full justification
         };
 
         var lines = Normalize(markdown).Split('\n');
