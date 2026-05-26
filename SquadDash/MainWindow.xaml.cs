@@ -27663,7 +27663,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         shaRun.SetResourceReference(Run.ForegroundProperty, "DocumentLinkText");
 
         var suffix = new Run($" — \"{att.Description}\"");
-        suffix.SetResourceReference(Run.ForegroundProperty, "SubtleText");
+        suffix.SetResourceReference(Run.ForegroundProperty, "LabelText");
 
         if (label.Inlines.Count == 0)
             label.Inlines.Add(prefix);
