@@ -10803,24 +10803,34 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (sender is not FrameworkElement { DataContext: AgentStatusCard agentCard })
                 return;
 
-            // Parse accent color
+            // Parse accent color; brighten toward white in dark theme so the glow is visible
+            // against a dark background (same accent color reads as nearly invisible in dark mode).
             var accentColor = (System.Windows.Media.Color)ColorConverter.ConvertFromString(agentCard.AccentColorHex);
+            bool isDark = AgentStatusCard.IsDarkTheme;
+            if (isDark)
+            {
+                accentColor = System.Windows.Media.Color.FromRgb(
+                    (byte)(accentColor.R + (255 - accentColor.R) * 0.55),
+                    (byte)(accentColor.G + (255 - accentColor.G) * 0.55),
+                    (byte)(accentColor.B + (255 - accentColor.B) * 0.55));
+            }
 
             // If this is the lead/coordinator agent, apply glow to main transcript border
             if (agentCard.IsLeadAgent)
             {
                 if (_mainTranscriptVisible && MainTranscriptBorder is not null)
                 {
+                    double startOpacity = isDark ? 0.6 : 0.4;
                     var glow = new System.Windows.Media.Effects.DropShadowEffect
                     {
                         Color = accentColor,
-                        BlurRadius = 20,
+                        BlurRadius = isDark ? 28 : 20,
                         ShadowDepth = 0,
-                        Opacity = 0.4
+                        Opacity = startOpacity
                     };
                     MainTranscriptBorder.Effect = glow;
 
-                    var opacityAnim = new System.Windows.Media.Animation.DoubleAnimation(0.4, 1.0, TimeSpan.FromMilliseconds(2000));
+                    var opacityAnim = new System.Windows.Media.Animation.DoubleAnimation(startOpacity, 1.0, TimeSpan.FromMilliseconds(2000));
                     glow.BeginAnimation(System.Windows.Media.Effects.DropShadowEffect.OpacityProperty, opacityAnim);
                 }
                 return;
@@ -10832,17 +10842,20 @@ public partial class MainWindow : Window, ILiveElementLocator
                 return;
 
             // Apply pulsing glow effect to secondary panel
-            var secondaryGlow = new System.Windows.Media.Effects.DropShadowEffect
             {
-                Color = accentColor,
-                BlurRadius = 20,
-                ShadowDepth = 0,
-                Opacity = 0.4
-            };
-            entry.PanelBorder.Effect = secondaryGlow;
+                double startOpacity = isDark ? 0.6 : 0.4;
+                var secondaryGlow = new System.Windows.Media.Effects.DropShadowEffect
+                {
+                    Color = accentColor,
+                    BlurRadius = isDark ? 28 : 20,
+                    ShadowDepth = 0,
+                    Opacity = startOpacity
+                };
+                entry.PanelBorder.Effect = secondaryGlow;
 
-            var secondaryOpacityAnim = new System.Windows.Media.Animation.DoubleAnimation(0.4, 1.0, TimeSpan.FromMilliseconds(2000));
-            secondaryGlow.BeginAnimation(System.Windows.Media.Effects.DropShadowEffect.OpacityProperty, secondaryOpacityAnim);
+                var secondaryOpacityAnim = new System.Windows.Media.Animation.DoubleAnimation(startOpacity, 1.0, TimeSpan.FromMilliseconds(2000));
+                secondaryGlow.BeginAnimation(System.Windows.Media.Effects.DropShadowEffect.OpacityProperty, secondaryOpacityAnim);
+            }
         }
         catch (Exception ex)
         {
