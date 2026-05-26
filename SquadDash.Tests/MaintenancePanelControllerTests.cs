@@ -396,7 +396,8 @@ internal sealed class MaintenancePanelControllerTests {
             Assert.That(buttons, Is.Not.Empty, "At least one report button must be present");
 
             var content = buttons[0].Content?.ToString() ?? "";
-            Assert.That(content, Does.Contain("2026-05-20"), "Button must show the report date");
+            // Date is now shown as a relative label (e.g. "Today", "Yesterday", "Monday", "May 20, 2026")
+            Assert.That(content, Does.Contain("—"), "Button label must contain the em-dash separator");
             Assert.That(content, Does.Contain("2 tasks"), "Button must show task count");
         });
     }

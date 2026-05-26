@@ -331,7 +331,7 @@ internal sealed class MaintenancePanelController {
 
     private void AppendReportsSection() {
         var separator = new Separator { Margin = new Thickness(0, 8, 0, 4) };
-        separator.SetResourceReference(Separator.BackgroundProperty, "SubtleText");
+        separator.SetResourceReference(Separator.BackgroundProperty, "SubtleBorder");
         _listPanel.Children.Add(separator);
 
         var inboxBtn = new Button {
@@ -354,6 +354,7 @@ internal sealed class MaintenancePanelController {
             Margin     = new Thickness(0, 4, 0, 0),
             Content    = BuildReportsContent(),
         };
+        reportsExpander.SetResourceReference(Expander.StyleProperty, "ThemedExpanderStyle");
         _listPanel.Children.Add(reportsExpander);
     }
 
@@ -384,23 +385,59 @@ internal sealed class MaintenancePanelController {
             return content;
         }
 
-        foreach (var filePath in reportFiles) {
-            var (date, taskCount) = ParseReportSummary(filePath);
-            var taskWord = taskCount == 1 ? "task" : "tasks";
-            var label    = $"{date} — {taskCount} {taskWord}";
+        var grouped = reportFiles
+            .GroupBy(p => {
+                var n    = Path.GetFileNameWithoutExtension(p);
+                var dash = n.IndexOf('-');
+                return dash > 0 ? n[..dash] : n;  // YYYYMMDD key
+            })
+            .OrderByDescending(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .Take(10)
+            .ToList();
+
+        foreach (var dayGroup in grouped) {
+            int totalTasks = dayGroup.Sum(f => {
+                var (_, cnt) = ParseReportSummary(f);
+                return cnt;
+            });
+            var representative = dayGroup.OrderByDescending(p => p, StringComparer.OrdinalIgnoreCase).First();
+
+            var dateKey  = dayGroup.Key;
+            var relLabel = FormatRelativeDay(dateKey);
+            var taskWord = totalTasks == 1 ? "task" : "tasks";
+            var label    = $"{relLabel} — {totalTasks} {taskWord}";
             var btn = new Button {
                 Content                    = label,
                 HorizontalContentAlignment = HorizontalAlignment.Left,
                 BorderThickness            = new Thickness(0),
                 Padding                    = new Thickness(4, 2, 4, 2),
                 Cursor                     = Cursors.Hand,
+                Tag                        = representative,
             };
-            btn.SetResourceReference(Button.StyleProperty,    "FlatButtonStyle");
-            btn.SetResourceReference(Button.FontSizeProperty, "FontSizeSmall");
+            btn.SetResourceReference(Button.StyleProperty,      "FlatButtonStyle");
+            btn.SetResourceReference(Button.FontSizeProperty,   "FontSizeSmall");
+            btn.SetResourceReference(Button.ForegroundProperty, "SubtleText");
             content.Children.Add(btn);
         }
 
         return content;
+    }
+
+    private static string FormatRelativeDay(string dateKey) {
+        if (dateKey.Length != 8 ||
+            !DateTime.TryParseExact(dateKey, "yyyyMMdd",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var date))
+            return dateKey;
+
+        var today    = DateTime.Today;
+        var daysDiff = (today - date.Date).Days;
+
+        if (daysDiff == 0) return "Today";
+        if (daysDiff == 1) return "Yesterday";
+        if (daysDiff < 7)  return date.ToString("dddd");
+        if (daysDiff < 14) return $"Last {date:dddd}";
+        return date.ToString("MMM d, yyyy");
     }
 
     private static (string date, int taskCount) ParseReportSummary(string filePath) {
