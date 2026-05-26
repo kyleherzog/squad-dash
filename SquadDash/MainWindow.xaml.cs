@@ -27304,8 +27304,21 @@ public partial class MainWindow : Window, ILiveElementLocator
     /// Any <c>&lt;/attachment&gt;</c> in <paramref name="content"/> is escaped so the
     /// block close tag cannot collide with content.
     /// </summary>
-    private static string BuildTypedAttachmentBlock(string type, string? title, string content) =>
-        AttachmentBlockFormatter.BuildTypedAttachmentBlock(type, title, content);
+    private static string BuildTypedAttachmentBlock(string type, string? title, string content)
+    {
+        var result = AttachmentBlockFormatter.BuildTypedAttachmentBlock(type, title, content);
+        
+        // Log inbox-excerpt creation for diagnostics
+        if (type == "inbox-excerpt")
+        {
+            var logPath = Path.Combine(Path.GetTempPath(), "squaddash-excerpt-debug.log");
+            var preview = result.Substring(0, Math.Min(300, result.Length));
+            File.AppendAllText(logPath,
+                $"[{DateTime.Now:HH:mm:ss.fff}] [BUILD ATTACHMENT] Created inbox-excerpt block:\n{preview}...\n");
+        }
+        
+        return result;
+    }
 
     [Obsolete("Use BuildTypedAttachmentBlock for new attachments. This overload is retained only to generate " +
               "SQUADCLIP fences for addToNotes callers that still expect the old markdown format.")]
@@ -27591,10 +27604,19 @@ public partial class MainWindow : Window, ILiveElementLocator
                     var isInboxExcerpt = att.ContentBlock.Contains("type=\"inbox-excerpt\"", StringComparison.Ordinal)
                         && att.InboxMessageId != null;
 
-                    Trace.WriteLine($"[EXCERPT ATTACH] Creating attachment - isInboxExcerpt={isInboxExcerpt}, hasInboxMessageId={att.InboxMessageId != null}, hasContentBlock={att.ContentBlock != null}");
+                    // Diagnostic logging
+                    var logPath = Path.Combine(Path.GetTempPath(), "squaddash-excerpt-debug.log");
+                    File.AppendAllText(logPath,
+                        $"[{DateTime.Now:HH:mm:ss.fff}] [EXCERPT ATTACH] " +
+                        $"isInboxExcerpt={isInboxExcerpt}, " +
+                        $"InboxMessageId={(att.InboxMessageId?.ToString() ?? "NULL")}, " +
+                        $"hasContentBlock={att.ContentBlock != null}\n");
+                    
                     if (isInboxExcerpt)
                     {
-                        Trace.WriteLine($"[EXCERPT ATTACH] ContentBlock preview: {att.ContentBlock!.Substring(0, Math.Min(200, att.ContentBlock.Length))}");
+                        var preview = att.ContentBlock!.Substring(0, Math.Min(200, att.ContentBlock.Length));
+                        File.AppendAllText(logPath,
+                            $"[{DateTime.Now:HH:mm:ss.fff}] [EXCERPT ATTACH] ContentBlock preview: {preview}\n");
                     }
 
                     if (att.Description.StartsWith("Note: ", StringComparison.Ordinal))
@@ -27624,11 +27646,19 @@ public partial class MainWindow : Window, ILiveElementLocator
                     if (isInboxExcerpt)
                     {
                         // For inbox-excerpt: open the message window and select the excerpt
+                        File.AppendAllText(logPath,
+                            $"[{DateTime.Now:HH:mm:ss.fff}] [EXCERPT ATTACH] ✅ Registering click handler for inbox-excerpt\n");
+                        
                         label.MouseLeftButtonUp += (_, _) =>
                         {
-                            Trace.WriteLine($"[EXCERPT CLICK] Attachment clicked! InboxMessageId={capturedContent.InboxMessageId}");
+                            var clickLogPath = Path.Combine(Path.GetTempPath(), "squaddash-excerpt-debug.log");
+                            File.AppendAllText(clickLogPath,
+                                $"[{DateTime.Now:HH:mm:ss.fff}] [EXCERPT CLICK] 🖱️ Attachment clicked! InboxMessageId={capturedContent.InboxMessageId}\n");
+                            
                             var excerptText = ExtractExcerptTextFromAttachment(capturedContent.ContentBlock!);
-                            Trace.WriteLine($"[EXCERPT CLICK] Extracted excerpt text: '{excerptText}'");
+                            File.AppendAllText(clickLogPath,
+                                $"[{DateTime.Now:HH:mm:ss.fff}] [EXCERPT CLICK] Extracted text: '{excerptText}'\n");
+                            
                             OpenOrFocusInboxMessageAndSelectText(capturedContent.InboxMessageId!, excerptText);
                         };
                     }
