@@ -26,6 +26,8 @@ internal sealed class MaintenancePanelController {
 
     private MaintenanceMdConfig?   _config;
     private MaintenanceStateStore? _stateStore;
+    private MaintenancePanelUiState? _uiState;
+    private readonly List<(string TaskId, StackPanel OptionsPanel)> _taskOptionsPanels = new();
     private bool                   _runnerActive;
     private string?                _runningTaskTitle;
     private DispatcherTimer?       _countdownTimer;
@@ -100,14 +102,32 @@ internal sealed class MaintenancePanelController {
         var menu = new ContextMenu();
         menu.SetResourceReference(ContextMenu.StyleProperty, "ThemedContextMenuStyle");
         menu.Items.Add(editItem);
+
+        var collapseItem = new MenuItem { Header = "Collapse All Tasks" };
+        collapseItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+        collapseItem.Click += (_, _) => CollapseAllTaskRows();
+        menu.Items.Add(collapseItem);
+
         _listPanel.ContextMenu = menu;
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
 
+    private void CollapseAllTaskRows() {
+        foreach (var (taskId, panel) in _taskOptionsPanels) {
+            panel.Visibility = Visibility.Collapsed;
+            _uiState?.SetExpanded(taskId, false);
+        }
+    }
+
     internal void Refresh(MaintenanceMdConfig? config, MaintenanceStateStore? stateStore) {
         _config     = config;
         _stateStore = stateStore;
+
+        if (_uiState is null && _getWorkspacePath() is { } wp) {
+            _uiState = new MaintenancePanelUiState(Path.Combine(wp, ".squad"));
+            _uiState.Load();
+        }
 
         _enabledOnIdlePicker.SelectedValue = (config?.EnabledOnIdle ?? false) ? "on-idle" : "manual";
 
@@ -287,6 +307,7 @@ internal sealed class MaintenancePanelController {
 
     private void RebuildList() {
         _listPanel.Children.Clear();
+        _taskOptionsPanels.Clear();
 
         if (_config is null || _config.Tasks is null || _config.Tasks.Count == 0) {
             var empty = new TextBlock {
@@ -439,7 +460,7 @@ internal sealed class MaintenancePanelController {
         // ── Checkbox ─────────────────────────────────────────────────────────
         var check = new CheckBox {
             IsChecked         = task.Enabled,
-            VerticalAlignment = VerticalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Top,
             Margin            = new Thickness(0, 0, 6, 0),
         };
         check.SetResourceReference(CheckBox.FontSizeProperty, "FontSizeBody");
@@ -547,6 +568,13 @@ internal sealed class MaintenancePanelController {
                 }
             }
             rightPanel.Children.Add(optionsPanel);
+
+            // Apply persisted expand state (default collapsed)
+            optionsPanel.Visibility = (_uiState?.IsExpanded(task.Id) == true)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+            _taskOptionsPanels.Add((task.Id, optionsPanel));
         }
 
         // Double-click the row to expand or collapse the options panel.
@@ -554,9 +582,9 @@ internal sealed class MaintenancePanelController {
             // Use Preview (tunnel) event so child controls (CheckBox, RadioButton) don't swallow it first.
             row.PreviewMouseLeftButtonDown += (_, e) => {
                 if (e.ClickCount != 2) return;
-                optionsPanel.Visibility = optionsPanel.Visibility == Visibility.Visible
-                    ? Visibility.Collapsed
-                    : Visibility.Visible;
+                var nowVisible = optionsPanel.Visibility != Visibility.Visible;
+                optionsPanel.Visibility = nowVisible ? Visibility.Visible : Visibility.Collapsed;
+                _uiState?.SetExpanded(task.Id, nowVisible);
                 e.Handled = true;
             };
         }
