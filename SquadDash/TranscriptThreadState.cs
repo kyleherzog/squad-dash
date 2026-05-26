@@ -82,6 +82,7 @@ internal sealed class TranscriptThreadState : INotifyPropertyChanged {
     public string[] RecentActivity { get; set; } = Array.Empty<string>();
     public string? ErrorText { get; set; }
     public bool WasObservedAsBackgroundTask { get; set; }
+    public bool SuppressCoordinatorPromotion { get; set; }
     public bool IsCurrentBackgroundRun { get; set; }
     public DateTimeOffset StartedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }

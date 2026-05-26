@@ -844,6 +844,14 @@ internal sealed class BackgroundTaskPresenter {
 
         _pendingBackgroundReportPromotions.Remove(thread.ThreadId);
 
+        if (thread.SuppressCoordinatorPromotion) {
+            _backgroundReportPromotionGenerations.Remove(thread.ThreadId);
+            SquadDashTrace.Write(
+                "Agents",
+                $"BackgroundReport.Suppressed thread={thread.ThreadId} reason={reason}");
+            return false;
+        }
+
         var isLiveBackgroundTask = IsThreadBackedByLiveBackgroundTask(thread);
         var isTerminal           = AgentThreadRegistry.IsTerminalBackgroundStatus(thread.StatusText);
         var announcement = BackgroundAgentReportAnnouncementBuilder.TryBuild(
