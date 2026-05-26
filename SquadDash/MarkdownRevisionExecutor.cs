@@ -94,7 +94,13 @@ internal static class MarkdownRevisionExecutor
                     });
                 }
             }
-            catch { /* swallow — user may have navigated away */ }
+            catch (Exception ex)
+            {
+                SquadDashTrace.Write("Revision", $"Revision failed: {ex}");
+                owner.Dispatcher.Invoke(() =>
+                    MessageBox.Show($"Revision failed: {ex.Message}", "Revision Error",
+                        MessageBoxButton.OK, MessageBoxImage.Error));
+            }
             finally
             {
                 cts.Dispose();

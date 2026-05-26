@@ -14284,7 +14284,13 @@ public partial class MainWindow : Window, ILiveElementLocator
                 if (!string.IsNullOrWhiteSpace(revised))
                     Dispatcher.Invoke(() => ApplyDocRevision(textBox, capturedStart, capturedLen, originalText, revised));
             }
-            catch { /* swallow — user may have navigated away */ }
+            catch (Exception ex)
+            {
+                SquadDashTrace.Write("Revision", $"Revision failed: {ex}");
+                Dispatcher.Invoke(() =>
+                    MessageBox.Show($"Revision failed: {ex.Message}", "Revision Error",
+                        MessageBoxButton.OK, MessageBoxImage.Error));
+            }
             finally
             {
                 cts.Dispose();
