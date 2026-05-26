@@ -42,6 +42,33 @@ internal static class DpiHelper
     /// it is returned unchanged without any copy.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Returns a copy of <paramref name="source"/> with DPI metadata set to the supplied
+    /// physical DPI values. Pixel data is copied unchanged — no resampling is performed.
+    /// Use this to correctly label GDI HBITMAPs (which always report 96 DPI) with the
+    /// actual physical DPI of the monitor they were captured from.
+    /// </summary>
+    public static BitmapSource SetPhysicalDpi(BitmapSource source, double dpiX, double dpiY)
+    {
+        if (source == null) throw new ArgumentNullException(nameof(source));
+
+        int width  = source.PixelWidth;
+        int height = source.PixelHeight;
+        int stride = (width * source.Format.BitsPerPixel + 7) / 8;
+        var pixels = new byte[height * stride];
+        source.CopyPixels(pixels, stride, 0);
+
+        var relabelled = BitmapSource.Create(
+            width, height,
+            dpiX, dpiY,
+            source.Format,
+            source.Palette,
+            pixels,
+            stride);
+        relabelled.Freeze();
+        return relabelled;
+    }
+
     internal static BitmapSource NormalizeTo96Dpi(BitmapSource src)
     {
         if (Math.Abs(src.DpiX - 96.0) < 0.5 && Math.Abs(src.DpiY - 96.0) < 0.5)

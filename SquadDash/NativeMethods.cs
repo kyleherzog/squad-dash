@@ -472,10 +472,10 @@ internal static class NativeMethods {
             h = win.Bottom - win.Top;
         }
 
-        // Normalise the captured bitmap to 96 DPI so that the saved PNG has
-        // predictable metadata regardless of the monitor's physical DPI.
+        // Label the captured bitmap with the actual physical DPI of the monitor so
+        // WPF renders it at the correct logical DIP size with 1:1 pixel mapping.
         // The physical pixel content is preserved 1:1 — no resampling occurs.
         var raw = CaptureScreenRegionPixels(x, y, w, h);
-        return raw is null ? null : DpiHelper.NormalizeTo96Dpi(raw);
+        return raw is null ? null : DpiHelper.SetPhysicalDpi(raw, 96.0 * dpi.DpiScaleX, 96.0 * dpi.DpiScaleY);
     }
 }
