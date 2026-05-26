@@ -2807,7 +2807,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             foreach (var item in items.Reverse())
             {
                 bool isNext = item.Id == nextReadyId;
-                var label = isNext ? $"Queue #{item.SequenceNumber}" : $"#{item.SequenceNumber}";
+                var label = isNext ? $"Queue #{item.QueueNumber}" : $"#{item.QueueNumber}";
                 var tooltip = isNext ? "This prompt is next in the Squad queue."
                                      : "This item is in the Squad queue.";
                 QueueTabStrip.Children.Add(CreateQueueTab(item.Id, label, tooltip));
@@ -2851,7 +2851,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (activeItem is null) return;
 
         bool isNext = activeItem.Id == nextReadyId;
-        var activeTabLabel = isNext ? $"Queue #{activeItem.SequenceNumber}" : $"#{activeItem.SequenceNumber}";
+        var activeTabLabel = isNext ? $"Queue #{activeItem.QueueNumber}" : $"#{activeItem.QueueNumber}";
         var hint = new TextBlock
         {
             Text = $"Automatic prompting will pause when it's time to send this active tab (\"{activeTabLabel}\")",
@@ -3113,8 +3113,8 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 var nextReadyId = _promptQueue.Items.FirstOrDefault(i => !i.IsEditing)?.Id;
                 activeTabLabel = item.Id == nextReadyId
-                    ? $"Queue #{item.SequenceNumber}"
-                    : $"#{item.SequenceNumber}";
+                    ? $"Queue #{item.QueueNumber}"
+                    : $"#{item.QueueNumber}";
             }
         }
 
@@ -3510,7 +3510,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         var preview = effectiveText.Length > 60 ? effectiveText[..57] + "…" : effectiveText;
 
         var dialog = new QueueItemDeleteConfirmWindow(
-            $"#{item.SequenceNumber}",
+            $"#{item.QueueNumber}",
             preview,
             GetScreenRect(anchor),
             effectiveText)
