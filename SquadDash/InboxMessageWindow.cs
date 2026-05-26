@@ -43,6 +43,10 @@ internal sealed class InboxMessageWindow : ChromedWindow
         WindowStartupLocation   = WindowStartupLocation.CenterOwner;
         ShowInTaskbar           = true;
 
+        // Debug logging for window size
+        var logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "squaddash-window-debug.log");
+        System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] Constructor: Width={Width}, Height={Height}\n");
+
         // Root grid: header / attachments / actions / body
         var root = new Grid();
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // 0 header
@@ -172,6 +176,13 @@ internal sealed class InboxMessageWindow : ChromedWindow
         bodyBorder.SetResourceReference(Border.BackgroundProperty, "InboxBodySurface");
         Grid.SetRow(bodyBorder, 3);
         root.Children.Add(bodyBorder);
+
+        // Debug logging in Loaded event
+        Loaded += (_, _) =>
+        {
+            var logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "squaddash-window-debug.log");
+            System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] Loaded: ActualWidth={ActualWidth}, ActualHeight={ActualHeight}\n");
+        };
     }
 
     private static void OnFlowDocumentCopying(object sender, DataObjectCopyingEventArgs e)

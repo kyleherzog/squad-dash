@@ -27457,18 +27457,23 @@ public partial class MainWindow : Window, ILiveElementLocator
         win.Owner = CanShowOwnedWindow() ? this : null;
         _openInboxWindows.Add(win);
         win.Closed += (_, _) => _openInboxWindows.Remove(win);
-        win.Show();
         
         Trace.WriteLine($"[Excerpt] Opening inbox message, will select: '{excerptText}'");
-        Trace.WriteLine($"[Excerpt] Window shown, scheduling selection with Dispatcher.BeginInvoke (ApplicationIdle)");
         
-        // Defer text selection until FlowDocument is fully rendered
-        // Use ApplicationIdle to ensure all layout and rendering is complete
-        Dispatcher.BeginInvoke(() =>
+        // Defer text selection until window is fully loaded and rendered
+        win.Loaded += (_, _) =>
         {
-            Trace.WriteLine($"[Excerpt] Dispatcher callback executing, calling SelectAndScrollToText");
-            win.SelectAndScrollToText(excerptText);
-        }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            Trace.WriteLine($"[Excerpt] Window Loaded event fired, scheduling selection with Dispatcher.BeginInvoke (Loaded priority)");
+            
+            // Use Loaded priority (higher than ApplicationIdle) and dispatch to ensure UI is ready
+            Dispatcher.BeginInvoke(() =>
+            {
+                Trace.WriteLine($"[Excerpt] Dispatcher callback executing, calling SelectAndScrollToText");
+                win.SelectAndScrollToText(excerptText);
+            }, System.Windows.Threading.DispatcherPriority.Loaded);
+        };
+        
+        win.Show();
     }
 
     private static string ExtractExcerptTextFromAttachment(string contentBlock)
