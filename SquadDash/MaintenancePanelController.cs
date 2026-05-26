@@ -502,10 +502,14 @@ internal sealed class MaintenancePanelController {
         };
         check.SetResourceReference(CheckBox.FontSizeProperty, "FontSizeBody");
         check.SetResourceReference(CheckBox.ForegroundProperty, "LabelText");
-        check.Loaded += (_, _) => {
+        void ApplyCheckboxScale() {
             double scale = check.FontSize / 13.0;
             check.LayoutTransform = new ScaleTransform(scale, scale);
-        };
+        }
+        check.Loaded += (_, _) => ApplyCheckboxScale();
+        System.ComponentModel.DependencyPropertyDescriptor
+            .FromProperty(CheckBox.FontSizeProperty, typeof(CheckBox))
+            .AddValueChanged(check, (_, _) => ApplyCheckboxScale());
         Grid.SetColumn(check, 0);
         check.Checked   += (_, _) => ToggleTaskEnabled(task.Id);
         check.Unchecked += (_, _) => ToggleTaskEnabled(task.Id);
