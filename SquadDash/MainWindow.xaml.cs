@@ -27795,16 +27795,13 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
     }
 
-    /// <summary>Returns the accent color of the currently selected transcript thread,
-    /// falling back to CornflowerBlue for the coordinator.</summary>
+    /// <summary>Returns the workspace tint accent color used for active-panel chrome
+    /// (the <c>ActivePanelBorder</c> resource), which rotates with the user's chosen
+    /// hue stop. Falls back to CornflowerBlue if the resource is unavailable.</summary>
     private System.Windows.Media.Color GetActiveAgentAccentColor()
     {
-        if (_selectedTranscriptThread is { Kind: not TranscriptThreadKind.Coordinator } agentThread)
-        {
-            var card = FindAgentCardForThread(agentThread);
-            if (card is not null)
-                return ColorFromHex(card.AccentColorHex);
-        }
+        if (Application.Current.Resources["ActivePanelBorder"] is SolidColorBrush brush)
+            return brush.Color;
         return System.Windows.Media.Colors.CornflowerBlue;
     }
 
