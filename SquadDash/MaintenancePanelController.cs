@@ -439,11 +439,15 @@ internal sealed class MaintenancePanelController {
         // ── Checkbox ─────────────────────────────────────────────────────────
         var check = new CheckBox {
             IsChecked         = task.Enabled,
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin            = new Thickness(0, 1, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(0, 0, 6, 0),
         };
         check.SetResourceReference(CheckBox.FontSizeProperty, "FontSizeBody");
         check.SetResourceReference(CheckBox.ForegroundProperty, "LabelText");
+        check.Loaded += (_, _) => {
+            double scale = check.FontSize / 13.0;
+            check.LayoutTransform = new ScaleTransform(scale, scale);
+        };
         Grid.SetColumn(check, 0);
         check.Checked   += (_, _) => ToggleTaskEnabled(task.Id);
         check.Unchecked += (_, _) => ToggleTaskEnabled(task.Id);
