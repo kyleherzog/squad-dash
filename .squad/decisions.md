@@ -2775,4 +2775,116 @@ Extended `PushNotificationService.ExtractGitCommitInfo()` to accept both tool ou
 
 **Why:** Users won't discover shortcuts unless they're visible somewhere in the product. Tooltips are the natural discovery surface — they require no prior knowledge and appear on demand. Documentation ensures shortcuts are findable in help content and the keyboard reference. A shortcut that exists only in code is effectively invisible.
 
-**Established:** 2026-05-08
+**Established:** 2026-05-08# Revise with AI — Live TextPointer Tracking
+
+**Date:** 2025-01-25  
+**Decider:** Lyra Morn (WPF & UI Specialist)  
+**Status:** Implemented  
+**Commit:** `4f016c5`
+
+---
+
+## Context
+
+The "Revise with AI" feature (Ctrl+Shift+A in doc editor) captures a text selection, sends it to the AI for revision, and replaces the original selection when the response arrives (async, potentially 10-120 seconds later). 
+
+**Problem:** If the user edits text *above* the original selection while waiting for the AI response, the captured integer char offsets become stale. The completion callback would check if `currentText.Substring(selStart, selLen) == selectedText`, and if not (due to offset drift), it would show a fallback dialog instead of applying the revision inline.
+
+The original task spec proposed a delta-based adjustment strategy: listen to `TextChanged` events, track insertion/deletion deltas, and manually adjust the stored `selStart` offset by `(inserted - deleted)` chars when edits occur before the selection.
+
+---
+
+## Decision
+
+**Use live (unfrozen) TextPointers instead of integer offsets.**
+
+WPF's `TextPointer` class automatically tracks position through document structure changes. When not frozen, TextPointers maintain their logical position relative to document content — insertions/deletions above the pointer automatically adjust the pointer's offset.
+
+### Implementation
+
+1. **Capture live TextPointers at selection time** (in `TriggerReviseWithAi` and `ShowDocRevisePopup`):
+   ```csharp
+   var startPointer = tb.Document.ContentStart.GetPositionAtOffset(selStart, LogicalDirection.Forward);
+   var endPointer   = tb.Document.ContentStart.GetPositionAtOffset(selStart + selLen, LogicalDirection.Backward);
+   ```
+   These are **not frozen** — they track automatically.
+
+2. **Pass TextPointers to adorners** instead of int offsets:
+   ```csharp
+   RevisionHighlightAdorner.Attach(tb, startPointer, endPointer);
+   RevisionPendingIndicator.Attach(tb, endPointer);
+   ```
+   Adorners use `GetCharacterRect(LogicalDirection.Forward/Backward)` for live rendering positions.
+
+3. **In the completion callback**, extract current text and replace using TextPointers:
+   ```csharp
+   var currentSelectedText = new TextRange(startPointer, endPointer).Text;
+   if (currentSelectedText == selectedText)
+   {
+       var replaceRange = new TextRange(startPointer, endPointer);
+       replaceRange.Text = revised;
+   }
+   else
+   {
+       // Fallback: show in separate window
+   }
+   ```
+
+---
+
+## Rationale
+
+**Why TextPointers over delta-based adjustment?**
+
+1. **WPF maintains positions automatically.** TextPointers track through complex document restructuring (paragraph merges, list nesting, formatting changes) — not just simple char insertions/deletions. Delta arithmetic would require parsing `TextChangedEventArgs` for every edit and manually tracking offset drift, which becomes unreliable when edits happen inside lists, tables, or nested blocks.
+
+2. **Adorner rendering stays correct.** `RevisionHighlightAdorner` and `RevisionPendingIndicator` render based on `GetCharacterRect()` from the TextPointers. If we stored int offsets, the adorner would need to recalculate char positions on every `TextChanged` event → performance overhead and visual jank. With live TextPointers, rendering just works.
+
+3. **Less code, fewer edge cases.** No event listeners, no offset arithmetic, no `PendingRevision` tracking structure. Simpler implementation → fewer bugs.
+
+4. **Standard WPF pattern.** Live TextPointers are the canonical way to track positions in FlowDocument editors. This aligns with how WPF's own selection tracking works internally.
+
+---
+
+## Alternatives Considered
+
+### Option A: Delta-based adjustment (original task spec)
+Listen to `TextChanged`, parse `TextChangedEventArgs` for insertion/deletion deltas at specific offsets, manually shift `capturedStart` by `(inserted - deleted)` when edits occur before the selection.
+
+**Rejected because:**
+- Complex to implement correctly for nested block structures (lists, tables, blockquotes)
+- Requires mutable `PendingRevision` record and event handler lifecycle management
+- Performance: every edit triggers offset recalculation for all in-flight revisions
+- Adorner rendering still requires TextPointers for `GetCharacterRect` → would need dual tracking (int offsets + TextPointers)
+
+### Option B: Freeze document during revision
+Disable editing in the RichTextBox while revision is in progress.
+
+**Rejected because:**
+- Poor UX: user cannot continue editing the document while waiting for AI response
+- Violates async-friendly design philosophy (don't block user actions while background tasks run)
+
+---
+
+## Consequences
+
+### Positive
+- **Correctness:** Revision replacement works even when user edits text above the selection while AI is working
+- **Simplicity:** No event listeners, no offset arithmetic, no manual tracking
+- **Performance:** Adorner rendering uses live positions with no recalculation overhead
+- **UX:** User can edit document freely; revision applies seamlessly when AI responds (if original selection is intact)
+
+### Negative
+- **None identified.** TextPointers are the standard pattern for this use case.
+
+---
+
+## Related Changes
+
+This decision also drove two other fixes in the same commit (`4f016c5`):
+
+1. **RevisionHighlightAdorner signature change:** `Attach(RichTextBox, TextPointer, TextPointer)` instead of `Attach(RichTextBox, int offset, int length)`. Adorner now renders at live pointer positions.
+
+2. **RevisionPendingIndicator rewrite:** Converted from `InlineUIContainer` (inserted into FlowDocument) to `Adorner`-based overlay. This removes the indicator from the undo stack (Ctrl+Z no longer shows spinner artifact) and positions the indicator at `endPointer.GetCharacterRect(LogicalDirection.Forward)` using the same live TextPointer.
+
+Both changes are tightly coupled to the TextPointer strategy — they benefit from the same automatic position tracking.

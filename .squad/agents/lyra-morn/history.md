@@ -165,3 +165,16 @@ file\, and backslash (no-newline markers). Clean diff preview without metadata n
 **Files:** `Themes/Light.xaml` (line 155-156), `Themes/Dark.xaml` (line 154-155), `RevisionHighlightAdorner.cs` (lines 14, 51-75, 77-95, 148-151), `RevisionPendingIndicator.cs` (full rewrite), `MarkdownDocumentWindow.cs` (lines 466-517), `MainWindow.xaml.cs` (lines 9886-9961). Task marked done in `.squad/tasks.md`. Commit: `4f016c5`. Build: 0 errors, 0 warnings.
 
 **Architecture note:** TextPointer live tracking is superior to delta-based adjustment (proposed in original task spec) because WPF maintains the pointer positions automatically across complex edits (insertions, deletions, paragraph restructuring). No event listener or manual offset arithmetic required.
+
+📌 Inbox message viewer copy bug fix (2026-05-26): Fixed clipboard copy behavior to preserve code samples.
+
+**Issue:** When selecting text that includes code blocks in the inbox message viewer and right-clicking to copy, code samples were stripped from the clipboard content.
+
+**Root cause:** WPF's FlowDocument default copy handler can strip Paragraph elements with custom backgrounds (used for code blocks). Even though code blocks are rendered as flow Paragraph elements to participate in selection, the default serialization skips them.
+
+**Fix:** Added DataObject.AddCopyingHandler to InboxMessageWindow constructor (line 126). The handler intercepts copy events, extracts plain text via selection.Text (which properly includes all Paragraph content), sets it to clipboard, and cancels the default operation.
+
+**Files:** InboxMessageWindow.cs (added import line 7, handler registration line 126, new method lines 138-163). Build: 0 errors, 0 warnings.
+
+
+📌 Team update (2026-05-26T15:31:00Z): Clipboard copy bug fixed in inbox message viewer — decided by Lyra Morn

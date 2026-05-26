@@ -66,6 +66,17 @@
 
 ## 🟡 Mid Priority
 
+- [ ] **Maintenance — custom task editor** *(Owner: Arjun Sen + Lyra Morn)*
+  Right-click a task row → "Edit Task" opens a custom WPF editor window (code-only, no XAML).
+  Layout: Title textbox (large font, top); Properties section (enabled, frequency, safety);
+  UI Options section (YAML editor for `options:` block on left, live rendered preview on right);
+  Instructions section (markdown preview on left, syntax-highlighted text editor on right with
+  `{{variable}}` hover tooltips and `{{#if}}`/`{{/if}}` highlighting); Cancel + Save buttons.
+  Both text editors support double-Ctrl voice dictation via `PttTextBoxAttachment`.
+  Save writes back to the source maintenance file via `MaintenanceMdParser.UpdateTask()`.
+  Requires adding `SourceFilePath` to `MaintenanceTask` record. Requires round-trip tests.
+  **Prerequisite for:** Maintenance — multi-file support.
+
 - [ ] **Maintenance — multi-file support** *(Owner: Arjun Sen + Lyra Morn)*
   Load all `maintenance*.md` files from the `.squad/` folder (e.g. `maintenance.md`,
   `maintenance-docs.md`, `maintenance-screenshots.md`). The base `maintenance.md` tasks are
