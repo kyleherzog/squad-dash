@@ -173,6 +173,7 @@ internal sealed class SquadCliAdapter {
     }
 
     private static string EscapePowerShellCommandArgument(string value) {
-        return value.Replace("\"", "\\\"");
+        // Single-quoted PS strings are fully literal — no variable/backtick expansion
+        return "'" + value.Replace("'", "''") + "'";
     }
 }
