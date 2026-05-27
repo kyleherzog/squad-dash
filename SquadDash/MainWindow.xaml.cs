@@ -8633,6 +8633,15 @@ public partial class MainWindow : Window, ILiveElementLocator
         var sw = Stopwatch.StartNew();
         try
         {
+            // When selection embedding handles a key (e.g. `"` wraps selected text),
+            // it sets e.Handled = true in this PreviewKeyDown handler.  WPF's
+            // TextCompositionManager then skips raising PreviewTextInput for that
+            // keystroke, so the suppression flag is never consumed and leaks into
+            // the next key press, silently swallowing it.  Clearing the flag at the
+            // top of every PreviewKeyDown ensures any stale suppression is discarded
+            // before the new key's TextInput event is evaluated.
+            _suppressPromptNextTextInput = false;
+
             var modifiers = Keyboard.Modifiers;
 
             if (modifiers == ModifierKeys.None
