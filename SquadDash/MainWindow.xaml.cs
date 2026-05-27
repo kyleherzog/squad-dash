@@ -18544,14 +18544,15 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         var rawText = entry.RawTextBuilder.ToString();
         var sanitizedText = SanitizeResponseText(rawText);
-        var rawTextForInboxParsing = ToolTranscriptFormatter.StripSystemNotifications(rawText);
-        bool hadInboxBlock = InboxMessageParser.TryExtract(rawTextForInboxParsing, out _, out _);
 
         var newBlocks = BuildResponseBlocks(entry, sanitizedText, entry.AllowQuickReplies).ToList();
         if (newBlocks.Count == 0)
             newBlocks.Add(CreateTranscriptParagraph(bottomMargin: 18));
 
-        if (hadInboxBlock)
+        // Only add the "✉ Sent to Inbox" indicator after a confirmed save.  InboxMessageId is
+        // set only when TrySaveInboxMessageFromResponse succeeds, so this never fires for
+        // rejected saves (e.g. empty-subject guard) or inline backtick mentions.
+        if (entry.InboxMessageId is not null)
             newBlocks.Add(BuildInboxIndicatorParagraph(entry.InboxMessageId));
 
         // If the user has a selection inside this specific section, clear it before swapping

@@ -132,6 +132,23 @@ internal static class TranscriptTextUtilities
 
     private static string StripInboxMessageBlock(string text)
     {
+        // Do not strip when the last occurrence of the sentinel is inside a backtick inline
+        // code span (i.e. the same line has a backtick before the sentinel).  A real
+        // INBOX_MESSAGE_JSON block always starts on a bare line — top-level or inside a code
+        // fence — never immediately after a backtick character.
+        const string sentinel = "INBOX_MESSAGE_JSON:";
+        var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
+        int lastMarkerIdx = normalized.LastIndexOf(sentinel, StringComparison.Ordinal);
+        if (lastMarkerIdx >= 0)
+        {
+            int prevNewline = lastMarkerIdx > 0
+                ? normalized.LastIndexOf('\n', lastMarkerIdx - 1)
+                : -1;
+            int lineStart = prevNewline < 0 ? 0 : prevNewline + 1;
+            if (normalized[lineStart..lastMarkerIdx].Contains('`'))
+                return text;
+        }
+
         // Strip complete block (already handled by parser).
         if (InboxMessageParser.TryExtract(text, out var body, out _))
             return body;

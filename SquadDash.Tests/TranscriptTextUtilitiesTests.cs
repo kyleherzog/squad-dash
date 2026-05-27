@@ -12,6 +12,34 @@ internal sealed class TranscriptTextUtilitiesTests {
         Assert.That(sanitized, Is.EqualTo(text));
     }
 
+    [Test]
+    public void SanitizeResponseText_BacktickInlineWithJson_DoesNotStripOrLeaveOrphanBacktick() {
+        // An inline code span like `INBOX_MESSAGE_JSON: { "from": "argus-weld" }` is NOT a real
+        // block — it should be left fully intact, not stripped to a lone backtick.
+        const string text = "See this example: `INBOX_MESSAGE_JSON: { \"from\": \"argus-weld\" }` for details.";
+
+        var sanitized = TranscriptTextUtilities.SanitizeResponseText(text);
+
+        Assert.That(sanitized, Is.EqualTo(text));
+    }
+
+    [Test]
+    public void SanitizeResponseText_BacktickInlineFollowedByTopLevelBlock_StripsOnlyBlock() {
+        // When there is BOTH an inline backtick mention AND a real top-level block, only the
+        // real block should be stripped. The inline mention should survive.
+        const string text = """
+            Example syntax: `INBOX_MESSAGE_JSON: {...}` — use this format.
+
+            INBOX_MESSAGE_JSON:
+            { "subject": "Real", "from": "argus-weld", "body": "Done", "attachments": [] }
+            """;
+
+        var sanitized = TranscriptTextUtilities.SanitizeResponseText(text);
+
+        Assert.That(sanitized, Does.Contain("`INBOX_MESSAGE_JSON:"));
+        Assert.That(sanitized, Does.Not.Contain("\"subject\": \"Real\""));
+    }
+
     /// <summary>
     /// Previously this was expected not to strip (old end-anchor behavior). Now that the parser
     /// is intentionally tolerant of trailing prose, even a fenced example block is stripped.
