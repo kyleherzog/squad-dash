@@ -127,4 +127,60 @@ internal class TextCaseHelperTests
     [Test]
     public void ToUnderscorePreserveCase_SpotCheck()
         => Assert.That(ToUnderscorePreserveCase("to a tag and a tag filter"), Is.EqualTo("to_a_tag_and_a_tag_filter"));
+
+    // ──────────────────────────────────────────────────────────────
+    // 7. Leading/trailing punctuation — ToTitleCase
+    // ──────────────────────────────────────────────────────────────
+
+    [TestCase("\"hello world\"",   "\"Hello World\"")]
+    [TestCase("(this is a test)",  "(This Is A Test)")]
+    [TestCase("[my variable]",     "[My Variable]")]
+    [TestCase("'single quoted'",   "'Single Quoted'")]
+    [TestCase("...ellipsis text",  "...Ellipsis Text")]
+    public void ToTitleCase_LeadingPunctuation_CapitalizesFirstLetter(string input, string expected)
+        => Assert.That(ToTitleCase(input), Is.EqualTo(expected));
+
+    // ──────────────────────────────────────────────────────────────
+    // 8. Leading/trailing punctuation — ToSentenceCase
+    // ──────────────────────────────────────────────────────────────
+
+    [TestCase("\"hello world\"",   "\"Hello world\"")]
+    [TestCase("(this is a test)",  "(This is a test)")]
+    public void ToSentenceCase_LeadingPunctuation_CapitalizesFirstLetter(string input, string expected)
+        => Assert.That(ToSentenceCase(input), Is.EqualTo(expected));
+
+    // ──────────────────────────────────────────────────────────────
+    // 9. Leading/trailing punctuation — DetectCase
+    // ──────────────────────────────────────────────────────────────
+
+    [TestCase("\"Hello World\"",   TextCase.TitleCase)]
+    [TestCase("(This Is A Test)",  TextCase.TitleCase)]
+    [TestCase("\"Hello world\"",   TextCase.SentenceCase)]
+    [TestCase("(Hello world)",     TextCase.SentenceCase)]
+    [TestCase("\"HELLO WORLD\"",   TextCase.UpperCase)]
+    public void DetectCase_LeadingPunctuation_DetectsCorrectly(string input, TextCase expected)
+        => Assert.That(DetectCase(input), Is.EqualTo(expected));
+
+    // ──────────────────────────────────────────────────────────────
+    // 10. Full cycle with leading quote — first press gives Title Case
+    // ──────────────────────────────────────────────────────────────
+
+    [Test]
+    public void ComputeVariants_QuotedInput_FirstVariantIsTitleCase()
+    {
+        const string input = "\"hello world\"";
+        var variants = ComputeVariants(input);
+        int startIndex = GetFirstVariantIndex(input);
+        // First press should give title case
+        Assert.That(variants[startIndex], Is.EqualTo("\"Hello World\""));
+    }
+
+    [Test]
+    public void ComputeVariants_ParenInput_FirstVariantIsTitleCase()
+    {
+        const string input = "(this is a test)";
+        var variants = ComputeVariants(input);
+        int startIndex = GetFirstVariantIndex(input);
+        Assert.That(variants[startIndex], Is.EqualTo("(This Is A Test)"));
+    }
 }

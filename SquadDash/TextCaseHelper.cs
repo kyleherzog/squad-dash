@@ -40,15 +40,24 @@ internal static class TextCaseHelper
         var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (words.Length == 0) return TextCase.None;
 
-        // Title Case: every word starts with uppercase, rest of letters lowercase
-        if (words.All(w => w.Length > 0 && char.IsUpper(w[0])
-                           && w.Skip(1).All(c => !char.IsLetter(c) || char.IsLower(c))))
+        // Title Case: every word's first letter is uppercase, all other letters lowercase
+        if (words.All(w => {
+            var firstLetter = w.FirstOrDefault(char.IsLetter);
+            if (firstLetter == default(char)) return true;   // no letters in this word — OK
+            return char.IsUpper(firstLetter)
+                && w.SkipWhile(c => !char.IsLetter(c))  // skip leading non-letters
+                     .Skip(1)                            // skip the first letter itself
+                     .All(c => !char.IsLetter(c) || char.IsLower(c));
+        }))
             return TextCase.TitleCase;
 
-        // Sentence case: first word starts uppercase (rest lowercase), all other words fully lowercase
-        bool firstOk = words[0].Length > 0
-                       && char.IsUpper(words[0][0])
-                       && words[0].Skip(1).All(c => !char.IsLetter(c) || char.IsLower(c));
+        // Sentence case: first word starts with uppercase letter (rest lowercase letters), all other words fully lowercase
+        var firstWordFirstLetter = words[0].FirstOrDefault(char.IsLetter);
+        bool firstOk = firstWordFirstLetter != default(char)
+                       && char.IsUpper(firstWordFirstLetter)
+                       && words[0].SkipWhile(c => !char.IsLetter(c))
+                                   .Skip(1)
+                                   .All(c => !char.IsLetter(c) || char.IsLower(c));
         bool restLower = words.Skip(1).All(w => w.All(c => !char.IsLetter(c) || char.IsLower(c)));
         if (firstOk && restLower) return TextCase.SentenceCase;
 
@@ -68,15 +77,15 @@ internal static class TextCaseHelper
                 capitalizeNext = true;
                 sb.Append(c);
             }
-            else if (capitalizeNext && char.IsLetter(c))
+            else if (char.IsLetter(c))
             {
-                sb.Append(char.ToUpper(c));
+                sb.Append(capitalizeNext ? char.ToUpper(c) : char.ToLower(c));
                 capitalizeNext = false;
             }
             else
             {
-                sb.Append(char.ToLower(c));
-                capitalizeNext = false;
+                // Non-letter, non-space: preserve capitalizeNext state unchanged
+                sb.Append(c);
             }
         }
         return sb.ToString();
