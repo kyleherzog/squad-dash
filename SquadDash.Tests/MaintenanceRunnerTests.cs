@@ -821,4 +821,114 @@ internal sealed class MaintenanceRunnerTests {
         Assert.That(callbackTimestamp!.Value, Is.GreaterThanOrEqualTo(beforeStart),
             "Timestamp passed to wasInboxSavedSince must be at or after the task started");
     }
+
+    // ── StripPreambleForDisplay ───────────────────────────────────────────────
+
+    // Read the exact private constants via reflection so the tests never drift from
+    // production values — any change to the constants is automatically reflected here.
+    private static string RealInboxPreamble =>
+        (string)typeof(MaintenanceRunner)
+            .GetField("ReportOnlyInboxPreamble",
+                      System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .GetValue(null)!;
+
+    private static string RealInboxReminder =>
+        (string)typeof(MaintenanceRunner)
+            .GetField("MaintenanceInboxReminder",
+                      System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .GetValue(null)!;
+
+    [Test]
+    public void StripPreambleForDisplay_PlainText_ReturnedUnchanged() {
+        const string prompt = "Scan all TODO comments and report findings.";
+        var result = MaintenanceRunner.StripPreambleForDisplay(prompt);
+        Assert.That(result, Is.EqualTo(prompt));
+    }
+
+    [Test]
+    public void StripPreambleForDisplay_EmptyString_ReturnsEmpty() {
+        var result = MaintenanceRunner.StripPreambleForDisplay(string.Empty);
+        Assert.That(result, Is.EqualTo(string.Empty));
+    }
+
+    [Test]
+    public void StripPreambleForDisplay_WhitespaceOnly_ReturnsEmpty() {
+        var result = MaintenanceRunner.StripPreambleForDisplay("   \n\n   ");
+        Assert.That(result, Is.EqualTo(string.Empty));
+    }
+
+    [Test]
+    public void StripPreambleForDisplay_InboxPreamblePrefix_IsStripped() {
+        var prompt = RealInboxPreamble + "Do not modify source files. Scan for issues.";
+        var result = MaintenanceRunner.StripPreambleForDisplay(prompt);
+        Assert.That(result, Does.Not.Contain("INBOX REQUIREMENT"),
+            "The inbox preamble header must not appear in the stripped output");
+        Assert.That(result, Does.Contain("Scan for issues."),
+            "The actual task instructions must be preserved after stripping");
+    }
+
+    [Test]
+    public void StripPreambleForDisplay_InboxPreamblePrefix_LeavesNoLeadingWhitespace() {
+        var prompt = RealInboxPreamble + "  Do not modify source files. Scan for issues.";
+        var result = MaintenanceRunner.StripPreambleForDisplay(prompt);
+        Assert.That(result, Does.Not.StartWith(" "),
+            "The result must be trimmed — no leading whitespace after preamble removal");
+    }
+
+    [Test]
+    public void StripPreambleForDisplay_InboxReminderBlock_IsStripped() {
+        var prompt = "Check for security issues.\n\n" + RealInboxReminder;
+        var result = MaintenanceRunner.StripPreambleForDisplay(prompt);
+        Assert.That(result, Does.Not.Contain("<maintenance_inbox_reminder>"),
+            "The maintenance inbox reminder tag must not appear in the stripped output");
+        Assert.That(result, Does.Contain("Check for security issues."),
+            "The task instructions before the reminder must be preserved");
+    }
+
+    [Test]
+    public void StripPreambleForDisplay_InboxReminderBlock_EverythingAfterItIsAlsoStripped() {
+        var prompt = "Find all dead code.\n\n" + RealInboxReminder + "\n\nSome trailing content that must vanish.";
+        var result = MaintenanceRunner.StripPreambleForDisplay(prompt);
+        Assert.That(result, Does.Not.Contain("trailing content"),
+            "Everything after the maintenance inbox reminder must be removed");
+    }
+
+    [Test]
+    public void StripPreambleForDisplay_BothPreambleAndReminder_BothStripped() {
+        var prompt = RealInboxPreamble + "Do not modify source files. Audit dependencies.\n\n" + RealInboxReminder;
+        var result = MaintenanceRunner.StripPreambleForDisplay(prompt);
+        Assert.That(result, Does.Not.Contain("INBOX REQUIREMENT"),
+            "Inbox preamble must be stripped when both elements are present");
+        Assert.That(result, Does.Not.Contain("<maintenance_inbox_reminder>"),
+            "Inbox reminder must be stripped when both elements are present");
+        Assert.That(result, Does.Contain("Audit dependencies."),
+            "The task instructions sandwiched between preamble and reminder must be preserved");
+    }
+
+    [Test]
+    public void StripPreambleForDisplay_PreambleAppearsInMiddle_NotStripped() {
+        // The method only strips the preamble when it is a prefix — mid-string occurrence must survive.
+        const string preambleFragment = "⚠️ INBOX REQUIREMENT — READ THIS FIRST ⚠️\n";
+        var prompt = "Some instructions. " + preambleFragment + " More instructions.";
+        var result = MaintenanceRunner.StripPreambleForDisplay(prompt);
+        Assert.That(result, Does.Contain("INBOX REQUIREMENT"),
+            "A preamble-like string that is not a prefix must not be stripped");
+        Assert.That(result, Does.Contain("Some instructions."),
+            "Text before a mid-string preamble look-alike must be preserved");
+    }
+
+    [Test]
+    public void StripPreambleForDisplay_PreambleAloneWithNoTaskInstructions_ReturnsEmpty() {
+        var result = MaintenanceRunner.StripPreambleForDisplay(RealInboxPreamble);
+        Assert.That(result, Is.EqualTo(string.Empty),
+            "Stripping a prompt that is only the preamble must yield an empty string");
+    }
+
+    [Test]
+    public void StripPreambleForDisplay_ResultIsAlwaysTrimmed() {
+        var prompt = RealInboxPreamble + "   Audit the codebase.   ";
+        var result = MaintenanceRunner.StripPreambleForDisplay(prompt);
+        Assert.That(result, Is.EqualTo("Audit the codebase."),
+            "The result must be trimmed of leading and trailing whitespace");
+    }
 }
