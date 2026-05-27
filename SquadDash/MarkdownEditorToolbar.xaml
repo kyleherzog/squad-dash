@@ -102,11 +102,11 @@
                 Click="NumberedListButton_Click">
             <Viewbox Width="24" Height="20" Stretch="Uniform">
                 <Canvas Width="20" Height="16">
-                    <TextBlock Canvas.Left="0" Canvas.Top="-0.5" FontSize="{DynamicResource FontSizeTiny}" Foreground="{DynamicResource LabelText}" Text="1"/>
+                    <TextBlock Canvas.Left="0" Canvas.Top="-3" FontSize="{DynamicResource FontSizeTiny}" Foreground="{DynamicResource LabelText}" Text="1" FontWeight="Black"/>
                     <Rectangle Canvas.Left="6.5" Canvas.Top="2.5"  Width="13.5" Height="1"   Fill="{DynamicResource LabelText}" Opacity="0.5" RadiusX="0.5" RadiusY="0.5"/>
-                    <TextBlock Canvas.Left="0" Canvas.Top="4.5"  FontSize="{DynamicResource FontSizeTiny}" Foreground="{DynamicResource LabelText}" Text="2"/>
+                    <TextBlock Canvas.Left="0" Canvas.Top="3"  FontSize="{DynamicResource FontSizeTiny}" Foreground="{DynamicResource LabelText}" Text="2" FontWeight="Black"/>
                     <Rectangle Canvas.Left="6.5" Canvas.Top="7.5"  Width="13.5" Height="1"   Fill="{DynamicResource LabelText}" Opacity="0.5" RadiusX="0.5" RadiusY="0.5"/>
-                    <TextBlock Canvas.Left="0" Canvas.Top="9.5"  FontSize="{DynamicResource FontSizeTiny}" Foreground="{DynamicResource LabelText}" Text="3"/>
+                    <TextBlock Canvas.Left="0" Canvas.Top="9.5"  FontSize="{DynamicResource FontSizeTiny}" Foreground="{DynamicResource LabelText}" Text="3" FontWeight="Black"/>
                     <Rectangle Canvas.Left="6.5" Canvas.Top="12.5" Width="13.5" Height="1"   Fill="{DynamicResource LabelText}" Opacity="0.5" RadiusX="0.5" RadiusY="0.5"/>
                 </Canvas>
             </Viewbox>
