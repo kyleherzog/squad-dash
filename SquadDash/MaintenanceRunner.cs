@@ -49,9 +49,10 @@ internal sealed class MaintenanceRunner {
     /// Runs eligible maintenance tasks in order. Awaitable — completes when all tasks have run.
     /// </summary>
     public async Task StartAsync(
-        MaintenanceMdConfig  config,
-        string               workspacePath,
-        CancellationToken    ct) {
+        MaintenanceMdConfig      config,
+        string                   workspacePath,
+        CancellationToken        ct,
+        IReadOnlySet<string>?    forceTaskIds = null) {
 
         SquadInstallerService.EnsureMaintenanceStateInGitIgnore(workspacePath);
         _isRunning = true;
@@ -77,7 +78,8 @@ internal sealed class MaintenanceRunner {
                 if (!task.Enabled)
                     continue;
 
-                if (!_stateStore.IsEligible(task.Id, task.Frequency, commitSha)) {
+                var isForced = forceTaskIds?.Contains(task.Id) == true;
+                if (!isForced && !_stateStore.IsEligible(task.Id, task.Frequency, commitSha)) {
                     skippedIds.Add(task.Id);
                     continue;
                 }

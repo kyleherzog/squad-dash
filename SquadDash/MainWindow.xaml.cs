@@ -12460,7 +12460,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void MaintenanceRunNowButton_Click(object sender, RoutedEventArgs e)
     {
-        try { _ = StartMaintenanceCycleAsync(); }
+        try { _ = StartMaintenanceCycleAsync(isManual: true); }
         catch (Exception ex) { HandleUiCallbackException(nameof(MaintenanceRunNowButton_Click), ex); }
     }
 
@@ -21628,6 +21628,8 @@ public partial class MainWindow : Window, ILiveElementLocator
         _conversationManager.ResetVirtualWindow();
         _toolSpinnerTimer.Stop();
         _toolSpinnerFrame = 0;
+        // Flush thread chips from all agent cards now that the registry is empty.
+        SyncAgentCardsWithThreads();
         SelectTranscriptThread(CoordinatorThread);
     }
 
@@ -28274,7 +28276,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _maintenancePanel.Refresh(config, _maintenanceStateStore);
     }
 
-    private async Task StartMaintenanceCycleAsync(bool isManual = false)
+    private async Task StartMaintenanceCycleAsync(bool isManual = false, IReadOnlySet<string>? forceTaskIds = null)
     {
         var workspacePath = _currentWorkspace?.FolderPath;
         if (workspacePath is null) return;
@@ -28309,6 +28311,7 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         string? latestMaintenanceThreadId = null;
         var stubRecords = new System.Collections.Generic.List<MaintenanceStubRecord>();
+        var enabledTasks = config.Tasks?.Where(t => t.Enabled).ToList() ?? [];
 
         _maintenanceRunner = new MaintenanceRunner(
             executePromptAsync: (prompt, ct) =>
@@ -28379,6 +28382,10 @@ public partial class MainWindow : Window, ILiveElementLocator
                     _maintenancePanel?.OnRunnerCompleted();
                     var updatedConfig = MaintenanceMdParser.Parse(Path.Combine(workspacePath, ".squad", "maintenance.md"));
                     _maintenancePanel?.Refresh(updatedConfig, _maintenanceStateStore);
+                    if (isManual && report.RanTaskIds.Count == 0 && report.SkippedTaskIds.Count > 0)
+                    {
+                        AppendManualRunSkippedFeedback(enabledTasks, workspacePath);
+                    }
                     // Banner surfaces on next user activity (see Window_PreviewKeyDown).
                     var notifBody = !string.IsNullOrEmpty(report.Summary)
                         ? report.Summary
@@ -28427,7 +28434,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _idleDetectionService?.SetRunnerActive(true);
         _maintenancePanel?.OnRunnerStarted("starting…");
 
-        await _maintenanceRunner.StartAsync(config, workspacePath, CancellationToken.None);
+        await _maintenanceRunner.StartAsync(config, workspacePath, CancellationToken.None, forceTaskIds);
     }
 
     private bool ShouldSuppressMaintenanceCycle()
@@ -28552,8 +28559,61 @@ public partial class MainWindow : Window, ILiveElementLocator
         ScrollToEndIfAtBottom(CoordinatorThread);
     }
 
-    /// <summary>
-    /// On workspace load, re-renders maintenance stubs from the most recent sidecar file
+    private void AppendManualRunSkippedFeedback(
+        IReadOnlyList<MaintenanceTask> enabledTasks,
+        string workspacePath)
+    {
+        var msgParagraph = CreateTranscriptParagraph(bottomMargin: 4);
+        var msgRun = new Run("Manual maintenance run invoked.");
+        msgRun.SetResourceReference(TextElement.ForegroundProperty, "SubtleText");
+        msgParagraph.Inlines.Add(msgRun);
+        msgParagraph.Inlines.Add(new LineBreak());
+        var skipRun = new Run("All selected maintenance tasks have been recently run.");
+        skipRun.SetResourceReference(TextElement.ForegroundProperty, "SubtleText");
+        msgParagraph.Inlines.Add(skipRun);
+        CoordinatorThread.Document.Blocks.Add(msgParagraph);
+
+        if (enabledTasks.Count == 0)
+        {
+            ScrollToEndIfAtBottom(CoordinatorThread);
+            return;
+        }
+
+        var preParagraph = CreateTranscriptParagraph(bottomMargin: 4);
+        var preRun = new Run("You can force a maintenance task to run right now by clicking one of the buttons below:");
+        preRun.SetResourceReference(TextElement.ForegroundProperty, "SubtleText");
+        preParagraph.Inlines.Add(preRun);
+        CoordinatorThread.Document.Blocks.Add(preParagraph);
+
+        var panel = new WrapPanel { Orientation = Orientation.Horizontal };
+        foreach (var task in enabledTasks)
+        {
+            var taskId = task.Id;
+            var button = new Button
+            {
+                Content        = task.Title,
+                Margin         = new Thickness(0, 0, 8, 8),
+                Padding        = new Thickness(10, 4, 10, 4),
+                BorderThickness = new Thickness(1),
+                Cursor         = Cursors.Hand,
+                MinHeight      = 28,
+            };
+            if (Application.Current.TryFindResource("QuickReplyButtonStyle") is Style qrStyle)
+                button.Style = qrStyle;
+            else if (Application.Current.TryFindResource("ThemedButtonStyle") is Style themedStyle)
+                button.Style = themedStyle;
+            button.Click += (_, _) =>
+            {
+                _ = StartMaintenanceCycleAsync(
+                    isManual: true,
+                    forceTaskIds: new HashSet<string> { taskId });
+            };
+            panel.Children.Add(button);
+        }
+        var buttonsBlock = new BlockUIContainer(panel) { Margin = new Thickness(0, 2, 0, 10) };
+        CoordinatorThread.Document.Blocks.Add(buttonsBlock);
+        ScrollToEndIfAtBottom(CoordinatorThread);
+    }
     /// if it has not been rendered yet (i.e. the app was restarted since the last maintenance run).
     /// </summary>
     private void RestoreMaintenanceStubs(string workspacePath)
