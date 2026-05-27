@@ -254,6 +254,24 @@ internal sealed class MaintenanceRunner {
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Strips maintenance boilerplate (inbox preamble, inbox reminder, final checklist) from a
+    /// prompt so that only the user-relevant task instructions remain for transcript display.
+    /// </summary>
+    internal static string StripPreambleForDisplay(string prompt) {
+        if (prompt.StartsWith(ReportOnlyInboxPreamble, StringComparison.Ordinal))
+            prompt = prompt[ReportOnlyInboxPreamble.Length..];
+
+        // Strip the maintenance inbox reminder (and everything after it, which includes the
+        // optional mandatory checklist suffix) from the display text.
+        const string reminderTag = "\n\n<maintenance_inbox_reminder>";
+        var reminderIdx = prompt.IndexOf(reminderTag, StringComparison.Ordinal);
+        if (reminderIdx >= 0)
+            prompt = prompt[..reminderIdx];
+
+        return prompt.Trim();
+    }
+
     private static string BuildPrompt(MaintenanceTask task, string globalSafety, DateTimeOffset runDate) {
         var effectiveSafety = ApplySafetyFloor(globalSafety, task.Safety);
         var branchName      = $"maintenance/{runDate:yyyyMMdd}-{task.Id}";
