@@ -17786,8 +17786,11 @@ public partial class MainWindow : Window, ILiveElementLocator
 
         if (thread.Kind == TranscriptThreadKind.Agent)
         {
+            var agentTurnMarkerPrompt = IsArgusWeldThread(thread)
+                ? MaintenanceRunner.StripPreambleForDisplay(prompt)
+                : prompt;
             var startMarkerParagraph = CreateTranscriptParagraph(bottomMargin: 4);
-            var startMarkerRun = new Run(ToolTranscriptFormatter.BuildAgentTurnStartMarker(prompt, startedAt))
+            var startMarkerRun = new Run(ToolTranscriptFormatter.BuildAgentTurnStartMarker(agentTurnMarkerPrompt, startedAt))
             {
                 FontWeight = FontWeights.SemiBold
             };
@@ -17805,7 +17808,11 @@ public partial class MainWindow : Window, ILiveElementLocator
         _pendingTranscriptAttachments = null;
 
         // Determine the display prompt: strip attachment header prefix if present.
-        string displayPrompt = prompt;
+        // For Argus Weld (maintenance) turns, also strip the machine-instruction boilerplate
+        // so only the user-relevant task description is shown in the transcript.
+        string displayPrompt = IsArgusWeldThread(thread)
+            ? MaintenanceRunner.StripPreambleForDisplay(prompt)
+            : prompt;
         IReadOnlyList<FollowUpAttachment>? attachmentsForViewer = pendingAttachments;
         bool hasAttachments = pendingAttachments?.Count > 0;
         // Overrides the count for historical turns where attachmentsForViewer is null but we
@@ -28179,6 +28186,13 @@ public partial class MainWindow : Window, ILiveElementLocator
             return null;
         }
 
+        if (string.IsNullOrWhiteSpace(dto.Subject))
+        {
+            SquadDashTrace.Write(TraceCategory.Inbox,
+                $"INBOX_SAVE: skipped — subject is empty (from={dto.From})");
+            return null;
+        }
+
         var message = new InboxMessage
         {
             Id          = Guid.NewGuid().ToString("N"),
@@ -28536,6 +28550,12 @@ public partial class MainWindow : Window, ILiveElementLocator
         DateTimeOffset startedAt,
         TimeSpan duration)
     {
+        // Maintenance appends new content to the coordinator transcript, so any quick-reply
+        // buttons from the previous coordinator response are now stale and should be hidden.
+        if (_lastQuickReplyEntry?.AllowQuickReplies == true)
+            _pec.DisableQuickReplies(_lastQuickReplyEntry);
+        ClearActiveQuickReplyState();
+
         var paragraph = CreateTranscriptParagraph();
 
         var prefix = new Run("🔧 ");
