@@ -1580,8 +1580,7 @@
                                         Margin="6,0,0,0"
                                         FontSize="{DynamicResource FontSizeSmall}"
                                         Style="{StaticResource ThemedButtonStyle}"
-                                        ToolTip="Start a maintenance cycle immediately"
-                                        Click="MaintenanceRunNowButton_Click" />
+                                        ToolTip="Start a maintenance cycle immediately" />
                                 <ContentControl x:Name="MaintenanceEnabledOnIdleHost"
                                               DockPanel.Dock="Left"
                                               VerticalAlignment="Center"

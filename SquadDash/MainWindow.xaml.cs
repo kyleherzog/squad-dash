@@ -12458,12 +12458,6 @@ public partial class MainWindow : Window, ILiveElementLocator
         catch (Exception ex) { HandleUiCallbackException(nameof(InboxUnreadOnlyCheckBox_Unchecked), ex); }
     }
 
-    private void MaintenanceRunNowButton_Click(object sender, RoutedEventArgs e)
-    {
-        try { _ = StartMaintenanceCycleAsync(isManual: true); }
-        catch (Exception ex) { HandleUiCallbackException(nameof(MaintenanceRunNowButton_Click), ex); }
-    }
-
     private void MaintenanceBannerDismissButton_Click(object sender, RoutedEventArgs e)
     {
         try { DismissMaintenanceBanner(); }
