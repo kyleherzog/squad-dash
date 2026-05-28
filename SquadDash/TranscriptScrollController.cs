@@ -654,11 +654,21 @@ internal sealed class TranscriptScrollController
 
         double distFromBottom = sv.ScrollableHeight - sv.VerticalOffset;
         bool wasScrolledAway = IsUserScrolledAway;
-        IsUserScrolledAway = distFromBottom > NearBottomThreshold;
+
+        // If a scroll-to-end is already queued (e.g. from a RE-ANCHOR cycle that fired
+        // just before window activation), the current distFromBottom is a transient gap
+        // that will be closed by the pending dispatch.  Treating it as a user-scroll-away
+        // would flip IsUserScrolledAway=true, causing ExecutePendingScrollToEnd to skip
+        // itself (line: "if (IsUserScrolledAway && !wasForced) return") and leave the
+        // viewport stranded at ~50 % after the subsequent virtualization re-expand.
+        // Guard: only upgrade false→true when no scroll-to-end is already in flight.
+        bool pendingScrollToEnd = _pendingScrollRequest;
+        IsUserScrolledAway = distFromBottom > NearBottomThreshold && !pendingScrollToEnd;
 
         SquadDashTrace.Write(TraceCategory.Scroll,
             $"SyncScrollState (window activated): distFromBottom={distFromBottom:0.#}px" +
             $"  scrollableH={sv.ScrollableHeight:0.#}px  locked={IsUserScrolledAway}" +
+            (pendingScrollToEnd ? "  [pendingScrollRequest — lock suppressed]" : "") +
             (wasScrolledAway != IsUserScrolledAway ? "  *** corrected ***" : ""));
 
         if (IsUserScrolledAway && !wasScrolledAway)
