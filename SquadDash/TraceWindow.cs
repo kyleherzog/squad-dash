@@ -138,7 +138,7 @@ internal sealed class TraceWindow : ChromedWindow, ILiveTraceTarget
                 IsChecked  = !_disabledCategories.Contains(cat),
                 Margin     = new Thickness(0, 0, 18, 4),
                 Tag        = cat,
-                ToolTip    = new ToolTip { Content = GetCategoryDescription(cat) },
+                ToolTip    = MakeThemedToolTip(GetCategoryDescription(cat)),
                 // Transparent background makes the gap between the box glyph and the
                 // text label hit-testable — without it that strip has null background
                 // and ignores mouse events entirely.
@@ -310,5 +310,20 @@ internal sealed class TraceWindow : ChromedWindow, ILiveTraceTarget
 
         _logTextBox.Text = text[keepStart..];
         _logTextBox.CaretIndex = _logTextBox.Text.Length;
+    }
+
+    private ToolTip MakeThemedToolTip(string text)
+    {
+        var tb = new TextBlock { Text = text };
+        tb.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+        var tip = new ToolTip
+        {
+            BorderThickness = new Thickness(1),
+            Padding         = new Thickness(6, 4, 6, 4),
+            Content         = tb,
+        };
+        tip.SetResourceReference(Control.BackgroundProperty, "InputSurface");
+        tip.SetResourceReference(Control.BorderBrushProperty, "InputBorder");
+        return tip;
     }
 }
