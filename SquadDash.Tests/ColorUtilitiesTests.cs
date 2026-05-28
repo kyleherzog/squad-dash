@@ -137,4 +137,31 @@ internal sealed class ColorUtilitiesTests {
         // t >= 2/3 → p
         Assert.That(ColorUtilities.HueToRgb(0.2, 0.8, 0.9), Is.EqualTo(0.2).Within(1e-9));
     }
+
+    // ── CreateSpinnerDarkAccentBrush ─────────────────────────────────────────
+
+    [TestCase("#666666")]   // dim mid-gray — typical default for custom agents
+    [TestCase("#808080")]   // medium gray
+    [TestCase("#555555")]   // dark gray
+    public void CreateSpinnerDarkAccentBrush_DimGray_ProducesMinimumChannelValue(string hex) {
+        var brush = ColorUtilities.CreateSpinnerDarkAccentBrush(hex);
+        var color = brush.Color;
+
+        // Each channel should be at least 160 so the spinner is visible in dark theme.
+        Assert.Multiple(() => {
+            Assert.That(color.R, Is.GreaterThanOrEqualTo(160), "R channel too dim");
+            Assert.That(color.G, Is.GreaterThanOrEqualTo(160), "G channel too dim");
+            Assert.That(color.B, Is.GreaterThanOrEqualTo(160), "B channel too dim");
+        });
+    }
+
+    [Test]
+    public void CreateSpinnerDarkAccentBrush_BrightAccent_IsNotClampedDown() {
+        // A bright accent like SteelBlue should remain at or above the floor — not clamped down
+        var brush = ColorUtilities.CreateSpinnerDarkAccentBrush("#4682B4");
+        var color = brush.Color;
+
+        // Brighter colors should stay bright (well above the 160 floor)
+        Assert.That((color.R + color.G + color.B) / 3.0, Is.GreaterThanOrEqualTo(100));
+    }
 }

@@ -21,12 +21,18 @@ internal static class ColorUtilities {
         return new SolidColorBrush(Color.FromRgb(r, g, b));
     }
 
+    // Minimum luminosity floor for the spinner in dark theme — ensures gray/dim
+    // accents produce a spinner bright enough to see on a dark background.
+    private const double SpinnerDarkMinLuminosity = 160.0 / 255.0; // ≈ 0.627
+
     // Brighter variant used for the activity spinner — more visible without
     // the extra contrast that would make the agent border too vivid.
+    // A minimum luminosity floor is applied so low-saturation (gray) accents
+    // are still readable in dark theme.
     internal static SolidColorBrush CreateSpinnerDarkAccentBrush(string hex) {
         var color = (Color)ColorConverter.ConvertFromString(hex);
         RgbToHsl(color.R, color.G, color.B, out double h, out double s, out double l);
-        var boostedL = Math.Min(0.85, l + 0.18);
+        var boostedL = Math.Max(Math.Min(0.85, l + 0.18), SpinnerDarkMinLuminosity);
         var boostedS  = Math.Min(1.0, s * 1.15);
         HslToRgb(h, boostedS, boostedL, out byte r, out byte g, out byte b);
         return new SolidColorBrush(Color.FromRgb(r, g, b));
