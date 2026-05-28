@@ -1626,8 +1626,16 @@ internal sealed class MarkdownDocumentWindow : ChromedWindow {
             return;
         }
 
-        var docDir        = Path.GetDirectoryName(doc.FilePath)!;
-        var fullImagePath = Path.Combine(docDir, imagePath.Replace('/', '\\'));
+        var docDir                = Path.GetDirectoryName(doc.FilePath)!;
+        var normalizedImagePath   = Path.GetFullPath(Path.Combine(docDir, imagePath.Replace('/', '\\')));
+        var safeDocDir            = Path.GetFullPath(docDir).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if (!normalizedImagePath.StartsWith(safeDocDir, StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show($"The image path \"{imagePath}\" points outside the document folder.",
+                "Security", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        var fullImagePath = normalizedImagePath;
         Directory.CreateDirectory(Path.GetDirectoryName(fullImagePath)!);
 
         var clipImg = Clipboard.GetImage()!;
@@ -1664,8 +1672,16 @@ internal sealed class MarkdownDocumentWindow : ChromedWindow {
             return;
         }
 
-        var docDir        = Path.GetDirectoryName(doc.FilePath)!;
-        var fullImagePath = Path.Combine(docDir, imagePath.Replace('/', '\\'));
+        var docDir                = Path.GetDirectoryName(doc.FilePath)!;
+        var normalizedImagePath   = Path.GetFullPath(Path.Combine(docDir, imagePath.Replace('/', '\\')));
+        var safeDocDir            = Path.GetFullPath(docDir).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if (!normalizedImagePath.StartsWith(safeDocDir, StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show($"The image path \"{imagePath}\" points outside the document folder.",
+                "Security", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        var fullImagePath = normalizedImagePath;
         Directory.CreateDirectory(Path.GetDirectoryName(fullImagePath)!);
 
         var clipImg = Clipboard.GetImage()!;
@@ -1770,8 +1786,16 @@ internal sealed class MarkdownDocumentWindow : ChromedWindow {
             return;
         }
 
-        var docDir        = Path.GetDirectoryName(doc.FilePath)!;
-        var fullImagePath = Path.Combine(docDir, imagePath.Replace('/', '\\'));
+        var docDir                = Path.GetDirectoryName(doc.FilePath)!;
+        var normalizedImagePath   = Path.GetFullPath(Path.Combine(docDir, imagePath.Replace('/', '\\')));
+        var safeDocDir            = Path.GetFullPath(docDir).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if (!normalizedImagePath.StartsWith(safeDocDir, StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show($"The image path \"{imagePath}\" points outside the document folder.",
+                "Security", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        var fullImagePath = normalizedImagePath;
         var imageDir      = Path.GetDirectoryName(fullImagePath)!;
 
         // Try to find a matching screenshot definition by filename stem.
