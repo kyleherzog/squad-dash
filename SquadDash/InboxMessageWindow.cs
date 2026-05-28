@@ -396,9 +396,20 @@ internal sealed class InboxMessageWindow : ChromedWindow
             case "text":
                 chip.MouseLeftButtonUp += (_, _) =>
                 {
-                    SquadDashTrace.Write(TraceCategory.Inbox, $"InboxMessageWindow.AttachmentChip.Click: type=text label='{att.Label}' contentLen={att.Content?.Length ?? 0} — opening MarkdownDocumentWindow, NOT calling SelectAndScrollToText");
-                    try { MarkdownDocumentWindow.ShowContent(owner, att.Label, att.Content ?? ""); }
-                    catch { }
+                    var excerptText = att.Content;
+                    SquadDashTrace.Write(TraceCategory.Inbox, $"InboxMessageWindow.AttachmentChip.Click: type=text label='{att.Label}' contentLen={excerptText?.Length ?? 0} excerptPreview='{excerptText?[..Math.Min(80, excerptText?.Length ?? 0)]}'");
+                    if (!string.IsNullOrWhiteSpace(excerptText) && owner is InboxMessageWindow inboxWin)
+                    {
+                        SquadDashTrace.Write(TraceCategory.Inbox, "InboxMessageWindow.AttachmentChip.Click: owner is InboxMessageWindow — calling SelectAndScrollToText");
+                        try { inboxWin.SelectAndScrollToText(excerptText); }
+                        catch (Exception ex) { SquadDashTrace.Write(TraceCategory.Inbox, $"InboxMessageWindow.AttachmentChip.Click: SelectAndScrollToText threw: {ex.Message}"); }
+                    }
+                    else
+                    {
+                        SquadDashTrace.Write(TraceCategory.Inbox, $"InboxMessageWindow.AttachmentChip.Click: fallback — owner is not InboxMessageWindow (type={owner?.GetType().Name ?? "null"}) or excerptText is empty — opening MarkdownDocumentWindow");
+                        try { MarkdownDocumentWindow.ShowContent(owner, att.Label, excerptText ?? ""); }
+                        catch { }
+                    }
                 };
                 break;
         }
@@ -463,7 +474,9 @@ internal sealed class InboxMessageWindow : ChromedWindow
     }
 
     /// <summary>
-    /// Searches for text within a TextRange and returns the matching TextPointer range.
+    /// Searches for text within a FlowDocument range and returns the matching TextRange.
+    /// Works across inline formatting boundaries (bold, italic, mixed runs) by building
+    /// a flat character map over all text runs before searching.
     /// Returns null if the text is not found.
     /// </summary>
     private static TextRange? FindTextInRange(TextPointer start, TextPointer end, string searchText)
@@ -471,30 +484,56 @@ internal sealed class InboxMessageWindow : ChromedWindow
         if (string.IsNullOrEmpty(searchText))
             return null;
 
+        // Collect all text runs with their start pointers.
+        var runs = new List<(TextPointer RunStart, string Text)>();
         var current = start;
-        
         while (current is not null && current.CompareTo(end) < 0)
         {
             if (current.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.Text)
             {
-                var textRun = current.GetTextInRun(LogicalDirection.Forward);
-                
-                // Check if the search text appears in this text run
-                var index = textRun.IndexOf(searchText, StringComparison.Ordinal);
-                if (index >= 0)
-                {
-                    // Found it! Create a TextRange for the match
-                    var matchStart = current.GetPositionAtOffset(index);
-                    var matchEnd = matchStart?.GetPositionAtOffset(searchText.Length);
-                    
-                    if (matchStart is not null && matchEnd is not null)
-                        return new TextRange(matchStart, matchEnd);
-                }
+                var text = current.GetTextInRun(LogicalDirection.Forward);
+                if (text.Length > 0)
+                    runs.Add((current, text));
             }
-            
             current = current.GetNextContextPosition(LogicalDirection.Forward);
         }
 
-        return null;
+        // Build a flat string and a parallel map from string-index → (runIndex, charOffset).
+        var sb     = new System.Text.StringBuilder();
+        var posMap = new List<(int RunIndex, int CharOffset)>();
+        for (int r = 0; r < runs.Count; r++)
+        {
+            var text = runs[r].Text;
+            for (int c = 0; c < text.Length; c++)
+            {
+                posMap.Add((r, c));
+                sb.Append(text[c]);
+            }
+        }
+
+        var fullText = sb.ToString();
+
+        // Try exact match first; fall back to case-insensitive.
+        int idx = fullText.IndexOf(searchText, StringComparison.Ordinal);
+        if (idx < 0)
+            idx = fullText.IndexOf(searchText, StringComparison.OrdinalIgnoreCase);
+
+        if (idx < 0)
+            return null;
+
+        int endCharIdx = idx + searchText.Length - 1;
+        if (idx >= posMap.Count || endCharIdx >= posMap.Count)
+            return null;
+
+        var (startRunIdx, startCharOff) = posMap[idx];
+        var (endRunIdx,   endCharOff)   = posMap[endCharIdx];
+
+        var matchStart = runs[startRunIdx].RunStart.GetPositionAtOffset(startCharOff);
+        var matchEnd   = runs[endRunIdx].RunStart.GetPositionAtOffset(endCharOff + 1);
+
+        if (matchStart is null || matchEnd is null)
+            return null;
+
+        return new TextRange(matchStart, matchEnd);
     }
 }
