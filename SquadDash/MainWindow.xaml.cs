@@ -17986,7 +17986,19 @@ public partial class MainWindow : Window, ILiveElementLocator
                         if (capturedAttachments.Count > 0)
                         {
                             if (capturedAttachments.Count == 1 && capturedAttachments[0].InboxMessageId is { } msgId)
-                                OpenOrFocusInboxMessage(msgId);
+                            {
+                                var att0 = capturedAttachments[0];
+                                if (att0.ContentBlock != null)
+                                {
+                                    var excerptText = ExtractExcerptTextFromAttachment(att0.ContentBlock);
+                                    if (excerptText.Length > 0)
+                                        OpenOrFocusInboxMessageAndSelectText(msgId, excerptText);
+                                    else
+                                        OpenOrFocusInboxMessage(msgId);
+                                }
+                                else
+                                    OpenOrFocusInboxMessage(msgId);
+                            }
                             else
                                 PromptAttachmentViewerWindow.Show(capturedAttachments, CanShowOwnedWindow() ? this : null);
                         }
@@ -27642,7 +27654,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 label.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeSmall");
                 label.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
 
-                if (att.InboxMessageId != null)
+                if (att.InboxMessageId != null && att.ContentBlock == null)
                 {
                     var icon    = new Run("📧 ");
                     var descRun = new Run(att.Description);
