@@ -206,8 +206,9 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(2, GridUnitType.Star) });
-        Grid.SetRow(BuildOptionsSection(), 0);
-        mainGrid.Children.Add(BuildOptionsSection());
+        var optionsSection = BuildOptionsSection();
+        Grid.SetRow(optionsSection, 0);
+        mainGrid.Children.Add(optionsSection);
 
         var midSep = new GridSplitter {
             Height              = 4,
