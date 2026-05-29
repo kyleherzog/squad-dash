@@ -679,39 +679,20 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
     }
 
     private void OnMarkdownPreviewMouseMove(object sender, MouseEventArgs e) {
-        var mouseY = e.GetPosition(_markdownPreview).Y;
-        var idx = FindBlockIndexAtY(mouseY);
+        // Use IsMouseOver on each block — this is the reliable way to identify the hovered
+        // block in a FlowDocumentScrollViewer.  GetCharacterRect returns document-space
+        // coordinates which diverge from e.GetPosition (viewport-space) once the content
+        // is scrolled or PagePadding is applied.
+        int idx = -1;
+        for (int i = 0; i < _previewBlocks.Count; i++) {
+            if (_previewBlocks[i].IsMouseOver) { idx = i; break; }
+        }
         if (idx == _lastHoveredBlockIdx) return;
         _lastHoveredBlockIdx = idx;
         if (idx >= 0)
             OnPreviewBlockMouseEnter(idx);
         else
             ClearInstructionsHoverHighlight();
-    }
-
-    /// <summary>
-    /// Finds the index of the block whose rendered top edge is the highest position
-    /// still at or above <paramref name="mouseY"/> (in <see cref="_markdownPreview"/> coords).
-    /// Returns -1 if no suitable block is found.
-    /// </summary>
-    private int FindBlockIndexAtY(double mouseY) {
-        var doc = _markdownPreview.Document;
-        if (doc == null || _previewBlocks.Count == 0) return -1;
-
-        int best = -1;
-        double bestTop = double.NegativeInfinity;
-
-        for (int i = 0; i < _previewBlocks.Count; i++) {
-            var block = _previewBlocks[i];
-            if (block.Parent != doc) continue;
-            var rect = block.ContentStart.GetCharacterRect(LogicalDirection.Forward);
-            if (rect == Rect.Empty) continue;
-            if (rect.Top <= mouseY && rect.Top > bestTop) {
-                bestTop = rect.Top;
-                best = i;
-            }
-        }
-        return best;
     }
 
     /// <summary>
