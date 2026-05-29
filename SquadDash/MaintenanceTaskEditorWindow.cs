@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -45,6 +46,14 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
 
     private DispatcherTimer? _optionsDebounce;
     private DispatcherTimer? _instructionsDebounce;
+
+    // ── Preview→source hover highlight ────────────────────────────────────────
+
+    private Grid                                          _instructionsHost       = null!;
+    private Canvas?                                       _instructionsOverlay;
+    private System.Windows.Shapes.Rectangle?              _instructionsHighlight;
+    private DispatcherTimer?                              _instructionsHoverTimer;
+    private readonly List<(int CharStart, int CharLength)> _previewBlockSrcRanges  = new();
 
     // ── Re-entrance guard ─────────────────────────────────────────────────────
 
@@ -327,10 +336,13 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         rightLabel.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
         rightLabel.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
 
+        _instructionsHost = new Grid();
+        _instructionsHost.Children.Add(_instructionsBox);
+
         var rightStack = new DockPanel { Margin = new Thickness(4, 0, 0, 0), LastChildFill = true };
         DockPanel.SetDock(rightLabel, Dock.Top);
         rightStack.Children.Add(rightLabel);
-        rightStack.Children.Add(_instructionsBox);
+        rightStack.Children.Add(_instructionsHost);
         Grid.SetColumn(rightStack, 2);
 
         grid.Children.Add(leftStack);
@@ -590,11 +602,9 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
     // ── Markdown preview ──────────────────────────────────────────────────────
 
     private void UpdateMarkdownPreview() {
-        var fullText = new TextRange(
-            _instructionsBox.Document.ContentStart,
-            _instructionsBox.Document.ContentEnd).Text.TrimEnd('\r', '\n');
+        var rawText = _instructionsBox.GetPlainText();
 
-        var segments         = ResolveConditionalSegments(fullText);
+        var segments         = ResolveConditionalSegments(rawText);
         var conditionalBrush = GetConditionalTextBrush();
 
         var combined = new FlowDocument {
@@ -606,26 +616,133 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         };
         combined.SetResourceReference(FlowDocument.ForegroundProperty, "LabelText");
 
+        _previewBlockSrcRanges.Clear();
+        int searchFrom = 0;
+
         foreach (var (segText, isConditional) in segments) {
             if (string.IsNullOrWhiteSpace(segText)) continue;
-            var resolved = SubstituteVars(segText);
+
+            // Locate this segment in rawText so we can compute block char offsets.
+            var searchKey  = segText.TrimStart('\n');
+            var segStart   = rawText.IndexOf(searchKey, searchFrom, StringComparison.Ordinal);
+            if (segStart < 0) segStart = searchFrom;
+            searchFrom = segStart + segText.Length;
+
+            var segLines   = searchKey.Split('\n');
+            var resolved   = SubstituteVars(segText);
             try {
-                var segDoc = MarkdownFlowDocumentBuilder.Build(resolved);
+                var segDoc = MarkdownFlowDocumentBuilder.BuildWithMap(resolved, out var blockLineRanges);
                 var blocks = segDoc.Blocks.ToList();
-                foreach (var block in blocks) {
+                for (int i = 0; i < blocks.Count; i++) {
+                    var block   = blocks[i];
+                    var range   = i < blockLineRanges.Count ? blockLineRanges[i] : (StartLine: 0, EndLine: 0);
+                    var srcRange = ComputeBlockCharRange(segLines, segStart, range);
+
                     segDoc.Blocks.Remove(block);
                     if (isConditional) ApplyForeground(block, conditionalBrush);
+
+                    _previewBlockSrcRanges.Add(srcRange);
+                    var capturedIdx = _previewBlockSrcRanges.Count - 1;
+                    block.MouseEnter += (_, _) => OnPreviewBlockMouseEnter(capturedIdx);
+
                     combined.Blocks.Add(block);
                 }
             }
             catch {
                 var para = new Paragraph(new Run(resolved));
                 if (isConditional) para.Foreground = conditionalBrush;
+                _previewBlockSrcRanges.Add((segStart, segText.Length));
+                var capturedIdx = _previewBlockSrcRanges.Count - 1;
+                para.MouseEnter += (_, _) => OnPreviewBlockMouseEnter(capturedIdx);
                 combined.Blocks.Add(para);
             }
         }
 
         _markdownPreview.Document = combined;
+    }
+
+    private void OnPreviewBlockMouseEnter(int blockIdx) {
+        if (blockIdx >= _previewBlockSrcRanges.Count) return;
+        var (charStart, charLength) = _previewBlockSrcRanges[blockIdx];
+        if (charLength <= 0) return;
+        HighlightInstructionsRange(charStart, charLength);
+    }
+
+    /// <summary>
+    /// Converts a block's (StartLine, EndLine) range (0-based, relative to <paramref name="segLines"/>)
+    /// into a (CharStart, CharLength) range relative to the start of <paramref name="rawText"/>.
+    /// </summary>
+    private static (int CharStart, int CharLength) ComputeBlockCharRange(
+        string[] segLines, int segCharStart, (int StartLine, int EndLine) lineRange) {
+
+        var (startLine, endLine) = lineRange;
+        startLine = Math.Max(0, Math.Min(startLine, segLines.Length - 1));
+        endLine   = Math.Max(startLine, Math.Min(endLine, segLines.Length - 1));
+
+        int charStart = segCharStart;
+        for (int i = 0; i < startLine; i++)
+            charStart += segLines[i].Length + 1; // +1 for '\n'
+
+        int charEnd = charStart;
+        for (int i = startLine; i <= endLine; i++)
+            charEnd += segLines[i].Length + 1;
+        charEnd = Math.Max(charEnd - 1, charStart); // trim trailing '\n'
+
+        return (charStart, charEnd - charStart);
+    }
+
+    private Canvas EnsureInstructionsOverlay() {
+        if (_instructionsOverlay is not null) return _instructionsOverlay;
+        _instructionsOverlay = new Canvas { IsHitTestVisible = false, Background = Brushes.Transparent };
+        _instructionsHost.Children.Add(_instructionsOverlay);
+        return _instructionsOverlay;
+    }
+
+    private void ClearInstructionsHoverHighlight() {
+        _instructionsHoverTimer?.Stop();
+        if (_instructionsHighlight is not null) {
+            (_instructionsHighlight.Parent as Canvas)?.Children.Remove(_instructionsHighlight);
+            _instructionsHighlight = null;
+        }
+    }
+
+    private void HighlightInstructionsRange(int start, int length) {
+        ClearInstructionsHoverHighlight();
+        if (length <= 0) return;
+
+        var rect = _instructionsBox.GetRectFromOffset(start);
+        if (rect == Rect.Empty) return;
+
+        var overlay    = EnsureInstructionsOverlay();
+        var origin     = _instructionsBox.TranslatePoint(new Point(0, 0), overlay);
+        var charTopLeft = _instructionsBox.TranslatePoint(rect.TopLeft, overlay);
+
+        // Don't draw if the target line is scrolled outside the visible area.
+        if (charTopLeft.Y < origin.Y || charTopLeft.Y >= origin.Y + _instructionsBox.ActualHeight) return;
+
+        var isDark = IsDark();
+        var highlightColor = isDark
+            ? Color.FromArgb(60, 255, 220, 80)
+            : Color.FromArgb(50, 100, 180, 255);
+
+        double highlightWidth = Math.Max(_instructionsBox.ActualWidth - (charTopLeft.X - origin.X), 0);
+
+        _instructionsHighlight = new System.Windows.Shapes.Rectangle {
+            Width             = highlightWidth,
+            Height            = Math.Max(rect.Height, 14),
+            Fill              = new SolidColorBrush(highlightColor),
+            IsHitTestVisible  = false,
+        };
+        Canvas.SetLeft(_instructionsHighlight, charTopLeft.X);
+        Canvas.SetTop(_instructionsHighlight,  charTopLeft.Y);
+        overlay.Children.Add(_instructionsHighlight);
+
+        _instructionsHoverTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _instructionsHoverTimer.Tick += (_, _) => {
+            _instructionsHoverTimer?.Stop();
+            ClearInstructionsHoverHighlight();
+        };
+        _instructionsHoverTimer.Start();
     }
 
     // ── Options YAML ──────────────────────────────────────────────────────────

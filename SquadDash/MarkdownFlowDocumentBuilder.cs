@@ -17,12 +17,23 @@ internal static class MarkdownFlowDocumentBuilder {
     private static Brush Res(string key, Brush fallback) =>
         Application.Current?.Resources[key] as Brush ?? fallback;
 
-    public static FlowDocument Build(string markdown) {
+    public static FlowDocument Build(string markdown) => BuildWithMap(markdown, out _);
+
+    /// <summary>
+    /// Builds a <see cref="FlowDocument"/> from <paramref name="markdown"/> and also returns,
+    /// for each block in document order, the 0-based (StartLine, EndLine) range in the
+    /// normalised input that produced it.  Use this to map rendered blocks back to source.
+    /// </summary>
+    public static FlowDocument BuildWithMap(string markdown, out List<(int StartLine, int EndLine)> blockLineRanges) {
+        blockLineRanges = new List<(int, int)>();
+
         var foreground   = Res("LabelText",          DefaultForegroundBrush);
         var quoteFill    = Res("QuoteSurface",        DefaultQuoteFillBrush);
         var quoteBorder  = Res("QuoteBorder",         DefaultQuoteBorderBrush);
         var tableRule    = Res("TableRule",           DefaultTableBorderBrush);
         var tableHeader  = Res("TableHeaderSurface",  DefaultTableHeaderBrush);
+
+        _ = quoteBorder; // declared for future use; suppress unused-variable warning
 
         var document = new FlowDocument {
             FontFamily    = new FontFamily("Segoe UI, Segoe UI Emoji"),
@@ -36,12 +47,14 @@ internal static class MarkdownFlowDocumentBuilder {
         var lines = Normalize(markdown).Split('\n');
 
         for (var index = 0; index < lines.Length; index++) {
+            var startIndex = index;
             var line = lines[index];
             var trimmed = line.Trim();
 
             if (string.IsNullOrWhiteSpace(trimmed)) {
                 // Use a minimal spacer instead of a full-height empty paragraph.
                 document.Blocks.Add(new Paragraph { Margin = new Thickness(0), LineHeight = 6 });
+                blockLineRanges.Add((startIndex, index));
                 continue;
             }
 
@@ -54,21 +67,25 @@ internal static class MarkdownFlowDocumentBuilder {
                 }
 
                 document.Blocks.Add(BuildCodeBlock(string.Join(Environment.NewLine, codeLines)));
+                blockLineRanges.Add((startIndex, index));
                 continue;
             }
 
             if (TryReadTable(lines, ref index, out var tableRows)) {
                 document.Blocks.Add(BuildTable(tableRows, tableRule, tableHeader));
+                blockLineRanges.Add((startIndex, index));
                 continue;
             }
 
             if (trimmed.StartsWith("#", StringComparison.Ordinal)) {
                 document.Blocks.Add(BuildHeading(trimmed));
+                blockLineRanges.Add((startIndex, index));
                 continue;
             }
 
             if (trimmed.StartsWith("> ", StringComparison.Ordinal)) {
                 document.Blocks.Add(BuildQuote(trimmed[2..].Trim(), quoteFill, foreground));
+                blockLineRanges.Add((startIndex, index));
                 continue;
             }
 
@@ -96,6 +113,7 @@ internal static class MarkdownFlowDocumentBuilder {
                 listItems.Add(currentItem.ToString());
 
                 document.Blocks.Add(BuildList(listItems));
+                blockLineRanges.Add((startIndex, index));
                 continue;
             }
 
@@ -105,6 +123,7 @@ internal static class MarkdownFlowDocumentBuilder {
                     Margin = new Thickness(0, 6, 0, 12),
                     Background = tableRule
                 }));
+                blockLineRanges.Add((startIndex, index));
                 continue;
             }
 
@@ -119,6 +138,7 @@ internal static class MarkdownFlowDocumentBuilder {
                 index++;
             }
             document.Blocks.Add(BuildParagraph(paraLines.ToString()));
+            blockLineRanges.Add((startIndex, index));
         }
 
         return document;
