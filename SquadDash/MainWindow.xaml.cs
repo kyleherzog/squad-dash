@@ -17239,7 +17239,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             TextTrimming = TextTrimming.None
         };
         titleBlock.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeSubtitle");
-        titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
+        titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
 
         var navUp = CreateSecondaryNavButton(up: true);
         var navDown = CreateSecondaryNavButton(up: false);

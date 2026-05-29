@@ -505,7 +505,7 @@ tasks:
       Do not modify any source files.
 
   - id: readme-currency
-    enabled: false
+    enabled: true
     frequency: daily
     safety: report-only
     title: README Currency Check

@@ -1864,7 +1864,7 @@
                                FontSize="{DynamicResource FontSizeSubtitle}"
                                FontWeight="SemiBold"
                                TextTrimming="CharacterEllipsis"
-                               Foreground="{DynamicResource LabelText}" />
+                               Foreground="{DynamicResource SubtleText}" />
                     <TextBlock x:Name="SessionStateTextBlock"
                                Margin="12,0,0,0"
                                VerticalAlignment="Bottom"
