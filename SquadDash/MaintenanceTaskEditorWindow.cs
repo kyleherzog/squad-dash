@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shell;
 using System.Windows.Threading;
 
 namespace SquadDash;
@@ -49,6 +50,12 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
 
     private bool _updatingHighlight;
 
+    // Tracks current option values for conditional preview resolution
+    private readonly Dictionary<string, string> _optionValues = new();
+
+    // Error indicator below the YAML editor
+    private TextBlock _yamlErrorText = null!;
+
     // ── Highlight colours ─────────────────────────────────────────────────────
 
     private static readonly Brush BlockTagBrush    = new SolidColorBrush(Color.FromRgb(0xB8, 0x86, 0x0B)); // amber (light)
@@ -88,6 +95,20 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         _optionsPreviewPanel = new StackPanel { Margin = new Thickness(4) };
         _markdownPreview     = BuildMarkdownPreview();
         _instructionsBox     = BuildInstructionsBox();
+
+        // Build error indicator for YAML section
+        _yamlErrorText = new TextBlock {
+            Visibility   = Visibility.Collapsed,
+            TextWrapping = TextWrapping.Wrap,
+            Margin       = new Thickness(2, 2, 2, 0),
+        };
+        _yamlErrorText.SetResourceReference(TextBlock.ForegroundProperty, "DangerText");
+        _yamlErrorText.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
+
+        // Seed option values from task's current options
+        if (_task.Options is not null)
+            foreach (var opt in _task.Options)
+                _optionValues[opt.Key] = opt.RawValue ?? string.Empty;
 
         ApplyOuterBorder().Child = BuildLayout();
 
@@ -130,7 +151,7 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         var root = new DockPanel { LastChildFill = true };
 
         // ── Title bar row ─────────────────────────────────────────────────────
-        var titleRow = new DockPanel { Margin = new Thickness(8, 8, 8, 4), LastChildFill = true };
+        var titleRow = new DockPanel { Margin = new Thickness(8, 8, 50, 4), LastChildFill = true };
         var titleLabel = new TextBlock { Text = "Title:", VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 6, 0) };
         titleLabel.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
@@ -218,32 +239,34 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        // Left: YAML editor
+        // Left: live preview (interactive)
         var leftPanel = new DockPanel { Margin = new Thickness(0, 0, 4, 0), LastChildFill = true };
-        var yamlLabel = new TextBlock { Text = "Options YAML", Margin = new Thickness(0, 0, 0, 2) };
-        yamlLabel.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
-        yamlLabel.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
-        DockPanel.SetDock(yamlLabel, Dock.Top);
-        leftPanel.Children.Add(yamlLabel);
-        leftPanel.Children.Add(new ScrollViewer {
-            Content             = _optionsYamlBox,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-        });
-        Grid.SetColumn(leftPanel, 0);
-
-        // Right: live preview
-        var rightPanel = new DockPanel { Margin = new Thickness(4, 0, 0, 0), LastChildFill = true };
         var previewLabel = new TextBlock { Text = "Preview", Margin = new Thickness(0, 0, 0, 2) };
         previewLabel.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
         previewLabel.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
         DockPanel.SetDock(previewLabel, Dock.Top);
-        rightPanel.Children.Add(previewLabel);
+        leftPanel.Children.Add(previewLabel);
         var previewScroll = new ScrollViewer {
             Content             = _optionsPreviewPanel,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         };
         previewScroll.SetResourceReference(ScrollViewer.BackgroundProperty, "InputSurface");
-        rightPanel.Children.Add(previewScroll);
+        leftPanel.Children.Add(previewScroll);
+        Grid.SetColumn(leftPanel, 0);
+
+        // Right: YAML editor with error line below
+        var rightPanel = new DockPanel { Margin = new Thickness(4, 0, 0, 0), LastChildFill = true };
+        var yamlLabel = new TextBlock { Text = "Options YAML", Margin = new Thickness(0, 0, 0, 2) };
+        yamlLabel.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+        yamlLabel.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
+        DockPanel.SetDock(yamlLabel, Dock.Top);
+        rightPanel.Children.Add(yamlLabel);
+        DockPanel.SetDock(_yamlErrorText, Dock.Bottom);
+        rightPanel.Children.Add(_yamlErrorText);
+        rightPanel.Children.Add(new ScrollViewer {
+            Content             = _optionsYamlBox,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        });
         Grid.SetColumn(rightPanel, 1);
 
         grid.Children.Add(leftPanel);
@@ -316,6 +339,7 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         tb.SetResourceReference(TextBox.ForegroundProperty, "BodyText");
         tb.SetResourceReference(TextBox.BackgroundProperty, "InputSurface");
         tb.SetResourceReference(TextBox.BorderBrushProperty,"SubtleBorder");
+        WindowChrome.SetIsHitTestVisibleInChrome(tb, true);
         return tb;
     }
 
@@ -339,6 +363,7 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         cb.SetResourceReference(ComboBox.ForegroundProperty,    "BodyText");
         cb.SetResourceReference(ComboBox.BackgroundProperty,    "InputSurface");
         cb.SetResourceReference(ComboBox.FontSizeProperty,      "FontSizeBody");
+        cb.SetResourceReference(ComboBox.StyleProperty, "ThemedComboBoxStyle");
         return cb;
     }
 
@@ -350,6 +375,7 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         cb.SetResourceReference(ComboBox.ForegroundProperty, "BodyText");
         cb.SetResourceReference(ComboBox.BackgroundProperty, "InputSurface");
         cb.SetResourceReference(ComboBox.FontSizeProperty,   "FontSizeBody");
+        cb.SetResourceReference(ComboBox.StyleProperty, "ThemedComboBoxStyle");
         return cb;
     }
 
@@ -548,17 +574,40 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
     private void UpdateMarkdownPreview() {
         var fullText = new TextRange(
             _instructionsBox.Document.ContentStart,
-            _instructionsBox.Document.ContentEnd).Text;
+            _instructionsBox.Document.ContentEnd).Text.TrimEnd('\r', '\n');
 
-        try {
-            var doc = MarkdownFlowDocumentBuilder.Build(fullText.TrimEnd('\r', '\n'));
-            _markdownPreview.Document = doc;
+        var segments         = ResolveConditionalSegments(fullText);
+        var conditionalBrush = GetConditionalTextBrush();
+
+        var combined = new FlowDocument {
+            FontFamily    = new FontFamily("Segoe UI, Segoe UI Emoji"),
+            FontSize      = Application.Current.Resources["FontSizeMedium"] is double sz ? sz : 13.0,
+            Background    = Brushes.Transparent,
+            PagePadding   = new Thickness(18),
+            TextAlignment = TextAlignment.Left,
+        };
+        combined.SetResourceReference(FlowDocument.ForegroundProperty, "LabelText");
+
+        foreach (var (segText, isConditional) in segments) {
+            if (string.IsNullOrWhiteSpace(segText)) continue;
+            var resolved = SubstituteVars(segText);
+            try {
+                var segDoc = MarkdownFlowDocumentBuilder.Build(resolved);
+                var blocks = segDoc.Blocks.ToList();
+                foreach (var block in blocks) {
+                    segDoc.Blocks.Remove(block);
+                    if (isConditional) ApplyForeground(block, conditionalBrush);
+                    combined.Blocks.Add(block);
+                }
+            }
+            catch {
+                var para = new Paragraph(new Run(resolved));
+                if (isConditional) para.Foreground = conditionalBrush;
+                combined.Blocks.Add(para);
+            }
         }
-        catch {
-            var doc = new FlowDocument();
-            doc.Blocks.Add(new Paragraph(new Run(fullText)));
-            _markdownPreview.Document = doc;
-        }
+
+        _markdownPreview.Document = combined;
     }
 
     // ── Options YAML ──────────────────────────────────────────────────────────
@@ -569,7 +618,14 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         _optionsDebounce.Tick += (_, _) => {
             _optionsDebounce?.Stop();
             _optionsDebounce = null;
+            // Re-seed option values from the updated YAML so conditional preview stays in sync.
+            var reparsed = ParseOptionsFromYaml(_optionsYamlBox.Text, out _);
+            if (reparsed is not null) {
+                _optionValues.Clear();
+                foreach (var o in reparsed) _optionValues[o.Key] = o.RawValue ?? string.Empty;
+            }
             UpdateOptionsPreview();
+            UpdateMarkdownPreview();
         };
         _optionsDebounce.Start();
     }
@@ -577,7 +633,18 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
     private void UpdateOptionsPreview() {
         _optionsPreviewPanel.Children.Clear();
 
-        var opts = ParseOptionsFromYaml(_optionsYamlBox.Text);
+        var opts = ParseOptionsFromYaml(_optionsYamlBox.Text, out var yamlError);
+
+        // Show or hide the YAML error indicator
+        if (!string.IsNullOrEmpty(yamlError)) {
+            _yamlErrorText.Text       = "⚠ " + yamlError;
+            _yamlErrorText.Visibility = Visibility.Visible;
+        }
+        else {
+            _yamlErrorText.Text       = string.Empty;
+            _yamlErrorText.Visibility = Visibility.Collapsed;
+        }
+
         if (opts is null || opts.Count == 0) {
             var empty = new TextBlock { Text = "(no options)", FontStyle = FontStyles.Italic };
             empty.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
@@ -599,28 +666,39 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
             }
 
             if (opt.Choices is { Count: > 0 }) {
+                var optKey = opt.Key;
                 foreach (var choice in opt.Choices) {
+                    var choiceValue = choice.Value;
                     var rb = new RadioButton {
                         Content   = choice.Value,
                         GroupName = $"preview-{opt.Key}",
-                        IsChecked = string.Equals(choice.Value, opt.RawValue,
+                        IsChecked = string.Equals(choice.Value, _optionValues.GetValueOrDefault(opt.Key, opt.RawValue),
                             StringComparison.OrdinalIgnoreCase),
                         Margin    = new Thickness(8, 1, 0, 1),
-                        IsEnabled = false,
                     };
                     rb.SetResourceReference(RadioButton.ForegroundProperty, "BodyText");
                     rb.SetResourceReference(RadioButton.FontSizeProperty,   "FontSizeSmall");
+                    rb.Checked += (_, _) => {
+                        _optionValues[optKey] = choiceValue;
+                        UpdateMarkdownPreview();
+                    };
                     _optionsPreviewPanel.Children.Add(rb);
                 }
             }
             else {
+                var optKey = opt.Key;
                 var tb = new TextBox {
-                    Text        = opt.RawValue,
-                    IsEnabled   = false,
-                    Margin      = new Thickness(0, 2, 0, 2),
+                    Text   = _optionValues.GetValueOrDefault(opt.Key, opt.RawValue ?? string.Empty),
+                    Margin = new Thickness(0, 2, 0, 2),
                 };
-                tb.SetResourceReference(TextBox.ForegroundProperty, "BodyText");
-                tb.SetResourceReference(TextBox.FontSizeProperty,   "FontSizeSmall");
+                tb.SetResourceReference(TextBox.ForegroundProperty,  "BodyText");
+                tb.SetResourceReference(TextBox.BackgroundProperty,  "InputSurface");
+                tb.SetResourceReference(TextBox.BorderBrushProperty, "SubtleBorder");
+                tb.SetResourceReference(TextBox.FontSizeProperty,    "FontSizeSmall");
+                tb.TextChanged += (_, _) => {
+                    _optionValues[optKey] = tb.Text;
+                    UpdateMarkdownPreview();
+                };
                 _optionsPreviewPanel.Children.Add(tb);
             }
         }
@@ -655,11 +733,15 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         return sb.ToString().TrimEnd();
     }
 
+    private static IReadOnlyList<MaintenanceOption>? ParseOptionsFromYaml(string yaml) =>
+        ParseOptionsFromYaml(yaml, out _);
+
     /// <summary>
-    /// Minimal YAML parser for the options block displayed in the editor.
-    /// Returns null if the YAML is empty or cannot be parsed.
+    /// Parses the options YAML. Sets <paramref name="error"/> to a user-facing
+    /// error message on failure, or null on success.
     /// </summary>
-    private static IReadOnlyList<MaintenanceOption>? ParseOptionsFromYaml(string yaml) {
+    private static IReadOnlyList<MaintenanceOption>? ParseOptionsFromYaml(string yaml, out string? error) {
+        error = null;
         if (string.IsNullOrWhiteSpace(yaml))
             return null;
 
@@ -689,7 +771,6 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
                 while (indent < rawLine.Length && rawLine[indent] == ' ') indent++;
                 var trimmed = rawLine.TrimStart();
 
-                // top-level key (indent 0, ends with colon, no value)
                 if (indent == 0 && trimmed.EndsWith(':') && !trimmed.Contains(' ')) {
                     CommitOption();
                     currentKey = trimmed.TrimEnd(':');
@@ -698,7 +779,6 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
 
                 if (currentKey is null) continue;
 
-                // choices list items (indent 4, starts with "- ")
                 if (inChoices) {
                     if (indent == 4 && trimmed.StartsWith("- ", StringComparison.Ordinal)) {
                         if (currentChoice is not null) choices.Add(currentChoice);
@@ -715,12 +795,10 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
                             currentChoice.Tooltip = trimmed[(ci + 1)..].Trim().Trim('"', '\'');
                         continue;
                     }
-                    // exiting choices
                     if (currentChoice is not null) { choices.Add(currentChoice); currentChoice = null; }
                     inChoices = false;
                 }
 
-                // sub-fields at indent 2
                 if (indent == 2) {
                     var ci = trimmed.IndexOf(':');
                     if (ci < 0) continue;
@@ -742,9 +820,101 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
             CommitOption();
             return options.Count > 0 ? options : null;
         }
-        catch {
+        catch (Exception ex) {
+            error = ex.Message;
             return null;
         }
+    }
+
+    // ── Conditional preview helpers ──────────────────────────────────────────────
+
+    private static bool IsOptionTruthy(string? value) =>
+        !string.IsNullOrEmpty(value) &&
+        !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase) &&
+        !string.Equals(value, "0",     StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Splits <paramref name="text"/> into (text, isConditional) segments by
+    /// resolving <c>{{#if KEY}}...{{/if}}</c> and <c>{{#unless KEY}}...{{/unless}}</c>
+    /// blocks against <see cref="_optionValues"/>. Excluded blocks are dropped.
+    /// </summary>
+    private List<(string Text, bool IsConditional)> ResolveConditionalSegments(string text) {
+        var result  = new List<(string, bool)>();
+        var pattern = new Regex(
+            @"\{\{#(if|unless)\s+(\w+)\}\}(.*?)\{\{/(if|unless)\}\}",
+            RegexOptions.Singleline | RegexOptions.IgnoreCase);
+        int pos = 0;
+        foreach (Match m in pattern.Matches(text)) {
+            if (m.Index > pos)
+                result.Add((text[pos..m.Index], false));
+            var verb     = m.Groups[1].Value.ToLowerInvariant();
+            var key      = m.Groups[2].Value;
+            var content  = m.Groups[3].Value;
+            var truthy   = _optionValues.TryGetValue(key, out var val) && IsOptionTruthy(val);
+            var include  = (verb == "if") ? truthy : !truthy;
+            if (include)
+                result.Add((content, true));
+            pos = m.Index + m.Length;
+        }
+        if (pos < text.Length)
+            result.Add((text[pos..], false));
+        // If no conditionals were found, return as a single normal segment
+        if (result.Count == 0)
+            result.Add((text, false));
+        return result;
+    }
+
+    /// <summary>
+    /// Replaces <c>{{varname}}</c> tokens (non-block tags) with the current
+    /// option value from <see cref="_optionValues"/>.
+    /// </summary>
+    private string SubstituteVars(string text) =>
+        Regex.Replace(text, @"\{\{([^}#/][^}]*)\}\}", m => {
+            var key = m.Groups[1].Value.Trim();
+            return _optionValues.TryGetValue(key, out var val) ? val : m.Value;
+        });
+
+    /// <summary>
+    /// Returns a brush that is halfway between the current body text colour
+    /// and the maximum contrast endpoint (white in dark theme, black in light).
+    /// Conditional preview text is rendered with this brush to make it stand out.
+    /// </summary>
+    private Brush GetConditionalTextBrush() {
+        var baseColor = IsDark()
+            ? Color.FromRgb(0xCC, 0xCC, 0xCC)   // fallback dark-theme body
+            : Color.FromRgb(0x33, 0x33, 0x33);   // fallback light-theme body
+        if (Application.Current?.Resources["LabelText"] is SolidColorBrush lb)
+            baseColor = lb.Color;
+        var target = IsDark() ? Color.FromRgb(255, 255, 255) : Color.FromRgb(0, 0, 0);
+        return new SolidColorBrush(Color.FromRgb(
+            (byte)((baseColor.R + target.R) / 2),
+            (byte)((baseColor.G + target.G) / 2),
+            (byte)((baseColor.B + target.B) / 2)));
+    }
+
+    private static void ApplyForeground(Block block, Brush brush) {
+        switch (block) {
+            case Paragraph p:
+                p.Foreground = brush;
+                foreach (var inline in p.Inlines) ApplyForegroundInline(inline, brush);
+                break;
+            case Section s:
+                foreach (var b in s.Blocks) ApplyForeground(b, brush);
+                break;
+            case List l:
+                foreach (var li in l.ListItems)
+                    foreach (var b in li.Blocks) ApplyForeground(b, brush);
+                break;
+            case BlockUIContainer buc:
+                buc.SetValue(TextElement.ForegroundProperty, brush);
+                break;
+        }
+    }
+
+    private static void ApplyForegroundInline(Inline inline, Brush brush) {
+        inline.Foreground = brush;
+        if (inline is Span span)
+            foreach (var child in span.Inlines) ApplyForegroundInline(child, brush);
     }
 
     // ── Caret helpers ─────────────────────────────────────────────────────────
