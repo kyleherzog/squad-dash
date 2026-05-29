@@ -679,20 +679,65 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
     }
 
     private void OnMarkdownPreviewMouseMove(object sender, MouseEventArgs e) {
-        // Use IsMouseOver on each block — this is the reliable way to identify the hovered
-        // block in a FlowDocumentScrollViewer.  GetCharacterRect returns document-space
-        // coordinates which diverge from e.GetPosition (viewport-space) once the content
-        // is scrolled or PagePadding is applied.
-        int idx = -1;
-        for (int i = 0; i < _previewBlocks.Count; i++) {
-            if (_previewBlocks[i].IsMouseOver) { idx = i; break; }
-        }
+        var mousePos = e.GetPosition(_markdownPreview);
+        int idx = FindHoveredBlockIndex(mousePos);
         if (idx == _lastHoveredBlockIdx) return;
         _lastHoveredBlockIdx = idx;
         if (idx >= 0)
             OnPreviewBlockMouseEnter(idx);
         else
             ClearInstructionsHoverHighlight();
+    }
+
+    /// <summary>
+    /// Finds the index of the block the mouse is currently over.
+    /// <para>
+    /// <see cref="TextPointer.GetCharacterRect"/> returns coordinates in the
+    /// <c>DocumentPageView</c> visual's coordinate space.  Mouse position from
+    /// <c>e.GetPosition(_markdownPreview)</c> is in the <see cref="FlowDocumentScrollViewer"/>
+    /// viewport space.  These differ by however far the page visual has been scrolled.
+    /// We use <c>TranslatePoint</c> from the <c>DocumentPageView</c> visual to
+    /// <c>_markdownPreview</c> to compute the exact offset, then compare corrected Y values.
+    /// </para>
+    /// </summary>
+    private int FindHoveredBlockIndex(Point mousePos) {
+        if (_previewBlocks.Count == 0) return -1;
+
+        // Locate the DocumentPageView visual that renders the FlowDocument content.
+        // Its coordinate system is the same one GetCharacterRect reports in.
+        var pageVisual = FindVisualDescendant(_markdownPreview,
+            v => v.GetType().Name == "DocumentPageView") as FrameworkElement;
+        if (pageVisual == null) return -1;
+
+        // offset = where the page visual's (0,0) appears in _markdownPreview viewport coords.
+        // Subtracting it from mousePos converts viewport coords to page-visual coords.
+        var offset = pageVisual.TranslatePoint(new Point(0, 0), _markdownPreview);
+        double docY = mousePos.Y - offset.Y;
+
+        int best = -1;
+        double bestTop = double.NegativeInfinity;
+        for (int i = 0; i < _previewBlocks.Count; i++) {
+            var block = _previewBlocks[i];
+            var rect = block.ContentStart.GetCharacterRect(LogicalDirection.Forward);
+            if (rect == Rect.Empty) continue;
+            if (rect.Top <= docY && rect.Top > bestTop) {
+                bestTop = rect.Top;
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    private static DependencyObject? FindVisualDescendant(
+        DependencyObject parent, Func<DependencyObject, bool> predicate) {
+        int count = VisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < count; i++) {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (predicate(child)) return child;
+            var found = FindVisualDescendant(child, predicate);
+            if (found != null) return found;
+        }
+        return null;
     }
 
     /// <summary>
