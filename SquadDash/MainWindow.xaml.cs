@@ -17715,69 +17715,53 @@ public partial class MainWindow : Window, ILiveElementLocator
         try
         {
             var scrollViewer = _transcriptScrollViewer;
-            // Use the viewport TOP as the reference, not the bottom.
-            // When Ctrl+PgUp jumps to an older turn, the target prompt lands at
-            // rect.Top ≈ 0 (viewport top).  Using viewportBottom as the cutoff would
-            // capture every prompt visible below the jump target and surface a later
-            // turn's intent as the title — the wrong one.  By anchoring to the top we
-            // always show the intent for the turn that is at (or just above) the current
-            // scroll position.
-            // A small tolerance (20 px) covers paragraph leading / border offsets that
-            // can place ContentStart a few pixels below the exact scroll origin.
-            var viewportTopRef = scrollViewer.VerticalOffset + 20;
+            var viewportHeight = scrollViewer.ViewportHeight;
 
-            // Find the last user prompt at or above the viewport top, and the first one below it.
-            // Using timestamps avoids fragile visual-tree checks on collapsed Expanders.
-            var lastVisiblePromptTime = DateTimeOffset.MinValue;
-            var nextPromptTime = DateTimeOffset.MaxValue;
-            var largestAbsoluteY = double.MinValue;
-            foreach (var pe in CoordinatorThread.PromptParagraphs)
+            // Strategy: scan coordinator report_intent entries by visual position and
+            // pick the bottommost one that is at least partially visible on screen.
+            //
+            // "Start at the last line in view and scan backwards" — among all visible
+            // report_intent entries, the one with the largest viewport-relative Y
+            // (i.e. closest to the bottom of the viewport) is the one that reflects the
+            // current reading context, whether the user:
+            //   • scrolled normally to the bottom (prompt is above viewport top, intent
+            //     is lower in the same turn — both are visible)
+            //   • used Ctrl+PgUp to jump to an older turn (that turn fills most of the
+            //     screen; later turns' intents are below the viewport bottom and are
+            //     therefore invisible, so we correctly find the jumped-to turn's intent)
+            //
+            // Using visual position avoids the timestamp-window approximation that
+            // broke down whenever the active prompt happened to land below the viewport
+            // top reference used by the old approach.
+            string? foundIntent = null;
+            double bestY = double.MinValue;
+
+            foreach (var toolEntry in _agentThreadRegistry.ToolEntries.Values)
             {
+                if (toolEntry.Turn.OwnerThread != CoordinatorThread) continue;
+                if (toolEntry.Descriptor.ToolName != "report_intent") continue;
+
                 try
                 {
-                    var rect = pe.Paragraph.ContentStart.GetCharacterRect(LogicalDirection.Forward);
-                    if (rect.IsEmpty) continue;
-                    var absoluteY = scrollViewer.VerticalOffset + rect.Top;
-                    if (absoluteY <= viewportTopRef)
+                    // Skip entries whose Expander is inside a collapsed parent (IsVisible
+                    // returns false when any ancestor has Visibility=Collapsed).
+                    if (!toolEntry.Expander.IsVisible) continue;
+
+                    var pos = toolEntry.Expander.TranslatePoint(new Point(0, 0), scrollViewer);
+                    var entryBottom = pos.Y + toolEntry.Expander.ActualHeight;
+
+                    // At least partially on screen: top is above viewport bottom AND
+                    // bottom is below viewport top.
+                    if (pos.Y < viewportHeight && entryBottom > 0)
                     {
-                        if (absoluteY > largestAbsoluteY)
+                        if (pos.Y > bestY)
                         {
-                            largestAbsoluteY = absoluteY;
-                            lastVisiblePromptTime = pe.Timestamp;
+                            bestY = pos.Y;
+                            foundIntent = toolEntry.Descriptor.DisplayText ?? toolEntry.Descriptor.Intent;
                         }
-                    }
-                    else
-                    {
-                        // First prompt below viewport top — entries at or after this belong to a turn not yet at the top.
-                        if (pe.Timestamp < nextPromptTime)
-                            nextPromptTime = pe.Timestamp;
                     }
                 }
                 catch { }
-            }
-
-            // Walk tool entries from most-recent to oldest.
-            var entries = _agentThreadRegistry.ToolEntries.Values
-                .Where(e => e.Turn.OwnerThread == CoordinatorThread)
-                .OrderByDescending(e => e.StartedAt)
-                .ToList();
-
-            string? foundIntent = null;
-            foreach (var toolEntry in entries)
-            {
-                // Stop: this entry predates the last visible prompt — it belongs to an older context.
-                if (toolEntry.StartedAt < lastVisiblePromptTime)
-                    break;
-
-                // Skip: this entry was emitted after the first prompt below the viewport top (not the active context).
-                if (toolEntry.StartedAt >= nextPromptTime)
-                    continue;
-
-                if (toolEntry.Descriptor.ToolName == "report_intent")
-                {
-                    foundIntent = toolEntry.Descriptor.DisplayText ?? toolEntry.Descriptor.Intent;
-                    break;
-                }
             }
 
             if (!string.IsNullOrWhiteSpace(foundIntent))
