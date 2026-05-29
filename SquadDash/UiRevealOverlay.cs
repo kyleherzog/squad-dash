@@ -48,6 +48,10 @@ internal sealed class UiRevealOverlay
     private DispatcherTimer? _copyFeedbackTimer;
     private string? _line1SavedText;
 
+    // Diagnostic log file — cleared on each Activate(), appended during the session.
+    private static readonly string _diagLogPath =
+        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SquadDash_UiReveal_diag.txt");
+
     /// <summary>True while the overlay is active on a window.</summary>
     public bool IsActive => _owner is not null;
 
@@ -59,6 +63,9 @@ internal sealed class UiRevealOverlay
 
         if (_owner is not null)
             return; // already active on this window
+
+        // Start fresh diagnostic log each time the overlay is activated.
+        try { System.IO.File.WriteAllText(_diagLogPath, $"[{DateTime.Now:HH:mm:ss.fff}] Activate() called — owner={owner.GetType().Name}\r\n"); } catch { }
 
         _owner = owner;
         EnsurePopup();
@@ -73,6 +80,8 @@ internal sealed class UiRevealOverlay
         // because PostProcessInput may see the event after a focused control has already
         // handled it, and the RoutedEvent on the args may differ between the two stages.
         InputManager.Current.PreProcessInput += OnPreProcessInputForKeys;
+
+        DiagLog("Activate() complete — PreProcessInput and PostProcessInput subscribed");
     }
 
     internal void Deactivate()
@@ -182,32 +191,93 @@ internal sealed class UiRevealOverlay
     {
         try
         {
-            if (_owner is null || _lastElement is null) return;
-            if (e.StagingItem.Input is not KeyEventArgs keyArgs) return;
-            if (keyArgs.RoutedEvent != Keyboard.PreviewKeyDownEvent) return;
+            // Log EVERY key-related staging item so we can see what's actually arriving.
+            var inputType = e.StagingItem.Input?.GetType().Name ?? "null";
 
-            var mods = Keyboard.Modifiers;
-            bool isCopy =
-                (keyArgs.Key == Key.C
-                    && mods.HasFlag(ModifierKeys.Control)
-                    && !mods.HasFlag(ModifierKeys.Shift)
-                    && !mods.HasFlag(ModifierKeys.Alt))
-                || (keyArgs.Key == Key.Insert
-                    && mods.HasFlag(ModifierKeys.Control)
-                    && !mods.HasFlag(ModifierKeys.Shift)
-                    && !mods.HasFlag(ModifierKeys.Alt));
-
-            if (!isCopy) return;
-
-            var text = BuildClipboardText(_lastElement);
-            if (!string.IsNullOrEmpty(text))
+            if (e.StagingItem.Input is KeyEventArgs keyArgs)
             {
-                try { Clipboard.SetText(text); } catch { }
-                ShowCopyFeedback();
+                var mods = Keyboard.Modifiers;
+                var msg = $"KeyEventArgs: key={keyArgs.Key} mods={mods} routedEvt={keyArgs.RoutedEvent?.Name ?? "null"} " +
+                          $"handled={keyArgs.Handled} _owner={((_owner is null) ? "null" : "set")} " +
+                          $"_lastElement={((_lastElement is null) ? "null" : _lastElement.GetType().Name)}";
+                DiagLog(msg);
+                ShowDiagInOverlay($"key: {keyArgs.Key} mods:{mods} re:{keyArgs.RoutedEvent?.Name ?? "?"}");
+
+                if (_owner is null || _lastElement is null)
+                {
+                    DiagLog($"  → skipped: _owner={(_owner is null ? "null" : "set")} _lastElement={(_lastElement is null ? "null" : "set")}");
+                    return;
+                }
+                if (keyArgs.RoutedEvent != Keyboard.PreviewKeyDownEvent)
+                {
+                    DiagLog($"  → skipped: RoutedEvent is {keyArgs.RoutedEvent?.Name ?? "null"}, not PreviewKeyDown");
+                    return;
+                }
+
+                bool isCopy =
+                    (keyArgs.Key == Key.C
+                        && mods.HasFlag(ModifierKeys.Control)
+                        && !mods.HasFlag(ModifierKeys.Shift)
+                        && !mods.HasFlag(ModifierKeys.Alt))
+                    || (keyArgs.Key == Key.Insert
+                        && mods.HasFlag(ModifierKeys.Control)
+                        && !mods.HasFlag(ModifierKeys.Shift)
+                        && !mods.HasFlag(ModifierKeys.Alt));
+
+                if (!isCopy)
+                {
+                    DiagLog($"  → skipped: not a copy key combo");
+                    return;
+                }
+
+                DiagLog("  → COPY TRIGGERED — building text");
+                var text = BuildClipboardText(_lastElement);
+                DiagLog($"  → BuildClipboardText returned {(string.IsNullOrEmpty(text) ? "empty" : $"{text.Length} chars")}");
+                if (!string.IsNullOrEmpty(text))
+                {
+                    try
+                    {
+                        Clipboard.SetText(text);
+                        DiagLog("  → Clipboard.SetText succeeded");
+                    }
+                    catch (Exception clipEx)
+                    {
+                        DiagLog($"  → Clipboard.SetText THREW: {clipEx.Message}");
+                    }
+                    ShowCopyFeedback();
+                }
+                keyArgs.Handled = true;
             }
-            keyArgs.Handled = true;
+            else
+            {
+                // Log non-KeyEventArgs input types that arrive during key presses so we
+                // can see if raw keyboard reports are arriving instead of KeyEventArgs.
+                if (inputType.Contains("Key") || inputType.Contains("Raw"))
+                    DiagLog($"Non-KeyEventArgs keyboard input: {inputType}");
+            }
         }
-        catch { /* never throw from overlay */ }
+        catch (Exception ex)
+        {
+            DiagLog($"OnPreProcessInputForKeys THREW: {ex.Message}");
+        }
+    }
+
+    private void DiagLog(string message)
+    {
+        try
+        {
+            System.IO.File.AppendAllText(_diagLogPath,
+                $"[{DateTime.Now:HH:mm:ss.fff}] {message}\r\n");
+        }
+        catch { }
+        System.Diagnostics.Debug.WriteLine($"[UiReveal] {message}");
+    }
+
+    /// <summary>Shows a brief debug string in line2 of the overlay without disrupting normal display.</summary>
+    private void ShowDiagInOverlay(string text)
+    {
+        if (_line4 is null) return;
+        _line4.Text = $"[diag] {text}";
     }
 
     // -------------------------------------------------------------------------
