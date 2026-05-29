@@ -633,7 +633,7 @@ internal sealed class MaintenancePanelController {
         // Per-task context menu — "Edit Task"
         var taskMenu    = new ContextMenu();
         taskMenu.SetResourceReference(ContextMenu.StyleProperty, "ThemedContextMenuStyle");
-        var editTaskItem = new MenuItem { Header = "Edit Task" };
+        var editTaskItem = new MenuItem { Header = "Edit Task..." };
         editTaskItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
         editTaskItem.Click += (_, _) => {
             var ownerWindow = Window.GetWindow(_listPanel);
