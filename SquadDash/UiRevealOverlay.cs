@@ -68,6 +68,11 @@ internal sealed class UiRevealOverlay
         // so OriginalSource is set correctly for both main-window elements and
         // elements inside floating ToolTip / Popup HWNDs.
         InputManager.Current.PostProcessInput += OnPostProcessInput;
+
+        // PreProcessInput is used for key detection (same pattern as the global F12 handler)
+        // because PostProcessInput may see the event after a focused control has already
+        // handled it, and the RoutedEvent on the args may differ between the two stages.
+        InputManager.Current.PreProcessInput += OnPreProcessInputForKeys;
     }
 
     internal void Deactivate()
@@ -75,6 +80,7 @@ internal sealed class UiRevealOverlay
         if (_owner is not null)
         {
             InputManager.Current.PostProcessInput -= OnPostProcessInput;
+            InputManager.Current.PreProcessInput -= OnPreProcessInputForKeys;
             _owner = null;
         }
 
@@ -99,33 +105,7 @@ internal sealed class UiRevealOverlay
                 return;
             }
 
-            // Ctrl+C or Ctrl+Insert → copy hovered element info to clipboard.
-            if (e.StagingItem.Input is KeyEventArgs copyKey
-                && copyKey.RoutedEvent == Keyboard.PreviewKeyDownEvent
-                && _lastElement is not null)
-            {
-                var mods = Keyboard.Modifiers;
-                bool isCopy =
-                    (copyKey.Key == Key.C
-                        && mods.HasFlag(ModifierKeys.Control)
-                        && !mods.HasFlag(ModifierKeys.Shift)
-                        && !mods.HasFlag(ModifierKeys.Alt))
-                    || (copyKey.Key == Key.Insert
-                        && mods.HasFlag(ModifierKeys.Control)
-                        && !mods.HasFlag(ModifierKeys.Shift)
-                        && !mods.HasFlag(ModifierKeys.Alt));
-                if (isCopy)
-                {
-                    var text = BuildClipboardText(_lastElement);
-                    if (!string.IsNullOrEmpty(text))
-                    {
-                        try { Clipboard.SetText(text); } catch { }
-                        ShowCopyFeedback();
-                    }
-                    copyKey.Handled = true;
-                    return;
-                }
-            }
+            // Ctrl+C or Ctrl+Insert → handled via OnPreProcessInputForKeys (PreProcessInput).
 
             // Only handle plain mouse-move events (not button, not wheel).
             if (e.StagingItem.Input is not MouseEventArgs mouse
@@ -192,6 +172,42 @@ internal sealed class UiRevealOverlay
             current = VisualTreeHelper.GetParent(current);
         }
         return null;
+    }
+
+    /// <summary>
+    /// PreProcessInput handler — fires before the event is dispatched to the element tree,
+    /// so key intercepts work even when a focused RichTextBox would normally consume Ctrl+C.
+    /// </summary>
+    private void OnPreProcessInputForKeys(object sender, PreProcessInputEventArgs e)
+    {
+        try
+        {
+            if (_owner is null || _lastElement is null) return;
+            if (e.StagingItem.Input is not KeyEventArgs keyArgs) return;
+            if (keyArgs.RoutedEvent != Keyboard.PreviewKeyDownEvent) return;
+
+            var mods = Keyboard.Modifiers;
+            bool isCopy =
+                (keyArgs.Key == Key.C
+                    && mods.HasFlag(ModifierKeys.Control)
+                    && !mods.HasFlag(ModifierKeys.Shift)
+                    && !mods.HasFlag(ModifierKeys.Alt))
+                || (keyArgs.Key == Key.Insert
+                    && mods.HasFlag(ModifierKeys.Control)
+                    && !mods.HasFlag(ModifierKeys.Shift)
+                    && !mods.HasFlag(ModifierKeys.Alt));
+
+            if (!isCopy) return;
+
+            var text = BuildClipboardText(_lastElement);
+            if (!string.IsNullOrEmpty(text))
+            {
+                try { Clipboard.SetText(text); } catch { }
+                ShowCopyFeedback();
+            }
+            keyArgs.Handled = true;
+        }
+        catch { /* never throw from overlay */ }
     }
 
     // -------------------------------------------------------------------------
