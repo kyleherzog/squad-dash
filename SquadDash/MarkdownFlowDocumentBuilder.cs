@@ -108,11 +108,31 @@ internal static class MarkdownFlowDocumentBuilder {
                 continue;
             }
 
-            document.Blocks.Add(BuildParagraph(trimmed));
+            // Standard markdown: consecutive non-blank plain-text lines form one paragraph.
+            // Only a blank line creates a paragraph break.
+            var paraLines = new System.Text.StringBuilder(trimmed);
+            while (index + 1 < lines.Length) {
+                var nextTrimmed = lines[index + 1].Trim();
+                if (string.IsNullOrWhiteSpace(nextTrimmed)) break;
+                if (IsSpecialLine(nextTrimmed)) break;
+                paraLines.Append(' ').Append(nextTrimmed);
+                index++;
+            }
+            document.Blocks.Add(BuildParagraph(paraLines.ToString()));
         }
 
         return document;
     }
+
+    /// <summary>Returns true for lines that start a new markdown block and must not be
+    /// absorbed into the preceding paragraph during soft-wrap joining.</summary>
+    private static bool IsSpecialLine(string trimmed) =>
+        trimmed.StartsWith('#')        ||
+        trimmed.StartsWith("- ",  StringComparison.Ordinal) ||
+        trimmed.StartsWith("* ",  StringComparison.Ordinal) ||
+        trimmed.StartsWith("> ",  StringComparison.Ordinal) ||
+        trimmed.StartsWith("```", StringComparison.Ordinal) ||
+        IsHorizontalRule(trimmed);
 
     private static string Normalize(string markdown) {
         return (markdown ?? string.Empty)
