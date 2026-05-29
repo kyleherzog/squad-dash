@@ -8,6 +8,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using SquadDash.Screenshots;
 
 namespace SquadDash;
@@ -44,6 +45,8 @@ internal sealed class UiRevealOverlay
     private FrameworkElement? _lastElement;
     private HighlightAdorner? _activeAdorner;
     private UIElement? _activeAdornerTarget;
+    private DispatcherTimer? _copyFeedbackTimer;
+    private string? _line1SavedText;
 
     /// <summary>True while the overlay is active on a window.</summary>
     public bool IsActive => _owner is not null;
@@ -94,6 +97,34 @@ internal sealed class UiRevealOverlay
             {
                 Deactivate();
                 return;
+            }
+
+            // Ctrl+C or Ctrl+Insert → copy hovered element info to clipboard.
+            if (e.StagingItem.Input is KeyEventArgs copyKey
+                && copyKey.RoutedEvent == Keyboard.PreviewKeyDownEvent
+                && _lastElement is not null)
+            {
+                var mods = Keyboard.Modifiers;
+                bool isCopy =
+                    (copyKey.Key == Key.C
+                        && mods.HasFlag(ModifierKeys.Control)
+                        && !mods.HasFlag(ModifierKeys.Shift)
+                        && !mods.HasFlag(ModifierKeys.Alt))
+                    || (copyKey.Key == Key.Insert
+                        && mods.HasFlag(ModifierKeys.Control)
+                        && !mods.HasFlag(ModifierKeys.Shift)
+                        && !mods.HasFlag(ModifierKeys.Alt));
+                if (isCopy)
+                {
+                    var text = BuildClipboardText(_lastElement);
+                    if (!string.IsNullOrEmpty(text))
+                    {
+                        try { Clipboard.SetText(text); } catch { }
+                        ShowCopyFeedback();
+                    }
+                    copyKey.Handled = true;
+                    return;
+                }
             }
 
             // Only handle plain mouse-move events (not button, not wheel).
@@ -484,6 +515,167 @@ internal sealed class UiRevealOverlay
             return $"◈ dc: {dcType.Name} ({string.Join(", ", ifaces)})";
         }
         catch { return string.Empty; }
+    }
+
+    // -------------------------------------------------------------------------
+    // Clipboard copy
+    // -------------------------------------------------------------------------
+
+    private void ShowCopyFeedback()
+    {
+        if (_line1 is null) return;
+        _line1SavedText ??= _line1.Text;
+        _line1SavedText = _line1.Text; // capture current before overwriting
+        _line1.Text = "✓ Copied to clipboard";
+
+        if (_copyFeedbackTimer is null)
+        {
+            _copyFeedbackTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
+            _copyFeedbackTimer.Tick += (_, _) =>
+            {
+                _copyFeedbackTimer.Stop();
+                if (_line1 is not null && _line1SavedText is not null)
+                    _line1.Text = _line1SavedText;
+                _line1SavedText = null;
+            };
+        }
+
+        _copyFeedbackTimer.Stop();
+        _copyFeedbackTimer.Start();
+    }
+
+    private static readonly Dictionary<DependencyProperty, string> _dpDisplayNames = new()
+    {
+        { TextBlock.ForegroundProperty,    "Foreground"   },
+        { Control.ForegroundProperty,      "Foreground"   },
+        { Control.BackgroundProperty,      "Background"   },
+        { Border.BackgroundProperty,       "Background"   },
+        { Border.BorderBrushProperty,      "BorderBrush"  },
+        { Control.BorderBrushProperty,     "BorderBrush"  },
+        { Panel.BackgroundProperty,        "Background"   },
+        { Shape.FillProperty,              "Fill"         },
+        { Shape.StrokeProperty,            "Stroke"       },
+        { TextBlock.FontSizeProperty,      "FontSize"     },
+        { Control.FontSizeProperty,        "FontSize"     },
+        { FrameworkElement.StyleProperty,  "Style"        },
+    };
+
+    private static string BuildClipboardText(FrameworkElement element)
+    {
+        try
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("[SquadDash UI Reveal]");
+
+            if (element is ToolTip tip)
+            {
+                sb.AppendLine($"Type: ToolTip");
+                var contentType = tip.Content?.GetType().Name ?? "(none)";
+                sb.AppendLine($"ContentType: {contentType}");
+
+                var keys = new List<string>();
+                CollectAllResourceKeysInTree(tip, keys);
+                var distinct = keys.Distinct().ToList();
+                if (distinct.Count > 0)
+                    sb.AppendLine($"ResourceKeys: {string.Join(", ", distinct)}");
+            }
+            else
+            {
+                sb.AppendLine($"Type: {element.GetType().Name}");
+                sb.AppendLine($"Name: {(string.IsNullOrEmpty(element.Name) ? "(unnamed)" : element.Name)}");
+
+                // Own property → resource-key mappings
+                var ownEntries = CollectResourceKeyEntries(element);
+                if (ownEntries.Count > 0)
+                {
+                    sb.AppendLine("--- Properties ---");
+                    foreach (var (prop, key) in ownEntries)
+                        sb.AppendLine($"  {prop}: {key}");
+                }
+
+                // Style
+                var styleKey = GetStyleKey(element);
+                sb.AppendLine($"Style: {styleKey ?? "(none)"}");
+
+                // Ancestors (up to 3)
+                var ancestorLines = new List<string>();
+                var anc = VisualTreeHelper.GetParent(element) as DependencyObject;
+                for (int depth = 1; depth <= 3 && anc is not null; depth++)
+                {
+                    if (anc is FrameworkElement fe)
+                    {
+                        var entries = CollectResourceKeyEntries(fe);
+                        foreach (var (prop, key) in entries)
+                        {
+                            var feLabel = string.IsNullOrEmpty(fe.Name) ? fe.GetType().Name : $"{fe.GetType().Name} \"{fe.Name}\"";
+                            ancestorLines.Add($"  ↑{depth} {feLabel}.{prop}: {key}");
+                        }
+                    }
+                    anc = VisualTreeHelper.GetParent(anc);
+                }
+                if (ancestorLines.Count > 0)
+                {
+                    sb.AppendLine("--- Ancestor Properties ---");
+                    foreach (var line in ancestorLines)
+                        sb.AppendLine(line);
+                }
+
+                // DataContext
+                var dcLine = BuildDataContextLine(element);
+                if (!string.IsNullOrEmpty(dcLine))
+                    sb.AppendLine($"DataContext: {dcLine.Replace("◈ dc: ", "")}");
+            }
+
+            return sb.ToString().TrimEnd();
+        }
+        catch { return string.Empty; }
+    }
+
+    private static List<(string Prop, string Key)> CollectResourceKeyEntries(FrameworkElement element)
+    {
+        var result = new List<(string, string)>();
+        var seen = new HashSet<string>();
+        foreach (var dp in _dpsToCheck)
+        {
+            if (dp == FrameworkElement.StyleProperty) continue;
+            try
+            {
+                var value = element.ReadLocalValue(dp);
+                if (value == DependencyProperty.UnsetValue) continue;
+                if (!value.GetType().Name.Contains("ResourceReference", StringComparison.Ordinal)) continue;
+
+                var keyProp = value.GetType().GetProperty("ResourceKey",
+                    System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.Public   |
+                    System.Reflection.BindingFlags.NonPublic);
+                if (keyProp?.GetValue(value) is string key && !string.IsNullOrEmpty(key))
+                {
+                    var propName = _dpDisplayNames.TryGetValue(dp, out var n) ? n : dp.Name;
+                    var entryKey = $"{propName}:{key}";
+                    if (seen.Add(entryKey))
+                        result.Add((propName, key));
+                }
+            }
+            catch { }
+        }
+        return result;
+    }
+
+    private static string? GetStyleKey(FrameworkElement element)
+    {
+        try
+        {
+            var value = element.ReadLocalValue(FrameworkElement.StyleProperty);
+            if (value == DependencyProperty.UnsetValue || value is not Style style) return null;
+            var keyProp = style.GetType().GetProperty("ResourceKey",
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.Public   |
+                System.Reflection.BindingFlags.NonPublic);
+            if (keyProp?.GetValue(style) is string key && !string.IsNullOrEmpty(key))
+                return key;
+        }
+        catch { }
+        return null;
     }
 
     // -------------------------------------------------------------------------
