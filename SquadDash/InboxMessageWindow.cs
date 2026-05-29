@@ -142,6 +142,7 @@ internal sealed class InboxMessageWindow : ChromedWindow
             contextMenu.Style = (Style)Application.Current.Resources["ThemedContextMenuStyle"];
             
             var attachMenuItem = new MenuItem { Header = "Add to Chat" };
+            attachMenuItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
             attachMenuItem.Click += (_, _) =>
             {
                 var selection = _bodyViewer.Selection;
@@ -152,6 +153,16 @@ internal sealed class InboxMessageWindow : ChromedWindow
                 }
             };
             contextMenu.Items.Add(attachMenuItem);
+
+            var copyMenuItem = new MenuItem { Header = "Copy" };
+            copyMenuItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+            copyMenuItem.Click += (_, _) =>
+            {
+                var selection = _bodyViewer.Selection;
+                if (!selection.IsEmpty)
+                    Clipboard.SetText(selection.Text);
+            };
+            contextMenu.Items.Add(copyMenuItem);
 
             // Explicitly set the custom context menu and suppress default behavior
             _bodyViewer.ContextMenu = contextMenu;
