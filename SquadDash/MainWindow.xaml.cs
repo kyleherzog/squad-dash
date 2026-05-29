@@ -1099,6 +1099,14 @@ public partial class MainWindow : Window, ILiveElementLocator
                 // main transcript visible if it was hidden (e.g. user had only agent
                 // secondary panels open). We do NOT close secondary panels — the user
                 // keeps seeing what they were looking at, and the coordinator is added.
+                //
+                // However, if the user is actively viewing an agent in the main transcript
+                // area, do NOT displace it.  Let the coordinator run silently in the
+                // background; its transcript is still updated (OutputTextBox.Document) and
+                // the user can switch to it at any time by clicking the coordinator header.
+                var currentSelected = _selectedTranscriptThread ?? CoordinatorThread;
+                if (_mainTranscriptVisible && currentSelected.Kind != TranscriptThreadKind.Coordinator)
+                    return;
                 if (!_mainTranscriptVisible)
                     ShowMainTranscript();
                 SelectTranscriptThread(thread);
@@ -17687,6 +17695,14 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         var selectedThread = _selectedTranscriptThread ?? CoordinatorThread;
         if (selectedThread.Kind != TranscriptThreadKind.Coordinator)
+            return;
+
+        // Belt-and-suspenders: if the user just initiated a switch to an agent view
+        // (ApplyImmediatePrimaryTranscriptSelectionVisuals has fired but the deferred
+        // QueueDeferredPrimaryTranscriptSelection has not yet set _selectedTranscriptThread),
+        // the debounce timer could still fire and pass the guard above.  Bail here to
+        // avoid overwriting the title that was already updated for the pending agent thread.
+        if (_pendingPrimaryTranscriptVisualThread?.Kind == TranscriptThreadKind.Agent)
             return;
 
         if (_transcriptScrollViewer is null)
