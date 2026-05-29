@@ -848,23 +848,25 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
 
     /// <summary>
     /// Splits <paramref name="text"/> into (text, isConditional) segments by
-    /// resolving <c>{{#if KEY}}...{{/if}}</c> and <c>{{#unless KEY}}...{{/unless}}</c>
-    /// blocks against <see cref="_optionValues"/>. Excluded blocks are dropped.
+    /// resolving <c>{{#if EXPR}}...{{/if}}</c> and <c>{{#unless EXPR}}...{{/unless}}</c>
+    /// blocks against <see cref="_optionValues"/>. Excluded blocks are dropped entirely.
+    /// EXPR may be a bare key (<c>key</c>) or an equality test (<c>key == "value"</c>).
     /// </summary>
     private List<(string Text, bool IsConditional)> ResolveConditionalSegments(string text) {
         var result  = new List<(string, bool)>();
+        // Capture the full condition expression (everything between the verb and the closing }})
         var pattern = new Regex(
-            @"\{\{#(if|unless)\s+(\w+)\}\}(.*?)\{\{/(if|unless)\}\}",
+            @"\{\{#(if|unless)\s+([^}]+?)\s*\}\}(.*?)\{\{/(if|unless)\}\}",
             RegexOptions.Singleline | RegexOptions.IgnoreCase);
         int pos = 0;
         foreach (Match m in pattern.Matches(text)) {
             if (m.Index > pos)
                 result.Add((text[pos..m.Index], false));
-            var verb     = m.Groups[1].Value.ToLowerInvariant();
-            var key      = m.Groups[2].Value;
-            var content  = m.Groups[3].Value;
-            var truthy   = _optionValues.TryGetValue(key, out var val) && IsOptionTruthy(val);
-            var include  = (verb == "if") ? truthy : !truthy;
+            var verb    = m.Groups[1].Value.ToLowerInvariant();
+            var expr    = m.Groups[2].Value.Trim();
+            var content = m.Groups[3].Value;
+            var truthy  = EvaluateConditionExpr(expr);
+            var include = (verb == "if") ? truthy : !truthy;
             if (include)
                 result.Add((content, true));
             pos = m.Index + m.Length;
@@ -875,6 +877,31 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         if (result.Count == 0)
             result.Add((text, false));
         return result;
+    }
+
+    /// <summary>
+    /// Evaluates a condition expression against <see cref="_optionValues"/>.
+    /// Supports <c>key</c> (truthy check) and <c>key == "value"</c> / <c>key != "value"</c>.
+    /// </summary>
+    private bool EvaluateConditionExpr(string expr) {
+        // Equality: key == "value" or key == value
+        var eqMatch = Regex.Match(expr, @"^(\w+)\s*==\s*""?([^""]+)""?$");
+        if (eqMatch.Success) {
+            var key = eqMatch.Groups[1].Value;
+            var rhs = eqMatch.Groups[2].Value;
+            return _optionValues.TryGetValue(key, out var actual) &&
+                   string.Equals(actual, rhs, StringComparison.OrdinalIgnoreCase);
+        }
+        // Inequality: key != "value" or key != value
+        var neMatch = Regex.Match(expr, @"^(\w+)\s*!=\s*""?([^""]+)""?$");
+        if (neMatch.Success) {
+            var key = neMatch.Groups[1].Value;
+            var rhs = neMatch.Groups[2].Value;
+            return !_optionValues.TryGetValue(key, out var actual) ||
+                   !string.Equals(actual, rhs, StringComparison.OrdinalIgnoreCase);
+        }
+        // Simple truthy key
+        return _optionValues.TryGetValue(expr, out var val) && IsOptionTruthy(val);
     }
 
     /// <summary>
