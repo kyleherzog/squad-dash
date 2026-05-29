@@ -22,8 +22,7 @@ internal sealed class UiRevealOverlay
 {
     private static readonly DependencyProperty[] _dpsToCheck = new[]
     {
-        TextBlock.ForegroundProperty,
-        Control.ForegroundProperty,
+        TextBlock.ForegroundProperty,   // == Control.ForegroundProperty (same DP via AddOwner)
         Control.BackgroundProperty,
         Border.BackgroundProperty,
         Border.BorderBrushProperty,
@@ -31,8 +30,7 @@ internal sealed class UiRevealOverlay
         Panel.BackgroundProperty,
         Shape.FillProperty,
         Shape.StrokeProperty,
-        TextBlock.FontSizeProperty,
-        Control.FontSizeProperty,
+        TextBlock.FontSizeProperty,     // == Control.FontSizeProperty (same DP via AddOwner)
         FrameworkElement.StyleProperty,
     };
 
@@ -624,8 +622,7 @@ internal sealed class UiRevealOverlay
 
     private static readonly Dictionary<DependencyProperty, string> _dpDisplayNames = new()
     {
-        { TextBlock.ForegroundProperty,    "Foreground"   },
-        { Control.ForegroundProperty,      "Foreground"   },
+        { TextBlock.ForegroundProperty,    "Foreground"   },  // Control.ForegroundProperty is the same DP
         { Control.BackgroundProperty,      "Background"   },
         { Border.BackgroundProperty,       "Background"   },
         { Border.BorderBrushProperty,      "BorderBrush"  },
@@ -633,8 +630,7 @@ internal sealed class UiRevealOverlay
         { Panel.BackgroundProperty,        "Background"   },
         { Shape.FillProperty,              "Fill"         },
         { Shape.StrokeProperty,            "Stroke"       },
-        { TextBlock.FontSizeProperty,      "FontSize"     },
-        { Control.FontSizeProperty,        "FontSize"     },
+        { TextBlock.FontSizeProperty,      "FontSize"     },  // Control.FontSizeProperty is the same DP
         { FrameworkElement.StyleProperty,  "Style"        },
     };
 
