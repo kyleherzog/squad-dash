@@ -35,7 +35,8 @@ internal static class ToolTranscriptFormatter {
             "report_intent" when hasDisplayText => "🎯",
             "sql"           when hasDisplayText => "🗄️",
             "powershell"         when hasDisplayText => "💻",
-            "read_powershell"    when hasDisplayText => "⌛",
+            "read_powershell"    when hasDisplayText && HasDelaySuffix(descriptor.DisplayText!) => "⌛",
+            "read_powershell"    when hasDisplayText => "💻",
             "write_powershell"   when hasDisplayText => "⌨️",
             "stop_powershell"    when hasDisplayText => "⛔",
             "list_powershell"                        => "📋",
@@ -60,7 +61,7 @@ internal static class ToolTranscriptFormatter {
         "report_intent" => "🎯",
         "sql"           => "🗄️",
         "powershell"                      => "💻",
-        "read_powershell"                 => "⌛",
+        "read_powershell"                 => "💻",
         "write_powershell"                => "⌨️",
         "stop_powershell"                 => "⛔",
         "list_powershell"                 => "📋",
@@ -269,7 +270,8 @@ internal static class ToolTranscriptFormatter {
                 return true;
 
             case "read_powershell" when !string.IsNullOrWhiteSpace(descriptor.DisplayText):
-                text = BuildFixedDisplayText("⌛ ", descriptor.DisplayText!, success, outputText);
+                var readEmoji = HasDelaySuffix(descriptor.DisplayText!) ? "⌛" : "💻";
+                text = BuildFixedDisplayText(readEmoji + " ", descriptor.DisplayText!, success, outputText);
                 return true;
 
             case "write_powershell" when !string.IsNullOrWhiteSpace(descriptor.DisplayText):
@@ -464,4 +466,8 @@ internal static class ToolTranscriptFormatter {
             return candidate;
         }
     }
+
+    /// <summary>Returns true when a read_powershell display text has an appended delay suffix like "(60s)".</summary>
+    private static bool HasDelaySuffix(string displayText) =>
+        displayText.EndsWith('s') && displayText.Contains('(');
 }
