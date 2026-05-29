@@ -7462,7 +7462,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         TraceAgentCardVisualFirstRender(card, reason, Stopwatch.StartNew());
     }
 
-    private static string BuildThreadChipToolTip(TranscriptThreadState thread)
+    private static ToolTip BuildThreadChipToolTip(TranscriptThreadState thread)
     {
         var lines = new List<string> {
             thread.Title
@@ -7483,7 +7483,29 @@ public partial class MainWindow : Window, ILiveElementLocator
             lines.Add($"{requestedName} was requested but the launched agent was identified as '{actualName}'. Response may not reflect {requestedName}'s charter.");
         }
 
-        return string.Join(Environment.NewLine, lines);
+        var stack = new System.Windows.Controls.StackPanel { Margin = new Thickness(2) };
+        for (int i = 0; i < lines.Count; i++)
+        {
+            var tb = new TextBlock {
+                Text         = lines[i],
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth     = 340,
+            };
+            if (i == 0) tb.FontWeight = FontWeights.SemiBold;
+            else         tb.Margin = new Thickness(0, 2, 0, 0);
+            tb.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+            tb.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeBody");
+            stack.Children.Add(tb);
+        }
+
+        var tip = new ToolTip {
+            Content         = stack,
+            Padding         = new Thickness(8, 6, 8, 6),
+            BorderThickness = new Thickness(1),
+        };
+        tip.SetResourceReference(Control.BackgroundProperty,  "InputSurface");
+        tip.SetResourceReference(Control.BorderBrushProperty, "SubtleBorder");
+        return tip;
     }
 
     private void AppendLine(string text, Brush? color = null) =>

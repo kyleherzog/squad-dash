@@ -20,7 +20,7 @@ internal sealed class TranscriptThreadState : INotifyPropertyChanged {
     private string _statusText;
     private string _detailText;
     private string _chipLabel;
-    private string _chipToolTip;
+    private object _chipToolTip;
     private Brush _chipBackground;
     private Brush _chipBorderBrush;
     private Brush _chipForeground;
@@ -106,7 +106,7 @@ internal sealed class TranscriptThreadState : INotifyPropertyChanged {
         get => _chipLabel;
         set => SetField(ref _chipLabel, value);
     }
-    public string ChipToolTip {
+    public object ChipToolTip {
         get => _chipToolTip;
         set => SetField(ref _chipToolTip, value);
     }
