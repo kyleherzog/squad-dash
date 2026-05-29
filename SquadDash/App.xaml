@@ -958,10 +958,23 @@
                     <Setter.Value>
                         <ControlTemplate TargetType="Expander">
                             <StackPanel>
-                                <Border x:Name="HeaderBorder"
-                                        Background="Transparent"
-                                        Padding="2,2,2,2"
-                                        Cursor="Hand">
+                                <ToggleButton IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                              Background="Transparent"
+                                              BorderThickness="0"
+                                              FocusVisualStyle="{x:Null}"
+                                              Cursor="Hand"
+                                              HorizontalAlignment="Stretch"
+                                              HorizontalContentAlignment="Stretch"
+                                              Padding="2,2,2,2">
+                                    <ToggleButton.Template>
+                                        <ControlTemplate TargetType="ToggleButton">
+                                            <Border x:Name="HeaderBorder"
+                                                    Background="Transparent"
+                                                    Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
                                     <DockPanel LastChildFill="True">
                                         <Path x:Name="Arrow"
                                               DockPanel.Dock="Left"
@@ -981,8 +994,8 @@
                                                           VerticalAlignment="Center"
                                                           TextElement.FontSize="{DynamicResource FontSizeSmall}"
                                                           TextElement.Foreground="{DynamicResource LabelText}"/>
-                                    </DockPanel>
-                                </Border>
+                                     </DockPanel>
+                                </ToggleButton>
                                 <ContentPresenter x:Name="ExpandSite"
                                                   Margin="0,2,0,0"
                                                   Visibility="Collapsed"/>

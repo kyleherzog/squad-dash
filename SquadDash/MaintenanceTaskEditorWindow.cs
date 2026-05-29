@@ -529,8 +529,14 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
     }
 
     private bool IsDark() {
-        if (TryFindResource("PanelBackground") is SolidColorBrush b)
-            return b.Color.R < 128;
+        // InputSurface is the actual preview background — reliably present in both theme files.
+        if (TryFindResource("InputSurface") is SolidColorBrush b) {
+            var lum = b.Color.R * 0.299 + b.Color.G * 0.587 + b.Color.B * 0.114;
+            return lum < 128;
+        }
+        // Fallback: light label text implies dark theme.
+        if (TryFindResource("LabelText") is SolidColorBrush lt)
+            return lt.Color.R > 128;
         return false;
     }
 
@@ -873,7 +879,7 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         var baseColor = IsDark()
             ? Color.FromRgb(0xCC, 0xCC, 0xCC)   // fallback dark-theme body
             : Color.FromRgb(0x33, 0x33, 0x33);   // fallback light-theme body
-        if (Application.Current?.Resources["LabelText"] is SolidColorBrush lb)
+        if (TryFindResource("LabelText") is SolidColorBrush lb)
             baseColor = lb.Color;
         var target = IsDark() ? Color.FromRgb(255, 255, 255) : Color.FromRgb(0, 0, 0);
         // 75% toward maximum contrast so conditional text stands out clearly
