@@ -17675,8 +17675,10 @@ public partial class MainWindow : Window, ILiveElementLocator
             var scrollViewer = _transcriptScrollViewer;
             var viewportBottom = scrollViewer.VerticalOffset + scrollViewer.ViewportHeight;
 
-            // Find the last user prompt whose top edge is at or above the viewport bottom.
+            // Find the last user prompt at or above viewport bottom, and the first one below it.
+            // Using timestamps avoids fragile visual-tree checks on collapsed Expanders.
             var lastVisiblePromptTime = DateTimeOffset.MinValue;
+            var nextPromptTime = DateTimeOffset.MaxValue;
             var largestAbsoluteY = double.MinValue;
             foreach (var pe in CoordinatorThread.PromptParagraphs)
             {
@@ -17685,10 +17687,19 @@ public partial class MainWindow : Window, ILiveElementLocator
                     var rect = pe.Paragraph.ContentStart.GetCharacterRect(LogicalDirection.Forward);
                     if (rect.IsEmpty) continue;
                     var absoluteY = scrollViewer.VerticalOffset + rect.Top;
-                    if (absoluteY <= viewportBottom && absoluteY > largestAbsoluteY)
+                    if (absoluteY <= viewportBottom)
                     {
-                        largestAbsoluteY = absoluteY;
-                        lastVisiblePromptTime = pe.Timestamp;
+                        if (absoluteY > largestAbsoluteY)
+                        {
+                            largestAbsoluteY = absoluteY;
+                            lastVisiblePromptTime = pe.Timestamp;
+                        }
+                    }
+                    else
+                    {
+                        // First prompt below viewport — entries at or after this belong to unseen context.
+                        if (pe.Timestamp < nextPromptTime)
+                            nextPromptTime = pe.Timestamp;
                     }
                 }
                 catch { }
@@ -17707,13 +17718,9 @@ public partial class MainWindow : Window, ILiveElementLocator
                 if (toolEntry.StartedAt < lastVisiblePromptTime)
                     break;
 
-                // Skip: the expander is below the viewport bottom (not yet scrolled into view).
-                try
-                {
-                    var pt = toolEntry.Expander.TransformToAncestor(scrollViewer).Transform(new Point(0, 0));
-                    if (pt.Y > scrollViewer.ViewportHeight) continue;
-                }
-                catch { continue; }
+                // Skip: this entry was emitted after the first prompt below the viewport (not yet seen).
+                if (toolEntry.StartedAt >= nextPromptTime)
+                    continue;
 
                 if (toolEntry.Descriptor.ToolName == "report_intent")
                 {
