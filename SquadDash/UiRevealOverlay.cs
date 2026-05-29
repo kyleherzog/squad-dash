@@ -640,9 +640,10 @@ internal sealed class UiRevealOverlay
 
     private static string BuildClipboardText(FrameworkElement element)
     {
+        // sb is outside the try so partial output is preserved even if an exception fires.
+        var sb = new StringBuilder();
         try
         {
-            var sb = new StringBuilder();
             sb.AppendLine("[SquadDash UI Reveal]");
 
             if (element is ToolTip tip)
@@ -677,20 +678,28 @@ internal sealed class UiRevealOverlay
 
                 // Ancestors (up to 3)
                 var ancestorLines = new List<string>();
-                var anc = VisualTreeHelper.GetParent(element) as DependencyObject;
-                for (int depth = 1; depth <= 3 && anc is not null; depth++)
+                try
                 {
-                    if (anc is FrameworkElement fe)
+                    var anc = VisualTreeHelper.GetParent(element) as DependencyObject;
+                    for (int depth = 1; depth <= 3 && anc is not null; depth++)
                     {
-                        var entries = CollectResourceKeyEntries(fe);
-                        foreach (var (prop, key) in entries)
+                        if (anc is FrameworkElement fe)
                         {
-                            var feLabel = string.IsNullOrEmpty(fe.Name) ? fe.GetType().Name : $"{fe.GetType().Name} \"{fe.Name}\"";
-                            ancestorLines.Add($"  ↑{depth} {feLabel}.{prop}: {key}");
+                            var entries = CollectResourceKeyEntries(fe);
+                            foreach (var (prop, key) in entries)
+                            {
+                                var feLabel = string.IsNullOrEmpty(fe.Name) ? fe.GetType().Name : $"{fe.GetType().Name} \"{fe.Name}\"";
+                                ancestorLines.Add($"  ↑{depth} {feLabel}.{prop}: {key}");
+                            }
                         }
+                        anc = VisualTreeHelper.GetParent(anc);
                     }
-                    anc = VisualTreeHelper.GetParent(anc);
                 }
+                catch (Exception ancEx)
+                {
+                    SquadDashTrace.Write("UI", $"[UiReveal] BuildClipboardText ancestor walk threw: {ancEx.GetType().Name}: {ancEx.Message}");
+                }
+
                 if (ancestorLines.Count > 0)
                 {
                     sb.AppendLine("--- Ancestor Properties ---");
@@ -706,7 +715,14 @@ internal sealed class UiRevealOverlay
 
             return sb.ToString().TrimEnd();
         }
-        catch { return string.Empty; }
+        catch (Exception ex)
+        {
+            // Log the exception and return whatever was built so far rather than silently
+            // returning empty string — the partial output is still useful.
+            SquadDashTrace.Write("UI", $"[UiReveal] BuildClipboardText THREW {ex.GetType().Name}: {ex.Message}");
+            var partial = sb.ToString().TrimEnd();
+            return partial.Length > 0 ? partial + "\n[partial — " + ex.GetType().Name + "]" : string.Empty;
+        }
     }
 
     private static List<(string Prop, string Key)> CollectResourceKeyEntries(FrameworkElement element)
