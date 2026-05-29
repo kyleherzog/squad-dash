@@ -17685,6 +17685,10 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void ScanAndUpdateCoordinatorIntent()
     {
+        var selectedThread = _selectedTranscriptThread ?? CoordinatorThread;
+        if (selectedThread.Kind != TranscriptThreadKind.Coordinator)
+            return;
+
         if (_transcriptScrollViewer is null)
         {
             TranscriptTitleTextBlock.Text = "Coordinator";
