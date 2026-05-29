@@ -332,6 +332,82 @@ internal static class LoopMdParser {
     }
 
     /// <summary>
+    /// Like <see cref="PreprocessConditionals(string,IReadOnlyDictionary{string,string})"/> but
+    /// returns a list of <c>(text, isConditional)</c> segments instead of a single resolved string.
+    /// Segments where <c>isConditional</c> is <see langword="true"/> contain content that was
+    /// inside an included <c>{{#if}}</c> or <c>{{#unless}}</c> block — callers can render these
+    /// with a visually distinct style. Excluded blocks are dropped entirely.
+    /// </summary>
+    public static List<(string Text, bool IsConditional)> ResolveSegments(
+        string text, IReadOnlyDictionary<string, string> values)
+    {
+        var lines = text.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+        var segments  = new List<(string, bool)>();
+        var normalBuf = new List<string>();
+        var condBuf   = new List<string>();
+        bool inBlock      = false;
+        bool includeBlock = false;
+        string? blockVerb = null;
+
+        void FlushNormal() {
+            if (normalBuf.Count == 0) return;
+            segments.Add((string.Join("\n", normalBuf), false));
+            normalBuf.Clear();
+        }
+        void FlushCond() {
+            if (condBuf.Count == 0) return;
+            var joined = string.Join("\n", condBuf).Trim('\n');
+            if (!string.IsNullOrWhiteSpace(joined))
+                segments.Add((joined, true));
+            condBuf.Clear();
+        }
+
+        foreach (var line in lines)
+        {
+            if (!inBlock)
+            {
+                var m = _conditionalOpenPattern.Match(line);
+                if (m.Success)
+                {
+                    var prefix   = m.Groups[1].Value;
+                    blockVerb    = m.Groups[2].Value;
+                    var key      = m.Groups[3].Value;
+                    var expected = m.Groups[4].Value;
+                    var actual   = values.TryGetValue(key, out var v) ? v : string.Empty;
+                    var met      = string.Equals(actual, expected, StringComparison.Ordinal);
+                    includeBlock = blockVerb == "if" ? met : !met;
+                    inBlock      = true;
+                    if (!string.IsNullOrWhiteSpace(prefix))
+                        normalBuf.Add(prefix);
+                }
+                else
+                {
+                    normalBuf.Add(line);
+                }
+            }
+            else
+            {
+                var m = _conditionalClosePattern.Match(line);
+                if (m.Success && m.Groups[1].Value == blockVerb)
+                {
+                    if (includeBlock) { FlushNormal(); FlushCond(); }
+                    inBlock   = false;
+                    blockVerb = null;
+                }
+                else if (includeBlock)
+                {
+                    condBuf.Add(line);
+                }
+                // else: excluded block — discard
+            }
+        }
+
+        FlushNormal();
+
+        return segments;
+    }
+
+    /// <summary>
     /// Overload that accepts an already-resolved key→value dictionary. Use this
     /// when the caller has its own option type (e.g. <see cref="MaintenanceOption"/>).
     /// </summary>
