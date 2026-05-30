@@ -635,6 +635,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _dockingService = new PanelDockingService(
             new Dictionary<string, FrameworkElement>
             {
+                ["loop"]        = LoopPanelBorder,
                 ["tasks"]       = TasksPanelBorder,
                 ["approvals"]   = ApprovalPanelBorder,
                 ["notes"]       = NotesPanelBorder,
@@ -12347,6 +12348,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             (Border: NotesPanelBorder,       PanelId: "notes"),
             (Border: MaintenancePanelBorder, PanelId: "maintenance"),
             (Border: InboxPanelBorder,       PanelId: "inbox"),
+            (Border: LoopPanelBorder,        PanelId: "loop"),
         };
 
         foreach (var (border, panelId) in dockable)

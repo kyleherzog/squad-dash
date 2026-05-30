@@ -28,13 +28,14 @@ public sealed class DockLayout
         Name = "Default",
         Slots =
         [
-            new PanelSlot("tasks",       DockZone.Top, 0),
-            new PanelSlot("approvals",   DockZone.Top, 1),
-            new PanelSlot("inbox",       DockZone.Top, 2),
-            new PanelSlot("maintenance", DockZone.Top, 3),
-            new PanelSlot("notes",       DockZone.Top, 4),
-            new PanelSlot("health",      DockZone.Top, 5),
-            new PanelSlot("trace",       DockZone.Top, 6),
+            new PanelSlot("loop",        DockZone.Top, 0),
+            new PanelSlot("tasks",       DockZone.Top, 1),
+            new PanelSlot("approvals",   DockZone.Top, 2),
+            new PanelSlot("inbox",       DockZone.Top, 3),
+            new PanelSlot("maintenance", DockZone.Top, 4),
+            new PanelSlot("notes",       DockZone.Top, 5),
+            new PanelSlot("health",      DockZone.Top, 6),
+            new PanelSlot("trace",       DockZone.Top, 7),
         ]
     };
 }

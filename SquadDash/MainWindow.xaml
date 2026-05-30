@@ -919,7 +919,7 @@
                         </Grid>
                     </Border>
 
-                    <Border x:Name="LoopPanelBorder"
+                    <panelDocking:GripStripBorder x:Name="LoopPanelBorder"
                             Grid.Column="3"
                             Visibility="Collapsed"
                             Margin="14,0,0,0"
@@ -1054,7 +1054,7 @@
                                                 Visibility="Collapsed" />
                                 </ScrollViewer>
                             </DockPanel>
-                        </Border>
+                        </panelDocking:GripStripBorder>
 
                     <!-- Loop "not configured" flyout — shown below StartLoopButton when loop.md frontmatter is missing -->
                     <Popup x:Name="_loopConfigFlyout"

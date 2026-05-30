@@ -12,6 +12,7 @@ internal static class DockingMapBuilder
     private static readonly Dictionary<string, string> PanelLabels =
         new(StringComparer.OrdinalIgnoreCase)
         {
+            ["loop"]        = "Loop",
             ["tasks"]       = "Tasks",
             ["approvals"]   = "Aprvl",
             ["notes"]       = "Notes",

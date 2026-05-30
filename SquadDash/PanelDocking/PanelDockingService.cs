@@ -32,6 +32,7 @@ internal sealed class PanelDockingService
     // Maps each dockable panel ID to its column index within TopZonePanelsGrid.
     private static readonly Dictionary<string, int> TopZoneColumnMap = new(StringComparer.OrdinalIgnoreCase)
     {
+        ["loop"]        = 3,
         ["tasks"]       = 4,
         ["approvals"]   = 6,
         ["notes"]       = 7,
