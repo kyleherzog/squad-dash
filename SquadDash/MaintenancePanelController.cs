@@ -417,6 +417,8 @@ internal sealed class MaintenancePanelController {
             btn.SetResourceReference(Button.StyleProperty,      "FlatButtonStyle");
             btn.SetResourceReference(Button.FontSizeProperty,   "FontSizeSmall");
             btn.SetResourceReference(Button.ForegroundProperty, "SubtleText");
+            var capturedPath = representative;
+            btn.Click += (_, _) => _openInMarkdownEditor(capturedPath);
             content.Children.Add(btn);
         }
 
