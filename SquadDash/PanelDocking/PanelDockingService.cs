@@ -185,6 +185,9 @@ internal sealed class PanelDockingService
         }
 
         // Cross-zone move — update data model.
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"MovePanel: {panelId} {sourceZone} → {targetZone} (requestedOrder={targetOrder})");
+
         var slots = CurrentLayout.Slots
             .Where(s => !string.Equals(s.PanelId, panelId, StringComparison.OrdinalIgnoreCase))
             .ToList();
@@ -251,13 +254,31 @@ internal sealed class PanelDockingService
 
         // Collapse source zone if it is now empty.
         if (sourceZone == DockZone.Left && !ZoneHasPanels(DockZone.Left))
+        {
+            SquadDashTrace.Write(TraceCategory.Docking, $"MovePanel: Left zone now empty after moving {panelId} out — collapsing");
             CollapseZone(_leftZoneColumn!, _leftSplitterColumn!, _leftZoneScrollViewer!, _leftZoneSplitter!);
+        }
         else if (sourceZone == DockZone.Right && !ZoneHasPanels(DockZone.Right))
+        {
+            SquadDashTrace.Write(TraceCategory.Docking, $"MovePanel: Right zone now empty after moving {panelId} out — collapsing");
             CollapseZone(_rightZoneColumn!, _rightSplitterColumn!, _rightZoneScrollViewer!, _rightZoneSplitter!);
+        }
         else if (sourceZone == DockZone.Left2 && !ZoneHasPanels(DockZone.Left2))
+        {
+            SquadDashTrace.Write(TraceCategory.Docking, $"MovePanel: Left2 zone now empty after moving {panelId} out — collapsing");
             CollapseZone(_left2ZoneColumn!, _left2SplitterColumn!, _left2ZoneScrollViewer!, _left2ZoneSplitter!);
+        }
         else if (sourceZone == DockZone.Right2 && !ZoneHasPanels(DockZone.Right2))
+        {
+            SquadDashTrace.Write(TraceCategory.Docking, $"MovePanel: Right2 zone now empty after moving {panelId} out — collapsing");
             CollapseZone(_right2ZoneColumn!, _right2SplitterColumn!, _right2ZoneScrollViewer!, _right2ZoneSplitter!);
+        }
+        else if (sourceZone is DockZone.Left or DockZone.Right or DockZone.Left2 or DockZone.Right2)
+        {
+            int remaining = CurrentLayout.Slots.Count(s => s.Zone == sourceZone);
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"MovePanel: {sourceZone} still has {remaining} panel(s) after moving {panelId} — not collapsing");
+        }
     }
 
     private bool ZoneHasPanels(DockZone zone) =>
@@ -284,7 +305,21 @@ internal sealed class PanelDockingService
         if (slot is null || slot.Zone == DockZone.Top) return;
 
         var (zoneList, zoneGrid, scrollViewer) = GetZoneContext(slot.Zone);
-        if (zoneList is null || zoneGrid is null || zoneList.Count == 0) return;
+
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"OnPanelVisibilityChanged: {panelId} visible={visible} zone={slot.Zone} " +
+            $"zoneList=[{(zoneList is null ? "null" : string.Join(",", zoneList.Select(e =>
+            {
+                var id = _panelRegistry.FirstOrDefault(kv => kv.Value == e).Key ?? "?";
+                return $"{id}({(e.Visibility == Visibility.Collapsed ? "hidden" : "vis")})";
+            })))}]");
+
+        if (zoneList is null || zoneGrid is null || zoneList.Count == 0)
+        {
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"OnPanelVisibilityChanged: early-exit — zoneList null/empty for {panelId} zone={slot.Zone}");
+            return;
+        }
 
         var (col, splCol, sv, spl) = GetZoneColumnContext(slot.Zone);
 
@@ -298,6 +333,10 @@ internal sealed class PanelDockingService
             var remaining = zoneList
                 .Where(el => el.Visibility != Visibility.Collapsed)
                 .ToList();
+
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"OnPanelVisibilityChanged: hiding {panelId} — remaining visible={remaining.Count}/{zoneList.Count} " +
+                $"colWidth={col?.Width.Value:F0} willCollapse={remaining.Count == 0}");
 
             if (remaining.Count == 0)
             {
@@ -321,6 +360,8 @@ internal sealed class PanelDockingService
                             weights[p] = cur + hiddenWeight * (cur / remainingTotal);
                         }
                     }
+                    SquadDashTrace.Write(TraceCategory.Docking,
+                        $"OnPanelVisibilityChanged: redistributed hiddenWeight={hiddenWeight:F2} among {remaining.Count} survivor(s)");
                 }
                 RebuildZoneGrid(zoneGrid, remaining, scrollViewer as FrameworkElement, weights);
             }
@@ -328,11 +369,15 @@ internal sealed class PanelDockingService
         else
         {
             // Panel is being shown.  Re-expand zone column if it was collapsed.
-            if (col is not null && col.Width.IsAbsolute && col.Width.Value == 0)
+            bool wasCollapsed = col is not null && col.Width.IsAbsolute && col.Width.Value == 0;
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"OnPanelVisibilityChanged: showing {panelId} zone={slot.Zone} colWidth={col?.Width.Value:F0} wasCollapsed={wasCollapsed}");
+
+            if (wasCollapsed)
             {
                 double width = _panelRegistry.TryGetValue(panelId, out var shownEl) && shownEl.ActualWidth > 0
                     ? shownEl.ActualWidth : 280;
-                col.Width    = new GridLength(width);
+                col!.Width    = new GridLength(width);
                 splCol!.Width = new GridLength(5);
                 sv!.Visibility  = Visibility.Visible;
                 spl!.Visibility = Visibility.Visible;
@@ -536,13 +581,21 @@ internal sealed class PanelDockingService
         UIElement splitter,
         FrameworkElement arrivedPanel)
     {
-        if (zoneCol.Width.IsAbsolute && zoneCol.Width.Value == 0)
+        bool wasCollapsed = zoneCol.Width.IsAbsolute && zoneCol.Width.Value == 0;
+        if (wasCollapsed)
         {
             double width = arrivedPanel.ActualWidth > 0 ? arrivedPanel.ActualWidth : 280;
             zoneCol.Width = new GridLength(width);
             splitterCol.Width = new GridLength(5);
             scrollViewer.Visibility = Visibility.Visible;
             splitter.Visibility = Visibility.Visible;
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"ExpandZone: was collapsed → expanded to w={width:F0}");
+        }
+        else
+        {
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"ExpandZone: already expanded (w={zoneCol.Width.Value:F0}) — no change");
         }
     }
 
@@ -552,6 +605,8 @@ internal sealed class PanelDockingService
         UIElement scrollViewer,
         UIElement splitter)
     {
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"CollapseZone: collapsing (was w={zoneCol.Width.Value:F0})");
         zoneCol.Width = new GridLength(0);
         splitterCol.Width = new GridLength(0);
         scrollViewer.Visibility = Visibility.Collapsed;
