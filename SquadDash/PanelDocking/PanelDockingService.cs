@@ -668,7 +668,17 @@ internal sealed class PanelDockingService
             Rect neighborRect = GetInnerNeighborRect(zone);
             if (!neighborRect.IsEmpty)
             {
-                double x = isRightSide ? neighborRect.Right : neighborRect.Left - StripWidth;
+                // For inner zones (Left, Right) the neighbor is the center grid — place the strip
+                // just outside it (toward the window edge).
+                // For outer zones (Left2, Right2) the neighbor is the Left/Right scroll-viewer,
+                // whose outer edge is already at the window boundary.  Overlap its outer 64px so
+                // the strip is always on-screen.
+                double x = zone switch
+                {
+                    DockZone.Left2  => neighborRect.Left,
+                    DockZone.Right2 => neighborRect.Right - StripWidth,
+                    _               => isRightSide ? neighborRect.Right : neighborRect.Left - StripWidth,
+                };
                 return new Rect(x, neighborRect.Top, StripWidth, neighborRect.Height);
             }
             return Rect.Empty;
