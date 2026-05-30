@@ -56,7 +56,7 @@ internal static class QuickReplyRoutePresentation {
         var normalizedMode = Normalize(route.RouteMode);
 
         if (string.Equals(normalizedMode, "draft", StringComparison.OrdinalIgnoreCase))
-            return "Pre-fill draft (won't send)";
+            return "✏️ Pre-fill draft — won't send immediately";
 
         return string.IsNullOrWhiteSpace(normalizedLabel)
             ? "Handled by Coordinator"

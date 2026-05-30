@@ -215,9 +215,10 @@ internal sealed class InboxMessageWindow : ChromedWindow
         InboxMessage msg,
         Action<InboxAction, InboxMessage> onActionClicked)
     {
+        var isDraft = string.Equals(action.RouteMode, "draft", StringComparison.OrdinalIgnoreCase);
         var btn = new Button
         {
-            Content         = action.Label,
+            Content         = isDraft ? $"✏️ {action.Label}" : action.Label,
             Margin          = new Thickness(0, 0, 8, 8),
             Padding         = new Thickness(10, 4, 10, 4),
             BorderThickness = new Thickness(1),

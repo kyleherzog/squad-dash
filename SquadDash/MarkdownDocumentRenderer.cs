@@ -484,8 +484,9 @@ internal sealed class MarkdownDocumentRenderer {
         foreach (var routeDecision in routeDecisions) {
             var option = routeDecision.Option.Label;
             var routedQuickReply = routeDecision.Decision;
+            var isDraft = string.Equals(routedQuickReply.RouteMode, "draft", StringComparison.OrdinalIgnoreCase);
             var button = new Button {
-                Content = option,
+                Content = isDraft ? $"✏️ {option}" : option,
                 Tag = new QuickReplyButtonPayload(
                     entry,
                     option,

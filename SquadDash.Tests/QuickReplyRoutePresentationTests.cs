@@ -84,7 +84,7 @@ internal sealed class QuickReplyRoutePresentationTests {
         var toolTip = QuickReplyRoutePresentation.BuildButtonToolTip(
             new QuickReplyRoutePresentation.RouteInfo("draft", null, null));
 
-        Assert.That(toolTip, Is.EqualTo("Pre-fill draft (won't send)"));
+        Assert.That(toolTip, Is.EqualTo("✏️ Pre-fill draft — won't send immediately"));
     }
 
     [Test]
