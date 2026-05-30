@@ -26,9 +26,9 @@ public sealed class GripStripBorder : Border
         DrawGripStrip(dc);
     }
 
-    // GripHeight = 80% of corner radius: covers the arc but leaves the flat
-    // content area untouched so panel controls can render without interference.
-    private double GripHeight => CornerRadius.TopLeft * 0.8;
+    // GripHeight is capped at 8 px: a thin decorative strip that stays well
+    // inside the rounded-corner arc and doesn't push panel content down.
+    private double GripHeight => Math.Min(CornerRadius.TopLeft * 0.5, 8.0);
 
     private void DrawGripStrip(DrawingContext dc)
     {
