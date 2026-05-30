@@ -89,7 +89,6 @@ internal sealed class DockingMapWindow : Window
     {
         var btn = new Button
         {
-            Content   = slot.Label,
             Width     = slot.Width,
             Height    = slot.Height,
             IsEnabled = !slot.IsSourcePanel,
