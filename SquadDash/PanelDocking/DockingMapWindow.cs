@@ -159,6 +159,9 @@ internal sealed class DockingMapWindow : Window
         _previewOverlay!.Height = Math.Max(screenRect.Height, 1);
         if (!_previewOverlay.IsVisible)
             _previewOverlay.Show();
+        // Re-assert topmost so the docking map stays above the preview overlay.
+        Topmost = false;
+        Topmost = true;
     }
 
     private void HidePreview() => _previewOverlay?.Hide();
@@ -169,8 +172,10 @@ internal sealed class DockingMapWindow : Window
 
         var previewBorder = new Border
         {
-            Background   = _hoverBrush,
-            CornerRadius = new CornerRadius(6),
+            Background      = _hoverBrush,
+            BorderBrush     = DeriveBorderBrush(_hoverBrush),
+            BorderThickness = new Thickness(2),
+            CornerRadius    = new CornerRadius(6),
         };
 
         _previewOverlay = new Window
@@ -185,6 +190,59 @@ internal sealed class DockingMapWindow : Window
             WindowStartupLocation = WindowStartupLocation.Manual,
             Content               = previewBorder,
         };
+    }
+
+    /// <summary>
+    /// Derives a border brush from the fill brush — same hue, but shifted toward
+    /// higher contrast against the background (brighter in dark theme, darker in light theme).
+    /// </summary>
+    private static SolidColorBrush? DeriveBorderBrush(Brush? fillBrush)
+    {
+        if (fillBrush is not SolidColorBrush scb) return null;
+        var c = scb.Color;
+        var (h, s, l) = RgbToHsl(c);
+        double perceivedL = (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B) / 255.0;
+        double newL = perceivedL < 0.45
+            ? Math.Min(l + 0.30, 0.95)   // dark theme: brighter
+            : Math.Max(l - 0.25, 0.05);  // light theme: darker
+        double newS = Math.Min(s + 0.10, 1.0);
+        return new SolidColorBrush(HslToRgb(h, newS, newL, 210));
+    }
+
+    private static (double H, double S, double L) RgbToHsl(Color c)
+    {
+        double r = c.R / 255.0, g = c.G / 255.0, b = c.B / 255.0;
+        double max = Math.Max(r, Math.Max(g, b));
+        double min = Math.Min(r, Math.Min(g, b));
+        double l   = (max + min) / 2.0;
+        if (max == min) return (0, 0, l);
+        double d = max - min;
+        double s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        double h;
+        if      (max == r) h = (g - b) / d + (g < b ? 6 : 0);
+        else if (max == g) h = (b - r) / d + 2;
+        else               h = (r - g) / d + 4;
+        return (h / 6.0, s, l);
+    }
+
+    private static Color HslToRgb(double h, double s, double l, byte a = 255)
+    {
+        if (s == 0) { byte v = (byte)(l * 255); return Color.FromArgb(a, v, v, v); }
+        double q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        double p = 2 * l - q;
+        return Color.FromArgb(a,
+            (byte)(Hue2Rgb(p, q, h + 1.0 / 3) * 255),
+            (byte)(Hue2Rgb(p, q, h)            * 255),
+            (byte)(Hue2Rgb(p, q, h - 1.0 / 3) * 255));
+    }
+
+    private static double Hue2Rgb(double p, double q, double t)
+    {
+        if (t < 0) t += 1; if (t > 1) t -= 1;
+        if (t < 1.0 / 6) return p + (q - p) * 6 * t;
+        if (t < 1.0 / 2) return q;
+        if (t < 2.0 / 3) return p + (q - p) * (2.0 / 3 - t) * 6;
+        return p;
     }
 
     private static Brush GetRes(ResourceDictionary r, string key, Brush fallback) =>
