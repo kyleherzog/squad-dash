@@ -23,8 +23,8 @@ internal static class DockingMapBuilder
     // Sizing constants
     private const double ColSlotWidth      = 48;
     private const double ColSlotHeight     = 48;
-    private const double TopSlotWidth      = 64;
-    private const double TopSlotHeight     = 32;
+    private const double TopSlotWidth      = 48;
+    private const double TopSlotHeight     = 72;
     private const double SlotGap           = 4;
     private const double ZoneGutter        = 8;
     private const double PopupPadding      = 8;
