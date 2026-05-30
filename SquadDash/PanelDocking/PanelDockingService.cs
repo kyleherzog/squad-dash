@@ -658,20 +658,32 @@ internal sealed class PanelDockingService
         if (panelsInZone.Count == 0)
         {
             // Empty zone — 64px wide strip at the column's near screen edge.
-            // Try the scroll-viewer first; fall back to the zone grid which is always present.
-            FrameworkElement? anchor =
-                (container is FrameworkElement cfeA && cfeA.IsVisible) ? cfeA :
-                (zoneGrid   is FrameworkElement cfeG && cfeG.IsVisible) ? cfeG :
-                null;
+            // The scroll-viewer and zone grid are Width=0/Collapsed when empty, so anchor off
+            // _topZoneGrid (always visible) for the Y/height, and use its left or right edge for X.
+            const double StripWidth = 64;
 
+            if (_topZoneGrid is not null)
+            {
+                var tgr = GetScreenRect(_topZoneGrid);
+                if (!tgr.IsEmpty)
+                {
+                    double x = isRightSide ? tgr.Right : tgr.Left - StripWidth;
+                    return new Rect(x, tgr.Top, StripWidth, tgr.Height);
+                }
+            }
+
+            // Last-resort: try the (collapsed) scroll-viewer or zone grid directly.
+            FrameworkElement? anchor =
+                (container is FrameworkElement cfeA && cfeA.IsVisible && cfeA.ActualWidth > 0) ? cfeA :
+                (zoneGrid   is FrameworkElement cfeG && cfeG.IsVisible && cfeG.ActualWidth > 0) ? cfeG :
+                null;
             if (anchor is not null)
             {
                 var r = GetScreenRect(anchor);
                 if (!r.IsEmpty)
                 {
-                    const double StripWidth = 64;
-                    double x = isRightSide ? r.Right - StripWidth : r.Left;
-                    return new Rect(x, r.Top, StripWidth, r.Height);
+                    double x2 = isRightSide ? r.Right - StripWidth : r.Left;
+                    return new Rect(x2, r.Top, StripWidth, r.Height);
                 }
             }
             return Rect.Empty;
