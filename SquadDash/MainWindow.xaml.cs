@@ -429,6 +429,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private string? _lastAgentImageFolder;
     private ScrollViewer? _transcriptScrollViewer;
     private DispatcherTimer? _coordinatorIntentDebounceTimer;
+    private readonly Dictionary<string, DispatcherTimer> _agentIntentDebounceTimers = new();
 
     // ── Doc source find-in-source bar state ────────────────────────────────────
     private Border? _docSourceFindBar;
@@ -17635,6 +17636,23 @@ public partial class MainWindow : Window, ILiveElementLocator
             catch (Exception ex) { HandleUiCallbackException("SecondaryPanel.PreviewMouseWheel", ex); }
         };
 
+        // Refresh agent intent label on scroll so title reflects the last visible intent.
+        rtb.Loaded += (_, _) =>
+        {
+            try
+            {
+                if (rtb.Template?.FindName("PART_ContentHost", rtb) is ScrollViewer sv)
+                {
+                    sv.ScrollChanged += (_, e) =>
+                    {
+                        try { if (e.VerticalChange != 0) RestartAgentIntentDebounce(thread); }
+                        catch (Exception ex) { HandleUiCallbackException("SecondaryPanel.ScrollChanged", ex); }
+                    };
+                }
+            }
+            catch (Exception ex) { HandleUiCallbackException("SecondaryPanel.Loaded.ScrollWire", ex); }
+        };
+
         if (thread.Document.Parent is RichTextBox currentOwner && currentOwner != rtb)
             currentOwner.Document = CreateEmptyTranscriptDocument();
         rtb.Document = thread.Document;
@@ -17741,7 +17759,23 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void ApplySecondaryTranscriptTitleFit(SecondaryTranscriptEntry entry)
     {
-        var (baseText, relativeTime) = BuildSecondaryTranscriptTitleParts(entry.Agent, entry.Thread);
+        var displayName = AbbreviateAgentName(
+            AgentThreadRegistry.ResolveSecondaryTranscriptDisplayName(entry.Thread, entry.Agent.Name));
+
+        // Prefer a report_intent tool entry (bottommost visible, mirroring coordinator behaviour)
+        // over the thread-level LatestIntent so the timestamp reflects the actual tool call.
+        var (scannedIntent, intentTimestamp) = ScanAgentReportIntent(entry);
+        string baseText;
+        string relativeTime;
+        if (!string.IsNullOrWhiteSpace(scannedIntent) && intentTimestamp.HasValue)
+        {
+            baseText = $"{displayName} — {scannedIntent}";
+            relativeTime = FormatRelativeTime(intentTimestamp.Value);
+        }
+        else
+        {
+            (baseText, relativeTime) = BuildSecondaryTranscriptTitleParts(entry.Agent, entry.Thread);
+        }
         var fullText = !string.IsNullOrWhiteSpace(relativeTime)
             ? $"{baseText}  ·  {relativeTime}"
             : baseText;
@@ -17948,6 +17982,86 @@ public partial class MainWindow : Window, ILiveElementLocator
         }
         _coordinatorIntentDebounceTimer.Stop();
         _coordinatorIntentDebounceTimer.Start();
+    }
+
+    /// <summary>
+    /// Scans <see cref="_agentThreadRegistry"/> for <c>report_intent</c> tool entries that
+    /// belong to the given secondary-transcript entry's thread and returns the
+    /// bottommost-visible one's intent text and timestamp.  Mirrors the coordinator's visual
+    /// scan so the header reflects what the user is currently reading.
+    /// </summary>
+    private (string? Intent, DateTimeOffset? Timestamp) ScanAgentReportIntent(SecondaryTranscriptEntry entry)
+    {
+        // Obtain the inner ScrollViewer so we can check visual position.
+        var scrollViewer = entry.TranscriptBox.IsLoaded
+            ? entry.TranscriptBox.Template?.FindName("PART_ContentHost", entry.TranscriptBox) as ScrollViewer
+            : null;
+
+        string? foundIntent = null;
+        DateTimeOffset? foundTimestamp = null;
+        double bestY = double.MinValue;
+
+        foreach (var toolEntry in _agentThreadRegistry.ToolEntries.Values)
+        {
+            if (toolEntry.Turn.OwnerThread != entry.Thread) continue;
+            if (toolEntry.Descriptor.ToolName != "report_intent") continue;
+
+            try
+            {
+                if (!toolEntry.Expander.IsVisible) continue;
+
+                if (scrollViewer is not null)
+                {
+                    var pos = toolEntry.Expander.TranslatePoint(new Point(0, 0), scrollViewer);
+                    var entryBottom = pos.Y + toolEntry.Expander.ActualHeight;
+                    // At least partially on screen.
+                    if (pos.Y < scrollViewer.ViewportHeight && entryBottom > 0)
+                    {
+                        if (pos.Y > bestY)
+                        {
+                            bestY = pos.Y;
+                            foundIntent = toolEntry.Descriptor.DisplayText ?? toolEntry.Descriptor.Intent;
+                            foundTimestamp = toolEntry.StartedAt;
+                        }
+                    }
+                }
+                else
+                {
+                    // Scroll viewer not yet available — fall back to most recent by timestamp.
+                    if (!foundTimestamp.HasValue || toolEntry.StartedAt > foundTimestamp.Value)
+                    {
+                        foundIntent = toolEntry.Descriptor.DisplayText ?? toolEntry.Descriptor.Intent;
+                        foundTimestamp = toolEntry.StartedAt;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        return (foundIntent, foundTimestamp);
+    }
+
+    private void RestartAgentIntentDebounce(TranscriptThreadState thread)
+    {
+        if (!_agentIntentDebounceTimers.TryGetValue(thread.ThreadId, out var timer))
+        {
+            timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+            timer.Tick += (_, _) =>
+            {
+                try
+                {
+                    timer.Stop();
+                    RefreshSecondaryTranscriptTitle(thread);
+                }
+                catch (Exception ex)
+                {
+                    HandleUiCallbackException("AgentIntentDebounce.Tick", ex);
+                }
+            };
+            _agentIntentDebounceTimers[thread.ThreadId] = timer;
+        }
+        timer.Stop();
+        timer.Start();
     }
 
     private void TranscriptTitleDockPanel_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -21552,6 +21666,10 @@ public partial class MainWindow : Window, ILiveElementLocator
         // Refresh the coordinator intent label when a new tool entry arrives for it.
         if (entry.Turn.OwnerThread.Kind == TranscriptThreadKind.Coordinator)
             RestartCoordinatorIntentDebounce();
+        // Refresh the agent secondary-transcript header when a report_intent arrives.
+        else if (entry.Turn.OwnerThread.Kind == TranscriptThreadKind.Agent &&
+                 string.Equals(entry.Descriptor.ToolName, "report_intent", StringComparison.OrdinalIgnoreCase))
+            RestartAgentIntentDebounce(entry.Turn.OwnerThread);
 
         expander.ContextMenu = CreateToolBlockContextMenu(entry);
         headerPanel.ContextMenu = CreateThinkingContextMenu(block.Turn);
