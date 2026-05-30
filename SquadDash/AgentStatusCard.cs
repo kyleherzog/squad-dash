@@ -205,8 +205,7 @@ internal sealed class AgentStatusCard : INotifyPropertyChanged, IHaveUniqueName 
         : _accentBrush;
 
     public Brush EffectiveSpinnerAccentBrush =>
-        _isDarkTheme && IsDynamicAgent ? DarkDynamicAccentBrush
-        : _isDarkTheme ? _darkSpinnerAccentBrush
+        _isDarkTheme ? _darkSpinnerAccentBrush
         : _lightSpinnerAccentBrush;
 
     public string AccentColorHex {
