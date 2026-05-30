@@ -12371,8 +12371,12 @@ public partial class MainWindow : Window, ILiveElementLocator
                 {
                     var mousePos    = System.Windows.Input.Mouse.GetPosition(this);
                     var screenPoint = PointToScreen(mousePos);
+                    var visibleIds  = dockable
+                        .Where(d => d.Border.Visibility == Visibility.Visible)
+                        .Select(d => d.PanelId)
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
                     var viewModel   = SquadDash.PanelDocking.DockingMapBuilder.BuildDockingMap(
-                        id, _dockingService.CurrentLayout);
+                        id, _dockingService.CurrentLayout, visibleIds);
                     var mapWindow = new SquadDash.PanelDocking.DockingMapWindow(
                         viewModel,
                         _dockingService,

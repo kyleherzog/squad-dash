@@ -23,8 +23,8 @@ internal static class DockingMapBuilder
     // Sizing constants
     private const double ColSlotWidth      = 48;
     private const double ColSlotHeight     = 48;
-    private const double TopSlotWidth      = 48;
-    private const double TopSlotHeight     = 72;
+    private const double TopSlotWidth      = 40;
+    private const double TopSlotHeight     = 50;
     private const double SlotGap           = 4;
     private const double ZoneGutter        = 8;
     private const double PopupPadding      = 8;
@@ -35,16 +35,19 @@ internal static class DockingMapBuilder
     /// </summary>
     internal static DockingMapViewModel BuildDockingMap(
         string sourcePanelId,
-        DockLayout currentLayout)
+        DockLayout currentLayout,
+        IReadOnlySet<string>? visiblePanelIds = null)
     {
         var allSlots = new List<SlotButtonViewModel>();
 
-        // Partition panels by zone, ordered by their Order field
-        var topPanels    = PanelsInZone(currentLayout, DockZone.Top);
-        var leftPanels   = PanelsInZone(currentLayout, DockZone.Left);
-        var rightPanels  = PanelsInZone(currentLayout, DockZone.Right);
-        var left2Panels  = PanelsInZone(currentLayout, DockZone.Left2);
-        var right2Panels = PanelsInZone(currentLayout, DockZone.Right2);
+        // Partition panels by zone, ordered by their Order field.
+        // Filter to only visible panels so the map reflects what the user actually sees.
+        // The source panel is always included (user clicked its grip, so it is visible).
+        var topPanels    = FilterZone(PanelsInZone(currentLayout, DockZone.Top),    sourcePanelId, visiblePanelIds);
+        var leftPanels   = FilterZone(PanelsInZone(currentLayout, DockZone.Left),   sourcePanelId, visiblePanelIds);
+        var rightPanels  = FilterZone(PanelsInZone(currentLayout, DockZone.Right),  sourcePanelId, visiblePanelIds);
+        var left2Panels  = FilterZone(PanelsInZone(currentLayout, DockZone.Left2),  sourcePanelId, visiblePanelIds);
+        var right2Panels = FilterZone(PanelsInZone(currentLayout, DockZone.Right2), sourcePanelId, visiblePanelIds);
 
         bool sourceInTop    = topPanels.Any(p => Same(p, sourcePanelId));
         bool sourceInLeft   = leftPanels.Any(p => Same(p, sourcePanelId));
@@ -185,6 +188,14 @@ internal static class DockingMapBuilder
               .Select(s => s.PanelId)
               .ToList();
 
+    private static List<string> FilterZone(
+        List<string> panels,
+        string sourcePanelId,
+        IReadOnlySet<string>? visiblePanelIds) =>
+        visiblePanelIds is null
+            ? panels
+            : panels.Where(p => visiblePanelIds.Contains(p) || Same(p, sourcePanelId)).ToList();
+
     private static bool Same(string panelId, string sourcePanelId) =>
         string.Equals(panelId, sourcePanelId, StringComparison.OrdinalIgnoreCase);
 
@@ -239,11 +250,14 @@ internal static class DockingMapBuilder
 
         // Rule B (sourceInZone) or Rule C (!sourceInZone)
         int buttonCount = sourceInZone ? zonePanels.Count : zonePanels.Count + 1;
-        double totalH   = buttonCount * slotH + Math.Max(0, buttonCount - 1) * SlotGap;
 
-        // Center the stack vertically in the available zone height
-        double startY = zoneY + Math.Max(0, (zoneAvailableHeight - totalH) / 2);
-        double curY   = startY;
+        // Stretch slots to fill the full available height (equal share each)
+        double effectiveSlotH = buttonCount > 0
+            ? (zoneAvailableHeight - Math.Max(0, buttonCount - 1) * SlotGap) / buttonCount
+            : slotH;
+        effectiveSlotH = Math.Max(effectiveSlotH, slotH); // never smaller than the nominal size
+
+        double curY = zoneY;
 
         for (int i = 0; i < zonePanels.Count; i++)
         {
@@ -256,11 +270,11 @@ internal static class DockingMapBuilder
                 X:               zoneX,
                 Y:               curY,
                 Width:           slotW,
-                Height:          slotH,
+                Height:          effectiveSlotH,
                 TargetZone:      zone,
                 TargetOrder:     i,
                 SourcePanelId:   sourcePanelId));
-            curY += slotH + SlotGap;
+            curY += effectiveSlotH + SlotGap;
         }
 
         if (!sourceInZone)
@@ -273,7 +287,7 @@ internal static class DockingMapBuilder
                 X:               zoneX,
                 Y:               curY,
                 Width:           slotW,
-                Height:          slotH,
+                Height:          effectiveSlotH,
                 TargetZone:      zone,
                 TargetOrder:     zonePanels.Count,
                 SourcePanelId:   sourcePanelId));
