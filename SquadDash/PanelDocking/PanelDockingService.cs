@@ -643,26 +643,47 @@ internal sealed class PanelDockingService
             _               => null,
         };
 
+        // When the scroll-viewer is collapsed (empty column), fall back to the zone's Grid panel.
+        Grid? zoneGrid = zone switch
+        {
+            DockZone.Left   => _leftZonePanel,
+            DockZone.Right  => _rightZonePanel,
+            DockZone.Left2  => _left2ZonePanel,
+            DockZone.Right2 => _right2ZonePanel,
+            _               => null,
+        };
+
+        bool isRightSide = zone == DockZone.Right || zone == DockZone.Right2;
+
         if (panelsInZone.Count == 0)
         {
-            // Empty zone — 64px wide strip at the edge matching the column's screen side.
-            if (container is FrameworkElement cfe && cfe.IsVisible)
+            // Empty zone — 64px wide strip at the column's near screen edge.
+            // Try the scroll-viewer first; fall back to the zone grid which is always present.
+            FrameworkElement? anchor =
+                (container is FrameworkElement cfeA && cfeA.IsVisible) ? cfeA :
+                (zoneGrid   is FrameworkElement cfeG && cfeG.IsVisible) ? cfeG :
+                null;
+
+            if (anchor is not null)
             {
-                var r = GetScreenRect(cfe);
-                if (r.IsEmpty) return r;
-                const double StripWidth = 64;
-                bool isRightSide = zone == DockZone.Right || zone == DockZone.Right2;
-                double x = isRightSide ? r.Right - StripWidth : r.Left;
-                return new Rect(x, r.Top, StripWidth, r.Height);
+                var r = GetScreenRect(anchor);
+                if (!r.IsEmpty)
+                {
+                    const double StripWidth = 64;
+                    double x = isRightSide ? r.Right - StripWidth : r.Left;
+                    return new Rect(x, r.Top, StripWidth, r.Height);
+                }
             }
             return Rect.Empty;
         }
 
         // Get the column's bounding rect (horizontal bounds + total height).
-        // Prefer the container scroll-viewer; fall back to the first panel's rect.
+        // Prefer the container scroll-viewer; fall back to zone grid then to first panel's rect.
         Rect colRect = Rect.Empty;
         if (container is FrameworkElement cfe2 && cfe2.IsVisible)
             colRect = GetScreenRect(cfe2);
+        if (colRect.IsEmpty && zoneGrid is FrameworkElement cfeGrid && cfeGrid.IsVisible)
+            colRect = GetScreenRect(cfeGrid);
         if (colRect.IsEmpty && _panelRegistry!.TryGetValue(panelsInZone[0], out var firstFallback))
             colRect = GetScreenRect(firstFallback);
         if (colRect.IsEmpty) return Rect.Empty;
