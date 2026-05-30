@@ -263,6 +263,128 @@ internal sealed class PanelDockingService
     private bool ZoneHasPanels(DockZone zone) =>
         CurrentLayout.Slots.Any(s => s.Zone == zone);
 
+    /// <summary>
+    /// Called when a panel's visibility is toggled (shown or hidden) without moving it to a
+    /// different zone.  Handles two behaviours for side zones (Left/Right/Left2/Right2):
+    /// <list type="bullet">
+    ///   <item><b>Hidden:</b> Rebuilds the zone grid with only the remaining visible panels,
+    ///   redistributing the closed panel's star-height share proportionally.  Collapses the
+    ///   zone column entirely when no visible panels remain.</item>
+    ///   <item><b>Shown:</b> Re-expands a collapsed zone if needed and rebuilds the grid to
+    ///   include the newly visible panel.</item>
+    /// </list>
+    /// Top-zone panels are silently ignored — their layout is managed separately.
+    /// </summary>
+    public void OnPanelVisibilityChanged(string panelId, bool visible)
+    {
+        if (_panelRegistry is null) return;
+
+        var slot = CurrentLayout.Slots.FirstOrDefault(s =>
+            string.Equals(s.PanelId, panelId, StringComparison.OrdinalIgnoreCase));
+        if (slot is null || slot.Zone == DockZone.Top) return;
+
+        var (zoneList, zoneGrid, scrollViewer) = GetZoneContext(slot.Zone);
+        if (zoneList is null || zoneGrid is null || zoneList.Count == 0) return;
+
+        var (col, splCol, sv, spl) = GetZoneColumnContext(slot.Zone);
+
+        if (!visible)
+        {
+            // Capture star weights from RowDefinitions *before* rebuilding.
+            // The panel is already Collapsed at call time but RowDefinitions still reflect
+            // the pre-collapse proportions.
+            var weights = CaptureStarWeights(zoneGrid, zoneList);
+
+            var remaining = zoneList
+                .Where(el => el.Visibility != Visibility.Collapsed)
+                .ToList();
+
+            if (remaining.Count == 0)
+            {
+                if (col is not null)
+                    CollapseZone(col, splCol!, sv!, spl!);
+                RebuildZoneGrid(zoneGrid, remaining, scrollViewer as FrameworkElement);
+            }
+            else
+            {
+                // Distribute the hidden panel's star share proportionally to the survivors.
+                if (_panelRegistry.TryGetValue(panelId, out var hiddenEl) &&
+                    weights.TryGetValue(hiddenEl, out double hiddenWeight) &&
+                    hiddenWeight > 0)
+                {
+                    double remainingTotal = remaining.Sum(p => weights.GetValueOrDefault(p, 1.0));
+                    if (remainingTotal > 0)
+                    {
+                        foreach (var p in remaining)
+                        {
+                            double cur = weights.GetValueOrDefault(p, 1.0);
+                            weights[p] = cur + hiddenWeight * (cur / remainingTotal);
+                        }
+                    }
+                }
+                RebuildZoneGrid(zoneGrid, remaining, scrollViewer as FrameworkElement, weights);
+            }
+        }
+        else
+        {
+            // Panel is being shown.  Re-expand zone column if it was collapsed.
+            if (col is not null && col.Width.IsAbsolute && col.Width.Value == 0)
+            {
+                double width = _panelRegistry.TryGetValue(panelId, out var shownEl) && shownEl.ActualWidth > 0
+                    ? shownEl.ActualWidth : 280;
+                col.Width    = new GridLength(width);
+                splCol!.Width = new GridLength(5);
+                sv!.Visibility  = Visibility.Visible;
+                spl!.Visibility = Visibility.Visible;
+            }
+
+            // Rebuild including the now-visible panel, preserving zone order.
+            var orderedVisible = zoneList
+                .Where(el => el.Visibility != Visibility.Collapsed)
+                .ToList();
+            RebuildZoneGrid(zoneGrid, orderedVisible, scrollViewer as FrameworkElement);
+        }
+    }
+
+    /// <summary>
+    /// Returns the zone column, splitter-column, scroll-viewer, and splitter UI elements for
+    /// a given side zone.  Returns all-nulls for <see cref="DockZone.Top"/>.
+    /// </summary>
+    private (ColumnDefinition? col, ColumnDefinition? splCol, UIElement? sv, UIElement? spl)
+        GetZoneColumnContext(DockZone zone) =>
+        zone switch
+        {
+            DockZone.Left   => (_leftZoneColumn,   _leftSplitterColumn,   _leftZoneScrollViewer,   _leftZoneSplitter),
+            DockZone.Right  => (_rightZoneColumn,  _rightSplitterColumn,  _rightZoneScrollViewer,  _rightZoneSplitter),
+            DockZone.Left2  => (_left2ZoneColumn,  _left2SplitterColumn,  _left2ZoneScrollViewer,  _left2ZoneSplitter),
+            DockZone.Right2 => (_right2ZoneColumn, _right2SplitterColumn, _right2ZoneScrollViewer, _right2ZoneSplitter),
+            _               => (null, null, null, null),
+        };
+
+    /// <summary>
+    /// Reads the current star-height values from <paramref name="zoneGrid"/>'s RowDefinitions
+    /// and returns a mapping from each panel element to its star weight.
+    /// Panel <c>i</c> occupies row <c>2*i</c> (odd rows are 5 px splitters).
+    /// Falls back to 1.0 when a row is missing or not a star row.
+    /// </summary>
+    private static Dictionary<FrameworkElement, double> CaptureStarWeights(
+        Grid zoneGrid, List<FrameworkElement> zoneList)
+    {
+        var weights = new Dictionary<FrameworkElement, double>(zoneList.Count);
+        for (int i = 0; i < zoneList.Count; i++)
+        {
+            int rowIdx = 2 * i;
+            double star = 1.0;
+            if (rowIdx < zoneGrid.RowDefinitions.Count)
+            {
+                var h = zoneGrid.RowDefinitions[rowIdx].Height;
+                if (h.IsStar) star = h.Value;
+            }
+            weights[zoneList[i]] = star;
+        }
+        return weights;
+    }
+
     private static void RemoveFromTopZone(FrameworkElement element)
     {
         if (LogicalTreeHelper.GetParent(element) is Panel parent)
@@ -313,7 +435,8 @@ internal sealed class PanelDockingService
     /// The Grid height is bound to <paramref name="scrollViewer"/> so star rows have
     /// a finite space to divide.
     /// </summary>
-    private static void RebuildZoneGrid(Grid zone, List<FrameworkElement> panels, FrameworkElement? scrollViewer)
+    private static void RebuildZoneGrid(Grid zone, List<FrameworkElement> panels, FrameworkElement? scrollViewer,
+        IReadOnlyDictionary<FrameworkElement, double>? weights = null)
     {
         zone.Children.Clear();
         zone.RowDefinitions.Clear();
@@ -337,9 +460,10 @@ internal sealed class PanelDockingService
                 zone.Children.Add(splitter);
             }
 
+            double starValue = weights is not null && weights.TryGetValue(panels[i], out double w) ? w : 1.0;
             zone.RowDefinitions.Add(new RowDefinition
             {
-                Height    = new GridLength(1, GridUnitType.Star),
+                Height    = new GridLength(starValue, GridUnitType.Star),
                 MinHeight = 100,
             });
             Grid.SetRow(panels[i], zone.RowDefinitions.Count - 1);

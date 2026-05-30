@@ -5866,6 +5866,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (LoopPanelBorder is null) return;
         SyncSendButton();
         LoopPanelBorder.Visibility = _loopPanelVisible ? Visibility.Visible : Visibility.Collapsed;
+        _dockingService?.OnPanelVisibilityChanged("loop", _loopPanelVisible);
         bool running = IsLoopRunning;
 
         if (running != _lastSyncedLoopRunning) {
@@ -5932,6 +5933,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         if (TasksPanelBorder is null) return;
         TasksPanelBorder.Visibility = _tasksPanelVisible ? Visibility.Visible : Visibility.Collapsed;
+        _dockingService?.OnPanelVisibilityChanged("tasks", _tasksPanelVisible);
         if (_tasksPanelVisible)
             LoadTasksPanel();
     }
@@ -27864,6 +27866,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         if (ApprovalPanelBorder is null) return;
         ApprovalPanelBorder.Visibility = _approvalPanelVisible ? Visibility.Visible : Visibility.Collapsed;
+        _dockingService?.OnPanelVisibilityChanged("approvals", _approvalPanelVisible);
         if (_approvalPanelVisible && _approvalPanel is null)
         {
             _approvalPanel = new CommitApprovalPanel(
@@ -28679,6 +28682,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         if (NotesPanelBorder is null) return;
         NotesPanelBorder.Visibility = _notesPanelVisible ? Visibility.Visible : Visibility.Collapsed;
+        _dockingService?.OnPanelVisibilityChanged("notes", _notesPanelVisible);
         if (_notesPanelVisible && _notesPanel is null)
         {
             _notesPanel = new NotesPanelController(
@@ -28712,6 +28716,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         if (MaintenancePanelBorder is null) return;
         MaintenancePanelBorder.Visibility = _maintenancePanelVisible ? Visibility.Visible : Visibility.Collapsed;
+        _dockingService?.OnPanelVisibilityChanged("maintenance", _maintenancePanelVisible);
         if (!_maintenancePanelVisible) return;
 
         var workspacePath = _currentWorkspace?.FolderPath;
@@ -28780,6 +28785,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     {
         if (InboxPanelBorder is null) return;
         InboxPanelBorder.Visibility = _inboxPanelVisible ? Visibility.Visible : Visibility.Collapsed;
+        _dockingService?.OnPanelVisibilityChanged("inbox", _inboxPanelVisible);
         if (!_inboxPanelVisible) return;
 
         var workspacePath = _currentWorkspace?.FolderPath;
