@@ -47,6 +47,7 @@ Or open `squad-dash.slnx` in **Visual Studio 2022+** and press **F5**.
 | `SquadDashLauncher/` | Thin launcher executable that manages hot-swappable runtime slots. Handles deploy-and-restart during Debug builds so the app can update itself without a full restart. |
 | `Squad.SDK/` | TypeScript SDK project (`@bradygaster/squad-sdk`). Provides the Node.js-side bridge for interacting with Squad programmatically. |
 | `SquadDash.Tests/` | NUnit unit tests for `SquadDash`. Run with `dotnet test`. |
+| `VoiceHeuristics/` | Standalone .NET library implementing voice-to-text insertion heuristics used by the push-to-talk feature. |
 | `.squad/` | Squad AI team configuration — agent charters, decisions log, routing rules, and universe definitions. See [.squad/team.md](.squad/team.md). |
 | `R&D/` | Research and design assets (not shipped). |
 
@@ -54,7 +55,7 @@ Or open `squad-dash.slnx` in **Visual Studio 2022+** and press **F5**.
 
 ## SquadDash Architecture
 
-`MainWindow.xaml.cs` is the application coordinator. It owns all WPF state and delegates distinct responsibilities to focused helper classes. As of 2026-04-17, MainWindow is **5,605 lines** (down from 8,305 before decomposition); nine helper classes account for the extracted logic.
+`MainWindow.xaml.cs` is the application coordinator. It owns all WPF state and delegates distinct responsibilities to focused helper classes. MainWindow is **31,382 lines**; over 200 helper and service classes account for the application's logic.
 
 The code-behind pattern is deliberately preserved — no MVVM migration. Helper classes receive `Action<>`/`Func<>` delegates from MainWindow's constructor rather than holding copies of MainWindow's fields, which keeps state ownership unambiguous. See [`decisions.md`](.squad/decisions.md) for the rationale.
 
@@ -62,15 +63,15 @@ The code-behind pattern is deliberately preserved — no MVVM migration. Helper 
 
 | File | Lines | Responsibility |
 |---|---|---|
-| `AgentStatusCard.cs` | 322 | `INotifyPropertyChanged` view-model for agent cards; accent colour palette; `SidebarEntry` types |
-| `ColorUtilities.cs` | 54 | Static HSL/RGB math: `RgbToHsl`, `HslToRgb`, `HueToRgb`, `CreateAccentBrush`, `CreateDarkAccentBrush` |
-| `SquadCliAdapter.cs` | 124 | OS/process interaction: CLI version resolution, PowerShell window launch, Explorer open, external links |
-| `PushToTalkController.cs` | 243 | Double-Ctrl PTT state machine; Azure Speech Service lifecycle; voice hint visibility |
-| `MarkdownDocumentRenderer.cs` | 772 | Markdown → WPF `Block`/`Inline` conversion: paragraphs, code fences, tables, quick-reply blocks |
-| `AgentThreadRegistry.cs` | 840 | Agent thread lifecycle: creation, aliasing, identity normalisation, key lookup, background thread sync |
-| `TranscriptConversationManager.cs` | 481 | Conversation persistence: load/save/persist, turn records, history navigation, emergency save |
-| `BackgroundTaskPresenter.cs` | 813 | Background task tracking; completion detection; delayed-promotion pipeline; display label building |
-| `PromptExecutionController.cs` | 923 | Prompt execution: `ExecutePromptAsync`, all slash-command handlers, prompt health monitoring, universe selection, quick-reply disabling |
+| `AgentStatusCard.cs` | 410 | `INotifyPropertyChanged` view-model for agent cards; accent colour palette; `SidebarEntry` types |
+| `ColorUtilities.cs` | 86 | Static HSL/RGB math: `RgbToHsl`, `HslToRgb`, `HueToRgb`, `CreateAccentBrush`, `CreateDarkAccentBrush` |
+| `SquadCliAdapter.cs` | 179 | OS/process interaction: CLI version resolution, PowerShell window launch, Explorer open, external links |
+| `PushToTalkController.cs` | 289 | Double-Ctrl PTT state machine; Azure Speech Service lifecycle; voice hint visibility |
+| `MarkdownDocumentRenderer.cs` | 1,183 | Markdown → WPF `Block`/`Inline` conversion: paragraphs, code fences, tables, quick-reply blocks |
+| `AgentThreadRegistry.cs` | 1,076 | Agent thread lifecycle: creation, aliasing, identity normalisation, key lookup, background thread sync |
+| `TranscriptConversationManager.cs` | 1,780 | Conversation persistence: load/save/persist, turn records, history navigation, emergency save |
+| `BackgroundTaskPresenter.cs` | 1,291 | Background task tracking; completion detection; delayed-promotion pipeline; display label building |
+| `PromptExecutionController.cs` | 2,468 | Prompt execution: `ExecutePromptAsync`, all slash-command handlers, prompt health monitoring, universe selection, quick-reply disabling |
 
 ### Thinking Block — Tool Call Icons
 
@@ -125,12 +126,19 @@ This repo is developed with a Squad AI team. Each agent has a defined role and c
 
 | Agent | Role |
 |---|---|
+| Orion Vale | Lead Architect |
 | Lyra Morn | WPF & UI Specialist |
 | Arjun Sen | C# Backend Services Specialist |
 | Talia Rune | TypeScript & SDK Bridge Specialist |
 | Jae Min Kade | Deployment & Infrastructure Specialist |
 | Vesper Knox | Testing & Quality Specialist |
 | Mira Quill | Documentation & Memory Specialist |
+| Sorin Pyre | Performance Engineer |
+| Atlas Wren | Mac & Cross-Platform Specialist |
+| Scribe | Session Logger |
+| Ralph | Work Monitor |
+| Argus Weld | Maintenance Coordinator |
+| Malik Graves | Markdown Specialist |
 
 Full team details: [.squad/team.md](.squad/team.md)
 
