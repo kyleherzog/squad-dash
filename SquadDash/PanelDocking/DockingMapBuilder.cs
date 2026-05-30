@@ -40,27 +40,35 @@ internal static class DockingMapBuilder
         var allSlots = new List<SlotButtonViewModel>();
 
         // Partition panels by zone, ordered by their Order field
-        var topPanels   = PanelsInZone(currentLayout, DockZone.Top);
-        var leftPanels  = PanelsInZone(currentLayout, DockZone.Left);
-        var rightPanels = PanelsInZone(currentLayout, DockZone.Right);
+        var topPanels    = PanelsInZone(currentLayout, DockZone.Top);
+        var leftPanels   = PanelsInZone(currentLayout, DockZone.Left);
+        var rightPanels  = PanelsInZone(currentLayout, DockZone.Right);
+        var left2Panels  = PanelsInZone(currentLayout, DockZone.Left2);
+        var right2Panels = PanelsInZone(currentLayout, DockZone.Right2);
 
-        bool sourceInTop   = topPanels.Any(p => Same(p, sourcePanelId));
-        bool sourceInLeft  = leftPanels.Any(p => Same(p, sourcePanelId));
-        bool sourceInRight = rightPanels.Any(p => Same(p, sourcePanelId));
+        bool sourceInTop    = topPanels.Any(p => Same(p, sourcePanelId));
+        bool sourceInLeft   = leftPanels.Any(p => Same(p, sourcePanelId));
+        bool sourceInRight  = rightPanels.Any(p => Same(p, sourcePanelId));
+        bool sourceInLeft2  = left2Panels.Any(p => Same(p, sourcePanelId));
+        bool sourceInRight2 = right2Panels.Any(p => Same(p, sourcePanelId));
 
         // ── Compute zone dimensions ──────────────────────────────────────────
 
-        // Left zone column content height = total slot heights + gaps
-        double leftColContentHeight  = ZoneColumnHeight(leftPanels.Count,  sourceInLeft,  ColSlotHeight);
-        double rightColContentHeight = ZoneColumnHeight(rightPanels.Count, sourceInRight, ColSlotHeight);
+        // Left/Left2 zone column content height = total slot heights + gaps
+        double leftColContentHeight   = ZoneColumnHeight(leftPanels.Count,   sourceInLeft,   ColSlotHeight);
+        double rightColContentHeight  = ZoneColumnHeight(rightPanels.Count,  sourceInRight,  ColSlotHeight);
+        double left2ColContentHeight  = ZoneColumnHeight(left2Panels.Count,  sourceInLeft2,  ColSlotHeight);
+        double right2ColContentHeight = ZoneColumnHeight(right2Panels.Count, sourceInRight2, ColSlotHeight);
 
         // Top zone content width
         double topContentWidth = ZoneRowWidth(topPanels.Count, sourceInTop, TopSlotWidth);
 
         // Overall popup inner height (excluding padding):
-        //   max of (left column height, right column height, top slot height + lower half breathing room)
+        //   max of all column heights, top slot height + lower half breathing room
         double innerHeight = Math.Max(
-            Math.Max(leftColContentHeight, rightColContentHeight),
+            Math.Max(
+                Math.Max(leftColContentHeight,  left2ColContentHeight),
+                Math.Max(rightColContentHeight, right2ColContentHeight)),
             TopSlotHeight * 2);   // top zone occupies upper half; lower half is breathing room
 
         // Clamp minimum inner height so popup never looks too small
@@ -68,27 +76,42 @@ internal static class DockingMapBuilder
 
         // ── Compute zone widths ──────────────────────────────────────────────
 
-        // Left and right zones: always ColSlotWidth wide (one column skeleton)
-        double leftZoneWidth  = leftPanels.Count  > 0 || !sourceInLeft  ? ColSlotWidth : 0;
-        double rightZoneWidth = rightPanels.Count > 0 || !sourceInRight ? ColSlotWidth : 0;
-
-        // Left zone is always shown (either column slots or empty Rule-D slot)
-        leftZoneWidth  = ColSlotWidth;
-        rightZoneWidth = ColSlotWidth;
+        // All side zones: always ColSlotWidth wide (one column skeleton)
+        double leftZoneWidth   = ColSlotWidth;
+        double rightZoneWidth  = ColSlotWidth;
+        double left2ZoneWidth  = ColSlotWidth;
+        double right2ZoneWidth = ColSlotWidth;
 
         double topZoneWidth = Math.Max(topContentWidth, TopSlotWidth);
 
-        double innerWidth = leftZoneWidth + ZoneGutter + topZoneWidth + ZoneGutter + rightZoneWidth;
+        double innerWidth = left2ZoneWidth + ZoneGutter
+                          + leftZoneWidth  + ZoneGutter
+                          + topZoneWidth   + ZoneGutter
+                          + rightZoneWidth + ZoneGutter
+                          + right2ZoneWidth;
 
         double popupWidth  = innerWidth  + PopupPadding * 2;
         double popupHeight = innerHeight + PopupPadding * 2;
 
         // ── Layout slot positions (relative to inner canvas, 0,0 at top-left) ──
 
-        double leftX   = 0;
-        double topX    = leftZoneWidth + ZoneGutter;
+        double left2X  = 0;
+        double leftX   = left2ZoneWidth + ZoneGutter;
+        double topX    = leftX + leftZoneWidth + ZoneGutter;
         double rightX  = topX + topZoneWidth + ZoneGutter;
+        double right2X = rightX + rightZoneWidth + ZoneGutter;
         double upperHalfHeight = innerHeight / 2;
+
+        // Left2 zone slots (outermost left column)
+        BuildColumnSlots(
+            allSlots,
+            sourcePanelId,
+            left2Panels,
+            sourceInLeft2,
+            left2X, 0,
+            ColSlotWidth, ColSlotHeight,
+            innerHeight,
+            DockZone.Left2);
 
         // Left zone slots
         BuildColumnSlots(
@@ -124,6 +147,17 @@ internal static class DockingMapBuilder
             ColSlotWidth, ColSlotHeight,
             innerHeight,
             DockZone.Right);
+
+        // Right2 zone slots (outermost right column)
+        BuildColumnSlots(
+            allSlots,
+            sourcePanelId,
+            right2Panels,
+            sourceInRight2,
+            right2X, 0,
+            ColSlotWidth, ColSlotHeight,
+            innerHeight,
+            DockZone.Right2);
 
         // ── Find the source panel slot center ───────────────────────────────
         var srcSlot = allSlots.FirstOrDefault(s => s.IsSourcePanel);

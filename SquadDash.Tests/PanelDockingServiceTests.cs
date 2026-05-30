@@ -1,5 +1,7 @@
 #nullable enable
 
+using System.Windows;
+using System.Windows.Controls;
 using SquadDash.PanelDocking;
 
 namespace SquadDash.Tests;
@@ -133,5 +135,96 @@ internal sealed class PanelDockingServiceTests
         }
 
         Assert.That(currentZone, Is.EqualTo(DockZone.Left));
+    }
+
+    [Test, Apartment(ApartmentState.STA)]
+    public void MovePanel_WhenLoadedLayoutSaysSideButElementIsStillTop_DoesNotDoubleParent()
+    {
+        var tempDir = CreateSavedLayoutWithTasksOnLeft();
+        try
+        {
+            var topZone = new Grid();
+            var taskPanel = new Border();
+            topZone.Children.Add(taskPanel);
+            var svc = CreateWpfDockingService(taskPanel, topZone);
+
+            svc.LoadLayout(tempDir);
+
+            Assert.That(() => svc.MovePanel("tasks", DockZone.Top), Throws.Nothing);
+            Assert.That(topZone.Children.Contains(taskPanel), Is.True);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Test, Apartment(ApartmentState.STA)]
+    public void LoadAndApplyLayout_MovesTopElementIntoSavedSideZone()
+    {
+        var tempDir = CreateSavedLayoutWithTasksOnLeft();
+        try
+        {
+            var topZone = new Grid();
+            var leftZone = new Grid();
+            var taskPanel = new Border();
+            topZone.Children.Add(taskPanel);
+            var svc = CreateWpfDockingService(taskPanel, topZone, leftZone);
+
+            var loaded = svc.LoadAndApplyLayout(tempDir);
+
+            Assert.That(topZone.Children.Contains(taskPanel), Is.False);
+            Assert.That(leftZone.Children.Contains(taskPanel), Is.True);
+            Assert.That(loaded.Slots.Single(s => s.PanelId == "tasks").Zone, Is.EqualTo(DockZone.Left));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    private static string CreateSavedLayoutWithTasksOnLeft()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"PanelDockingServiceTests-{Guid.NewGuid()}");
+        Directory.CreateDirectory(tempDir);
+
+        var dataSvc = new PanelDockingService();
+        dataSvc.MovePanel("tasks", DockZone.Left);
+        dataSvc.SaveLayout(tempDir);
+
+        return tempDir;
+    }
+
+    private static PanelDockingService CreateWpfDockingService(
+        FrameworkElement taskPanel,
+        Grid topZone,
+        Grid? leftZone = null)
+    {
+        return new PanelDockingService(
+            new Dictionary<string, FrameworkElement>
+            {
+                ["tasks"] = taskPanel,
+            },
+            leftZone ?? new Grid(),  // leftZonePanel
+            new Grid(),              // rightZonePanel
+            new Grid(),              // left2ZonePanel
+            new Grid(),              // right2ZonePanel
+            topZone,
+            new ColumnDefinition(),  // leftZoneColumn
+            new ColumnDefinition(),  // rightZoneColumn
+            new ColumnDefinition(),  // left2ZoneColumn
+            new ColumnDefinition(),  // right2ZoneColumn
+            new ColumnDefinition(),  // leftSplitterColumn
+            new ColumnDefinition(),  // rightSplitterColumn
+            new ColumnDefinition(),  // left2SplitterColumn
+            new ColumnDefinition(),  // right2SplitterColumn
+            new ScrollViewer(),      // leftZoneScrollViewer
+            new ScrollViewer(),      // rightZoneScrollViewer
+            new ScrollViewer(),      // left2ZoneScrollViewer
+            new ScrollViewer(),      // right2ZoneScrollViewer
+            new GridSplitter(),      // leftZoneSplitter
+            new GridSplitter(),      // rightZoneSplitter
+            new GridSplitter(),      // left2ZoneSplitter
+            new GridSplitter());     // right2ZoneSplitter
     }
 }

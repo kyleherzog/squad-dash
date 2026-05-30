@@ -19,8 +19,10 @@ public enum DockZone
 {
     Top,
     Left,
-    Right
-    // Future: Left2, Right2, Bottom, …
+    Right,
+    Left2,
+    Right2
+    // Future: Bottom, …
 }
 
 /// <summary>

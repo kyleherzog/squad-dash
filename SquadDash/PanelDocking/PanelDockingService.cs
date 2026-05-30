@@ -21,15 +21,25 @@ internal sealed class PanelDockingService
     private readonly Dictionary<string, FrameworkElement>? _panelRegistry;
     private readonly Grid? _leftZonePanel;
     private readonly Grid? _rightZonePanel;
+    private readonly Grid? _left2ZonePanel;
+    private readonly Grid? _right2ZonePanel;
     private readonly Grid? _topZoneGrid;
     private readonly ColumnDefinition? _leftZoneColumn;
     private readonly ColumnDefinition? _rightZoneColumn;
+    private readonly ColumnDefinition? _left2ZoneColumn;
+    private readonly ColumnDefinition? _right2ZoneColumn;
     private readonly ColumnDefinition? _leftSplitterColumn;
     private readonly ColumnDefinition? _rightSplitterColumn;
+    private readonly ColumnDefinition? _left2SplitterColumn;
+    private readonly ColumnDefinition? _right2SplitterColumn;
     private readonly UIElement? _leftZoneScrollViewer;
     private readonly UIElement? _rightZoneScrollViewer;
+    private readonly UIElement? _left2ZoneScrollViewer;
+    private readonly UIElement? _right2ZoneScrollViewer;
     private readonly UIElement? _leftZoneSplitter;
     private readonly UIElement? _rightZoneSplitter;
+    private readonly UIElement? _left2ZoneSplitter;
+    private readonly UIElement? _right2ZoneSplitter;
 
     // Maps each dockable panel ID to its column index within TopZonePanelsGrid.
     private static readonly Dictionary<string, int> TopZoneColumnMap = new(StringComparer.OrdinalIgnoreCase)
@@ -48,8 +58,10 @@ internal sealed class PanelDockingService
         new(StringComparer.OrdinalIgnoreCase);
 
     // Ordered lists of panels currently in each side zone (used to rebuild row layout).
-    private readonly List<FrameworkElement> _leftZonePanels  = new();
-    private readonly List<FrameworkElement> _rightZonePanels = new();
+    private readonly List<FrameworkElement> _leftZonePanels   = new();
+    private readonly List<FrameworkElement> _rightZonePanels  = new();
+    private readonly List<FrameworkElement> _left2ZonePanels  = new();
+    private readonly List<FrameworkElement> _right2ZonePanels = new();
 
     /// <summary>Data-model-only constructor for unit tests.</summary>
     public PanelDockingService() { }
@@ -59,28 +71,48 @@ internal sealed class PanelDockingService
         Dictionary<string, FrameworkElement> panelRegistry,
         Grid leftZonePanel,
         Grid rightZonePanel,
+        Grid left2ZonePanel,
+        Grid right2ZonePanel,
         Grid topZoneGrid,
         ColumnDefinition leftZoneColumn,
         ColumnDefinition rightZoneColumn,
+        ColumnDefinition left2ZoneColumn,
+        ColumnDefinition right2ZoneColumn,
         ColumnDefinition leftSplitterColumn,
         ColumnDefinition rightSplitterColumn,
+        ColumnDefinition left2SplitterColumn,
+        ColumnDefinition right2SplitterColumn,
         UIElement leftZoneScrollViewer,
         UIElement rightZoneScrollViewer,
+        UIElement left2ZoneScrollViewer,
+        UIElement right2ZoneScrollViewer,
         UIElement leftZoneSplitter,
-        UIElement rightZoneSplitter)
+        UIElement rightZoneSplitter,
+        UIElement left2ZoneSplitter,
+        UIElement right2ZoneSplitter)
     {
         _panelRegistry = panelRegistry;
         _leftZonePanel = leftZonePanel;
         _rightZonePanel = rightZonePanel;
+        _left2ZonePanel = left2ZonePanel;
+        _right2ZonePanel = right2ZonePanel;
         _topZoneGrid = topZoneGrid;
         _leftZoneColumn = leftZoneColumn;
         _rightZoneColumn = rightZoneColumn;
+        _left2ZoneColumn = left2ZoneColumn;
+        _right2ZoneColumn = right2ZoneColumn;
         _leftSplitterColumn = leftSplitterColumn;
         _rightSplitterColumn = rightSplitterColumn;
+        _left2SplitterColumn = left2SplitterColumn;
+        _right2SplitterColumn = right2SplitterColumn;
         _leftZoneScrollViewer = leftZoneScrollViewer;
         _rightZoneScrollViewer = rightZoneScrollViewer;
+        _left2ZoneScrollViewer = left2ZoneScrollViewer;
+        _right2ZoneScrollViewer = right2ZoneScrollViewer;
         _leftZoneSplitter = leftZoneSplitter;
         _rightZoneSplitter = rightZoneSplitter;
+        _left2ZoneSplitter = left2ZoneSplitter;
+        _right2ZoneSplitter = right2ZoneSplitter;
     }
 
     /// <summary>The live panel layout for the current session.</summary>
@@ -123,6 +155,10 @@ internal sealed class PanelDockingService
             RemoveFromZone(_leftZonePanel!, _leftZonePanels, element, _leftZoneScrollViewer as FrameworkElement);
         else if (sourceZone == DockZone.Right)
             RemoveFromZone(_rightZonePanel!, _rightZonePanels, element, _rightZoneScrollViewer as FrameworkElement);
+        else if (sourceZone == DockZone.Left2)
+            RemoveFromZone(_left2ZonePanel!, _left2ZonePanels, element, _left2ZoneScrollViewer as FrameworkElement);
+        else if (sourceZone == DockZone.Right2)
+            RemoveFromZone(_right2ZonePanel!, _right2ZonePanels, element, _right2ZoneScrollViewer as FrameworkElement);
         else
             RemoveFromTopZone(element);
 
@@ -138,6 +174,16 @@ internal sealed class PanelDockingService
                 ExpandZone(_rightZoneColumn!, _rightSplitterColumn!, _rightZoneScrollViewer!, _rightZoneSplitter!, element);
                 break;
 
+            case DockZone.Left2:
+                AddToZone(_left2ZonePanel!, _left2ZonePanels, element, panelId, _left2ZoneScrollViewer as FrameworkElement);
+                ExpandZone(_left2ZoneColumn!, _left2SplitterColumn!, _left2ZoneScrollViewer!, _left2ZoneSplitter!, element);
+                break;
+
+            case DockZone.Right2:
+                AddToZone(_right2ZonePanel!, _right2ZonePanels, element, panelId, _right2ZoneScrollViewer as FrameworkElement);
+                ExpandZone(_right2ZoneColumn!, _right2SplitterColumn!, _right2ZoneScrollViewer!, _right2ZoneSplitter!, element);
+                break;
+
             case DockZone.Top:
                 AddToTopZone(panelId, element);
                 break;
@@ -148,6 +194,10 @@ internal sealed class PanelDockingService
             CollapseZone(_leftZoneColumn!, _leftSplitterColumn!, _leftZoneScrollViewer!, _leftZoneSplitter!);
         else if (sourceZone == DockZone.Right && !ZoneHasPanels(DockZone.Right))
             CollapseZone(_rightZoneColumn!, _rightSplitterColumn!, _rightZoneScrollViewer!, _rightZoneSplitter!);
+        else if (sourceZone == DockZone.Left2 && !ZoneHasPanels(DockZone.Left2))
+            CollapseZone(_left2ZoneColumn!, _left2SplitterColumn!, _left2ZoneScrollViewer!, _left2ZoneSplitter!);
+        else if (sourceZone == DockZone.Right2 && !ZoneHasPanels(DockZone.Right2))
+            CollapseZone(_right2ZoneColumn!, _right2SplitterColumn!, _right2ZoneScrollViewer!, _right2ZoneSplitter!);
     }
 
     private bool ZoneHasPanels(DockZone zone) =>
@@ -318,10 +368,10 @@ internal sealed class PanelDockingService
         {
             Name = CurrentLayout.Name,
             Slots = CurrentLayout.Slots.ToList(),
-            LeftZoneWidth  = (_leftZoneColumn  is { } lc && lc.Width.IsAbsolute && lc.Width.Value > 0)
-                             ? lc.Width.Value : (double?)null,
-            RightZoneWidth = (_rightZoneColumn is { } rc && rc.Width.IsAbsolute && rc.Width.Value > 0)
-                             ? rc.Width.Value : (double?)null,
+            LeftZoneWidth   = (_leftZoneColumn   is { } lc  && lc.Width.IsAbsolute  && lc.Width.Value  > 0) ? lc.Width.Value  : (double?)null,
+            RightZoneWidth  = (_rightZoneColumn  is { } rc  && rc.Width.IsAbsolute  && rc.Width.Value  > 0) ? rc.Width.Value  : (double?)null,
+            Left2ZoneWidth  = (_left2ZoneColumn  is { } l2c && l2c.Width.IsAbsolute && l2c.Width.Value > 0) ? l2c.Width.Value : (double?)null,
+            Right2ZoneWidth = (_right2ZoneColumn is { } r2c && r2c.Width.IsAbsolute && r2c.Width.Value > 0) ? r2c.Width.Value : (double?)null,
         };
 
         if (idx >= 0)
@@ -375,8 +425,10 @@ internal sealed class PanelDockingService
     {
         Name = layout.Name,
         Slots = layout.Slots.ToList(),
-        LeftZoneWidth = layout.LeftZoneWidth,
-        RightZoneWidth = layout.RightZoneWidth,
+        LeftZoneWidth   = layout.LeftZoneWidth,
+        RightZoneWidth  = layout.RightZoneWidth,
+        Left2ZoneWidth  = layout.Left2ZoneWidth,
+        Right2ZoneWidth = layout.Right2ZoneWidth,
     };
 
     private static DockLayout ReadActiveLayout(string workspacePath)

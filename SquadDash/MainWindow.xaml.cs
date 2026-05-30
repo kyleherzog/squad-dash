@@ -644,15 +644,25 @@ public partial class MainWindow : Window, ILiveElementLocator
             },
             LeftZonePanel,
             RightZonePanel,
+            Left2ZonePanel,
+            Right2ZonePanel,
             TopZonePanelsGrid,
             LeftZoneColumn,
             RightZoneColumn,
+            Left2ZoneColumn,
+            Right2ZoneColumn,
             LeftSplitterColumn,
             RightSplitterColumn,
+            Left2SplitterColumn,
+            Right2SplitterColumn,
             LeftZoneScrollViewer,
             RightZoneScrollViewer,
+            Left2ZoneScrollViewer,
+            Right2ZoneScrollViewer,
             LeftZoneSplitter,
-            RightZoneSplitter);
+            RightZoneSplitter,
+            Left2ZoneSplitter,
+            Right2ZoneSplitter);
         WireGripStripHandlers();
         SquadDashTrace.Write(TraceCategory.Startup, $"Constructor: InitializeComponent {ctorSw.ElapsedMilliseconds}ms.");
         SquadDashTrace.Write(
