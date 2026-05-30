@@ -585,7 +585,8 @@ internal sealed class PanelDockingService
     /// • Existing-panel column slot → full panel screen rect.<br/>
     /// • Append "+" column slot     → thin horizontal strip below the last panel.<br/>
     /// • Empty column zone (Rule D) → zone scroll-viewer rect (min 20 px wide).<br/>
-    /// • Top zone slot              → thin vertical strip at the insertion X position.<br/>
+    /// • Top zone slot, source already in top → full panel screen rect (replace/reorder).<br/>
+    /// • Top zone slot, source from elsewhere → thin vertical insertion strip.<br/>
     /// • Empty top zone (Rule D)    → thin horizontal strip across the top-zone grid.
     /// </para>
     /// Returns <see cref="Rect.Empty"/> when the location cannot be determined.
@@ -600,9 +601,35 @@ internal sealed class PanelDockingService
             .Select(s => s.PanelId)
             .ToList();
 
-        return slot.TargetZone == DockZone.Top
-            ? GetTopInsertionRect(slot.TargetOrder, panelsInZone)
-            : GetColumnSlotRect(slot.TargetZone, slot.TargetOrder, panelsInZone);
+        if (slot.TargetZone == DockZone.Top)
+        {
+            // If the dragged panel is already in the top zone, hovering another top slot
+            // means a reorder/replace — show the full target panel rect, not an insertion strip.
+            bool sourceIsInTop = CurrentLayout.Slots.Any(s =>
+                s.Zone == DockZone.Top &&
+                string.Equals(s.PanelId, slot.SourcePanelId, StringComparison.OrdinalIgnoreCase));
+
+            return sourceIsInTop
+                ? GetTopReorderRect(slot.TargetOrder, panelsInZone)
+                : GetTopInsertionRect(slot.TargetOrder, panelsInZone);
+        }
+
+        return GetColumnSlotRect(slot.TargetZone, slot.TargetOrder, panelsInZone);
+    }
+
+    /// <summary>
+    /// Source is already in top zone → show the full rect of the panel at targetOrder
+    /// (or the last panel's rect for the append "+" slot).
+    /// </summary>
+    private Rect GetTopReorderRect(int targetOrder, List<string> panelsInZone)
+    {
+        if (panelsInZone.Count == 0) return Rect.Empty;
+
+        var index = Math.Clamp(targetOrder, 0, panelsInZone.Count - 1);
+        if (_panelRegistry!.TryGetValue(panelsInZone[index], out var el))
+            return GetScreenRect(el);
+
+        return Rect.Empty;
     }
 
     private Rect GetColumnSlotRect(DockZone zone, int targetOrder, List<string> panelsInZone)
