@@ -31,8 +31,16 @@ internal sealed class DockingMapWindow : Window
         ResizeMode       = ResizeMode.NoResize;
         SizeToContent    = SizeToContent.WidthAndHeight;
 
-        KeyDown     += (_, e) => { if (e.Key == Key.Escape) Close(); };
-        Deactivated += (_, _) => Close();
+        KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
+
+        // Wire Deactivated only after the first Activated — wiring it in the constructor
+        // causes an immediate Close() because WPF fires WM_ACTIVATE during Show() itself.
+        void OnFirstActivated(object? s, EventArgs e)
+        {
+            Activated   -= OnFirstActivated;
+            Deactivated += (_, _) => { if (IsVisible) Dispatcher.InvokeAsync(Close); };
+        }
+        Activated += OnFirstActivated;
 
         BuildUI(appResources);
     }
