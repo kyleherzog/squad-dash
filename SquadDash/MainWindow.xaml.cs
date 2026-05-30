@@ -15195,11 +15195,25 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (_dockingService is not null)
         {
             var loadedLayout = _dockingService.LoadLayout(_currentWorkspace.FolderPath);
-            foreach (var slot in loadedLayout.Slots)
+
+            // Reset all panels to Top before applying the loaded layout so that panels
+            // stranded in a zone from a previous workspace are pulled back first.
+            foreach (var slot in _dockingService.CurrentLayout.Slots)
+                if (slot.Zone != SquadDash.PanelDocking.DockZone.Top)
+                    _dockingService.MovePanel(slot.PanelId, SquadDash.PanelDocking.DockZone.Top);
+
+            foreach (var slot in loadedLayout.Slots.OrderBy(s => s.Order))
             {
                 if (slot.Zone != SquadDash.PanelDocking.DockZone.Top)
                     _dockingService.MovePanel(slot.PanelId, slot.Zone);
             }
+
+            if (loadedLayout.LeftZoneWidth is double lw && lw > 0
+                && loadedLayout.Slots.Any(s => s.Zone == SquadDash.PanelDocking.DockZone.Left))
+                LeftZoneColumn.Width = new System.Windows.GridLength(lw, System.Windows.GridUnitType.Pixel);
+            if (loadedLayout.RightZoneWidth is double rw && rw > 0
+                && loadedLayout.Slots.Any(s => s.Zone == SquadDash.PanelDocking.DockZone.Right))
+                RightZoneColumn.Width = new System.Windows.GridLength(rw, System.Windows.GridUnitType.Pixel);
         }
 
         ClearRuntimeIssue();
