@@ -119,31 +119,78 @@ internal sealed class PanelDockingService
     public DockLayout CurrentLayout { get; private set; } = DockLayout.CreateDefault();
 
     /// <summary>
-    /// Moves <paramref name="panelId"/> to <paramref name="targetZone"/>, updating both
-    /// the in-memory layout model and (when WPF context is present) the actual UI elements.
+    /// Moves <paramref name="panelId"/> to <paramref name="targetZone"/> at position
+    /// <paramref name="targetOrder"/>, updating both the in-memory layout model and (when
+    /// WPF context is present) the actual UI elements.  When <paramref name="targetOrder"/>
+    /// is negative the panel is appended at the end of the zone.
+    /// Same-zone reordering is supported.
     /// </summary>
-    public void MovePanel(string panelId, DockZone targetZone)
+    public void MovePanel(string panelId, DockZone targetZone, int targetOrder = -1)
     {
         var existing = CurrentLayout.Slots.FirstOrDefault(s =>
             string.Equals(s.PanelId, panelId, StringComparison.OrdinalIgnoreCase));
 
-        if (existing is not null && existing.Zone == targetZone)
-            return;
-
         var sourceZone = existing?.Zone;
+        bool sameZone  = existing is not null && existing.Zone == targetZone;
 
-        // Update data model.
+        // Reorder within the same zone — skip if no explicit order requested or already correct.
+        if (sameZone)
+        {
+            if (targetOrder < 0) return; // no-op: same zone, no explicit reorder requested
+
+            var zoneSlots = CurrentLayout.Slots
+                .Where(s => s.Zone == targetZone)
+                .OrderBy(s => s.Order)
+                .Select(s => s.PanelId)
+                .ToList();
+            int currentIdx = zoneSlots.IndexOf(
+                zoneSlots.FirstOrDefault(id => string.Equals(id, panelId, StringComparison.OrdinalIgnoreCase)) ?? "");
+            int clampedTarget = targetOrder < 0 ? zoneSlots.Count - 1 : Math.Clamp(targetOrder, 0, zoneSlots.Count - 1);
+            if (currentIdx == clampedTarget) return;
+
+            // Reorder the list and reassign Order values using immutable record updates.
+            zoneSlots.Remove(panelId);
+            zoneSlots.Insert(Math.Clamp(clampedTarget, 0, zoneSlots.Count), panelId);
+            CurrentLayout.Slots = CurrentLayout.Slots
+                .Where(s => s.Zone != targetZone ||
+                            !zoneSlots.Contains(s.PanelId, StringComparer.OrdinalIgnoreCase))
+                .Concat(zoneSlots.Select((id, i) => new PanelSlot(id, targetZone, i)))
+                .ToList();
+
+            // WPF: reorder the panel within the zone list and rebuild the grid.
+            if (_panelRegistry is not null && _panelRegistry.TryGetValue(panelId, out var el))
+            {
+                var (zoneList, zoneGrid, scrollViewer) = GetZoneContext(targetZone);
+                if (zoneList is not null && zoneGrid is not null)
+                {
+                    zoneList.Remove(el);
+                    zoneList.Insert(Math.Clamp(clampedTarget, 0, zoneList.Count), el);
+                    RebuildZoneGrid(zoneGrid, zoneList, scrollViewer as FrameworkElement);
+                }
+            }
+            return;
+        }
+
+        // Cross-zone move — update data model.
         var slots = CurrentLayout.Slots
             .Where(s => !string.Equals(s.PanelId, panelId, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        int nextOrder = slots
+        // Determine insertion index within target zone.
+        var targetZoneSlots = slots
             .Where(s => s.Zone == targetZone)
-            .Select(s => s.Order)
-            .DefaultIfEmpty(-1)
-            .Max() + 1;
+            .OrderBy(s => s.Order)
+            .ToList();
 
-        slots.Add(new PanelSlot(panelId, targetZone, nextOrder));
+        int insertAt = targetOrder < 0 ? targetZoneSlots.Count : Math.Clamp(targetOrder, 0, targetZoneSlots.Count);
+
+        // Build ordered list of target zone panel IDs with the new panel inserted, then renumber.
+        var targetIds = targetZoneSlots.Select(s => s.PanelId).ToList();
+        targetIds.Insert(insertAt, panelId);
+
+        // Replace all target-zone slots with freshly ordered records.
+        slots = slots.Where(s => s.Zone != targetZone).ToList();
+        slots.AddRange(targetIds.Select((id, i) => new PanelSlot(id, targetZone, i)));
         CurrentLayout.Slots = slots;
 
         // WPF reparenting (only when context is wired).
@@ -165,22 +212,22 @@ internal sealed class PanelDockingService
         switch (targetZone)
         {
             case DockZone.Left:
-                AddToZone(_leftZonePanel!, _leftZonePanels, element, panelId, _leftZoneScrollViewer as FrameworkElement);
+                AddToZone(_leftZonePanel!, _leftZonePanels, element, panelId, _leftZoneScrollViewer as FrameworkElement, insertAt);
                 ExpandZone(_leftZoneColumn!, _leftSplitterColumn!, _leftZoneScrollViewer!, _leftZoneSplitter!, element);
                 break;
 
             case DockZone.Right:
-                AddToZone(_rightZonePanel!, _rightZonePanels, element, panelId, _rightZoneScrollViewer as FrameworkElement);
+                AddToZone(_rightZonePanel!, _rightZonePanels, element, panelId, _rightZoneScrollViewer as FrameworkElement, insertAt);
                 ExpandZone(_rightZoneColumn!, _rightSplitterColumn!, _rightZoneScrollViewer!, _rightZoneSplitter!, element);
                 break;
 
             case DockZone.Left2:
-                AddToZone(_left2ZonePanel!, _left2ZonePanels, element, panelId, _left2ZoneScrollViewer as FrameworkElement);
+                AddToZone(_left2ZonePanel!, _left2ZonePanels, element, panelId, _left2ZoneScrollViewer as FrameworkElement, insertAt);
                 ExpandZone(_left2ZoneColumn!, _left2SplitterColumn!, _left2ZoneScrollViewer!, _left2ZoneSplitter!, element);
                 break;
 
             case DockZone.Right2:
-                AddToZone(_right2ZonePanel!, _right2ZonePanels, element, panelId, _right2ZoneScrollViewer as FrameworkElement);
+                AddToZone(_right2ZonePanel!, _right2ZonePanels, element, panelId, _right2ZoneScrollViewer as FrameworkElement, insertAt);
                 ExpandZone(_right2ZoneColumn!, _right2SplitterColumn!, _right2ZoneScrollViewer!, _right2ZoneSplitter!, element);
                 break;
 
@@ -215,7 +262,7 @@ internal sealed class PanelDockingService
         RebuildZoneGrid(zone, zoneList, scrollViewer);
     }
 
-    private void AddToZone(Grid zone, List<FrameworkElement> zoneList, FrameworkElement element, string panelId, FrameworkElement? scrollViewer)
+    private void AddToZone(Grid zone, List<FrameworkElement> zoneList, FrameworkElement element, string panelId, FrameworkElement? scrollViewer, int insertAt = -1)
     {
         // Save the original height binding before we replace it (only once per panel).
         if (!_savedHeightBindings.ContainsKey(panelId))
@@ -229,9 +276,23 @@ internal sealed class PanelDockingService
         element.ClearValue(FrameworkElement.VerticalAlignmentProperty);
         element.ClearValue(FrameworkElement.HeightProperty); // row sizing handles height
 
-        zoneList.Add(element);
+        if (insertAt < 0 || insertAt >= zoneList.Count)
+            zoneList.Add(element);
+        else
+            zoneList.Insert(insertAt, element);
         RebuildZoneGrid(zone, zoneList, scrollViewer);
     }
+
+    /// <summary>Returns the zone list, grid, and scroll viewer for a given side zone.</summary>
+    private (List<FrameworkElement>? zoneList, Grid? zoneGrid, UIElement? scrollViewer) GetZoneContext(DockZone zone) =>
+        zone switch
+        {
+            DockZone.Left   => (_leftZonePanels,   _leftZonePanel,   _leftZoneScrollViewer),
+            DockZone.Right  => (_rightZonePanels,  _rightZonePanel,  _rightZoneScrollViewer),
+            DockZone.Left2  => (_left2ZonePanels,  _left2ZonePanel,  _left2ZoneScrollViewer),
+            DockZone.Right2 => (_right2ZonePanels, _right2ZonePanel, _right2ZoneScrollViewer),
+            _               => (null, null, null),
+        };
 
     /// <summary>
     /// Clears and rebuilds the side-zone Grid with one star row per panel and a

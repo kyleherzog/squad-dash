@@ -118,7 +118,7 @@ internal sealed class DockingMapWindow : Window
             {
                 try
                 {
-                    _dockingService.MovePanel(slot.SourcePanelId, slot.TargetZone);
+                    _dockingService.MovePanel(slot.SourcePanelId, slot.TargetZone, slot.TargetOrder);
                     if (!string.IsNullOrEmpty(_workspacePath))
                         _dockingService.SaveLayout(_workspacePath);
                 }
