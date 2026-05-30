@@ -36,11 +36,9 @@ public sealed class GripStripBorder : Border
         double h = GripHeight;
         if (r <= 0 || ActualWidth <= 0) return;
 
-        // Use the GripStripLine theme color — a midpoint between RosterPanelTitle
-        // and RosterPanelSurface — for subtle, low-contrast hatching.
-        var baseBrush = (TryFindResource("GripStripLine") as SolidColorBrush)
-                        ?? new SolidColorBrush(Color.FromRgb(0x72, 0x60, 0x4C));
-        var pen = new Pen(baseBrush, 1.0);
+        // Derive line color from the panel's own background: same hue, just a
+        // touch lighter (dark theme) or darker (light theme) — no accent intrusion.
+        var pen = new Pen(GetGripBrush(), 1.0);
         pen.Freeze();
 
         // Draw lines within the 80% strip height, stride 4 → 3 clear lines in 16px.
@@ -56,6 +54,41 @@ public sealed class GripStripBorder : Border
             dc.DrawLine(pen, new Point(lineStart, y + 0.5), new Point(lineEnd, y + 0.5));
             dc.Pop();
         }
+    }
+
+    /// <summary>
+    /// Returns a brush that is the same warm hue as the panel background but shifted
+    /// slightly toward mid-gray — barely visible hatching that never reads as an accent.
+    /// </summary>
+    private Brush GetGripBrush()
+    {
+        if (Background is SolidColorBrush bg)
+        {
+            var c = bg.Color;
+            double luminance = (0.299 * c.R + 0.587 * c.G + 0.114 * c.B) / 255.0;
+            Color tinted;
+            if (luminance < 0.5)
+            {
+                // Dark background: push ~14 steps toward white, preserving warm hue ratio.
+                tinted = Color.FromRgb(
+                    (byte)Math.Min(255, c.R + 22),
+                    (byte)Math.Min(255, c.G + 18),
+                    (byte)Math.Min(255, c.B + 12));
+            }
+            else
+            {
+                // Light background: pull ~12 steps toward black, same warm-hue ratio.
+                tinted = Color.FromRgb(
+                    (byte)Math.Max(0, c.R - 18),
+                    (byte)Math.Max(0, c.G - 15),
+                    (byte)Math.Max(0, c.B - 10));
+            }
+            return new SolidColorBrush(tinted);
+        }
+
+        // No solid background — fall back to theme token then hardcoded default.
+        return (TryFindResource("GripStripLine") as SolidColorBrush)
+               ?? new SolidColorBrush(Color.FromRgb(0x3E, 0x36, 0x30));
     }
 
     protected override void OnPreviewMouseLeftButtonDown(MouseButtonEventArgs e)
