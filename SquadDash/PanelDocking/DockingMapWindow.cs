@@ -12,16 +12,21 @@ internal sealed class DockingMapWindow : Window
     private readonly DockingMapViewModel _viewModel;
     private readonly PanelDockingService _dockingService;
     private readonly string _workspacePath;
+    private readonly Brush? _hoverBrush;
+
+    private Window? _previewOverlay;
 
     public DockingMapWindow(
         DockingMapViewModel viewModel,
         PanelDockingService dockingService,
         string workspacePath,
-        ResourceDictionary appResources)
+        ResourceDictionary appResources,
+        Brush? hoverBrush = null)
     {
         _viewModel      = viewModel;
         _dockingService = dockingService;
         _workspacePath  = workspacePath;
+        _hoverBrush     = hoverBrush;
 
         WindowStyle      = WindowStyle.None;
         AllowsTransparency = true;
@@ -41,6 +46,9 @@ internal sealed class DockingMapWindow : Window
             Deactivated += (_, _) => { if (IsVisible) Dispatcher.InvokeAsync(Close); };
         }
         Activated += OnFirstActivated;
+
+        // Close the preview overlay whenever this window closes.
+        Closed += (_, _) => { _previewOverlay?.Close(); _previewOverlay = null; };
 
         BuildUI(appResources);
     }
@@ -125,9 +133,58 @@ internal sealed class DockingMapWindow : Window
                 catch { /* swallow — best effort */ }
                 Close();
             };
+
+            // Show/hide a semi-transparent overlay on the main window at the target location.
+            btn.MouseEnter += (_, _) => OnSlotHover(slot);
+            btn.MouseLeave += (_, _) => HidePreview();
         }
 
         return btn;
+    }
+
+    private void OnSlotHover(SlotButtonViewModel slot)
+    {
+        var rect = _dockingService.GetSlotScreenRect(slot);
+        if (rect.IsEmpty) { HidePreview(); return; }
+        ShowPreview(rect);
+    }
+
+    private void ShowPreview(Rect screenRect)
+    {
+        if (_hoverBrush is null) return;
+        EnsurePreviewOverlay();
+        _previewOverlay!.Left   = screenRect.Left;
+        _previewOverlay!.Top    = screenRect.Top;
+        _previewOverlay!.Width  = Math.Max(screenRect.Width,  1);
+        _previewOverlay!.Height = Math.Max(screenRect.Height, 1);
+        if (!_previewOverlay.IsVisible)
+            _previewOverlay.Show();
+    }
+
+    private void HidePreview() => _previewOverlay?.Hide();
+
+    private void EnsurePreviewOverlay()
+    {
+        if (_previewOverlay is not null) return;
+
+        var previewBorder = new Border
+        {
+            Background   = _hoverBrush,
+            CornerRadius = new CornerRadius(6),
+        };
+
+        _previewOverlay = new Window
+        {
+            WindowStyle           = WindowStyle.None,
+            AllowsTransparency    = true,
+            Background            = Brushes.Transparent,
+            Topmost               = true,
+            ShowInTaskbar         = false,
+            ResizeMode            = ResizeMode.NoResize,
+            ShowActivated         = false,
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Content               = previewBorder,
+        };
     }
 
     private static Brush GetRes(ResourceDictionary r, string key, Brush fallback) =>

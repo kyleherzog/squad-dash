@@ -127,15 +127,13 @@ internal static class DockingMapBuilder
             innerHeight,
             DockZone.Left);
 
-        // Top zone slots — occupy upper half, centered vertically in the top band
-        double topY = (upperHalfHeight - TopSlotHeight) / 2;
-        topY = Math.Max(topY, 0);
+        // Top zone slots — top-aligned so their tops line up with the column panel tops
         BuildRowSlots(
             allSlots,
             sourcePanelId,
             topPanels,
             sourceInTop,
-            topX, topY,
+            topX, 0,
             TopSlotWidth, TopSlotHeight,
             topZoneWidth,
             DockZone.Top);

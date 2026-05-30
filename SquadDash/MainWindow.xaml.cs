@@ -12377,11 +12377,18 @@ public partial class MainWindow : Window, ILiveElementLocator
                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
                     var viewModel   = SquadDash.PanelDocking.DockingMapBuilder.BuildDockingMap(
                         id, _dockingService.CurrentLayout, visibleIds);
+                    Brush? hoverBrush = null;
+                    if (Application.Current.Resources["ActivePanelSurface"] is SolidColorBrush accentBrush)
+                    {
+                        var c = accentBrush.Color;
+                        hoverBrush = new SolidColorBrush(Color.FromArgb(128, c.R, c.G, c.B));
+                    }
                     var mapWindow = new SquadDash.PanelDocking.DockingMapWindow(
                         viewModel,
                         _dockingService,
                         _currentWorkspace?.FolderPath ?? string.Empty,
-                        Application.Current.Resources);
+                        Application.Current.Resources,
+                        hoverBrush);
                     mapWindow.Owner = this;
                     mapWindow.ShowAtScreenPoint(screenPoint);
                 }

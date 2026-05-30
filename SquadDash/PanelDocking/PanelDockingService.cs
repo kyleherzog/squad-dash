@@ -578,6 +578,125 @@ internal sealed class PanelDockingService
             ? []
             : ReadLayoutsFile(LayoutFilePath(_workspacePath)).Layouts.Select(l => l.Name).ToList();
 
+    /// <summary>
+    /// Returns the screen rectangle (in physical pixels) that should be highlighted when the
+    /// user hovers over <paramref name="slot"/> in the docking map popup.
+    /// <para>
+    /// • Existing-panel column slot → full panel screen rect.<br/>
+    /// • Append "+" column slot     → thin horizontal strip below the last panel.<br/>
+    /// • Empty column zone (Rule D) → zone scroll-viewer rect (min 20 px wide).<br/>
+    /// • Top zone slot              → thin vertical strip at the insertion X position.<br/>
+    /// • Empty top zone (Rule D)    → thin horizontal strip across the top-zone grid.
+    /// </para>
+    /// Returns <see cref="Rect.Empty"/> when the location cannot be determined.
+    /// </summary>
+    public Rect GetSlotScreenRect(SlotButtonViewModel slot)
+    {
+        if (_panelRegistry is null) return Rect.Empty;
+
+        var panelsInZone = CurrentLayout.Slots
+            .Where(s => s.Zone == slot.TargetZone)
+            .OrderBy(s => s.Order)
+            .Select(s => s.PanelId)
+            .ToList();
+
+        return slot.TargetZone == DockZone.Top
+            ? GetTopInsertionRect(slot.TargetOrder, panelsInZone)
+            : GetColumnSlotRect(slot.TargetZone, slot.TargetOrder, panelsInZone);
+    }
+
+    private Rect GetColumnSlotRect(DockZone zone, int targetOrder, List<string> panelsInZone)
+    {
+        UIElement? container = zone switch
+        {
+            DockZone.Left   => _leftZoneScrollViewer,
+            DockZone.Right  => _rightZoneScrollViewer,
+            DockZone.Left2  => _left2ZoneScrollViewer,
+            DockZone.Right2 => _right2ZoneScrollViewer,
+            _               => null,
+        };
+
+        if (panelsInZone.Count == 0)
+        {
+            // Rule D: empty zone — show narrow strip at the zone container's position.
+            if (container is FrameworkElement cfe && cfe.IsVisible)
+            {
+                var r = GetScreenRect(cfe);
+                return r.IsEmpty ? r : new Rect(r.Left, r.Top, Math.Max(r.Width, 20), r.Height);
+            }
+            return Rect.Empty;
+        }
+
+        if (targetOrder < panelsInZone.Count)
+        {
+            // Existing panel slot — return its full screen rect.
+            if (_panelRegistry!.TryGetValue(panelsInZone[targetOrder], out var el))
+                return GetScreenRect(el);
+        }
+        else
+        {
+            // "+" append slot — thin strip below the last panel.
+            if (_panelRegistry!.TryGetValue(panelsInZone[^1], out var lastEl))
+            {
+                var lr = GetScreenRect(lastEl);
+                if (!lr.IsEmpty)
+                    return new Rect(lr.Left, lr.Bottom + 2, lr.Width, 8);
+            }
+        }
+
+        return Rect.Empty;
+    }
+
+    private Rect GetTopInsertionRect(int targetOrder, List<string> panelsInZone)
+    {
+        if (_topZoneGrid is null) return Rect.Empty;
+
+        var gridRect = GetScreenRect(_topZoneGrid);
+        if (gridRect.IsEmpty) return Rect.Empty;
+
+        if (panelsInZone.Count == 0)
+        {
+            // Rule D: empty top zone — thin horizontal strip across the grid.
+            return new Rect(gridRect.Left, gridRect.Top, gridRect.Width, 8);
+        }
+
+        const double StripW = 8;
+
+        if (targetOrder < panelsInZone.Count)
+        {
+            // Thin vertical strip to the LEFT of the panel at targetOrder.
+            if (_panelRegistry!.TryGetValue(panelsInZone[targetOrder], out var el))
+            {
+                var r = GetScreenRect(el);
+                if (!r.IsEmpty)
+                    return new Rect(r.Left - StripW - 2, gridRect.Top, StripW, gridRect.Height);
+            }
+        }
+        else
+        {
+            // "+" append slot — thin vertical strip to the RIGHT of the last panel.
+            if (_panelRegistry!.TryGetValue(panelsInZone[^1], out var el))
+            {
+                var r = GetScreenRect(el);
+                if (!r.IsEmpty)
+                    return new Rect(r.Right + 2, gridRect.Top, StripW, gridRect.Height);
+            }
+        }
+
+        return Rect.Empty;
+    }
+
+    private static Rect GetScreenRect(FrameworkElement el)
+    {
+        if (!el.IsVisible || el.ActualWidth <= 0) return Rect.Empty;
+        try
+        {
+            var pt = el.PointToScreen(new Point(0, 0));
+            return new Rect(pt.X, pt.Y, el.ActualWidth, el.ActualHeight);
+        }
+        catch { return Rect.Empty; }
+    }
+
     /// <summary>Returns the zone that <paramref name="panelId"/> currently occupies.</summary>
     public DockZone GetCurrentZone(string panelId)
         => CurrentLayout.Slots.FirstOrDefault(s =>
