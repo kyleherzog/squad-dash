@@ -421,16 +421,10 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         _effectiveScaleX = effectiveScaleX;
         _effectiveScaleY = effectiveScaleY;
 
-        // Downscale the working image to logical pixel size so the canvas always operates in
-        // logical pixels and the output bitmap is naturally the right size for pasting.
-        // 795×660 on a 150% monitor → 530×440 logical.
-        if (effectiveScaleX > 1.05 || effectiveScaleY > 1.05) {
-            int outW = Math.Max(1, (int)Math.Round(imgW / effectiveScaleX));
-            int outH = Math.Max(1, (int)Math.Round(imgH / effectiveScaleY));
-            _workingImage = DownscaleHighQuality(clipboardImage, outW, outH);
-            imgW = outW;
-            imgH = outH;
-        }
+        // Preserve all physical pixels; only relabel DPI metadata to 96.
+        // The canvas operates in physical-pixel units and _zoom compensates so the
+        // window appears at the correct logical size on the screen.
+        _workingImage = DpiHelper.NormalizeTo96Dpi(clipboardImage);
 
         double dispW = imgW;
         double dispH = imgH;

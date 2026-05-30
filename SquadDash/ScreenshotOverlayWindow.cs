@@ -2917,23 +2917,9 @@ internal sealed class ScreenshotOverlayWindow : Window
             var pngName  = $"_pending-{theme}.png";
             var fullPath = System.IO.Path.Combine(_saveDirectory, pngName);
 
-            // Downsample to logical pixels so the PNG renders at correct size in documentation
-            if (Math.Abs(bmp.DpiX - 96.0) > 0.5)
-            {
-                var scaleX = 96.0 / bmp.DpiX;
-                var scaleY = 96.0 / bmp.DpiY;
-                var img = new Image { Source = bmp };
-                RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.Fant);
-                img.Measure(new Size(bmp.PixelWidth * scaleX, bmp.PixelHeight * scaleY));
-                img.Arrange(new Rect(0, 0, bmp.PixelWidth * scaleX, bmp.PixelHeight * scaleY));
-                var rtb = new RenderTargetBitmap(
-                    (int)Math.Round(bmp.PixelWidth * scaleX),
-                    (int)Math.Round(bmp.PixelHeight * scaleY),
-                    96, 96, PixelFormats.Pbgra32);
-                rtb.Render(img);
-                rtb.Freeze();
-                bmp = rtb;
-            }
+            // Preserve all physical pixels; only relabel DPI metadata to 96 so documentation
+            // viewers render the image at correct logical size without discarding any pixels.
+            bmp = DpiHelper.NormalizeTo96Dpi(bmp);
 
             using (var stream = File.Create(fullPath))
             {
