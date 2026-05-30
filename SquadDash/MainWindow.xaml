@@ -342,7 +342,7 @@
             <ColumnDefinition x:Name="RightSplitterColumn" Width="0" MinWidth="0" />
             <ColumnDefinition x:Name="RightZoneColumn" Width="0" MinWidth="0" />
         </Grid.ColumnDefinitions>
-        <!-- Left zone — top margin = MainGrid.Margin.Top(14) + TitleBar row height(38) = 52px -->
+        <!-- Left zone — top margin = TitleBar height(~38px) + gap(~14px) = 52px; matches MainGrid.Margin.Top -->
         <ScrollViewer x:Name="LeftZoneScrollViewer"
                       Grid.Column="0"
                       Margin="0,52,0,0"
@@ -359,29 +359,13 @@
                       VerticalAlignment="Stretch"
                       Background="{DynamicResource AppSurface}"
                       Visibility="Collapsed" />
-        <Grid x:Name="MainGrid" Grid.Column="2" Margin="12,14,14,14">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="38" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" MinWidth="320" />
-            <ColumnDefinition x:Name="DocsSplitterColumn" Width="0" />
-            <ColumnDefinition x:Name="DocsPanelColumn" Width="0" />
-        </Grid.ColumnDefinitions>
-
-        <!-- Titlebar row — bleeds edge-to-edge by cancelling the outer Grid's Margin="14" -->
+        <!-- Titlebar — spans full width including docked side zones -->
         <Grid x:Name="TitlebarGrid"
-              Grid.Row="0"
-              Grid.Column="0"
-              Grid.ColumnSpan="3"
-              Margin="-12,-14,-14,6"
+              Grid.ColumnSpan="5"
+              Margin="0,0,0,0"
               Background="{DynamicResource ChromeSurface}"
               MouseLeftButtonDown="TitlebarGrid_MouseLeftButtonDown"
+              VerticalAlignment="Top"
               SizeChanged="TitlebarGrid_SizeChanged">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
@@ -696,8 +680,23 @@
 
         </Grid>  <!-- end TitlebarGrid -->
 
+        <Grid x:Name="MainGrid" Grid.Column="2" Margin="12,52,14,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" MinWidth="320" />
+            <ColumnDefinition x:Name="DocsSplitterColumn" Width="0" />
+            <ColumnDefinition x:Name="DocsPanelColumn" Width="0" />
+        </Grid.ColumnDefinitions>
+
+
         <Border x:Name="WorkspaceIssuePanelBorder"
-                Grid.Row="1"
+                Grid.Row="0"
                 Grid.Column="0"
                 Margin="0,0,0,12"
                 Padding="14"
@@ -798,7 +797,7 @@
         </Border>
 
         <Border x:Name="StatusPanelBorder"
-                Grid.Row="2"
+                Grid.Row="1"
                 Grid.Column="0"
                 Padding="0"
                 Background="Transparent"
@@ -1784,7 +1783,7 @@
 
         <!-- Maintenance "While You Were Away" banner (Row 3) — shown after a maintenance cycle completes -->
         <Border x:Name="MaintenanceBannerBorder"
-                Grid.Row="3"
+                Grid.Row="2"
                 Grid.Column="0"
                 Margin="0,6,0,0"
                 Padding="14,10"
@@ -1823,7 +1822,7 @@
             </DockPanel>
         </Border>
 
-        <Grid x:Name="TranscriptPanelsGrid" Grid.Row="4" Grid.Column="0" Margin="0,14,0,14">
+        <Grid x:Name="TranscriptPanelsGrid" Grid.Row="3" Grid.Column="0" Margin="0,14,0,14">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
@@ -2276,7 +2275,7 @@
         </Grid>
 
         <Border x:Name="PromptBorder"
-                Grid.Row="5"
+                Grid.Row="4"
                 Grid.Column="0"
                 Padding="14"
                 Background="{DynamicResource InputSurface}"
