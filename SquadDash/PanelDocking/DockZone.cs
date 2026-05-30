@@ -1,5 +1,6 @@
 #nullable enable
 
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace SquadDash.PanelDocking;
@@ -13,11 +14,27 @@ namespace SquadDash.PanelDocking;
 /// Future zones (Left2, Right2, …) can be appended without breaking existing serialized layouts,
 /// provided unknown values are gracefully handled as Top during deserialization.
 /// </remarks>
-[JsonConverter(typeof(JsonStringEnumConverter))]
+[JsonConverter(typeof(DockZoneJsonConverter))]
 public enum DockZone
 {
     Top,
     Left,
     Right
     // Future: Left2, Right2, Bottom, …
+}
+
+/// <summary>
+/// Tolerant JSON converter for <see cref="DockZone"/>: falls back to
+/// <see cref="DockZone.Top"/> for any unrecognised string instead of throwing.
+/// </summary>
+public class DockZoneJsonConverter : JsonConverter<DockZone>
+{
+    public override DockZone Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        var value = reader.GetString();
+        return Enum.TryParse<DockZone>(value, ignoreCase: true, out var zone) ? zone : DockZone.Top;
+    }
+
+    public override void Write(Utf8JsonWriter writer, DockZone value, JsonSerializerOptions options)
+        => writer.WriteStringValue(value.ToString());
 }

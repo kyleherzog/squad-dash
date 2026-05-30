@@ -13,6 +13,12 @@ public sealed class DockLayout
     /// <summary>One slot entry per dockable panel included in this layout.</summary>
     public List<PanelSlot> Slots { get; set; } = new();
 
+    /// <summary>Saved width of the left dock zone column; null means use default.</summary>
+    public double? LeftZoneWidth { get; set; }
+
+    /// <summary>Saved width of the right dock zone column; null means use default.</summary>
+    public double? RightZoneWidth { get; set; }
+
     /// <summary>
     /// Returns the canonical default layout: every dockable panel in the Top zone,
     /// ordered to match their current left-to-right position in the status strip.
@@ -29,7 +35,6 @@ public sealed class DockLayout
             new PanelSlot("notes",       DockZone.Top, 4),
             new PanelSlot("health",      DockZone.Top, 5),
             new PanelSlot("trace",       DockZone.Top, 6),
-            new PanelSlot("docs",        DockZone.Top, 7),
         ]
     };
 }

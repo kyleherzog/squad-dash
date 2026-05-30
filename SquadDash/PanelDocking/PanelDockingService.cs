@@ -13,7 +13,7 @@ namespace SquadDash.PanelDocking;
 /// </summary>
 internal sealed class PanelDockingService
 {
-    private readonly Dictionary<string, DockLayout> _savedLayouts = new(StringComparer.OrdinalIgnoreCase);
+    private string? _workspacePath;
 
     // WPF context — null when running under unit tests.
     private readonly Dictionary<string, FrameworkElement>? _panelRegistry;
@@ -137,15 +137,8 @@ internal sealed class PanelDockingService
 
     private static void RemoveFromParent(FrameworkElement element)
     {
-        switch (System.Windows.Media.VisualTreeHelper.GetParent(element))
-        {
-            case Grid g:
-                g.Children.Remove(element);
-                break;
-            case StackPanel sp:
-                sp.Children.Remove(element);
-                break;
-        }
+        if (LogicalTreeHelper.GetParent(element) is Panel parent)
+            parent.Children.Remove(element);
     }
 
     private static void AddToZone(StackPanel zone, FrameworkElement element)
@@ -173,7 +166,7 @@ internal sealed class PanelDockingService
         UIElement splitter,
         FrameworkElement arrivedPanel)
     {
-        if (zoneCol.Width.Value == 0)
+        if (zoneCol.Width.IsAbsolute && zoneCol.Width.Value == 0)
         {
             double width = arrivedPanel.ActualWidth > 0 ? arrivedPanel.ActualWidth : 280;
             zoneCol.Width = new GridLength(width);
@@ -212,6 +205,7 @@ internal sealed class PanelDockingService
     /// </summary>
     public void SaveLayout(string workspacePath)
     {
+        _workspacePath = workspacePath;
         var filePath = LayoutFilePath(workspacePath);
         Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
 
@@ -224,7 +218,11 @@ internal sealed class PanelDockingService
         var snapshot = new DockLayout
         {
             Name = CurrentLayout.Name,
-            Slots = CurrentLayout.Slots.ToList()
+            Slots = CurrentLayout.Slots.ToList(),
+            LeftZoneWidth  = (_leftZoneColumn  is { } lc && lc.Width.IsAbsolute && lc.Width.Value > 0)
+                             ? lc.Width.Value : (double?)null,
+            RightZoneWidth = (_rightZoneColumn is { } rc && rc.Width.IsAbsolute && rc.Width.Value > 0)
+                             ? rc.Width.Value : (double?)null,
         };
 
         if (idx >= 0)
@@ -243,6 +241,7 @@ internal sealed class PanelDockingService
     /// </summary>
     public DockLayout LoadLayout(string workspacePath)
     {
+        _workspacePath = workspacePath;
         var filePath = LayoutFilePath(workspacePath);
         if (!File.Exists(filePath))
         {
@@ -255,7 +254,7 @@ internal sealed class PanelDockingService
             string.Equals(l.Name, file.ActiveLayout, StringComparison.OrdinalIgnoreCase));
 
         CurrentLayout = layout is not null
-            ? new DockLayout { Name = layout.Name, Slots = layout.Slots.ToList() }
+            ? new DockLayout { Name = layout.Name, Slots = layout.Slots.ToList(), LeftZoneWidth = layout.LeftZoneWidth, RightZoneWidth = layout.RightZoneWidth }
             : DockLayout.CreateDefault();
 
         return CurrentLayout;
@@ -285,9 +284,11 @@ internal sealed class PanelDockingService
         }
     }
 
-    /// <summary>Returns the names of all layouts saved in this session.</summary>
+    /// <summary>Returns the names of all layouts saved for the current workspace.</summary>
     public IReadOnlyList<string> SavedLayoutNames =>
-        _savedLayouts.Keys.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+        _workspacePath is null
+            ? []
+            : ReadLayoutsFile(LayoutFilePath(_workspacePath)).Layouts.Select(l => l.Name).ToList();
 
     /// <summary>Returns the zone that <paramref name="panelId"/> currently occupies.</summary>
     public DockZone GetCurrentZone(string panelId)
