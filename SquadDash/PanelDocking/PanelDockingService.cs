@@ -42,6 +42,7 @@ internal sealed class PanelDockingService
     private readonly UIElement? _right2ZoneSplitter;
 
     // Maps each dockable panel ID to its column index within TopZonePanelsGrid.
+    // Used only to validate which panels may live in the top zone.
     private static readonly Dictionary<string, int> TopZoneColumnMap = new(StringComparer.OrdinalIgnoreCase)
     {
         ["loop"]        = 3,
@@ -51,6 +52,10 @@ internal sealed class PanelDockingService
         ["maintenance"] = 8,
         ["inbox"]       = 9,
     };
+
+    // Physical grid columns available for dockable top-zone panels, in left-to-right order.
+    // Column 5 is occupied by WatchPanelBorder (non-dockable) so it is skipped.
+    private static readonly int[] TopZonePhysicalColumns = [3, 4, 6, 7, 8, 9];
 
     // Saves each panel's original XAML Height binding so it can be restored when the
     // panel moves back to the Top zone after having been in a Left/Right zone.
@@ -158,14 +163,22 @@ internal sealed class PanelDockingService
                 .ToList();
 
             // WPF: reorder the panel within the zone list and rebuild the grid.
-            if (_panelRegistry is not null && _panelRegistry.TryGetValue(panelId, out var el))
+            // For the Top zone, reassign physical columns; for side zones, rebuild the row grid.
+            if (_panelRegistry is not null)
             {
-                var (zoneList, zoneGrid, scrollViewer) = GetZoneContext(targetZone);
-                if (zoneList is not null && zoneGrid is not null)
+                if (targetZone == DockZone.Top)
                 {
-                    zoneList.Remove(el);
-                    zoneList.Insert(Math.Clamp(clampedTarget, 0, zoneList.Count), el);
-                    RebuildZoneGrid(zoneGrid, zoneList, scrollViewer as FrameworkElement);
+                    RebuildTopZoneLayout();
+                }
+                else if (_panelRegistry.TryGetValue(panelId, out var el))
+                {
+                    var (zoneList, zoneGrid, scrollViewer) = GetZoneContext(targetZone);
+                    if (zoneList is not null && zoneGrid is not null)
+                    {
+                        zoneList.Remove(el);
+                        zoneList.Insert(Math.Clamp(clampedTarget, 0, zoneList.Count), el);
+                        RebuildZoneGrid(zoneGrid, zoneList, scrollViewer as FrameworkElement);
+                    }
                 }
             }
             return;
@@ -343,7 +356,7 @@ internal sealed class PanelDockingService
     private void AddToTopZone(string panelId, FrameworkElement element)
     {
         if (_topZoneGrid is null) return;
-        if (!TopZoneColumnMap.TryGetValue(panelId, out int col)) return;
+        if (!TopZoneColumnMap.ContainsKey(panelId)) return; // not a valid top-zone panel
 
         // Remove any zone-height binding and restore the original Top-zone height constraint.
         element.ClearValue(FrameworkElement.HeightProperty);
@@ -352,9 +365,32 @@ internal sealed class PanelDockingService
 
         element.VerticalAlignment = VerticalAlignment.Top;
         element.Margin = new Thickness(14, 0, 0, 0);
-        Grid.SetColumn(element, col);
         DetachFromCurrentPanelParent(element);
         _topZoneGrid.Children.Add(element);
+
+        // Assign columns for ALL top-zone panels based on their current Order in the layout.
+        RebuildTopZoneLayout();
+    }
+
+    /// <summary>
+    /// Assigns each top-zone panel element to the physical grid column that corresponds
+    /// to its rank (0-based) in <see cref="CurrentLayout"/>.  Call after any change to
+    /// the top-zone order so that the visual left-to-right order tracks the data model.
+    /// </summary>
+    private void RebuildTopZoneLayout()
+    {
+        if (_topZoneGrid is null || _panelRegistry is null) return;
+
+        var topSlots = CurrentLayout.Slots
+            .Where(s => s.Zone == DockZone.Top)
+            .OrderBy(s => s.Order)
+            .ToList();
+
+        for (int rank = 0; rank < topSlots.Count && rank < TopZonePhysicalColumns.Length; rank++)
+        {
+            if (_panelRegistry.TryGetValue(topSlots[rank].PanelId, out var element))
+                Grid.SetColumn(element, TopZonePhysicalColumns[rank]);
+        }
     }
 
     private static void DetachFromCurrentPanelParent(FrameworkElement element)
@@ -480,6 +516,9 @@ internal sealed class PanelDockingService
             MovePanel(slot.PanelId, slot.Zone);
 
         CurrentLayout = targetSnapshot;
+
+        // Reassign physical top-zone columns to match the restored layout order.
+        RebuildTopZoneLayout();
     }
 
     private static DockLayout CloneLayout(DockLayout layout) => new()
