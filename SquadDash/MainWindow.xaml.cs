@@ -15235,10 +15235,10 @@ public partial class MainWindow : Window, ILiveElementLocator
             var loadedLayout = _dockingService.LoadAndApplyLayout(_currentWorkspace.FolderPath);
 
             if (loadedLayout.LeftZoneWidth is double lw && lw > 0
-                && loadedLayout.Slots.Any(s => s.Zone == SquadDash.PanelDocking.DockZone.Left))
+                && LeftZoneColumn.Width.Value > 0)
                 LeftZoneColumn.Width = new System.Windows.GridLength(lw, System.Windows.GridUnitType.Pixel);
             if (loadedLayout.RightZoneWidth is double rw && rw > 0
-                && loadedLayout.Slots.Any(s => s.Zone == SquadDash.PanelDocking.DockZone.Right))
+                && RightZoneColumn.Width.Value > 0)
                 RightZoneColumn.Width = new System.Windows.GridLength(rw, System.Windows.GridUnitType.Pixel);
         }
 
