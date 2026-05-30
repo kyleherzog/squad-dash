@@ -582,12 +582,12 @@ internal sealed class PanelDockingService
     /// Returns the screen rectangle (in physical pixels) that should be highlighted when the
     /// user hovers over <paramref name="slot"/> in the docking map popup.
     /// <para>
-    /// • Existing-panel column slot → full panel screen rect.<br/>
-    /// • Append "+" column slot     → thin horizontal strip below the last panel.<br/>
-    /// • Empty column zone (Rule D) → zone scroll-viewer rect (min 20 px wide).<br/>
-    /// • Top zone slot, source already in top → full panel screen rect (replace/reorder).<br/>
-    /// • Top zone slot, source from elsewhere → thin vertical insertion strip.<br/>
-    /// • Empty top zone (Rule D)    → thin horizontal strip across the top-zone grid.
+    /// • Column slot (N existing panels) → column's left/right bounds, height divided into
+    ///   (N+1) equal bands; targetOrder selects the band (append slot = last band).<br/>
+    /// • Empty column zone              → 64px wide strip at the column's near edge.<br/>
+    /// • Top zone slot, source in top   → full panel screen rect (replace/reorder).<br/>
+    /// • Top zone slot, source elsewhere → thin vertical insertion strip.<br/>
+    /// • Empty top zone                 → thin horizontal strip across the top-zone grid.
     /// </para>
     /// Returns <see cref="Rect.Empty"/> when the location cannot be determined.
     /// </summary>
@@ -645,33 +645,36 @@ internal sealed class PanelDockingService
 
         if (panelsInZone.Count == 0)
         {
-            // Rule D: empty zone — show narrow strip at the zone container's position.
+            // Empty zone — 64px wide strip at the edge matching the column's screen side.
             if (container is FrameworkElement cfe && cfe.IsVisible)
             {
                 var r = GetScreenRect(cfe);
-                return r.IsEmpty ? r : new Rect(r.Left, r.Top, Math.Max(r.Width, 20), r.Height);
+                if (r.IsEmpty) return r;
+                const double StripWidth = 64;
+                bool isRightSide = zone == DockZone.Right || zone == DockZone.Right2;
+                double x = isRightSide ? r.Right - StripWidth : r.Left;
+                return new Rect(x, r.Top, StripWidth, r.Height);
             }
             return Rect.Empty;
         }
 
-        if (targetOrder < panelsInZone.Count)
-        {
-            // Existing panel slot — return its full screen rect.
-            if (_panelRegistry!.TryGetValue(panelsInZone[targetOrder], out var el))
-                return GetScreenRect(el);
-        }
-        else
-        {
-            // "+" append slot — thin strip below the last panel.
-            if (_panelRegistry!.TryGetValue(panelsInZone[^1], out var lastEl))
-            {
-                var lr = GetScreenRect(lastEl);
-                if (!lr.IsEmpty)
-                    return new Rect(lr.Left, lr.Bottom + 2, lr.Width, 8);
-            }
-        }
+        // Get the column's bounding rect (horizontal bounds + total height).
+        // Prefer the container scroll-viewer; fall back to the first panel's rect.
+        Rect colRect = Rect.Empty;
+        if (container is FrameworkElement cfe2 && cfe2.IsVisible)
+            colRect = GetScreenRect(cfe2);
+        if (colRect.IsEmpty && _panelRegistry!.TryGetValue(panelsInZone[0], out var firstFallback))
+            colRect = GetScreenRect(firstFallback);
+        if (colRect.IsEmpty) return Rect.Empty;
 
-        return Rect.Empty;
+        // Divide the column height into (N+1) equal bands — one slot per existing panel
+        // plus one for the incoming panel.  targetOrder selects the band.
+        // The append "+" slot (targetOrder == panelsInZone.Count) naturally becomes the last band.
+        int sections = panelsInZone.Count + 1;
+        int index    = Math.Clamp(targetOrder, 0, sections - 1);
+        double bandH = colRect.Height / sections;
+        double top   = colRect.Top + index * bandH;
+        return new Rect(colRect.Left, top, colRect.Width, bandH);
     }
 
     private Rect GetTopInsertionRect(int targetOrder, List<string> panelsInZone)
