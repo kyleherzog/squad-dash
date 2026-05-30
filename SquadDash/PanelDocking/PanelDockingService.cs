@@ -599,6 +599,12 @@ internal sealed class PanelDockingService
             .Where(s => s.Zone == slot.TargetZone)
             .OrderBy(s => s.Order)
             .Select(s => s.PanelId)
+            // Filter to only registered (visible) panels — matches the filtered view that
+            // DockingMapBuilder used when producing slot TargetOrder values.  Unregistered
+            // panels (e.g. "health", "trace") in the layout would inflate the count and push
+            // the append slot into the wrong branch.
+            .Where(id => _panelRegistry!.ContainsKey(id) ||
+                         string.Equals(id, slot.SourcePanelId, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         if (slot.TargetZone == DockZone.Top)
