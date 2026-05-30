@@ -9,8 +9,19 @@
 
 ## 🟡 Mid Priority
 
+- [ ] **[Docking] Wire PanelDockingService into MainWindow layout** *(Owner: orion-vale)*
+  Wire MovePanel() to actually move panel controls between Top/Left/Right container stacks. Define the three container elements in the main window Grid.
 
-- [ ] **[Duplication] Investigate DUP-007 — re-scan or re-examine original findings** *(Owner: Fred)*
+- [ ] **[Docking] Ctrl+click popup menu for panel relocation** *(Owner: orion-vale)*
+  When the user Ctrl+clicks anywhere on a dockable panel, show a context menu with dock-target buttons (Top / Left / Right). Clicking instantly moves the panel via PanelDockingService.
+
+- [ ] **[Docking] Named layout persistence per workspace** *(Owner: orion-vale)*
+  Serialize/deserialize DockLayout to per-workspace settings. Allow save and recall by name. Wire to ApplicationSettingsStore or a dedicated layouts.json file.
+
+- [ ] **[Docking] Panel docking UI spec** *(Owner: mira-quill)*
+  Spec out the Ctrl+click popup UI — button layout, labels, visual affordances for each dock zone, keyboard shortcut (if any). To be done before the popup is implemented.
+
+- [ ] **[Duplication] Investigate DUP-007— re-scan or re-examine original findings** *(Owner: Fred)*
   The original duplication scan (2026-05-21) identified DUP-001–010. Fixes were committed for
   DUP-001–006 and DUP-008–010. DUP-007 has no recorded fix and no description was persisted.
   Re-run the duplication scan (or examine git history from that session) to identify what DUP-007
