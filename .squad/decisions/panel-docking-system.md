@@ -1,8 +1,9 @@
 # ADR: Panel Docking System
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-06-01  
-**Author:** Orion Vale (Lead Architect)
+**Author:** Orion Vale (Lead Architect)  
+**Decisions recorded:** 2026-05-29 (answers to open questions)
 
 ---
 
@@ -68,7 +69,7 @@ PanelDockingService — service: CurrentLayout, MovePanel(), SaveLayout(), LoadL
 ### Layout Persistence
 
 - Layouts are serialized as `DockLayout` objects (JSON).
-- Each workspace stores its layouts in a dedicated `layouts.json` file (path: `<workspace>/.squad/panel-layouts.json`) **or** as a field in the existing `WorkspaceDocsPanelState` — to be decided during implementation (see Open Questions).
+- Each workspace stores its layouts in **`.squad/panel-layouts.json`** (workspace-relative path). This keeps layout state out of the already large `WorkspaceDocsPanelState` record.
 - Multiple named layouts are supported: the user can save the current arrangement under a name and recall it later.
 - The **active layout name** is also persisted so it survives restart.
 - `DockLayout.CreateDefault()` returns the canonical default: all panels in `Top`, ordered by their
@@ -132,20 +133,31 @@ assigned to Orion Vale — the data model is deliberately UI-agnostic.
 **Negative / Risks:**
 - The Left/Right containers require non-trivial `MainGrid` restructuring (new rows/columns or
   wrapping element). This is the highest-complexity part of the implementation.
-- `DocsPanel` is currently at the root `MainGrid` level (not inside `StatusAgentPanelsGrid`), so
-  moving it to a zone requires special handling.
+- **`DocsPanel` is not a dockable panel.** It remains in its dedicated `MainGrid` column with its existing `GridSplitter`. Only the 7 panels in `StatusAgentPanelsGrid` (Tasks, Inbox, Maintenance, Notes, Health, Trace, Approvals) participate in the docking system.
 - Panel height management: Top-zone panels currently match the height of `ActiveAgentsPanelBorder`
   via `MultiBinding`. Left/Right panels will need a different sizing strategy (fill available height).
 
 ---
 
-## Open Questions
+## Resolved Decisions
 
-1. **Storage format** — integrate `DockLayout` into the existing `WorkspaceDocsPanelState` record, or
-   keep a separate `panel-layouts.json` file per workspace? Separate file avoids growing the already
-   large state record.
-2. **DocsPanel special-casing** — `DocsPanel` has its own column + splitter in `MainGrid`. Should it
-   be treated as a first-class dockable or kept separate with just a zone hint?
-3. **Left zone width** — fixed (e.g. 260px), auto-sized, or user-resizable via `GridSplitter`?
-4. **Panel header affordance** — should panels in Left/Right zones display a zone indicator icon so
-   users know they can Ctrl+click to move them? (UI spec question for Mira Quill.)
+The following questions from the original draft have been answered:
+
+### D1 — Storage format ✅
+**Decision:** Separate `.squad/panel-layouts.json` file per workspace.  
+Keeps layout state out of the already large `WorkspaceDocsPanelState` record.
+
+### D2 — DocsPanel special-casing ✅
+**Decision:** `DocsPanel` is **not** a dockable panel. It remains in its dedicated root-grid column with its existing `GridSplitter`. The docking system applies only to the 7 panels currently in `StatusAgentPanelsGrid`.
+
+### D3 — Left zone width ✅
+**Decision:** Left (and Right) zone columns are **user-resizable via `GridSplitter`**.  
+Initial width when the first panel arrives in an empty zone: match the panel's natural/current width (so there's no jarring resize). The `GridSplitter` allows the user to adjust from there.
+
+### D4 — Panel header affordance ✅
+**Decision:** Add a small **hamburger-style icon** (≡) to the left of each panel's close button when the panel is in Left or Right zone (or always, for discoverability — to be decided by Mira's UI spec task).  
+Tooltip text: *"Ctrl+click anywhere on this panel to move it to another zone."*  
+The icon serves as a visual affordance and as a direct Ctrl+click target.  
+Exact icon glyph, size, and placement to be specified in the UI spec task (owner: Mira Quill).
+
+

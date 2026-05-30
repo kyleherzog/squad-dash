@@ -10,7 +10,7 @@
 ## 🟡 Mid Priority
 
 - [ ] **[Docking] Wire PanelDockingService into MainWindow layout** *(Owner: orion-vale)*
-  Wire MovePanel() to actually move panel controls between Top/Left/Right container stacks. Define the three container elements in the main window Grid.
+  Wire MovePanel() to actually move panel controls between Top/Left/Right container stacks. Define the three container elements in the main window Grid. Left/Right zones use GridSplitter for resizing; initial width = arriving panel's natural width. DocsPanel is NOT dockable — stays in its own root-grid column. See ADR: .squad/decisions/panel-docking-system.md
 
 - [ ] **[Docking] Ctrl+click popup menu for panel relocation** *(Owner: orion-vale)*
   When the user Ctrl+clicks anywhere on a dockable panel, show a context menu with dock-target buttons (Top / Left / Right). Clicking instantly moves the panel via PanelDockingService.
@@ -20,6 +20,7 @@
 
 - [ ] **[Docking] Panel docking UI spec** *(Owner: mira-quill)*
   Spec out the Ctrl+click popup UI — button layout, labels, visual affordances for each dock zone, keyboard shortcut (if any). To be done before the popup is implemented.
+  Affordance decision: hamburger icon (≡) to the left of close button; tooltip = "Ctrl+click anywhere on this panel to move it to another zone." Decide: show icon always or only in Left/Right zones.
 
 - [ ] **[Duplication] Investigate DUP-007— re-scan or re-examine original findings** *(Owner: Fred)*
   The original duplication scan (2026-05-21) identified DUP-001–010. Fixes were committed for
