@@ -1,5 +1,8 @@
 #nullable enable
 
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -192,29 +195,94 @@ internal sealed class PanelDockingService
         splitter.Visibility = Visibility.Collapsed;
     }
 
-    /// <summary>Stores a snapshot of <see cref="CurrentLayout"/> under <paramref name="name"/>.</summary>
-    public void SaveLayout(string name)
+    private static readonly JsonSerializerOptions _jsonOptions = new()
     {
+        WriteIndented = true,
+        Converters = { new JsonStringEnumConverter() },
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
+
+    private static string LayoutFilePath(string workspacePath) =>
+        Path.Combine(workspacePath, ".squad", "panel-layouts.json");
+
+    /// <summary>
+    /// Persists <see cref="CurrentLayout"/> (upserted by name) to
+    /// <c>&lt;workspacePath&gt;/.squad/panel-layouts.json</c>.
+    /// Creates the <c>.squad</c> directory if it does not yet exist.
+    /// </summary>
+    public void SaveLayout(string workspacePath)
+    {
+        var filePath = LayoutFilePath(workspacePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+
+        var file = ReadLayoutsFile(filePath);
+        file.ActiveLayout = CurrentLayout.Name;
+
+        var idx = file.Layouts.FindIndex(l =>
+            string.Equals(l.Name, CurrentLayout.Name, StringComparison.OrdinalIgnoreCase));
+
         var snapshot = new DockLayout
         {
-            Name = name,
+            Name = CurrentLayout.Name,
             Slots = CurrentLayout.Slots.ToList()
         };
-        _savedLayouts[name] = snapshot;
+
+        if (idx >= 0)
+            file.Layouts[idx] = snapshot;
+        else
+            file.Layouts.Add(snapshot);
+
+        File.WriteAllText(filePath, JsonSerializer.Serialize(file, _jsonOptions));
     }
 
-    /// <summary>Restores a previously saved layout by name. Returns true if found.</summary>
-    public bool LoadLayout(string name)
+    /// <summary>
+    /// Reads <c>&lt;workspacePath&gt;/.squad/panel-layouts.json</c>, sets
+    /// <see cref="CurrentLayout"/> to the active layout, and returns it.
+    /// Falls back to <see cref="DockLayout.CreateDefault"/> if the file is
+    /// missing or the active layout name is not found.
+    /// </summary>
+    public DockLayout LoadLayout(string workspacePath)
     {
-        if (!_savedLayouts.TryGetValue(name, out var layout))
-            return false;
-
-        CurrentLayout = new DockLayout
+        var filePath = LayoutFilePath(workspacePath);
+        if (!File.Exists(filePath))
         {
-            Name = layout.Name,
-            Slots = layout.Slots.ToList()
-        };
-        return true;
+            CurrentLayout = DockLayout.CreateDefault();
+            return CurrentLayout;
+        }
+
+        var file = ReadLayoutsFile(filePath);
+        var layout = file.Layouts.FirstOrDefault(l =>
+            string.Equals(l.Name, file.ActiveLayout, StringComparison.OrdinalIgnoreCase));
+
+        CurrentLayout = layout is not null
+            ? new DockLayout { Name = layout.Name, Slots = layout.Slots.ToList() }
+            : DockLayout.CreateDefault();
+
+        return CurrentLayout;
+    }
+
+    /// <summary>
+    /// Renames <see cref="CurrentLayout"/> without saving to disk.
+    /// Call <see cref="SaveLayout"/> afterwards to persist the new name.
+    /// </summary>
+    public void RenameCurrentLayout(string newName) =>
+        CurrentLayout.Name = newName;
+
+    private static PanelLayoutsFile ReadLayoutsFile(string filePath)
+    {
+        if (!File.Exists(filePath))
+            return new PanelLayoutsFile();
+
+        try
+        {
+            var json = File.ReadAllText(filePath);
+            return JsonSerializer.Deserialize<PanelLayoutsFile>(json, _jsonOptions)
+                   ?? new PanelLayoutsFile();
+        }
+        catch
+        {
+            return new PanelLayoutsFile();
+        }
     }
 
     /// <summary>Returns the names of all layouts saved in this session.</summary>

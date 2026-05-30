@@ -12387,7 +12387,12 @@ public partial class MainWindow : Window, ILiveElementLocator
             var z = zone; // capture for lambda
             item.Click += (_, _) =>
             {
-                try { _dockingService.MovePanel(panelId, z); }
+                try
+                {
+                    _dockingService.MovePanel(panelId, z);
+                    if (_currentWorkspace is not null)
+                        _dockingService.SaveLayout(_currentWorkspace.FolderPath);
+                }
                 catch (Exception ex) { HandleUiCallbackException("DockContextMenu.MovePanel", ex); }
             };
             menu.Items.Add(item);
@@ -15184,6 +15189,17 @@ public partial class MainWindow : Window, ILiveElementLocator
         _notesPanel?.Refresh(_noteItems);
 
         _inboxStore = new InboxStore(_currentWorkspace.SquadFolderPath);
+
+        // Load persisted panel layout for this workspace and apply any non-default placements.
+        if (_dockingService is not null)
+        {
+            var loadedLayout = _dockingService.LoadLayout(_currentWorkspace.FolderPath);
+            foreach (var slot in loadedLayout.Slots)
+            {
+                if (slot.Zone != SquadDash.PanelDocking.DockZone.Top)
+                    _dockingService.MovePanel(slot.PanelId, slot.Zone);
+            }
+        }
 
         ClearRuntimeIssue();
 
