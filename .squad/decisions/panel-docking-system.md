@@ -155,9 +155,12 @@ Keeps layout state out of the already large `WorkspaceDocsPanelState` record.
 Initial width when the first panel arrives in an empty zone: match the panel's natural/current width (so there's no jarring resize). The `GridSplitter` allows the user to adjust from there.
 
 ### D4 — Panel header affordance ✅
-**Decision:** Add a small **hamburger-style icon** (≡) to the left of each panel's close button when the panel is in Left or Right zone (or always, for discoverability — to be decided by Mira's UI spec task).  
+**Decision:** The hamburger icon (≡) is shown **always**, regardless of which zone the panel occupies.  
 Tooltip text: *"Ctrl+click anywhere on this panel to move it to another zone."*  
-The icon serves as a visual affordance and as a direct Ctrl+click target.  
-Exact icon glyph, size, and placement to be specified in the UI spec task (owner: Mira Quill).
+The icon serves as a visual affordance and as a direct Ctrl+click target.
+
+**Rationale (resolved by Mira Quill's UI spec task):** Always-visible is more discoverable (users can find Ctrl+click from any zone), produces a consistent header layout in every zone, and requires no dynamic visibility binding or code-behind update after `MovePanel()`. The conditional approach (Left/Right only) would require a Visibility binding or code-behind update and hides the affordance until the user already knows about docking.
+
+**Full specification:** See [panel-docking-ui-spec.md](panel-docking-ui-spec.md) — Section 1.
 
 
