@@ -18,8 +18,8 @@ internal sealed class PanelDockingService
 
     // WPF context — null when running under unit tests.
     private readonly Dictionary<string, FrameworkElement>? _panelRegistry;
-    private readonly StackPanel? _leftZonePanel;
-    private readonly StackPanel? _rightZonePanel;
+    private readonly Grid? _leftZonePanel;
+    private readonly Grid? _rightZonePanel;
     private readonly Grid? _topZoneGrid;
     private readonly ColumnDefinition? _leftZoneColumn;
     private readonly ColumnDefinition? _rightZoneColumn;
@@ -46,14 +46,18 @@ internal sealed class PanelDockingService
     private readonly Dictionary<string, MultiBinding?> _savedHeightBindings =
         new(StringComparer.OrdinalIgnoreCase);
 
+    // Ordered lists of panels currently in each side zone (used to rebuild row layout).
+    private readonly List<FrameworkElement> _leftZonePanels  = new();
+    private readonly List<FrameworkElement> _rightZonePanels = new();
+
     /// <summary>Data-model-only constructor for unit tests.</summary>
     public PanelDockingService() { }
 
     /// <summary>Full constructor with WPF context for production use.</summary>
     public PanelDockingService(
         Dictionary<string, FrameworkElement> panelRegistry,
-        StackPanel leftZonePanel,
-        StackPanel rightZonePanel,
+        Grid leftZonePanel,
+        Grid rightZonePanel,
         Grid topZoneGrid,
         ColumnDefinition leftZoneColumn,
         ColumnDefinition rightZoneColumn,
@@ -113,17 +117,23 @@ internal sealed class PanelDockingService
         if (_panelRegistry is null) return;
         if (!_panelRegistry.TryGetValue(panelId, out var element)) return;
 
-        RemoveFromParent(element);
+        // Zone-aware removal — side zones need Grid row cleanup; top zone is a plain Grid.
+        if (sourceZone == DockZone.Left)
+            RemoveFromZone(_leftZonePanel!, _leftZonePanels, element, _leftZoneScrollViewer as FrameworkElement);
+        else if (sourceZone == DockZone.Right)
+            RemoveFromZone(_rightZonePanel!, _rightZonePanels, element, _rightZoneScrollViewer as FrameworkElement);
+        else
+            RemoveFromTopZone(element);
 
         switch (targetZone)
         {
             case DockZone.Left:
-                AddToZone(_leftZonePanel!, element, panelId, _leftZoneScrollViewer as FrameworkElement);
+                AddToZone(_leftZonePanel!, _leftZonePanels, element, panelId, _leftZoneScrollViewer as FrameworkElement);
                 ExpandZone(_leftZoneColumn!, _leftSplitterColumn!, _leftZoneScrollViewer!, _leftZoneSplitter!, element);
                 break;
 
             case DockZone.Right:
-                AddToZone(_rightZonePanel!, element, panelId, _rightZoneScrollViewer as FrameworkElement);
+                AddToZone(_rightZonePanel!, _rightZonePanels, element, panelId, _rightZoneScrollViewer as FrameworkElement);
                 ExpandZone(_rightZoneColumn!, _rightSplitterColumn!, _rightZoneScrollViewer!, _rightZoneSplitter!, element);
                 break;
 
@@ -142,13 +152,19 @@ internal sealed class PanelDockingService
     private bool ZoneHasPanels(DockZone zone) =>
         CurrentLayout.Slots.Any(s => s.Zone == zone);
 
-    private static void RemoveFromParent(FrameworkElement element)
+    private static void RemoveFromTopZone(FrameworkElement element)
     {
         if (LogicalTreeHelper.GetParent(element) is Panel parent)
             parent.Children.Remove(element);
     }
 
-    private void AddToZone(StackPanel zone, FrameworkElement element, string panelId, FrameworkElement? scrollViewer)
+    private static void RemoveFromZone(Grid zone, List<FrameworkElement> zoneList, FrameworkElement element, FrameworkElement? scrollViewer)
+    {
+        zoneList.Remove(element);
+        RebuildZoneGrid(zone, zoneList, scrollViewer);
+    }
+
+    private void AddToZone(Grid zone, List<FrameworkElement> zoneList, FrameworkElement element, string panelId, FrameworkElement? scrollViewer)
     {
         // Save the original height binding before we replace it (only once per panel).
         if (!_savedHeightBindings.ContainsKey(panelId))
@@ -158,16 +174,55 @@ internal sealed class PanelDockingService
         element.ClearValue(FrameworkElement.MarginProperty);
         element.ClearValue(FrameworkElement.MaxWidthProperty);
         element.ClearValue(FrameworkElement.VerticalAlignmentProperty);
+        element.ClearValue(FrameworkElement.HeightProperty); // row sizing handles height
 
-        // Bind height to the zone scroll viewer so the panel fills the full column height.
-        // If no scroll viewer ref is available, just free the height constraint.
-        if (scrollViewer is not null)
-            element.SetBinding(FrameworkElement.HeightProperty,
+        zoneList.Add(element);
+        RebuildZoneGrid(zone, zoneList, scrollViewer);
+    }
+
+    /// <summary>
+    /// Clears and rebuilds the side-zone Grid with one star row per panel and a
+    /// 5 px <see cref="GridSplitter"/> row between consecutive panels.
+    /// The Grid height is bound to <paramref name="scrollViewer"/> so star rows have
+    /// a finite space to divide.
+    /// </summary>
+    private static void RebuildZoneGrid(Grid zone, List<FrameworkElement> panels, FrameworkElement? scrollViewer)
+    {
+        zone.Children.Clear();
+        zone.RowDefinitions.Clear();
+
+        for (int i = 0; i < panels.Count; i++)
+        {
+            if (i > 0)
+            {
+                zone.RowDefinitions.Add(new RowDefinition { Height = new GridLength(5) });
+                var splitter = new GridSplitter
+                {
+                    Height = 5,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    VerticalAlignment   = VerticalAlignment.Center,
+                    ResizeDirection     = GridResizeDirection.Rows,
+                    ResizeBehavior      = GridResizeBehavior.PreviousAndNext,
+                };
+                splitter.SetResourceReference(Control.BackgroundProperty, "AppSurface");
+                Grid.SetRow(splitter, zone.RowDefinitions.Count - 1);
+                zone.Children.Add(splitter);
+            }
+
+            zone.RowDefinitions.Add(new RowDefinition
+            {
+                Height    = new GridLength(1, GridUnitType.Star),
+                MinHeight = 100,
+            });
+            Grid.SetRow(panels[i], zone.RowDefinitions.Count - 1);
+            zone.Children.Add(panels[i]);
+        }
+
+        // Bind the zone Grid height to the scroll viewer so star rows fill the column.
+        BindingOperations.ClearBinding(zone, FrameworkElement.HeightProperty);
+        if (scrollViewer is not null && panels.Count > 0)
+            zone.SetBinding(FrameworkElement.HeightProperty,
                 new Binding(nameof(FrameworkElement.ActualHeight)) { Source = scrollViewer });
-        else
-            element.ClearValue(FrameworkElement.HeightProperty);
-
-        zone.Children.Add(element);
     }
 
     private void AddToTopZone(string panelId, FrameworkElement element)
