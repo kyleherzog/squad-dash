@@ -234,10 +234,10 @@ internal sealed class CommitApprovalPanel {
         grid.Children.Add(checkBox);
 
         var descBlock = new TextBlock {
-            Text              = TruncateDescription(item.Description),
+            Text              = CleanDescription(item.Description),
             TextTrimming      = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin            = new Thickness(6, 0, 0, 0),
+            Margin            = new Thickness(6, 0, 6, 0),
             Cursor            = Cursors.Hand,
             ToolTip           = BuildDescriptionTooltip(item),
         };
@@ -287,10 +287,10 @@ internal sealed class CommitApprovalPanel {
         grid.Children.Add(BuildRedX());
 
         var descBlock = new TextBlock {
-            Text              = TruncateDescription(item.Description),
+            Text              = CleanDescription(item.Description),
             TextTrimming      = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin            = new Thickness(6, 0, 0, 0),
+            Margin            = new Thickness(6, 0, 6, 0),
             Opacity           = 0.6,
             ToolTip           = BuildDescriptionTooltip(item),
         };
@@ -406,7 +406,7 @@ internal sealed class CommitApprovalPanel {
     /// <summary>Builds the tooltip string for an approval list row.
     /// Shows the full untruncated description, plus the original prompt or prompt hint if available.</summary>
     private ToolTip BuildDescriptionTooltip(CommitApprovalItem item) {
-        var cleaned = CommitPhraseSuffix.Replace(item.Description, string.Empty).Trim();
+        var cleaned = CleanDescription(item.Description);
 
         var container = new StackPanel { Margin = new Thickness(2) };
 
@@ -464,6 +464,10 @@ internal sealed class CommitApprovalPanel {
     private static readonly Regex DictationAnnotation =
         new(@"\(some or all of this prompt was dictated by voice\)\s*",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>Strips the trailing " in commit &lt;ref&gt;" phrase and trims whitespace.</summary>
+    private static string CleanDescription(string text)
+        => CommitPhraseSuffix.Replace(text, string.Empty).Trim();
 
     /// <summary>Truncates <paramref name="text"/> to at most 35 characters.
     /// If the text exceeds 35 characters, returns the first 34 followed by "…".</summary>
