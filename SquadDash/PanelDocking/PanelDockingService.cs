@@ -657,34 +657,19 @@ internal sealed class PanelDockingService
 
         if (panelsInZone.Count == 0)
         {
-            // Empty zone — 64px wide strip at the column's near screen edge.
-            // The scroll-viewer and zone grid are Width=0/Collapsed when empty, so anchor off
-            // _topZoneGrid (always visible) for the Y/height, and use its left or right edge for X.
+            // Empty zone — 64px wide strip just outside the inner neighbor.
+            // "Inner neighbor" = the zone that sits between this one and the center content.
+            // Left  → neighbor is the center (TopZonePanelsGrid)
+            // Left2 → neighbor is the Left zone scroll-viewer (if visible) else center
+            // Right  → neighbor is the center
+            // Right2 → neighbor is the Right zone scroll-viewer (if visible) else center
             const double StripWidth = 64;
 
-            if (_topZoneGrid is not null)
+            Rect neighborRect = GetInnerNeighborRect(zone);
+            if (!neighborRect.IsEmpty)
             {
-                var tgr = GetScreenRect(_topZoneGrid);
-                if (!tgr.IsEmpty)
-                {
-                    double x = isRightSide ? tgr.Right : tgr.Left - StripWidth;
-                    return new Rect(x, tgr.Top, StripWidth, tgr.Height);
-                }
-            }
-
-            // Last-resort: try the (collapsed) scroll-viewer or zone grid directly.
-            FrameworkElement? anchor =
-                (container is FrameworkElement cfeA && cfeA.IsVisible && cfeA.ActualWidth > 0) ? cfeA :
-                (zoneGrid   is FrameworkElement cfeG && cfeG.IsVisible && cfeG.ActualWidth > 0) ? cfeG :
-                null;
-            if (anchor is not null)
-            {
-                var r = GetScreenRect(anchor);
-                if (!r.IsEmpty)
-                {
-                    double x2 = isRightSide ? r.Right - StripWidth : r.Left;
-                    return new Rect(x2, r.Top, StripWidth, r.Height);
-                }
+                double x = isRightSide ? neighborRect.Right : neighborRect.Left - StripWidth;
+                return new Rect(x, neighborRect.Top, StripWidth, neighborRect.Height);
             }
             return Rect.Empty;
         }
@@ -708,6 +693,29 @@ internal sealed class PanelDockingService
         double bandH = colRect.Height / sections;
         double top   = colRect.Top + index * bandH;
         return new Rect(colRect.Left, top, colRect.Width, bandH);
+    }
+
+    /// <summary>
+    /// Returns the screen rect of the element immediately "inside" (toward center) of the
+    /// given zone — used to anchor the 64px empty-zone strip at the correct outer edge.
+    /// </summary>
+    private Rect GetInnerNeighborRect(DockZone zone)
+    {
+        // For Left2/Right2 try the adjacent Left/Right scroll-viewer first (non-empty check).
+        UIElement? adjacent = zone switch
+        {
+            DockZone.Left2  => _leftZoneScrollViewer,
+            DockZone.Right2 => _rightZoneScrollViewer,
+            _               => null,
+        };
+        if (adjacent is FrameworkElement adjFe && adjFe.IsVisible && adjFe.ActualWidth > 0)
+        {
+            var r = GetScreenRect(adjFe);
+            if (!r.IsEmpty) return r;
+        }
+
+        // Fall back to the always-visible center top-zone grid.
+        return _topZoneGrid is not null ? GetScreenRect(_topZoneGrid) : Rect.Empty;
     }
 
     private Rect GetTopInsertionRect(int targetOrder, List<string> panelsInZone)
@@ -738,12 +746,14 @@ internal sealed class PanelDockingService
         else
         {
             // "+" append slot — thin vertical strip to the RIGHT of the last panel.
+            // Fall back to the grid's right edge if the last panel isn't in the registry.
+            double rightX = gridRect.Right;
             if (_panelRegistry!.TryGetValue(panelsInZone[^1], out var el))
             {
                 var r = GetScreenRect(el);
-                if (!r.IsEmpty)
-                    return new Rect(r.Right + 2, gridRect.Top, StripW, gridRect.Height);
+                if (!r.IsEmpty) rightX = r.Right + 2;
             }
+            return new Rect(rightX, gridRect.Top, StripW, gridRect.Height);
         }
 
         return Rect.Empty;
