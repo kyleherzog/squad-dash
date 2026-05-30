@@ -15208,19 +15208,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         // Load persisted panel layout for this workspace and apply any non-default placements.
         if (_dockingService is not null)
         {
-            var loadedLayout = _dockingService.LoadLayout(_currentWorkspace.FolderPath);
-
-            // Reset all panels to Top before applying the loaded layout so that panels
-            // stranded in a zone from a previous workspace are pulled back first.
-            foreach (var slot in _dockingService.CurrentLayout.Slots)
-                if (slot.Zone != SquadDash.PanelDocking.DockZone.Top)
-                    _dockingService.MovePanel(slot.PanelId, SquadDash.PanelDocking.DockZone.Top);
-
-            foreach (var slot in loadedLayout.Slots.OrderBy(s => s.Order))
-            {
-                if (slot.Zone != SquadDash.PanelDocking.DockZone.Top)
-                    _dockingService.MovePanel(slot.PanelId, slot.Zone);
-            }
+            var loadedLayout = _dockingService.LoadAndApplyLayout(_currentWorkspace.FolderPath);
 
             if (loadedLayout.LeftZoneWidth is double lw && lw > 0
                 && loadedLayout.Slots.Any(s => s.Zone == SquadDash.PanelDocking.DockZone.Left))
@@ -25282,11 +25270,20 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     private void UpdateRosterHeightCap()
     {
-        // Agent cards are arranged in a single horizontal row; the row height equals
-        // the tallest card (~140-160 px). Capping the grid to a fraction of the window
-        // height clips cards instead of scrolling them, so no cap is applied.
+        // Cap StatusPanelBorder so the top-zone row never pushes the transcript and
+        // prompt off screen.  The cap is ActualHeight/3, with a 240 px floor so that
+        // one row of agent cards (~160 px) plus panel chrome (~80 px) is always fully
+        // visible without clipping.  The matching InactiveAgentsScrollViewer cap lets
+        // the roster scroll rather than clip when the panel would otherwise exceed the
+        // budget.
+        const double inactiveRosterPanelChrome = 80;
+        const double minPanelHeight = 240;
+
+        var cap = Math.Max(minPanelHeight, Math.Floor(ActualHeight / 3));
+
+        StatusPanelBorder.MaxHeight = cap;
+        InactiveAgentsScrollViewer.MaxHeight = Math.Max(160, cap - inactiveRosterPanelChrome);
         StatusAgentPanelsGrid.MaxHeight = double.PositiveInfinity;
-        InactiveAgentsScrollViewer.MaxHeight = double.PositiveInfinity;
     }
 
     private void ScheduleAgentPanelLayoutRefresh()
