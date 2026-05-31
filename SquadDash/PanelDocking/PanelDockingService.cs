@@ -286,7 +286,10 @@ internal sealed class PanelDockingService
     }
 
     private bool ZoneHasPanels(DockZone zone) =>
-        CurrentLayout.Slots.Any(s => s.Zone == zone);
+        CurrentLayout.Slots.Any(s =>
+            s.Zone == zone &&
+            _panelRegistry!.TryGetValue(s.PanelId, out var el) &&
+            el.Visibility != Visibility.Collapsed);
 
     /// <summary>
     /// Called when a panel's visibility is toggled (shown or hidden) without moving it to a
