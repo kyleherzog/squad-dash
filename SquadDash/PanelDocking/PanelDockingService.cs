@@ -899,9 +899,30 @@ internal sealed class PanelDockingService
                     DockZone.Right2 => neighborRect.Right - StripWidth,
                     _               => isRightSide ? neighborRect.Right : neighborRect.Left - StripWidth,
                 };
-                var result = new Rect(x, neighborRect.Top, StripWidth, neighborRect.Height);
+
+                // The neighborRect height is only the top-zone panel height (~330px).
+                // The preview strip for an empty side zone should span the full window height.
+                // Walk up from _topZoneGrid to find the host Window for full bounds.
+                double stripTop    = neighborRect.Top;
+                double stripHeight = neighborRect.Height;
+                if (_topZoneGrid is DependencyObject tgDep)
+                {
+                    var win = System.Windows.Window.GetWindow(tgDep);
+                    if (win is FrameworkElement winFe)
+                    {
+                        var winRect = GetScreenRect(winFe);
+                        if (!winRect.IsEmpty)
+                        {
+                            stripTop    = winRect.Top;
+                            stripHeight = winRect.Height;
+                        }
+                    }
+                }
+
+                var result = new Rect(x, stripTop, StripWidth, stripHeight);
                 SquadDashTrace.Write(TraceCategory.Docking,
-                    $"GetColumnSlotRect(empty): zone={zone} x={x:F0} neighborRect={neighborRect} → strip={result}");
+                    $"GetColumnSlotRect(empty): zone={zone} x={x:F0} neighborRect={neighborRect} " +
+                    $"stripTop={stripTop:F0} stripH={stripHeight:F0} → strip={result}");
                 return result;
             }
             SquadDashTrace.Write(TraceCategory.Docking,
