@@ -230,25 +230,37 @@ internal sealed class PanelDockingService
             case DockZone.Left:
                 AddToZone(_leftZonePanel!, _leftZonePanels, element, panelId, _leftZoneScrollViewer as FrameworkElement, insertAt);
                 if (element.Visibility != Visibility.Collapsed)
+                {
                     ExpandZone(_leftZoneColumn!, _leftSplitterColumn!, _leftZoneScrollViewer!, _leftZoneSplitter!, element);
+                    EnsureZoneHeight(_leftZonePanel!, (_leftZoneScrollViewer as FrameworkElement)!);
+                }
                 break;
 
             case DockZone.Right:
                 AddToZone(_rightZonePanel!, _rightZonePanels, element, panelId, _rightZoneScrollViewer as FrameworkElement, insertAt);
                 if (element.Visibility != Visibility.Collapsed)
+                {
                     ExpandZone(_rightZoneColumn!, _rightSplitterColumn!, _rightZoneScrollViewer!, _rightZoneSplitter!, element);
+                    EnsureZoneHeight(_rightZonePanel!, (_rightZoneScrollViewer as FrameworkElement)!);
+                }
                 break;
 
             case DockZone.Left2:
                 AddToZone(_left2ZonePanel!, _left2ZonePanels, element, panelId, _left2ZoneScrollViewer as FrameworkElement, insertAt);
                 if (element.Visibility != Visibility.Collapsed)
+                {
                     ExpandZone(_left2ZoneColumn!, _left2SplitterColumn!, _left2ZoneScrollViewer!, _left2ZoneSplitter!, element);
+                    EnsureZoneHeight(_left2ZonePanel!, (_left2ZoneScrollViewer as FrameworkElement)!);
+                }
                 break;
 
             case DockZone.Right2:
                 AddToZone(_right2ZonePanel!, _right2ZonePanels, element, panelId, _right2ZoneScrollViewer as FrameworkElement, insertAt);
                 if (element.Visibility != Visibility.Collapsed)
+                {
                     ExpandZone(_right2ZoneColumn!, _right2SplitterColumn!, _right2ZoneScrollViewer!, _right2ZoneSplitter!, element);
+                    EnsureZoneHeight(_right2ZonePanel!, (_right2ZoneScrollViewer as FrameworkElement)!);
+                }
                 break;
 
             case DockZone.Top:
@@ -388,6 +400,8 @@ internal sealed class PanelDockingService
                 splCol!.Width = new GridLength(5);
                 sv!.Visibility  = Visibility.Visible;
                 spl!.Visibility = Visibility.Visible;
+                if (sv is FrameworkElement svFe)
+                    EnsureZoneHeight(zoneGrid, svFe);
             }
 
             // Rebuild including the now-visible panel, preserving zone order.
@@ -437,10 +451,11 @@ internal sealed class PanelDockingService
         return weights;
     }
 
-    private static void RemoveFromTopZone(FrameworkElement element)
+    private void RemoveFromTopZone(FrameworkElement element)
     {
         if (LogicalTreeHelper.GetParent(element) is Panel parent)
             parent.Children.Remove(element);
+        RebuildTopZoneLayout();
     }
 
     private static void RemoveFromZone(Grid zone, List<FrameworkElement> zoneList, FrameworkElement element, FrameworkElement? scrollViewer)
@@ -460,6 +475,7 @@ internal sealed class PanelDockingService
         element.ClearValue(Grid.ColumnProperty);
         element.ClearValue(FrameworkElement.MarginProperty);
         element.ClearValue(FrameworkElement.MaxWidthProperty);
+        element.ClearValue(FrameworkElement.MaxHeightProperty);
         element.ClearValue(FrameworkElement.VerticalAlignmentProperty);
         element.ClearValue(FrameworkElement.HeightProperty); // row sizing handles height
 
@@ -618,6 +634,25 @@ internal sealed class PanelDockingService
         splitterCol.Width = new GridLength(0);
         scrollViewer.Visibility = Visibility.Collapsed;
         splitter.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Registers a one-shot <see cref="FrameworkElement.SizeChanged"/> handler on
+    /// <paramref name="scrollViewer"/> that updates <paramref name="zone"/>.Height as
+    /// soon as layout assigns a non-zero height.  This is needed because WPF does not
+    /// reliably fire the ActualHeight binding update when a ScrollViewer transitions
+    /// Collapsed → Visible for the second time (the zone Grid height stays at 0,
+    /// clipping all content).
+    /// </summary>
+    private static void EnsureZoneHeight(Grid zone, FrameworkElement scrollViewer)
+    {
+        void onSizeChanged(object? s, SizeChangedEventArgs e)
+        {
+            scrollViewer.SizeChanged -= onSizeChanged;
+            if (e.NewSize.Height > 0)
+                zone.Height = e.NewSize.Height;
+        }
+        scrollViewer.SizeChanged += onSizeChanged;
     }
 
     private static readonly JsonSerializerOptions _jsonOptions = new()
