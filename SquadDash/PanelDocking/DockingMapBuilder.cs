@@ -55,14 +55,19 @@ internal static class DockingMapBuilder
         bool sourceInLeft2  = left2Panels.Any(p => Same(p, sourcePanelId));
         bool sourceInRight2 = right2Panels.Any(p => Same(p, sourcePanelId));
 
-        // ── Suppress outer zones when both the outer and inner zones are empty ─
-        // If Left2 and Left are both empty (and source is in neither), showing two
-        // separate "dock here" slots is confusing — only one destination exists.
-        // Suppress the outer zone so the user sees a single slot for that side.
-        bool suppressLeft2  = left2Panels.Count == 0 && !sourceInLeft2
-                           && leftPanels.Count  == 0 && !sourceInLeft;
-        bool suppressRight2 = right2Panels.Count == 0 && !sourceInRight2
-                           && rightPanels.Count  == 0 && !sourceInRight;
+        // ── Suppress sibling zone when it would be a no-op target ─────────────
+        // Case 1: both outer and inner zones are empty — suppress the outer zone
+        //         so the user sees a single "dock here" slot per side.
+        // Case 2: source is the SOLE occupant of its zone AND the sibling zone is
+        //         empty — moving there is visually identical (source zone collapses,
+        //         sibling expands with the same single panel). Suppress that target.
+        bool suppressLeft2  = (left2Panels.Count == 0 && !sourceInLeft2 && leftPanels.Count  == 0 && !sourceInLeft)
+                           || (sourceInLeft  && leftPanels.Count  == 1 && left2Panels.Count  == 0);
+        bool suppressRight2 = (right2Panels.Count == 0 && !sourceInRight2 && rightPanels.Count == 0 && !sourceInRight)
+                           || (sourceInRight && rightPanels.Count == 1 && right2Panels.Count == 0);
+        // Symmetric: source sole in outer zone, inner zone is empty.
+        bool suppressLeft   = sourceInLeft2  && left2Panels.Count  == 1 && leftPanels.Count  == 0;
+        bool suppressRight  = sourceInRight2 && right2Panels.Count == 1 && rightPanels.Count == 0;
 
         // ── Compute zone dimensions ──────────────────────────────────────────
 
@@ -70,8 +75,8 @@ internal static class DockingMapBuilder
         // Rule B (sourceInZone): emits exactly N slots — no insertion extras.
         // When source is the sole occupant this produces 1 slot (the "you are here"
         // IsSourcePanel button); no no-op insertion slots are ever generated.
-        double leftColContentHeight   = ZoneColumnHeight(leftPanels.Count,   sourceInLeft,   ColSlotHeight);
-        double rightColContentHeight  = ZoneColumnHeight(rightPanels.Count,  sourceInRight,  ColSlotHeight);
+        double leftColContentHeight   = suppressLeft   ? 0 : ZoneColumnHeight(leftPanels.Count,   sourceInLeft,   ColSlotHeight);
+        double rightColContentHeight  = suppressRight  ? 0 : ZoneColumnHeight(rightPanels.Count,  sourceInRight,  ColSlotHeight);
         double left2ColContentHeight  = suppressLeft2  ? 0 : ZoneColumnHeight(left2Panels.Count,  sourceInLeft2,  ColSlotHeight);
         double right2ColContentHeight = suppressRight2 ? 0 : ZoneColumnHeight(right2Panels.Count, sourceInRight2, ColSlotHeight);
 
@@ -92,18 +97,18 @@ internal static class DockingMapBuilder
         // ── Compute zone widths ──────────────────────────────────────────────
 
         // All side zones: always ColSlotWidth wide (one column skeleton)
-        double leftZoneWidth   = ColSlotWidth;
-        double rightZoneWidth  = ColSlotWidth;
+        double leftZoneWidth   = suppressLeft   ? 0 : ColSlotWidth;
+        double rightZoneWidth  = suppressRight  ? 0 : ColSlotWidth;
         double left2ZoneWidth  = suppressLeft2  ? 0 : ColSlotWidth;
         double right2ZoneWidth = suppressRight2 ? 0 : ColSlotWidth;
 
         double topZoneWidth = Math.Max(topContentWidth, TopSlotWidth);
 
-        // Only include gutter for non-suppressed outer zones
+        // Only include gutter for non-suppressed zones
         double innerWidth = (suppressLeft2  ? 0 : left2ZoneWidth  + ZoneGutter)
-                          + leftZoneWidth   + ZoneGutter
-                          + topZoneWidth    + ZoneGutter
-                          + rightZoneWidth
+                          + (suppressLeft   ? 0 : leftZoneWidth   + ZoneGutter)
+                          + topZoneWidth
+                          + (suppressRight  ? 0 : ZoneGutter + rightZoneWidth)
                           + (suppressRight2 ? 0 : ZoneGutter + right2ZoneWidth);
 
         double popupWidth  = innerWidth  + PopupPadding * 2;
@@ -112,10 +117,10 @@ internal static class DockingMapBuilder
         // ── Layout slot positions (relative to inner canvas, 0,0 at top-left) ──
 
         double left2X  = 0;
-        double leftX   = suppressLeft2 ? 0 : left2ZoneWidth + ZoneGutter;
-        double topX    = leftX + leftZoneWidth + ZoneGutter;
-        double rightX  = topX + topZoneWidth + ZoneGutter;
-        double right2X = rightX + rightZoneWidth + (suppressRight2 ? 0 : ZoneGutter);
+        double leftX   = suppressLeft2 ? left2X : left2X + left2ZoneWidth + ZoneGutter;
+        double topX    = suppressLeft  ? leftX  : leftX  + leftZoneWidth  + ZoneGutter;
+        double rightX  = topX + topZoneWidth + (suppressRight ? 0 : ZoneGutter);
+        double right2X = suppressRight ? rightX : rightX + rightZoneWidth + (suppressRight2 ? 0 : ZoneGutter);
 
         // Left2 zone slots (outermost left column — suppressed when both left zones are empty)
         if (!suppressLeft2)
@@ -130,6 +135,7 @@ internal static class DockingMapBuilder
                 DockZone.Left2);
 
         // Left zone slots
+        if (!suppressLeft)
         BuildColumnSlots(
             allSlots,
             sourcePanelId,
@@ -152,6 +158,7 @@ internal static class DockingMapBuilder
             DockZone.Top);
 
         // Right zone slots
+        if (!suppressRight)
         BuildColumnSlots(
             allSlots,
             sourcePanelId,
