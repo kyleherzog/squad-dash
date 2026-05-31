@@ -561,10 +561,13 @@ internal sealed class PanelDockingService
             }
 
             double starValue = weights is not null && weights.TryGetValue(panels[i], out double w) ? w : 1.0;
+            // MinHeight is only meaningful when a GridSplitter is present (2+ panels) so the user
+            // cannot drag a panel to zero.  A solo panel has no splitter and must be allowed to
+            // start at zero height (NaN zone) without creating a spurious visible stub.
             zone.RowDefinitions.Add(new RowDefinition
             {
                 Height    = new GridLength(starValue, GridUnitType.Star),
-                MinHeight = 100,
+                MinHeight = panels.Count > 1 ? 100 : 0,
             });
             Grid.SetRow(panels[i], zone.RowDefinitions.Count - 1);
             zone.Children.Add(panels[i]);
@@ -683,6 +686,14 @@ internal sealed class PanelDockingService
     /// </summary>
     private static void EnsureZoneHeight(Grid zone, FrameworkElement scrollViewer)
     {
+        // If the scrollViewer is already laid-out and has a real height, sync immediately.
+        // This handles zones that were already visible when a panel was dropped into them.
+        if (scrollViewer.ActualHeight > 0)
+        {
+            zone.Height = scrollViewer.ActualHeight;
+            return;
+        }
+
         SizeChangedEventHandler? handler = null;
         handler = (_, e) =>
         {
