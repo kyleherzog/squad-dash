@@ -268,6 +268,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     // ── Panel docking ────────────────────────────────────────────────────────
     private PanelDockingService? _dockingService;
     internal PanelDockingService? DockingService => _dockingService;
+    private DockingTestRecorder? _dockingRecorder;
     // Set true while we are programmatically moving a floating window so its
     // LocationChanged does not overwrite the saved offset.
     private bool _movingFloatingWindow;
@@ -11689,6 +11690,35 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     // ── Developer > Simulation menu ───────────────────────────────────────────
 
+    private void RecordDockingTestMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_dockingService is null || _currentWorkspace is null) return;
+
+        var outputDir = Path.Combine(_currentWorkspace.FolderPath, "SquadDash.Tests", "DockingTestCases");
+        _dockingRecorder = new SquadDash.PanelDocking.DockingTestRecorder(outputDir);
+        _dockingRecorder.RecordingCompleted = () => Dispatcher.Invoke(() =>
+        {
+            RecordDockingTestMenuItem.Header    = "Record Docking Test Case";
+            RecordDockingTestMenuItem.IsEnabled = true;
+            _dockingService.TestRecorder        = null;
+        });
+
+        var layoutData = _dockingService.GetCurrentLayoutData();
+        _dockingRecorder.StartRecording(layoutData);
+        _dockingService.TestRecorder = _dockingRecorder;
+
+        RecordDockingTestMenuItem.Header    = "⏺ Recording... (dock to complete)";
+        RecordDockingTestMenuItem.IsEnabled = false;
+    }
+
+    private void DockingTestCasesFolderMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentWorkspace is null) return;
+        var folderPath = Path.Combine(_currentWorkspace.FolderPath, "SquadDash.Tests", "DockingTestCases");
+        Directory.CreateDirectory(folderPath);
+        System.Diagnostics.Process.Start("explorer.exe", folderPath);
+    }
+
     private void SimulateBridgeDisposed_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -12377,6 +12407,12 @@ public partial class MainWindow : Window, ILiveElementLocator
                         .Where(d => d.Border.Visibility == Visibility.Visible)
                         .Select(d => d.PanelId)
                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    if (_dockingRecorder is not null && !_dockingRecorder.IsIdle)
+                    {
+                        var layoutData = _dockingService.GetCurrentLayoutData(visibleIds);
+                        var slotButtons = SquadDash.PanelDocking.DockingLayoutEngine.BuildSlotButtons(id, layoutData);
+                        _dockingRecorder.OnSlotButtonsBuilt(id, slotButtons, layoutData);
+                    }
                     var viewModel   = SquadDash.PanelDocking.DockingMapBuilder.BuildDockingMap(
                         id, _dockingService.CurrentLayout, visibleIds);
                     Brush? hoverBrush = null;

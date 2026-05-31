@@ -71,6 +71,34 @@ internal sealed class PanelDockingService
     /// <summary>Data-model-only constructor for unit tests.</summary>
     public PanelDockingService() { }
 
+    /// <summary>Active test recorder; null when not recording.</summary>
+    internal IDockingMoveRecorder? TestRecorder { get; set; }
+
+    /// <summary>
+    /// Builds a <see cref="PanelLayoutData"/> snapshot from the current layout.
+    /// Uses <paramref name="visiblePanelIds"/> when provided; otherwise infers
+    /// visibility from the WPF panel registry (non-collapsed = visible).
+    /// </summary>
+    public PanelLayoutData GetCurrentLayoutData(IReadOnlySet<string>? visiblePanelIds = null)
+    {
+        IReadOnlySet<string> visible;
+        if (visiblePanelIds is not null)
+            visible = visiblePanelIds;
+        else if (_panelRegistry is not null)
+            visible = CurrentLayout.Slots
+                .Select(s => s.PanelId)
+                .Where(id => _panelRegistry.TryGetValue(id, out var el) && el.Visibility != Visibility.Collapsed)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        else
+            visible = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        return new PanelLayoutData
+        {
+            Slots          = CurrentLayout.Slots.ToList(),
+            VisiblePanelIds = visible,
+        };
+    }
+
     /// <summary>Full constructor with WPF context for production use.</summary>
     public PanelDockingService(
         Dictionary<string, FrameworkElement> panelRegistry,
@@ -162,6 +190,8 @@ internal sealed class PanelDockingService
                 .Concat(zoneSlots.Select((id, i) => new PanelSlot(id, targetZone, i)))
                 .ToList();
 
+            TestRecorder?.OnMoveCompleted(panelId, targetZone, targetOrder, GetCurrentLayoutData());
+
             // WPF: reorder the panel within the zone list and rebuild the grid.
             // For the Top zone, reassign physical columns; for side zones, rebuild the row grid.
             if (_panelRegistry is not null)
@@ -208,6 +238,8 @@ internal sealed class PanelDockingService
         slots = slots.Where(s => s.Zone != targetZone).ToList();
         slots.AddRange(targetIds.Select((id, i) => new PanelSlot(id, targetZone, i)));
         CurrentLayout.Slots = slots;
+
+        TestRecorder?.OnMoveCompleted(panelId, targetZone, targetOrder, GetCurrentLayoutData());
 
         // WPF reparenting (only when context is wired).
         if (_panelRegistry is null) return;

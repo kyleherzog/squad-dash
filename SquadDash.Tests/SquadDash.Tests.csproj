@@ -236,6 +236,8 @@
     <Compile Include="..\SquadDash\PanelDocking\PanelDockingService.cs" Link="Source\PanelDocking\PanelDockingService.cs" />
     <Compile Include="..\SquadDash\PanelDocking\DockingMapViewModel.cs" Link="Source\PanelDocking\DockingMapViewModel.cs" />
     <Compile Include="..\SquadDash\PanelDocking\DockingMapBuilder.cs"   Link="Source\PanelDocking\DockingMapBuilder.cs" />
+    <Compile Include="..\SquadDash\PanelDocking\PanelLayoutData.cs"       Link="Source\PanelDocking\PanelLayoutData.cs" />
+    <Compile Include="..\SquadDash\PanelDocking\DockingLayoutEngine.cs"   Link="Source\PanelDocking\DockingLayoutEngine.cs" />
   </ItemGroup>
 
 </Project>

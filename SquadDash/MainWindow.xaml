@@ -563,6 +563,15 @@
                                       Tag="GenericRuntimeFailure" Click="SimulateRuntimeIssue_Click" />
                         </MenuItem>
                     </MenuItem>
+                    <Separator Style="{StaticResource ThemedMenuSeparatorStyle}" />
+                    <MenuItem x:Name="RecordDockingTestMenuItem"
+                              Header="Record Docking Test Case"
+                              Click="RecordDockingTestMenuItem_Click" />
+                    <MenuItem Header="_Folders"
+                              ItemContainerStyle="{StaticResource ThemedMenuItemStyle}">
+                        <MenuItem Header="Docking Test Cases"
+                                  Click="DockingTestCasesFolderMenuItem_Click" />
+                    </MenuItem>
                 </MenuItem>
             </Menu>
 
