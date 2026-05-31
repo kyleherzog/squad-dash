@@ -121,6 +121,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
     private Button? _addArrowBtn;
     private Button? _moveSelectBtn;
     private Button? _cropBtn;
+    private Button? _cursorBtn;
 
     // Arrow drag sub-state
     private bool _tailDragging;
@@ -787,7 +788,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             Height = 28,
             Padding = new Thickness(4, 3, 4, 3),
             Margin = new Thickness(0, 0, 4, 0),
-            ToolTip = "Move/Select (M or V) — select and move existing annotations"
+            ToolTip = "Move/Select (V) — select and move existing annotations"
         };
         _cropBtn = new Button {
             Content = MakeToolIcon("ImageEditorCropIcon"),
@@ -829,13 +830,13 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             Margin = new Thickness(0, 0, 4, 0),
             ToolTip = "Dimension line (D) \u00B7 drag horizontally or vertically to measure pixel distance"
         };
-        var cursorBtn = new Button {
+        _cursorBtn = new Button {
             Content = MakeToolIcon("ImageEditorCursorIcon"),
             Width = 32,
             Height = 28,
             Padding = new Thickness(4, 3, 4, 3),
             Margin = new Thickness(0, 0, 4, 0),
-            ToolTip = "Add a mouse-cursor indicator"
+            ToolTip = "Mouse cursor indicator (M) — click to place a cursor overlay"
         };
         _eyedropperBtn = new Button {
             Content = MakeToolIcon("ImageEditorEyedropperIcon"),
@@ -911,8 +912,8 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             roundCornersBtn.Visibility = Visibility.Collapsed;
 
         var styleButtons = _isPromptMode
-            ? new[] { _moveSelectBtn, _cropBtn, _addArrowBtn, _addRectBtn, _addTextBtn, _addMeasureLineBtn, cursorBtn, _eyedropperBtn, insertBtn, cancelBtn }
-            : new[] { _moveSelectBtn, _cropBtn, _addArrowBtn, _addRectBtn, _addTextBtn, _addMeasureLineBtn, cursorBtn, _eyedropperBtn, roundCornersBtn, insertBtn, cancelBtn };
+            ? new[] { _moveSelectBtn, _cropBtn, _addArrowBtn, _addRectBtn, _addTextBtn, _addMeasureLineBtn, _cursorBtn, _eyedropperBtn, insertBtn, cancelBtn }
+            : new[] { _moveSelectBtn, _cropBtn, _addArrowBtn, _addRectBtn, _addTextBtn, _addMeasureLineBtn, _cursorBtn, _eyedropperBtn, roundCornersBtn, insertBtn, cancelBtn };
         foreach (var btn in styleButtons)
             btn.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
 
@@ -977,7 +978,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             }
         };
 
-        cursorBtn.Click += (_, _) => {
+        _cursorBtn.Click += (_, _) => {
             // Bug fix: if cursor was already placed (_cursorEnabled true but placement mode
             // exited), re-enter placement mode instead of toggling off.
             if (_cursorEnabled && !_inCursorPlacementMode) {
@@ -986,7 +987,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 _inCropMode = false;
                 _cursorEnabled = true;
                 _inCursorPlacementMode = true;
-                cursorBtn.Content = MakeToolIcon("ImageEditorCursorIcon", active: true);
+                _cursorBtn.Content = MakeToolIcon("ImageEditorCursorIcon", active: true);
                 _canvas.Cursor = AnnotationCursors.DropCursorTool;
                 ShowModeHint("Click to place the cursor indicator");
                 return;
@@ -997,13 +998,13 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 _inMoveMode = false;
                 _inCropMode = false;
                 _inCursorPlacementMode = true;
-                cursorBtn.Content = MakeToolIcon("ImageEditorCursorIcon", active: true);
+                _cursorBtn.Content = MakeToolIcon("ImageEditorCursorIcon", active: true);
                 _canvas.Cursor = AnnotationCursors.DropCursorTool;
                 ShowModeHint("Click to place the cursor indicator");
             }
             else {
                 _inCursorPlacementMode = false;
-                cursorBtn.Content = MakeToolIcon("ImageEditorCursorIcon");
+                _cursorBtn.Content = MakeToolIcon("ImageEditorCursorIcon");
                 _canvas.Cursor = Cursors.Arrow;
                 ToggleCursorOverlay(false);
                 HideModeHint();
@@ -1084,7 +1085,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         leftStack.Children.Add(_addRectBtn);
         leftStack.Children.Add(_addTextBtn);
         leftStack.Children.Add(_addMeasureLineBtn);
-        leftStack.Children.Add(cursorBtn);
+        leftStack.Children.Add(_cursorBtn);
         leftStack.Children.Add(_eyedropperBtn);
         leftStack.Children.Add(_eyedropperSwatch);
         leftStack.Children.Add(_eyedropperHexLabel);
@@ -2461,7 +2462,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         // Tool keyboard shortcuts — ignored when a TextBox has keyboard focus.
         if (!e.Handled && Keyboard.FocusedElement is not TextBox) {
             bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
-            if (e.Key == Key.M || e.Key == Key.V) {
+            if (e.Key == Key.V) {
                 ExitAllToolModes();
                 EnterMoveMode();
                 e.Handled = true;
@@ -2522,6 +2523,39 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             else if (e.Key == Key.I) {
                 if (_inEyedropperMode) { ExitEyedropperMode(); EnterMoveMode(); }
                 else { ExitAllToolModes(); EnterEyedropperMode(); if (_eyedropperBtn != null) _eyedropperBtn.Content = MakeToolIcon("ImageEditorEyedropperIcon", active: true); }
+                e.Handled = true;
+            }
+            else if (e.Key == Key.M) {
+                if (_cursorEnabled && !_inCursorPlacementMode) {
+                    ExitAllToolModes();
+                    _inMoveMode = false;
+                    _inCropMode = false;
+                    _cursorEnabled = true;
+                    _inCursorPlacementMode = true;
+                    if (_cursorBtn != null) _cursorBtn.Content = MakeToolIcon("ImageEditorCursorIcon", active: true);
+                    _canvas.Cursor = AnnotationCursors.DropCursorTool;
+                    ShowModeHint("Click to place the cursor indicator");
+                }
+                else {
+                    ExitAllToolModes();
+                    _cursorEnabled = !_cursorEnabled;
+                    if (_cursorEnabled) {
+                        _inMoveMode = false;
+                        _inCropMode = false;
+                        _inCursorPlacementMode = true;
+                        if (_cursorBtn != null) _cursorBtn.Content = MakeToolIcon("ImageEditorCursorIcon", active: true);
+                        _canvas.Cursor = AnnotationCursors.DropCursorTool;
+                        ShowModeHint("Click to place the cursor indicator");
+                    }
+                    else {
+                        _inCursorPlacementMode = false;
+                        if (_cursorBtn != null) _cursorBtn.Content = MakeToolIcon("ImageEditorCursorIcon");
+                        _canvas.Cursor = Cursors.Arrow;
+                        ToggleCursorOverlay(false);
+                        HideModeHint();
+                        EnterMoveMode();
+                    }
+                }
                 e.Handled = true;
             }
         }
