@@ -843,7 +843,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             Height = 28,
             Padding = new Thickness(4, 3, 4, 3),
             Margin = new Thickness(0, 0, 4, 0),
-            ToolTip = "Pick a color from the image"
+            ToolTip = "Eyedropper (I) — pick a color from the image"
         };
         var roundCornersBtn = new Button {
             Content = MakeToolIcon("ImageEditorRoundCornersIcon"),
@@ -2512,6 +2512,16 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 _inMeasureLineMultiDropMode = true;
                 ShowModeHint("Multi-drop: drag to place dimension lines · ESC to exit");
                 if (_addMeasureLineBtn != null) _addMeasureLineBtn.Content = MakeToolIcon("ImageEditorMeasureLineIcon", active: true, multiDrop: true);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.C) {
+                ExitAllToolModes();
+                EnterCropMode();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.I) {
+                if (_inEyedropperMode) { ExitEyedropperMode(); EnterMoveMode(); }
+                else { ExitAllToolModes(); EnterEyedropperMode(); if (_eyedropperBtn != null) _eyedropperBtn.Content = MakeToolIcon("ImageEditorEyedropperIcon", active: true); }
                 e.Handled = true;
             }
         }
