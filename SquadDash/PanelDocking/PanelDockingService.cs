@@ -669,22 +669,44 @@ internal sealed class PanelDockingService
     }
 
     /// <summary>
-    /// Registers a one-shot <see cref="FrameworkElement.SizeChanged"/> handler on
-    /// <paramref name="scrollViewer"/> that updates <paramref name="zone"/>.Height as
-    /// soon as layout assigns a non-zero height.  This is needed because WPF does not
-    /// reliably fire the ActualHeight binding update when a ScrollViewer transitions
-    /// Collapsed → Visible for the second time (the zone Grid height stays at 0,
-    /// clipping all content).
+    /// Ensures the zone Grid's height is synchronised with the scroll viewer after the
+    /// scroll viewer transitions Collapsed → Visible.  Two mechanisms work together:
+    /// <list type="bullet">
+    ///   <item>A <see cref="FrameworkElement.SizeChanged"/> handler that fires once the
+    ///   layout engine assigns a non-zero height.  The handler stays subscribed until it
+    ///   sees a positive height so that an early zero-height layout pass (e.g. triggered
+    ///   by the docking-map window closing) does not cause it to unsubscribe prematurely.</item>
+    ///   <item>A <see cref="System.Windows.Threading.DispatcherPriority.Background"/> fallback
+    ///   that runs after all layout and rendering work has settled, guaranteeing the height is
+    ///   applied even when SizeChanged never fires with a positive value.</item>
+    /// </list>
     /// </summary>
     private static void EnsureZoneHeight(Grid zone, FrameworkElement scrollViewer)
     {
-        void onSizeChanged(object? s, SizeChangedEventArgs e)
+        SizeChangedEventHandler? handler = null;
+        handler = (_, e) =>
         {
-            scrollViewer.SizeChanged -= onSizeChanged;
-            if (e.NewSize.Height > 0)
-                zone.Height = e.NewSize.Height;
-        }
-        scrollViewer.SizeChanged += onSizeChanged;
+            if (e.NewSize.Height <= 0) return; // early layout pass — wait for a real height
+            scrollViewer.SizeChanged -= handler;
+            handler = null;
+            zone.Height = e.NewSize.Height;
+        };
+        scrollViewer.SizeChanged += handler;
+
+        // Belt-and-suspenders: sync height once the dispatcher is fully idle after layout/render,
+        // covering the case where SizeChanged fires only with 0 (e.g. map-window close) or not at all.
+        scrollViewer.Dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.Background,
+            new Action(() =>
+            {
+                if (handler is not null)
+                {
+                    scrollViewer.SizeChanged -= handler;
+                    handler = null;
+                }
+                if (scrollViewer.ActualHeight > 0)
+                    zone.Height = scrollViewer.ActualHeight;
+            }));
     }
 
     private static readonly JsonSerializerOptions _jsonOptions = new()
