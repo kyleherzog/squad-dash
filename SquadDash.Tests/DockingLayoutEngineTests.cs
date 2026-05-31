@@ -41,7 +41,7 @@ public class DockingLayoutEngineTests
     private static readonly string TestCasesFolder = Path.GetFullPath(
         Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory,
-            @"..\..\..\..\..\SquadDash.Tests\DockingTestCases"));
+            @"..\..\..\..\SquadDash.Tests\DockingTestCases"));
 
     private static IEnumerable<TestCaseData> DockingTestCases()
     {

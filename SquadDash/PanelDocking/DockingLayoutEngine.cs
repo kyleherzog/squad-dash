@@ -36,10 +36,14 @@ internal static class DockingLayoutEngine
     public static Dictionary<string, List<string>> LayoutToJson(PanelLayoutData layout)
     {
         var result = new Dictionary<string, List<string>>();
+        // When the layout carries visibility information, only serialize panels the user
+        // can actually see.  Health/Trace and other always-hidden panels live in Slots
+        // (they have a zone assignment) but must not pollute test-case snapshots.
+        bool hasVisibility = layout.VisiblePanelIds.Count > 0;
         foreach (var zone in new[] { DockZone.Top, DockZone.Left, DockZone.Left2, DockZone.Right, DockZone.Right2 })
         {
             result[GetZoneDisplayName(zone)] = layout.Slots
-                .Where(s => s.Zone == zone)
+                .Where(s => s.Zone == zone && (!hasVisibility || layout.VisiblePanelIds.Contains(s.PanelId)))
                 .OrderBy(s => s.Order)
                 .Select(s => s.PanelId)
                 .ToList();
@@ -100,17 +104,26 @@ internal static class DockingLayoutEngine
         bool sourceInLeft2  = left2Panels.Any(p => Same(p, sourcePanelId));
         bool sourceInRight2 = right2Panels.Any(p => Same(p, sourcePanelId));
 
-        bool suppressLeft2  = left2Panels.Count == 0 && !sourceInLeft2
-                           && leftPanels.Count  == 0 && !sourceInLeft;
-        bool suppressRight2 = right2Panels.Count == 0 && !sourceInRight2
-                           && rightPanels.Count  == 0 && !sourceInRight;
+        // Mirrors DockingMapBuilder suppression logic exactly:
+        // Case 1: both outer and inner zones are empty — suppress the outer zone.
+        // Case 2: source is the sole occupant of its zone AND the sibling is empty — no-op move.
+        bool suppressLeft2  = (left2Panels.Count == 0 && !sourceInLeft2 && leftPanels.Count  == 0 && !sourceInLeft)
+                           || (sourceInLeft  && leftPanels.Count  == 1 && left2Panels.Count  == 0);
+        bool suppressRight2 = (right2Panels.Count == 0 && !sourceInRight2 && rightPanels.Count == 0 && !sourceInRight)
+                           || (sourceInRight && rightPanels.Count == 1 && right2Panels.Count == 0);
+        bool suppressLeft   = sourceInLeft2  && left2Panels.Count  == 1 && leftPanels.Count  == 0;
+        bool suppressRight  = sourceInRight2 && right2Panels.Count == 1 && rightPanels.Count == 0;
 
         if (!suppressLeft2)
             AddZoneSlots(result, sourcePanelId, left2Panels, sourceInLeft2, DockZone.Left2);
 
-        AddZoneSlots(result, sourcePanelId, leftPanels,   sourceInLeft,   DockZone.Left);
-        AddZoneSlots(result, sourcePanelId, topPanels,    sourceInTop,    DockZone.Top);
-        AddZoneSlots(result, sourcePanelId, rightPanels,  sourceInRight,  DockZone.Right);
+        if (!suppressLeft)
+            AddZoneSlots(result, sourcePanelId, leftPanels, sourceInLeft, DockZone.Left);
+
+        AddZoneSlots(result, sourcePanelId, topPanels, sourceInTop, DockZone.Top);
+
+        if (!suppressRight)
+            AddZoneSlots(result, sourcePanelId, rightPanels, sourceInRight, DockZone.Right);
 
         if (!suppressRight2)
             AddZoneSlots(result, sourcePanelId, right2Panels, sourceInRight2, DockZone.Right2);
