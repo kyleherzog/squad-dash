@@ -105,6 +105,7 @@
     <Compile Include="..\SquadDash\WhisperSpeechRecognitionService.cs" Link="Source\WhisperSpeechRecognitionService.cs" />
     <Compile Include="..\SquadDash\PushToTalkWindow.cs" Link="Source\PushToTalkWindow.cs" />
     <Compile Include="..\SquadDash\PttTextBoxAttachment.cs" Link="Source\PttTextBoxAttachment.cs" />
+    <Compile Include="..\SquadDash\PttRichTextBoxAttachment.cs" Link="Source\PttRichTextBoxAttachment.cs" />
     <Compile Include="..\SquadDash\PromptExecutionController.cs" Link="Source\PromptExecutionController.cs" />
     <Compile Include="..\SquadDash\PromptInteractionLogic.cs" Link="Source\PromptInteractionLogic.cs" />
     <Compile Include="..\SquadDash\SquadCliAdapter.cs" Link="Source\SquadCliAdapter.cs" />

@@ -39,8 +39,9 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
 
     // ── Voice ─────────────────────────────────────────────────────────────────
 
-    private readonly PttTextBoxAttachment _pttTitle;
-    private readonly PttTextBoxAttachment _pttOptions;
+    private readonly PttTextBoxAttachment    _pttTitle;
+    private readonly PttTextBoxAttachment    _pttOptions;
+    private readonly PttRichTextBoxAttachment _pttInstructions;
 
     // ── Debounce timers ───────────────────────────────────────────────────────
 
@@ -95,8 +96,9 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         ResizeMode            = ResizeMode.CanResizeWithGrip;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
-        _pttTitle   = new PttTextBoxAttachment(_settingsProvider, this, Dispatcher);
-        _pttOptions = new PttTextBoxAttachment(_settingsProvider, this, Dispatcher);
+        _pttTitle        = new PttTextBoxAttachment(_settingsProvider, this, Dispatcher);
+        _pttOptions      = new PttTextBoxAttachment(_settingsProvider, this, Dispatcher);
+        _pttInstructions = new PttRichTextBoxAttachment(_settingsProvider, this, Dispatcher);
 
         _titleBox            = BuildTitleBox();
         _enabledCheck        = BuildEnabledCheck();
@@ -150,18 +152,23 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
             if (_pttTitle.HandlePreviewKeyDown(e, _titleBox)) e.Handled = true;
         if (_optionsYamlBox.IsKeyboardFocusWithin)
             if (_pttOptions.HandlePreviewKeyDown(e, _optionsYamlBox)) e.Handled = true;
+        if (_instructionsBox.IsKeyboardFocusWithin)
+            if (_pttInstructions.HandlePreviewKeyDown(e, _instructionsBox)) e.Handled = true;
     }
 
     private void OnPreviewKeyUp(object sender, KeyEventArgs e) {
         _pttTitle.HandlePreviewKeyUp(e);
         _pttOptions.HandlePreviewKeyUp(e);
+        _pttInstructions.HandlePreviewKeyUp(e);
     }
 
     private void OnClosed(object? sender, EventArgs e) {
-        if (_pttTitle.IsActive)   _ = _pttTitle.StopAsync();
-        if (_pttOptions.IsActive) _ = _pttOptions.StopAsync();
+        if (_pttTitle.IsActive)        _ = _pttTitle.StopAsync();
+        if (_pttOptions.IsActive)      _ = _pttOptions.StopAsync();
+        if (_pttInstructions.IsActive) _ = _pttInstructions.StopAsync();
         _pttTitle.Dispose();
         _pttOptions.Dispose();
+        _pttInstructions.Dispose();
     }
 
     // ── Layout ────────────────────────────────────────────────────────────────

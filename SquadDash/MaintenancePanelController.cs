@@ -76,6 +76,48 @@ internal sealed class MaintenancePanelController {
     // ── Context menu ──────────────────────────────────────────────────────────
 
     private void WireListPanelContextMenu() {
+        var newTaskItem = new MenuItem { Header = "New Task" };
+        newTaskItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+        newTaskItem.Click += (_, _) => {
+            var workspacePath = _getWorkspacePath();
+            if (workspacePath is null) {
+                SquadDashTrace.Write(TraceCategory.General,
+                    "MaintenancePanelController: workspace path is null; cannot create task");
+                return;
+            }
+            var mdPath = Path.Combine(workspacePath, ".squad", "maintenance.md");
+            if (!File.Exists(mdPath)) {
+                SquadDashTrace.Write(TraceCategory.General,
+                    $"MaintenancePanelController: maintenance file not found at {mdPath}");
+                return;
+            }
+            var newId   = Guid.NewGuid().ToString("N")[..8];
+            var newTask = new MaintenanceTask(
+                Id:            newId,
+                Enabled:       false,
+                Frequency:     "weekly",
+                Safety:        "branch",
+                Title:         "New Task",
+                Instructions:  "Describe what the agent should do here.\n\nAdd as many details as needed.",
+                SourceFilePath: mdPath);
+            try {
+                MaintenanceMdParser.AppendTask(mdPath, newTask);
+            }
+            catch (Exception ex) {
+                SquadDashTrace.Write(TraceCategory.General,
+                    $"MaintenancePanelController: failed to create task: {ex.Message}");
+                return;
+            }
+            var ownerWindow = Window.GetWindow(_listPanel);
+            if (ownerWindow is null) return;
+            new MaintenanceTaskEditorWindow(
+                ownerWindow,
+                newTask,
+                () => new ApplicationSettingsStore().Load(),
+                _reloadPanel)
+                .ShowDialog();
+        };
+
         var editItem = new MenuItem { Header = "Edit Maintenance File…" };
         editItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
         editItem.Click += (_, _) => {
@@ -101,6 +143,7 @@ internal sealed class MaintenancePanelController {
 
         var menu = new ContextMenu();
         menu.SetResourceReference(ContextMenu.StyleProperty, "ThemedContextMenuStyle");
+        menu.Items.Add(newTaskItem);
         menu.Items.Add(editItem);
 
         var collapseItem = new MenuItem { Header = "Collapse All Tasks" };

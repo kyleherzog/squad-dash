@@ -552,6 +552,53 @@ internal static class MaintenanceMdParser {
         catch { /* best-effort */ }
     }
 
+    /// <summary>
+    /// Appends a new task entry to the <c>tasks:</c> block in <paramref name="filePath"/>.
+    /// If no <c>tasks:</c> key is present in the frontmatter, one is inserted before the
+    /// closing <c>---</c>. Does nothing if the file cannot be read or has no frontmatter.
+    /// </summary>
+    public static void AppendTask(string filePath, MaintenanceTask task) {
+        if (!File.Exists(filePath)) return;
+
+        string raw;
+        try { raw = File.ReadAllText(filePath); }
+        catch { return; }
+
+        var lineEnding = raw.Contains("\r\n") ? "\r\n" : "\n";
+        var lines = raw.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n').ToList();
+
+        // Locate frontmatter opening and closing ---
+        int fmStart = -1, fmEnd = -1;
+        for (int i = 0; i < lines.Count; i++) {
+            if (lines[i].Trim() == "---") {
+                if (fmStart < 0) fmStart = i;
+                else { fmEnd = i; break; }
+            }
+        }
+        if (fmEnd < 0) return;
+
+        // Check whether a tasks: key already exists inside the frontmatter
+        bool hasTasksKey = false;
+        for (int i = fmStart + 1; i < fmEnd; i++) {
+            if (lines[i].TrimStart() == "tasks:") { hasTasksKey = true; break; }
+        }
+
+        var taskLines = SerializeTask(task);
+
+        if (!hasTasksKey) {
+            // Insert "tasks:" followed by the new task block just before the closing ---
+            lines.Insert(fmEnd, "tasks:");
+            fmEnd++;  // closing --- shifted by one
+        }
+
+        // Insert the new task block just before the closing ---
+        for (int k = taskLines.Count - 1; k >= 0; k--)
+            lines.Insert(fmEnd, taskLines[k]);
+
+        try { File.WriteAllText(filePath, string.Join(lineEnding, lines)); }
+        catch { /* best-effort */ }
+    }
+
     private static List<string> SerializeTask(MaintenanceTask t) {
         var lines = new List<string>();
         lines.Add($"  - id: {t.Id}");
