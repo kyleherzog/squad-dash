@@ -5868,6 +5868,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         SyncSendButton();
         LoopPanelBorder.Visibility = _loopPanelVisible ? Visibility.Visible : Visibility.Collapsed;
         _dockingService?.OnPanelVisibilityChanged("loop", _loopPanelVisible);
+        UpdateMainGridSideMargins();
         bool running = IsLoopRunning;
 
         if (running != _lastSyncedLoopRunning) {
@@ -5935,6 +5936,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (TasksPanelBorder is null) return;
         TasksPanelBorder.Visibility = _tasksPanelVisible ? Visibility.Visible : Visibility.Collapsed;
         _dockingService?.OnPanelVisibilityChanged("tasks", _tasksPanelVisible);
+        UpdateMainGridSideMargins();
         if (_tasksPanelVisible)
             LoadTasksPanel();
     }
@@ -12401,6 +12403,18 @@ public partial class MainWindow : Window, ILiveElementLocator
 
     // ── Panel docking ──────────────────────────────────────────────────────────
 
+    private void UpdateMainGridSideMargins()
+    {
+        bool hasLeft  = LeftZoneColumn.Width.Value  > 0 || Left2ZoneColumn.Width.Value  > 0;
+        bool hasRight = RightZoneColumn.Width.Value > 0 || Right2ZoneColumn.Width.Value > 0;
+        var current = MainGrid.Margin;
+        MainGrid.Margin = new System.Windows.Thickness(
+            hasLeft  ? 4 : 12,
+            current.Top,
+            hasRight ? 4 : 14,
+            current.Bottom);
+    }
+
     private void WireGripStripHandlers()
     {
         var dockable = new[]
@@ -12485,6 +12499,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 try
                 {
                     _dockingService.MovePanel(panelId, z);
+                    UpdateMainGridSideMargins();
                     if (_currentWorkspace is not null)
                         _dockingService.SaveLayout(_currentWorkspace.FolderPath);
                 }
@@ -15296,6 +15311,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             if (loadedLayout.RightZoneWidth is double rw && rw > 0
                 && RightZoneColumn.Width.Value > 0)
                 RightZoneColumn.Width = new System.Windows.GridLength(rw, System.Windows.GridUnitType.Pixel);
+            UpdateMainGridSideMargins();
         }
 
         ClearRuntimeIssue();
@@ -27923,6 +27939,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (ApprovalPanelBorder is null) return;
         ApprovalPanelBorder.Visibility = _approvalPanelVisible ? Visibility.Visible : Visibility.Collapsed;
         _dockingService?.OnPanelVisibilityChanged("approvals", _approvalPanelVisible);
+        UpdateMainGridSideMargins();
         if (_approvalPanelVisible && _approvalPanel is null)
         {
             _approvalPanel = new CommitApprovalPanel(
@@ -28739,6 +28756,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (NotesPanelBorder is null) return;
         NotesPanelBorder.Visibility = _notesPanelVisible ? Visibility.Visible : Visibility.Collapsed;
         _dockingService?.OnPanelVisibilityChanged("notes", _notesPanelVisible);
+        UpdateMainGridSideMargins();
         if (_notesPanelVisible && _notesPanel is null)
         {
             _notesPanel = new NotesPanelController(
@@ -28773,6 +28791,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (MaintenancePanelBorder is null) return;
         MaintenancePanelBorder.Visibility = _maintenancePanelVisible ? Visibility.Visible : Visibility.Collapsed;
         _dockingService?.OnPanelVisibilityChanged("maintenance", _maintenancePanelVisible);
+        UpdateMainGridSideMargins();
         if (!_maintenancePanelVisible) return;
 
         var workspacePath = _currentWorkspace?.FolderPath;
@@ -28842,6 +28861,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         if (InboxPanelBorder is null) return;
         InboxPanelBorder.Visibility = _inboxPanelVisible ? Visibility.Visible : Visibility.Collapsed;
         _dockingService?.OnPanelVisibilityChanged("inbox", _inboxPanelVisible);
+        UpdateMainGridSideMargins();
         if (!_inboxPanelVisible) return;
 
         var workspacePath = _currentWorkspace?.FolderPath;
