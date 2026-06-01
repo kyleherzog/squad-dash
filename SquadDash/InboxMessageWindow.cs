@@ -228,9 +228,15 @@ internal sealed class InboxMessageWindow : ChromedWindow
         _bodyFontSize = Math.Clamp(_bodyFontSize + (e.Delta > 0 ? step : -step), min, max);
 
         if (_bodyViewer.Document is not null)
-            _bodyViewer.Document.FontSize = _bodyFontSize;
+            RebuildDocument();
 
         _onFontSizeChanged?.Invoke(_bodyFontSize);
+    }
+
+    private void RebuildDocument()
+    {
+        var doc = MarkdownFlowDocumentBuilder.Build(_message.Body ?? string.Empty, _bodyFontSize);
+        _bodyViewer.Document = doc;
     }
 
     private static ScrollViewer? FindScrollViewer(DependencyObject parent)
@@ -494,9 +500,7 @@ internal sealed class InboxMessageWindow : ChromedWindow
     /// </summary>
     public void NotifyThemeChanged()
     {
-        var doc = MarkdownFlowDocumentBuilder.Build(_message.Body ?? string.Empty);
-        doc.FontSize = _bodyFontSize;
-        _bodyViewer.Document = doc;
+        RebuildDocument();
     }
 
     public void SelectAndScrollToText(string excerptText)

@@ -17,15 +17,18 @@ internal static class MarkdownFlowDocumentBuilder {
     private static Brush Res(string key, Brush fallback) =>
         Application.Current?.Resources[key] as Brush ?? fallback;
 
-    public static FlowDocument Build(string markdown) => BuildWithMap(markdown, out _);
+    public static FlowDocument Build(string markdown, double baseFontSize = 0) => BuildWithMap(markdown, out _, baseFontSize);
 
     /// <summary>
     /// Builds a <see cref="FlowDocument"/> from <paramref name="markdown"/> and also returns,
     /// for each block in document order, the 0-based (StartLine, EndLine) range in the
     /// normalised input that produced it.  Use this to map rendered blocks back to source.
     /// </summary>
-    public static FlowDocument BuildWithMap(string markdown, out List<(int StartLine, int EndLine)> blockLineRanges) {
+    public static FlowDocument BuildWithMap(string markdown, out List<(int StartLine, int EndLine)> blockLineRanges, double baseFontSize = 0) {
         blockLineRanges = new List<(int, int)>();
+
+        if (baseFontSize <= 0)
+            baseFontSize = Application.Current?.Resources["FontSizeMedium"] as double? ?? 13.0;
 
         var foreground   = Res("LabelText",          DefaultForegroundBrush);
         var quoteFill    = Res("QuoteSurface",        DefaultQuoteFillBrush);
@@ -37,7 +40,7 @@ internal static class MarkdownFlowDocumentBuilder {
 
         var document = new FlowDocument {
             FontFamily    = new FontFamily("Segoe UI, Segoe UI Emoji"),
-            FontSize      = (double)Application.Current.Resources["FontSizeMedium"],
+            FontSize      = baseFontSize,
             Foreground    = foreground,
             Background    = Brushes.Transparent,   // let the viewer's background show through the page
             PagePadding   = new Thickness(18),
@@ -72,13 +75,13 @@ internal static class MarkdownFlowDocumentBuilder {
             }
 
             if (TryReadTable(lines, ref index, out var tableRows)) {
-                document.Blocks.Add(BuildTable(tableRows, tableRule, tableHeader));
+                document.Blocks.Add(BuildTable(tableRows, tableRule, tableHeader, baseFontSize));
                 blockLineRanges.Add((startIndex, index));
                 continue;
             }
 
             if (trimmed.StartsWith("#", StringComparison.Ordinal)) {
-                document.Blocks.Add(BuildHeading(trimmed));
+                document.Blocks.Add(BuildHeading(trimmed, baseFontSize));
                 blockLineRanges.Add((startIndex, index));
                 continue;
             }
@@ -193,14 +196,14 @@ internal static class MarkdownFlowDocumentBuilder {
             .Replace('\r', '\n');
     }
 
-    private static Paragraph BuildHeading(string line) {
+    private static Paragraph BuildHeading(string line, double baseFontSize) {
         var level = line.TakeWhile(character => character == '#').Count();
         var text = line[level..].Trim();
         var size = level switch {
-            1 => 24d,
-            2 => 20d,
-            3 => 17d,
-            _ => 15d
+            1 => baseFontSize * (24.0 / 14.0),
+            2 => baseFontSize * (20.0 / 14.0),
+            3 => baseFontSize * (17.0 / 14.0),
+            _ => baseFontSize * (15.0 / 14.0)
         };
 
         var paragraph = new Paragraph {
@@ -307,11 +310,11 @@ internal static class MarkdownFlowDocumentBuilder {
         return rows.Count > 0;
     }
 
-    private static Block BuildTable(IReadOnlyList<string[]> rows, Brush tableRule, Brush tableHeader) {
+    private static Block BuildTable(IReadOnlyList<string[]> rows, Brush tableRule, Brush tableHeader, double baseFontSize) {
         var columnCount = rows.Max(row => row.Length);
 
         var foreground = Res("LabelText", DefaultForegroundBrush);
-        var fontSize   = Application.Current?.Resources["FontSizeMedium"] as double? ?? 13.0;
+        var fontSize   = baseFontSize;
 
         var grid = new Grid {
             HorizontalAlignment = HorizontalAlignment.Left,
