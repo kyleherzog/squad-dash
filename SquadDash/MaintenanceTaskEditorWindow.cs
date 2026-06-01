@@ -22,9 +22,11 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
 
     // ── State ─────────────────────────────────────────────────────────────────
 
-    private readonly MaintenanceTask                   _task;
-    private readonly Func<ApplicationSettingsSnapshot> _settingsProvider;
-    private readonly Action                            _onSaved;
+    private readonly MaintenanceTask                         _task;
+    private readonly Func<ApplicationSettingsSnapshot>       _settingsProvider;
+    private readonly Action                                  _onSaved;
+    private readonly Action<RichTextBox, string>?            _onReviseWithAi;
+    private readonly Action<RichTextBox, string, string>?    _onDirectRevise;
 
     // ── Controls ──────────────────────────────────────────────────────────────
 
@@ -81,11 +83,15 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         Window owner,
         MaintenanceTask task,
         Func<ApplicationSettingsSnapshot> settingsProvider,
-        Action onSaved) : base(captionHeight: 56) {
+        Action onSaved,
+        Action<RichTextBox, string>?         onReviseWithAi = null,
+        Action<RichTextBox, string, string>? onDirectRevise = null) : base(captionHeight: 56) {
 
         _task             = task;
         _settingsProvider = settingsProvider;
         _onSaved          = onSaved;
+        _onReviseWithAi   = onReviseWithAi;
+        _onDirectRevise   = onDirectRevise;
 
         Owner                 = owner;
         Title                 = "Edit Maintenance Task";
@@ -154,6 +160,36 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
             if (_pttOptions.HandlePreviewKeyDown(e, _optionsYamlBox)) e.Handled = true;
         if (_instructionsBox.IsKeyboardFocusWithin)
             if (_pttInstructions.HandlePreviewKeyDown(e, _instructionsBox)) e.Handled = true;
+
+        // Ctrl+Shift+A: Revise with AI
+        if (_instructionsBox.IsKeyboardFocusWithin
+            && e.Key == Key.A
+            && (Keyboard.Modifiers & ModifierKeys.Control) != 0
+            && (Keyboard.Modifiers & ModifierKeys.Shift) != 0
+            && _onReviseWithAi is not null
+            && _instructionsBox.GetSelectionLength() > 0)
+        {
+            _onReviseWithAi(_instructionsBox, "");
+            e.Handled = true;
+            return;
+        }
+
+        // Ctrl+Shift+C: Quick Cleanup
+        if (_instructionsBox.IsKeyboardFocusWithin
+            && e.Key == Key.C
+            && (Keyboard.Modifiers & ModifierKeys.Control) != 0
+            && (Keyboard.Modifiers & ModifierKeys.Shift) != 0
+            && _onDirectRevise is not null
+            && _instructionsBox.GetSelectionLength() > 0)
+        {
+            var cleanupPrompt = _settingsProvider().CleanupPrompt;
+            if (!string.IsNullOrWhiteSpace(cleanupPrompt))
+            {
+                _onDirectRevise(_instructionsBox, "", cleanupPrompt);
+                e.Handled = true;
+                return;
+            }
+        }
     }
 
     private void OnPreviewKeyUp(object sender, KeyEventArgs e) {

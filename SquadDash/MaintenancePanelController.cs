@@ -23,6 +23,8 @@ internal sealed class MaintenancePanelController {
     private readonly Action               _reloadPanel;
     private readonly Action<string>       _openInMarkdownEditor;
     private readonly Action               _showInboxPanel;
+    private readonly Action<RichTextBox, string>?            _onReviseWithAi;
+    private readonly Action<RichTextBox, string, string>?    _onDirectRevise;
 
     private MaintenanceMdConfig?   _config;
     private MaintenanceStateStore? _stateStore;
@@ -47,7 +49,9 @@ internal sealed class MaintenancePanelController {
         Action<string, bool> toggleTaskEnabled,
         Action               reloadPanel,
         Action<string>       openInMarkdownEditor,
-        Action               showInboxPanel) {
+        Action               showInboxPanel,
+        Action<RichTextBox, string>?            onReviseWithAi = null,
+        Action<RichTextBox, string, string>?    onDirectRevise = null) {
 
         _listPanel              = listPanel;
         _statusLabel            = statusLabel;
@@ -58,6 +62,8 @@ internal sealed class MaintenancePanelController {
         _reloadPanel            = reloadPanel;
         _openInMarkdownEditor   = openInMarkdownEditor;
         _showInboxPanel         = showInboxPanel;
+        _onReviseWithAi         = onReviseWithAi;
+        _onDirectRevise         = onDirectRevise;
 
         _enabledOnIdlePicker = new CompactPickerButton(
             headerText:     "Maintenance Tasks:",
@@ -114,7 +120,9 @@ internal sealed class MaintenancePanelController {
                 ownerWindow,
                 newTask,
                 () => new ApplicationSettingsStore().Load(),
-                _reloadPanel)
+                _reloadPanel,
+                onReviseWithAi: _onReviseWithAi,
+                onDirectRevise: _onDirectRevise)
                 .ShowDialog();
         };
 
@@ -688,7 +696,9 @@ internal sealed class MaintenancePanelController {
                 ownerWindow,
                 capturedTask,
                 () => new ApplicationSettingsStore().Load(),
-                _reloadPanel)
+                _reloadPanel,
+                onReviseWithAi: _onReviseWithAi,
+                onDirectRevise: _onDirectRevise)
                 .ShowDialog();
         };
         taskMenu.Items.Add(editTaskItem);

@@ -28813,7 +28813,9 @@ public partial class MainWindow : Window, ILiveElementLocator
                     path,
                     showSource: true,
                     BuildMarkdownCaptureContext()),
-                showInboxPanel:         () => ShowInboxPanel());
+                showInboxPanel:         () => ShowInboxPanel(),
+                onReviseWithAi:         (rtb, path) => ShowDocRevisePopup(rtb, path),
+                onDirectRevise:         (rtb, path, instructions) => DirectReviseRichTextBox(rtb, path, instructions));
         }
 
         var config = MaintenanceMdParser.Parse(Path.Combine(workspacePath, ".squad", "maintenance.md"));
