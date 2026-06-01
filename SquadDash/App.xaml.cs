@@ -43,6 +43,7 @@ namespace SquadDash {
             services.AddSingleton<PostedUiActionTracker>();
             services.AddSingleton<UiActionReplayRegistry>();
             services.AddSingleton<FixtureLoaderRegistry>();
+            services.AddSingleton<IPromptInstructionProvider, DefaultPromptInstructionProvider>();
             var serviceProvider = services.BuildServiceProvider();
 
             // Resolve screenshot refresh options from raw parsed args.

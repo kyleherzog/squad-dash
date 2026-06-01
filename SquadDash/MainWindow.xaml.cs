@@ -1300,6 +1300,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             renderToolEntry: entry => RenderToolEntry(entry),
             updateToolSpinnerState: () => UpdateToolSpinnerState(),
             workspacePaths: _workspacePaths,
+            instructionProvider: serviceProvider?.GetRequiredService<IPromptInstructionProvider>() ?? new DefaultPromptInstructionProvider(),
             getSubmittedAttachments: () => _pendingTranscriptAttachments ?? Array.Empty<FollowUpAttachment>());
 
         InitializeHostCommands();
