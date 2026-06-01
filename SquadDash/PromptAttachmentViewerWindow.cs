@@ -35,10 +35,10 @@ internal sealed class PromptAttachmentViewerWindow : ChromedWindow
     private readonly Action<string>? _openInboxMessage;
 
     private PromptAttachmentViewerWindow(IReadOnlyList<FollowUpAttachment> attachments, Window? owner, Action<string>? openInboxMessage = null)
-        : base(captionHeight: 28, resizeMode: ResizeMode.CanResize)
+        : base(captionHeight: CloseButtonHeight, resizeMode: ResizeMode.CanResize)
     {
         _openInboxMessage = openInboxMessage;
-        Title         = attachments.Count == 1 ? "Prompt Attachment" : "Prompt Attachments";
+        Title         = attachments.Count == 1 ? "Text Attachment" : "Text Attachments";
         MinWidth      = 320;
         MinHeight     = 200;
         ShowInTaskbar = false;
@@ -74,8 +74,8 @@ internal sealed class PromptAttachmentViewerWindow : ChromedWindow
         }
 
         System.Windows.Shell.WindowChrome.SetIsHitTestVisibleInChrome(content, true);
-        var outerBorder = ApplyOuterBorder();
-        outerBorder.Child = content;
+        var contentBorder = ApplyOuterBorder(titleText: Title);
+        contentBorder.Child = content;
 
         // Auto-size the window to the image when we have a single image attachment.
         if (singleImage is not null)

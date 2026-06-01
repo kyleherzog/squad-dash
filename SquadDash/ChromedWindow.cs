@@ -64,15 +64,22 @@ internal class ChromedWindow : Window {
     /// Pass a different key (e.g. <c>"PopupSurface"</c>) for windows that use
     /// an alternative surface colour.
     /// </param>
-    protected Border ApplyOuterBorder(string backgroundResource = "AppSurface") {
-        var border = new Border {
+    /// <param name="titleText">
+    /// When non-null, a visible title bar row is rendered at the top of the window
+    /// containing this text (left-aligned) and the close button (right-aligned).
+    /// The returned border is the <em>inner content area</em> below the title bar,
+    /// not the outer border itself.  The <see cref="WindowChrome.CaptionHeight"/>
+    /// should be set to <see cref="CloseButtonHeight"/> so the title bar is the
+    /// drag zone.
+    /// </param>
+    protected Border ApplyOuterBorder(string backgroundResource = "AppSurface", string? titleText = null) {
+        var outerBorder = new Border {
             BorderThickness = new Thickness(1.5),
             CornerRadius    = new CornerRadius(4),
         };
-        border.SetResourceReference(Border.BackgroundProperty,  backgroundResource);
-        border.SetResourceReference(Border.BorderBrushProperty, "PanelBorder");
+        outerBorder.SetResourceReference(Border.BackgroundProperty,  backgroundResource);
+        outerBorder.SetResourceReference(Border.BorderBrushProperty, "PanelBorder");
 
-        // Close button floats in the top-right corner of the caption strip.
         var closeBtnText = new TextBlock {
             Text                = "\u2715",
             VerticalAlignment   = VerticalAlignment.Center,
@@ -81,24 +88,68 @@ internal class ChromedWindow : Window {
         closeBtnText.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBody");
 
         var closeBtn = new Button {
-            Width               = 38,
-            Height              = CloseButtonHeight,
-            Padding             = new Thickness(0),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment   = VerticalAlignment.Top,
-            ToolTip             = "Close",
-            Content             = closeBtnText,
+            Width   = 38,
+            Padding = new Thickness(0),
+            ToolTip = "Close",
+            Content = closeBtnText,
         };
         closeBtn.SetResourceReference(Button.StyleProperty, "CaptionCloseButtonStyle");
         WindowChrome.SetIsHitTestVisibleInChrome(closeBtn, true);
         closeBtn.Click += (_, _) => Close();
 
-        // Overlay grid: border fills the whole window area; close button is layered on top.
-        var overlay = new Grid();
-        overlay.Children.Add(border);
-        overlay.Children.Add(closeBtn);
+        if (titleText is not null)
+        {
+            // Visible title bar: title text (left) + close button (right), separated from
+            // content by a 1px bottom border.  The title row is the drag zone — do NOT
+            // mark it hit-test-visible in chrome.
+            var titleLabel = new TextBlock {
+                Text              = titleText,
+                VerticalAlignment = VerticalAlignment.Center,
+                Padding           = new Thickness(10, 0, 8, 0),
+                FontWeight        = FontWeights.SemiBold,
+                TextTrimming      = TextTrimming.CharacterEllipsis,
+            };
+            titleLabel.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeBody");
+            titleLabel.SetResourceReference(TextBlock.ForegroundProperty,  "LabelText");
 
-        Content = overlay;
-        return border;
+            closeBtn.HorizontalAlignment = HorizontalAlignment.Stretch;
+            closeBtn.VerticalAlignment   = VerticalAlignment.Stretch;
+
+            var titleRow = new DockPanel { Height = CloseButtonHeight };
+            DockPanel.SetDock(closeBtn, Dock.Right);
+            titleRow.Children.Add(closeBtn);
+            titleRow.Children.Add(titleLabel);
+
+            var titleBar = new Border { BorderThickness = new Thickness(0, 0, 0, 1) };
+            titleBar.SetResourceReference(Border.BorderBrushProperty, "PanelBorder");
+            titleBar.Child = titleRow;
+
+            var contentHolder = new Border();
+            WindowChrome.SetIsHitTestVisibleInChrome(contentHolder, true);
+
+            var layout = new DockPanel { LastChildFill = true };
+            DockPanel.SetDock(titleBar, Dock.Top);
+            layout.Children.Add(titleBar);
+            layout.Children.Add(contentHolder);
+
+            outerBorder.Child = layout;
+
+            var overlay = new Grid();
+            overlay.Children.Add(outerBorder);
+            Content = overlay;
+            return contentHolder;
+        }
+
+        // Original path: floating close button overlay (no visible title row).
+        closeBtn.Width               = 38;
+        closeBtn.Height              = CloseButtonHeight;
+        closeBtn.HorizontalAlignment = HorizontalAlignment.Right;
+        closeBtn.VerticalAlignment   = VerticalAlignment.Top;
+
+        var grid = new Grid();
+        grid.Children.Add(outerBorder);
+        grid.Children.Add(closeBtn);
+        Content = grid;
+        return outerBorder;
     }
 }
