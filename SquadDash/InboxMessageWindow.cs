@@ -125,7 +125,7 @@ internal sealed class InboxMessageWindow : ChromedWindow
             actionsPanel.Children.Add(BuildActionButton(action, message, onActionClicked));
 
         // ── Body ──────────────────────────────────────────────────────────────
-        var doc = MarkdownFlowDocumentBuilder.Build(message.Body ?? string.Empty);
+        var doc = MarkdownFlowDocumentBuilder.Build(message.Body ?? string.Empty, _bodyFontSize);
 
         _bodyViewer = new FlowDocumentScrollViewer
         {
@@ -154,8 +154,6 @@ internal sealed class InboxMessageWindow : ChromedWindow
                 case Key.Up:       sv.LineUp();   e.Handled = true; break;
             }
         };
-
-        doc.FontSize = _bodyFontSize;
 
         // Fix for code block copying: FlowDocument's default copy handler can skip
         // Paragraph elements with backgrounds (code blocks). Intercept the copy event
