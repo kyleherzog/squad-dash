@@ -28794,8 +28794,9 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
         BitmapSource?             srcImage = null;
         try
         {
+            var jsonOpts = new System.Text.Json.JsonSerializerOptions { NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals };
             state = System.Text.Json.JsonSerializer.Deserialize<ClipboardAnnotationState>(
-                File.ReadAllText(annotJsonPath));
+                File.ReadAllText(annotJsonPath), jsonOpts);
             var bi = new System.Windows.Media.Imaging.BitmapImage(new Uri(sourcePngPath));
             bi.Freeze();
             srcImage = bi;
