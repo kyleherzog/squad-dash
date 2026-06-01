@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows.Threading;
 using System.Windows.Shell;
 using System.Collections.Generic;
+using Microsoft.Extensions.DependencyInjection;
 using SquadDash.Screenshots;
 
 namespace SquadDash {
@@ -27,6 +28,22 @@ namespace SquadDash {
                 $"App.OnStartup appRoot={startupArguments.ApplicationRoot ?? "(auto)"} workspace={startupArguments.StartupFolder ?? "(none)"} newWindow={startupArguments.NoWorkspaceOnStart} devMode={SquadDashEnvironment.IsDeveloperMode}");
             SquadDashRuntimeStamp.WriteStartupStamp(workspacePaths);
             var startupFolder = startupArguments.StartupFolder;
+
+            var services = new ServiceCollection();
+            services.AddSingleton<ApplicationSettingsStore>();
+            services.AddSingleton<SquadTeamRosterLoader>();
+            services.AddSingleton<SquadRoutingDocumentService>();
+            services.AddSingleton<SquadInstallationStateService>();
+            services.AddSingleton<SquadInstallerService>();
+            services.AddSingleton<RunningInstanceRegistry>();
+            services.AddSingleton<RestartCoordinatorStateStore>();
+            services.AddSingleton<PastedImageStore>();
+            services.AddSingleton<PromptQueue>();
+            services.AddSingleton<HostCommandRegistry>();
+            services.AddSingleton<PostedUiActionTracker>();
+            services.AddSingleton<UiActionReplayRegistry>();
+            services.AddSingleton<FixtureLoaderRegistry>();
+            var serviceProvider = services.BuildServiceProvider();
 
             // Resolve screenshot refresh options from raw parsed args.
             var refreshOptions = startupArguments.RefreshScreenshots
@@ -53,13 +70,13 @@ namespace SquadDash {
             var noWorkspaceOnStart = startupArguments.NoWorkspaceOnStart;
             if (!noWorkspaceOnStart &&
                 !WorkspaceStartupRoutingPolicy.ShouldBypassSingleInstanceRouting(refreshOptions) &&
-                TryHandleStartupWorkspaceRouting(startupFolder, workspacePaths, out startupWorkspaceLease, out noWorkspaceOnStart))
+                TryHandleStartupWorkspaceRouting(startupFolder, workspacePaths, serviceProvider, out startupWorkspaceLease, out noWorkspaceOnStart))
                 return;
 
-            var window = new MainWindow(startupFolder, startupWorkspaceLease, workspacePaths, refreshOptions, noWorkspaceOnStart);
+            var window = new MainWindow(startupFolder, startupWorkspaceLease, workspacePaths, refreshOptions, noWorkspaceOnStart, serviceProvider);
             MainWindow = window;
 
-            var recentFolders = new ApplicationSettingsStore().Load().RecentFolders;
+            var recentFolders = serviceProvider.GetRequiredService<ApplicationSettingsStore>().Load().RecentFolders;
             RefreshJumpList(recentFolders);
 
             window.Show();
@@ -183,6 +200,7 @@ namespace SquadDash {
         private bool TryHandleStartupWorkspaceRouting(
             string? startupFolder,
             IWorkspacePaths workspacePaths,
+            IServiceProvider serviceProvider,
             out WorkspaceOwnershipLease? startupWorkspaceLease,
             out bool noWorkspaceOnStart) {
             startupWorkspaceLease = null;
@@ -191,7 +209,7 @@ namespace SquadDash {
             if (!string.IsNullOrWhiteSpace(startupFolder) && !Directory.Exists(startupFolder))
                 return false;
 
-            var settingsSnapshot = new ApplicationSettingsStore().Load();
+            var settingsSnapshot = serviceProvider.GetRequiredService<ApplicationSettingsStore>().Load();
             var candidateWorkspace = StartupWorkspaceResolver.Resolve(
                 startupFolder,
                 settingsSnapshot.LastOpenedFolder,

@@ -28,6 +28,7 @@ using Microsoft.Win32;
 using SquadDash.PanelDocking;
 using SquadDash.Screenshots;
 using SquadDash.Screenshots.Fixtures;
+using Microsoft.Extensions.DependencyInjection;
 using Shapes = System.Windows.Shapes;
 
 namespace SquadDash;
@@ -135,13 +136,13 @@ public partial class MainWindow : Window, ILiveElementLocator
     ];
     private readonly SquadSdkProcess _bridge;
     private int _ignoreBridgeEventsThroughGeneration;
-    private readonly ApplicationSettingsStore _settingsStore = new();
-    private readonly SquadTeamRosterLoader _teamRosterLoader = new();
-    private readonly SquadRoutingDocumentService _routingDocumentService = new();
-    private readonly SquadInstallationStateService _installationStateService = new();
-    private readonly SquadInstallerService _installerService = new();
-    private readonly RunningInstanceRegistry _instanceRegistry = new();
-    private readonly RestartCoordinatorStateStore _restartCoordinatorStateStore = new();
+    private readonly ApplicationSettingsStore _settingsStore;
+    private readonly SquadTeamRosterLoader _teamRosterLoader;
+    private readonly SquadRoutingDocumentService _routingDocumentService;
+    private readonly SquadInstallationStateService _installationStateService;
+    private readonly SquadInstallerService _installerService;
+    private readonly RunningInstanceRegistry _instanceRegistry;
+    private readonly RestartCoordinatorStateStore _restartCoordinatorStateStore;
     private readonly WorkspaceOpenCoordinator _workspaceOpenCoordinator;
     private readonly InstanceActivationChannel _instanceActivationChannel;
     private PreferencesWindow? _preferencesWindow;
@@ -177,7 +178,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private TreeViewItem? _docsRenameLastClickedItem;
     private bool _docsRenameIsFromAdd;
     private SessionWorkspace? _currentWorkspace;
-    private readonly PastedImageStore _pastedImageStore = new();
+    private readonly PastedImageStore _pastedImageStore;
     private SquadInstallationState? _currentInstallationState;
     private int _pendingThinkingDeltaTraceCount;
     private int _pendingThinkingDeltaTraceChars;
@@ -282,14 +283,14 @@ public partial class MainWindow : Window, ILiveElementLocator
     private bool _queueDrainActive;  // true while an auto-dispatched queue item is executing
     private bool _pendingPromptIsSystemInjected; // set for silent-completion follow-up prompts; consumed by CreateTranscriptTurnView
     private bool _bridgeRestartForSettingsPending;
-    private readonly PromptQueue _promptQueue = new();
+    private readonly PromptQueue _promptQueue;
     private bool _queueManuallyPaused;
     private bool _queuePausePending;
     private bool _bridgeStallShowing;
     private int _promptQueueSeq;
     private int    _queueDayCounter;      // per-day, per-workspace queue sequence number
     private string _queueCounterDate = ""; // local date string "yyyy-MM-dd" for _queueDayCounter
-    private readonly HostCommandRegistry _hostCommandRegistry = new();
+    private readonly HostCommandRegistry _hostCommandRegistry;
     private HostCommandExecutor? _hostCommandExecutor;
     private string? _queuePreEditDraft;
     private int _queuePreEditDraftCaretIndex;
@@ -353,9 +354,9 @@ public partial class MainWindow : Window, ILiveElementLocator
     private readonly Queue<SquadSdkEvent> _pendingBridgeEvents = new();
     private bool _bridgeEventDispatchPending;
     private DateTimeOffset _lastKeyboardInputAt = DateTimeOffset.MinValue;
-    private readonly PostedUiActionTracker _postedUiActionTracker = new();
-    private readonly UiActionReplayRegistry _uiActionReplayRegistry = new();
-    private readonly FixtureLoaderRegistry _fixtureLoaderRegistry = new();
+    private readonly PostedUiActionTracker _postedUiActionTracker;
+    private readonly UiActionReplayRegistry _uiActionReplayRegistry;
+    private readonly FixtureLoaderRegistry _fixtureLoaderRegistry;
     private Screenshots.ScreenshotDefinitionRegistry? _cachedDefinitionRegistry;
     public  Screenshots.ScreenshotHealthChecker ScreenshotHealthChecker { get; private set; } = null!;
     private readonly Queue<DelegationOutcomeTelemetry> _recentDelegationOutcomes = new();
@@ -620,8 +621,21 @@ public partial class MainWindow : Window, ILiveElementLocator
         string Summary,
         string Details);
 
-    internal MainWindow(string? startupFolder = null, WorkspaceOwnershipLease? startupWorkspaceLease = null, IWorkspacePaths? workspacePaths = null, ScreenshotRefreshOptions? screenshotRefreshOptions = null, bool noWorkspaceOnStart = false)
+    internal MainWindow(string? startupFolder = null, WorkspaceOwnershipLease? startupWorkspaceLease = null, IWorkspacePaths? workspacePaths = null, ScreenshotRefreshOptions? screenshotRefreshOptions = null, bool noWorkspaceOnStart = false, IServiceProvider? serviceProvider = null)
     {
+        _settingsStore = serviceProvider?.GetRequiredService<ApplicationSettingsStore>() ?? new ApplicationSettingsStore();
+        _teamRosterLoader = serviceProvider?.GetRequiredService<SquadTeamRosterLoader>() ?? new SquadTeamRosterLoader();
+        _routingDocumentService = serviceProvider?.GetRequiredService<SquadRoutingDocumentService>() ?? new SquadRoutingDocumentService();
+        _installationStateService = serviceProvider?.GetRequiredService<SquadInstallationStateService>() ?? new SquadInstallationStateService();
+        _installerService = serviceProvider?.GetRequiredService<SquadInstallerService>() ?? new SquadInstallerService();
+        _instanceRegistry = serviceProvider?.GetRequiredService<RunningInstanceRegistry>() ?? new RunningInstanceRegistry();
+        _restartCoordinatorStateStore = serviceProvider?.GetRequiredService<RestartCoordinatorStateStore>() ?? new RestartCoordinatorStateStore();
+        _pastedImageStore = serviceProvider?.GetRequiredService<PastedImageStore>() ?? new PastedImageStore();
+        _promptQueue = serviceProvider?.GetRequiredService<PromptQueue>() ?? new PromptQueue();
+        _hostCommandRegistry = serviceProvider?.GetRequiredService<HostCommandRegistry>() ?? new HostCommandRegistry();
+        _postedUiActionTracker = serviceProvider?.GetRequiredService<PostedUiActionTracker>() ?? new PostedUiActionTracker();
+        _uiActionReplayRegistry = serviceProvider?.GetRequiredService<UiActionReplayRegistry>() ?? new UiActionReplayRegistry();
+        _fixtureLoaderRegistry = serviceProvider?.GetRequiredService<FixtureLoaderRegistry>() ?? new FixtureLoaderRegistry();
         _workspacePaths = workspacePaths ?? WorkspacePathsProvider.Discover();
         _screenshotRefreshOptions = screenshotRefreshOptions ?? ScreenshotRefreshOptions.None;
         var ctorSw = Stopwatch.StartNew();
