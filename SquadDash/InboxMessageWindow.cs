@@ -35,8 +35,8 @@ internal sealed class InboxMessageWindow : ChromedWindow
         MessageId               = message.Id;
         Title                   = message.Subject;
         SizeToContent           = SizeToContent.Manual;
-        Width                   = 750;
-        Height                  = 550;
+        Width                   = 1312;
+        Height                  = 825;
         MinWidth                = 400;
         MinHeight               = 300;
         Topmost                 = false;
