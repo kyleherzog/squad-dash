@@ -385,6 +385,7 @@
         <Grid x:Name="TitlebarGrid"
               Grid.ColumnSpan="9"
               Margin="0,0,0,0"
+              MinHeight="38"
               Background="{DynamicResource ChromeSurface}"
               MouseLeftButtonDown="TitlebarGrid_MouseLeftButtonDown"
               VerticalAlignment="Top"
