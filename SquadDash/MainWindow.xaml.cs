@@ -9213,7 +9213,7 @@ public partial class MainWindow : Window, ILiveElementLocator
                 return;
             }
 
-            if (e.Key == Key.F10)
+            if (e.Key == Key.F10 || (e.Key == Key.System && e.SystemKey == Key.F10))
             {
                 RecordDockingTestMenuItem_Click(this, new RoutedEventArgs());
                 e.Handled = true;
