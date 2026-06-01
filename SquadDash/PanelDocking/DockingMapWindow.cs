@@ -96,7 +96,7 @@ internal sealed class DockingMapWindow : Window
 
         foreach (var slot in _viewModel.Slots)
         {
-            var el = BuildSlotElement(slot, groundingColor, polarColor);
+            var el = BuildSlotElement(slot, groundingColor, polarColor, isDark);
             Canvas.SetLeft(el, slot.X);
             Canvas.SetTop(el,  slot.Y);
             canvas.Children.Add(el);
@@ -108,7 +108,7 @@ internal sealed class DockingMapWindow : Window
 
     private const double PopupPadding = 8;
 
-    private UIElement BuildSlotElement(SlotButtonViewModel slot, Color groundingColor, Color polarColor)
+    private UIElement BuildSlotElement(SlotButtonViewModel slot, Color groundingColor, Color polarColor, bool isDark)
     {
         // ── Separator (decorative vertical pill) ────────────────────────────
         if (slot.IsSeparator)
@@ -117,7 +117,7 @@ internal sealed class DockingMapWindow : Window
             {
                 Width        = slot.Width,
                 Height       = slot.Height,
-                Background   = MakeBrush(polarColor, 0.15),
+                Background   = MakeBrush(polarColor, isDark ? 0.15 : 0.30),
                 CornerRadius = new CornerRadius(slot.Width / 2.0),
             };
         }
