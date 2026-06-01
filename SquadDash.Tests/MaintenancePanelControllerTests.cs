@@ -28,25 +28,23 @@ internal sealed class MaintenancePanelControllerTests {
 
     private static (MaintenancePanelController controller,
                     StackPanel listPanel,
-                    TextBlock  statusLabel,
-                    Button     runNowButton)
+                    TextBlock  statusLabel)
         CreateController() {
-        var listPanel              = new StackPanel();
-        var statusLabel            = new TextBlock();
-        var runNowButton           = new Button();
-        var enabledOnIdleCheckBox  = new CheckBox();
+        var listPanel            = new StackPanel();
+        var statusLabel          = new TextBlock();
+        var enabledOnIdleHost    = new ContentControl();
         var controller   = new MaintenancePanelController(
             listPanel,
             statusLabel,
-            runNowButton,
-            enabledOnIdleCheckBox,
+            enabledOnIdleHost,
             getWorkspacePath:  () => null,
-            runNow:            () => { },
             toggleTaskEnabled: (_, _) => { },
             reloadPanel:       () => { },
             openInMarkdownEditor: _ => { },
-            showInboxPanel:    () => { });
-        return (controller, listPanel, statusLabel, runNowButton);
+            showInboxPanel:    () => { },
+            runTask:           _ => { },
+            simulateIdle:      () => { });
+        return (controller, listPanel, statusLabel);
     }
 
     private static MaintenanceMdConfig MakeConfig(IReadOnlyList<MaintenanceTask>? tasks = null) =>
@@ -93,7 +91,7 @@ internal sealed class MaintenancePanelControllerTests {
     [Test]
     public void Refresh_HeaderText_WhenIdle() {
         WpfTestContext.Run(() => {
-            var (controller, _, statusLabel, _) = CreateController();
+            var (controller, _, statusLabel) = CreateController();
             var config = MakeConfig([MakeTask("t1", "Task One")]);
 
             controller.Refresh(config, stateStore: null);
@@ -110,7 +108,7 @@ internal sealed class MaintenancePanelControllerTests {
     [Test]
     public void Refresh_HeaderText_WhenRunning() {
         WpfTestContext.Run(() => {
-            var (controller, _, statusLabel, _) = CreateController();
+            var (controller, _, statusLabel) = CreateController();
             var config = MakeConfig([MakeTask("t1", "Build Checks")]);
 
             // Simulate runner starting before the next Refresh call
@@ -129,7 +127,7 @@ internal sealed class MaintenancePanelControllerTests {
     [Test]
     public void OnRunnerCompleted_ResetsHeaderToIdle() {
         WpfTestContext.Run(() => {
-            var (controller, _, statusLabel, _) = CreateController();
+            var (controller, _, statusLabel) = CreateController();
             var config = MakeConfig([MakeTask("t1", "Lint")]);
             controller.Refresh(config, stateStore: null);
 
@@ -149,7 +147,7 @@ internal sealed class MaintenancePanelControllerTests {
     [Test]
     public void Refresh_CheckboxState_ReflectsConfig() {
         WpfTestContext.Run(() => {
-            var (controller, listPanel, _, _) = CreateController();
+            var (controller, listPanel, _) = CreateController();
             var config = MakeConfig([
                 MakeTask("task-a", "Enabled Task",  enabled: true),
                 MakeTask("task-b", "Disabled Task", enabled: false),
@@ -170,7 +168,7 @@ internal sealed class MaintenancePanelControllerTests {
     [Test]
     public void Refresh_EmptyConfig_ShowsNoCheckboxes() {
         WpfTestContext.Run(() => {
-            var (controller, listPanel, _, _) = CreateController();
+            var (controller, listPanel, _) = CreateController();
             var config = MakeConfig(tasks: []);  // no tasks
 
             controller.Refresh(config, stateStore: null);
@@ -186,7 +184,7 @@ internal sealed class MaintenancePanelControllerTests {
     [Test]
     public void Refresh_LastRunInfo_ShownWhenAvailable() {
         WpfTestContext.Run(() => {
-            var (controller, listPanel, _, _) = CreateController();
+            var (controller, listPanel, _) = CreateController();
             var config = MakeConfig([MakeTask("tracked-task", "Tracked Task")]);
 
             var store = new MaintenanceStateStore(_workspace.RootPath);
@@ -206,7 +204,7 @@ internal sealed class MaintenancePanelControllerTests {
     [Test]
     public void Refresh_LastRunInfo_AbsentWhenNoStateStore() {
         WpfTestContext.Run(() => {
-            var (controller, listPanel, _, _) = CreateController();
+            var (controller, listPanel, _) = CreateController();
             var config = MakeConfig([MakeTask("any-task", "Any Task")]);
 
             // Pass null state store — no last-run info can be resolved
@@ -230,7 +228,7 @@ internal sealed class MaintenancePanelControllerTests {
             var emptyDir = Path.Combine(_workspace.RootPath, "empty");
             Directory.CreateDirectory(emptyDir);
 
-            var (controller, listPanel, _, _) = CreateController();
+            var (controller, listPanel, _) = CreateController();
             var config = MakeConfig([MakeTask("new-task", "Brand New Task")]);
 
             var store = new MaintenanceStateStore(emptyDir);
@@ -251,26 +249,6 @@ internal sealed class MaintenancePanelControllerTests {
             var checkBoxes = FindCheckBoxes(listPanel).ToList();
             Assert.That(checkBoxes, Has.Count.EqualTo(1),
                 "The task row must still be rendered on first run");
-        });
-    }
-
-    // ── Run Now button ────────────────────────────────────────────────────────
-
-    [Test]
-    public void RunNowButton_DisabledWhileRunning_ReEnabledOnComplete() {
-        WpfTestContext.Run(() => {
-            var (controller, _, _, runNowButton) = CreateController();
-
-            Assert.That(runNowButton.IsEnabled, Is.True,
-                "Run Now button must be enabled initially");
-
-            controller.OnRunnerStarted("Some Task");
-            Assert.That(runNowButton.IsEnabled, Is.False,
-                "Run Now button must be disabled while a task is running");
-
-            controller.OnRunnerCompleted();
-            Assert.That(runNowButton.IsEnabled, Is.True,
-                "Run Now button must be re-enabled after runner completes");
         });
     }
 
@@ -299,31 +277,29 @@ internal sealed class MaintenancePanelControllerTests {
 
     private static (MaintenancePanelController controller,
                     StackPanel listPanel,
-                    TextBlock  statusLabel,
-                    Button     runNowButton)
+                    TextBlock  statusLabel)
         CreateControllerWithWorkspace(string? workspacePath) {
-        var listPanel             = new StackPanel();
-        var statusLabel           = new TextBlock();
-        var runNowButton          = new Button();
-        var enabledOnIdleCheckBox = new CheckBox();
+        var listPanel            = new StackPanel();
+        var statusLabel          = new TextBlock();
+        var enabledOnIdleHost    = new ContentControl();
         var controller   = new MaintenancePanelController(
             listPanel,
             statusLabel,
-            runNowButton,
-            enabledOnIdleCheckBox,
+            enabledOnIdleHost,
             getWorkspacePath:  () => workspacePath,
-            runNow:            () => { },
             toggleTaskEnabled: (_, _) => { },
             reloadPanel:       () => { },
             openInMarkdownEditor: _ => { },
-            showInboxPanel:    () => { });
-        return (controller, listPanel, statusLabel, runNowButton);
+            showInboxPanel:    () => { },
+            runTask:           _ => { },
+            simulateIdle:      () => { });
+        return (controller, listPanel, statusLabel);
     }
 
     [Test]
     public void ReportsSection_ShowsNoReportsYet_WhenNullWorkspacePath() {
         WpfTestContext.Run(() => {
-            var (controller, listPanel, _, _) = CreateController(); // getWorkspacePath returns null
+            var (controller, listPanel, _) = CreateController(); // getWorkspacePath returns null
             var config = MakeConfig([MakeTask("t1", "Task One")]);
 
             controller.Refresh(config, stateStore: null);
@@ -345,7 +321,7 @@ internal sealed class MaintenancePanelControllerTests {
             var reportsDir = Path.Combine(workspacePath, ".squad", "maintenance-reports");
             Directory.CreateDirectory(reportsDir);
 
-            var (controller, listPanel, _, _) = CreateControllerWithWorkspace(workspacePath);
+            var (controller, listPanel, _) = CreateControllerWithWorkspace(workspacePath);
             var config = MakeConfig([MakeTask("t1", "Task One")]);
 
             controller.Refresh(config, stateStore: null);
@@ -383,7 +359,7 @@ internal sealed class MaintenancePanelControllerTests {
                 """;
             File.WriteAllText(Path.Combine(reportsDir, "20260520-143000.md"), reportContent);
 
-            var (controller, listPanel, _, _) = CreateControllerWithWorkspace(workspacePath);
+            var (controller, listPanel, _) = CreateControllerWithWorkspace(workspacePath);
             var config = MakeConfig([MakeTask("t1", "Task One")]);
 
             controller.Refresh(config, stateStore: null);
@@ -424,7 +400,7 @@ internal sealed class MaintenancePanelControllerTests {
                 """;
             File.WriteAllText(Path.Combine(reportsDir, "20260521-100000.md"), reportContent);
 
-            var (controller, listPanel, _, _) = CreateControllerWithWorkspace(workspacePath);
+            var (controller, listPanel, _) = CreateControllerWithWorkspace(workspacePath);
             controller.Refresh(MakeConfig([MakeTask("t1", "Task One")]), stateStore: null);
 
             var expander = FindReportsExpander(listPanel);
@@ -441,7 +417,7 @@ internal sealed class MaintenancePanelControllerTests {
     [Test]
     public void ReportsSection_CollapsedByDefault() {
         WpfTestContext.Run(() => {
-            var (controller, listPanel, _, _) = CreateController();
+            var (controller, listPanel, _) = CreateController();
             controller.Refresh(MakeConfig([MakeTask("t1", "Task One")]), stateStore: null);
 
             var expander = FindReportsExpander(listPanel);
@@ -473,7 +449,7 @@ internal sealed class MaintenancePanelControllerTests {
     [Test]
     public void Refresh_DirectSafetyTask_ShowsWarningChip() {
         WpfTestContext.Run(() => {
-            var (controller, listPanel, _, _) = CreateController();
+            var (controller, listPanel, _) = CreateController();
             var config = MakeConfig([MakeTask("t1", "Direct Task", safety: "direct")]);
 
             controller.Refresh(config, stateStore: null);
@@ -491,7 +467,7 @@ internal sealed class MaintenancePanelControllerTests {
     [Test]
     public void Refresh_BranchSafetyTask_NoWarningChip() {
         WpfTestContext.Run(() => {
-            var (controller, listPanel, _, _) = CreateController();
+            var (controller, listPanel, _) = CreateController();
             var config = MakeConfig([MakeTask("t1", "Branch Task", safety: "branch")]);
 
             controller.Refresh(config, stateStore: null);
@@ -509,7 +485,7 @@ internal sealed class MaintenancePanelControllerTests {
     [Test]
     public void Refresh_ReportOnlySafetyTask_ShowsPlainSafetyChip_NotWarning() {
         WpfTestContext.Run(() => {
-            var (controller, listPanel, _, _) = CreateController();
+            var (controller, listPanel, _) = CreateController();
             var config = MakeConfig([MakeTask("t1", "Report Only Task", safety: "report-only")]);
 
             controller.Refresh(config, stateStore: null);
@@ -539,22 +515,21 @@ internal sealed class MaintenancePanelControllerTests {
     private static (MaintenancePanelController controller,
                     List<(string taskId, bool enabled)> toggleCalls)
         CreateControllerWithTracking(string workspacePath) {
-        var listPanel             = new StackPanel();
-        var statusLabel           = new TextBlock();
-        var runNowButton          = new Button();
-        var enabledOnIdleCheckBox = new CheckBox();
+        var listPanel            = new StackPanel();
+        var statusLabel          = new TextBlock();
+        var enabledOnIdleHost    = new ContentControl();
         var toggleCalls  = new List<(string, bool)>();
         var controller   = new MaintenancePanelController(
             listPanel,
             statusLabel,
-            runNowButton,
-            enabledOnIdleCheckBox,
+            enabledOnIdleHost,
             getWorkspacePath:  () => workspacePath,
-            runNow:            () => { },
             toggleTaskEnabled: (id, en) => toggleCalls.Add((id, en)),
             reloadPanel:       () => { },
             openInMarkdownEditor: _ => { },
-            showInboxPanel:    () => { });
+            showInboxPanel:    () => { },
+            runTask:           _ => { },
+            simulateIdle:      () => { });
         return (controller, toggleCalls);
     }
 
