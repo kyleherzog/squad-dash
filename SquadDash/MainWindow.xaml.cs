@@ -8473,6 +8473,46 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
         }
     }
 
+    private void PromptTextBox_PreviewDragEnter(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            e.Effects = DragDropEffects.Copy;
+        else
+            e.Effects = DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void PromptTextBox_PreviewDragOver(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            e.Effects = DragDropEffects.Copy;
+        else
+            e.Effects = DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void PromptTextBox_PreviewDrop(object sender, DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
+        var paths = (string[])e.Data.GetData(DataFormats.FileDrop);
+        var list = GetOrCreateFollowUpList(_activeTabId ?? "");
+        foreach (var path in paths)
+        {
+            if (list.Count >= 15) break;
+            var leaf = System.IO.Path.GetFileName(path);
+            if (list.Any(a => a.FileReferencePath == path)) continue;
+            list.Add(new FollowUpAttachment(
+                CommitSha:         string.Empty,
+                Description:       leaf,
+                OriginalPrompt:    null,
+                FileReferencePath: path));
+        }
+        UpdateFollowUpStrip();
+        SyncQueuePanel();
+        if (_activeTabId is null) PersistDraftFollowUp();
+        e.Handled = true;
+    }
+
     private void PromptTextBox_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
         // Build a themed context menu, appending Smooth Dictation when text is selected.
@@ -15435,7 +15475,8 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                             a.ContentBlock,
                             a.ImagePath,
                             a.ImageSubmittedAt is not null && DateTime.TryParse(a.ImageSubmittedAt, out var dt2) ? dt2 : null,
-                            a.InboxMessageId))
+                            a.InboxMessageId,
+                            a.FileReferencePath))
                         .ToList();
                 }
             }
@@ -26955,7 +26996,8 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                         d.ContentBlock,
                         d.ImagePath,
                         d.ImageSubmittedAt is not null && DateTime.TryParse(d.ImageSubmittedAt, out var dt1) ? dt1 : null,
-                        d.InboxMessageId)));
+                        d.InboxMessageId,
+                        d.FileReferencePath)));
             }
             catch { /* corrupt data — ignore */ }
         }
@@ -28570,6 +28612,21 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                             PromptAttachmentViewerWindow.Show(new[] { capturedImg }, CanShowOwnedWindow() ? this : null);
                     };
                 }
+                else if (att.FileReferencePath != null)
+                {
+                    var icon    = new Run("📁 ");
+                    var leafName = System.IO.Path.GetFileName(att.FileReferencePath);
+                    var display  = leafName.Length > 40 ? leafName[..40] + "…" : leafName;
+                    var descRun  = new Run(display);
+                    descRun.SetResourceReference(Run.ForegroundProperty, "LabelText");
+                    label.Inlines.Add(icon);
+                    label.Inlines.Add(descRun);
+                    label.ToolTip = att.FileReferencePath;
+                    label.Cursor  = System.Windows.Input.Cursors.Hand;
+                    var capturedPath = att.FileReferencePath;
+                    label.MouseLeftButtonUp += (_, _) =>
+                        System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{capturedPath}\"");
+                }
                 else if (att.ContentBlock != null)
                 {
                     // Check if this is an inbox-excerpt attachment
@@ -28777,14 +28834,15 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
         {
             var dtos = list.Select(a => new FollowUpAttachmentDto
             {
-                CommitSha        = a.CommitSha,
-                Description      = a.Description,
-                OriginalPrompt   = a.OriginalPrompt,
-                TranscriptQuote  = a.TranscriptQuote,
-                ContentBlock     = a.ContentBlock,
-                ImagePath        = a.ImagePath,
-                ImageSubmittedAt = a.ImageSubmittedAt?.ToString("O"),
-                InboxMessageId   = a.InboxMessageId,
+                CommitSha         = a.CommitSha,
+                Description       = a.Description,
+                OriginalPrompt    = a.OriginalPrompt,
+                TranscriptQuote   = a.TranscriptQuote,
+                ContentBlock      = a.ContentBlock,
+                ImagePath         = a.ImagePath,
+                ImageSubmittedAt  = a.ImageSubmittedAt?.ToString("O"),
+                InboxMessageId    = a.InboxMessageId,
+                FileReferencePath = a.FileReferencePath,
             }).ToList();
             _docsPanelState = state with
             {
@@ -28844,6 +28902,8 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                 return $"[Attached image: {att.ImagePath}]";
             if (att.ContentBlock != null)
                 return att.ContentBlock;
+            if (att.FileReferencePath != null)
+                return BuildTypedAttachmentBlock("file-reference", att.Description, att.FileReferencePath);
             if (att.TranscriptQuote != null)
                 return $"Regarding this section of the transcript: \"{att.TranscriptQuote}\"";
             var summaryHint = att.OriginalPrompt is { Length: > 0 } op
@@ -28854,7 +28914,7 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
 
         // When the user has any typed content/image attachments, prepend a one-liner so the AI
         // understands the structure it is receiving.
-        bool hasTypedBlocks = stamped.Any(a => a.ContentBlock != null || a.ImagePath != null);
+        bool hasTypedBlocks = stamped.Any(a => a.ContentBlock != null || a.ImagePath != null || a.FileReferencePath != null);
         const string AttachmentPreamble = "The user has attached the following context items. Please refer to them as needed.";
         var headerSection = string.Join("\n", headers);
         return (hasTypedBlocks ? AttachmentPreamble + "\n" + headerSection : headerSection) + "\n\n" + text;

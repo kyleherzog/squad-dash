@@ -8,7 +8,8 @@ internal sealed record FollowUpAttachment(
     string? ContentBlock = null,
     string? ImagePath = null,
     DateTime? ImageSubmittedAt = null,
-    string? InboxMessageId = null);
+    string? InboxMessageId = null,
+    string? FileReferencePath = null);
 
 /// <summary>DTO for persisting <see cref="FollowUpAttachment"/> items as JSON.</summary>
 internal sealed class FollowUpAttachmentDto
@@ -30,6 +31,7 @@ internal sealed class FollowUpAttachmentDto
     public string? ContentBlock     { get; set; }
     public string? ImagePath        { get; set; }
     public string? ImageSubmittedAt { get; set; }
-    public string? InboxMessageId   { get; set; }
+    public string? InboxMessageId      { get; set; }
+    public string? FileReferencePath   { get; set; }
 }
 

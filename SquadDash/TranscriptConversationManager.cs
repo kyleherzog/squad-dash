@@ -1142,14 +1142,15 @@ internal sealed class TranscriptConversationManager {
                     dtos = list
                         .Select(a => new FollowUpAttachmentDto
                         {
-                            CommitSha        = a.CommitSha,
-                            Description      = a.Description,
-                            OriginalPrompt   = a.OriginalPrompt,
-                            TranscriptQuote  = a.TranscriptQuote,
-                            ContentBlock     = a.ContentBlock,
-                            ImagePath        = a.ImagePath,
-                            ImageSubmittedAt = a.ImageSubmittedAt?.ToString("O"),
-                            InboxMessageId   = a.InboxMessageId,
+                            CommitSha         = a.CommitSha,
+                            Description       = a.Description,
+                            OriginalPrompt    = a.OriginalPrompt,
+                            TranscriptQuote   = a.TranscriptQuote,
+                            ContentBlock      = a.ContentBlock,
+                            ImagePath         = a.ImagePath,
+                            ImageSubmittedAt  = a.ImageSubmittedAt?.ToString("O"),
+                            InboxMessageId    = a.InboxMessageId,
+                            FileReferencePath = a.FileReferencePath,
                         })
                         .ToList();
                 }
