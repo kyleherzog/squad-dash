@@ -2133,10 +2133,10 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
 
     // ── Prompt Queue ──────────────────────────────────────────────────────────
 
-    private void EnqueuePrompt(string text, bool isSystemInjected)
+    private PromptQueueItem? EnqueuePrompt(string text, bool isSystemInjected)
     {
         if (string.IsNullOrWhiteSpace(text))
-            return;
+            return null;
 
         var item = new PromptQueueItem {
             Text             = text,
@@ -2156,6 +2156,7 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             $"Enqueued prompt {DescribeQueueItemForTrace(item)} queueCount={_promptQueue.Count}");
         SyncQueuePanel();
         _ = DrainQueueIfNeededAsync();
+        return item;
     }
 
     private void EnqueueCurrentPrompt()
@@ -28304,8 +28305,11 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
     }
 
     private void AttachInboxMessageFollowUp(InboxMessage msg)
+        => AttachInboxMessageFollowUp(msg, _activeTabId ?? "");
+
+    private void AttachInboxMessageFollowUp(InboxMessage msg, string tabId)
     {
-        var list = GetOrCreateFollowUpList(_activeTabId ?? "");
+        var list = GetOrCreateFollowUpList(tabId);
         if (list.Count >= 15 || list.Any(a => a.InboxMessageId == msg.Id)) return;
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"From: {msg.From}");
@@ -28321,7 +28325,7 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             InboxMessageId: msg.Id));
         UpdateFollowUpStrip();
         SyncQueuePanel();
-        if (_activeTabId is null) PersistDraftFollowUp();
+        if (tabId == "") PersistDraftFollowUp();
     }
 
     private void AttachInboxMessageSelectedTextFollowUp(string selectedText, InboxMessage msg)
@@ -28990,7 +28994,9 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
         if (action.RouteMode == "start_named_agent" && !string.IsNullOrWhiteSpace(action.TargetAgent))
             prompt = $"[Deferred inbox action — route to @{action.TargetAgent}]\n\n{prompt}";
 
-        EnqueuePrompt(prompt, isSystemInjected: true);
+        var item = EnqueuePrompt(prompt, isSystemInjected: true);
+        if (item is not null)
+            AttachInboxMessageFollowUp(message, item.Id);
     }
 
     /// <summary>
