@@ -6,7 +6,7 @@ internal sealed class SquadBridgePromptBuilderTests {
     public void Build_AppendsQuickReplyInstructionAndRoutingInstruction() {
         using var workspace = new TestWorkspace();
 
-        var built = SquadBridgePromptBuilder.Build(
+        var built = new SquadBridgePromptBuilder().Build(
             "Review the docs",
             "Quick replies enabled.",
             "Continue with Mira Quill.",
@@ -22,7 +22,7 @@ internal sealed class SquadBridgePromptBuilderTests {
     public void Build_CanAppendStructuredQuickReplyInstruction() {
         using var workspace = new TestWorkspace();
 
-        var built = SquadBridgePromptBuilder.Build(
+        var built = new SquadBridgePromptBuilder().Build(
             "Review the docs",
             "QUICK_REPLIES_JSON:",
             null,
@@ -38,7 +38,7 @@ internal sealed class SquadBridgePromptBuilderTests {
         using var workspace = new TestWorkspace();
         workspace.CreateFile(".squad/universes/squaddash.md", "# SquadDash Universe");
 
-        var built = SquadBridgePromptBuilder.Build(
+        var built = new SquadBridgePromptBuilder().Build(
             "Please hire a lead architect for this investigation.",
             "Quick replies enabled.",
             null,
@@ -55,7 +55,7 @@ internal sealed class SquadBridgePromptBuilderTests {
         using var workspace = new TestWorkspace();
         workspace.CreateFile(".squad/universes/squaddash.md", "# SquadDash Universe");
 
-        var built = SquadBridgePromptBuilder.Build(
+        var built = new SquadBridgePromptBuilder().Build(
             "Sort the transcript headers by recency.",
             "Quick replies enabled.",
             null,
@@ -71,7 +71,7 @@ internal sealed class SquadBridgePromptBuilderTests {
         using var workspace = new TestWorkspace();
         workspace.CreateFile(".squad/universes/squaddash.md", "# SquadDash Universe");
 
-        var built = SquadBridgePromptBuilder.Build(
+        var built = new SquadBridgePromptBuilder().Build(
             "Hey, in the Hire a new agent window there's a black border around the inner panel under the light theme.",
             "Quick replies enabled.",
             null,
@@ -88,7 +88,7 @@ internal sealed class SquadBridgePromptBuilderTests {
         using var workspace = new TestWorkspace();
         workspace.CreateFile(".squad/universes/squaddash.md", "# SquadDash Universe");
 
-        var built = SquadBridgePromptBuilder.Build(
+        var built = new SquadBridgePromptBuilder().Build(
             "Can we get another agent to focus on merge conflicts?",
             "Quick replies enabled.",
             null,
@@ -104,7 +104,7 @@ internal sealed class SquadBridgePromptBuilderTests {
     public void Build_UsesSupplementalInstruction_WhenVisiblePromptIsHidden() {
         using var workspace = new TestWorkspace();
 
-        var built = SquadBridgePromptBuilder.Build(
+        var built = new SquadBridgePromptBuilder().Build(
             string.Empty,
             "Quick replies enabled.",
             null,
@@ -141,7 +141,7 @@ internal sealed class SquadBridgePromptBuilderTests {
             | UI | Lyra Morn | `MainWindow.xaml` |
             """);
 
-        var built = SquadBridgePromptBuilder.Build(
+        var built = new SquadBridgePromptBuilder().Build(
             "Please update the transcript layout.",
             "Quick replies enabled.",
             null,
@@ -178,7 +178,7 @@ internal sealed class SquadBridgePromptBuilderTests {
             | UI | Lyra Morn | `MainWindow.xaml` |
             """);
 
-        var built = SquadBridgePromptBuilder.Build(
+        var built = new SquadBridgePromptBuilder().Build(
             "Please update the transcript layout.",
             "Quick replies enabled.",
             null,
@@ -220,7 +220,7 @@ internal sealed class SquadBridgePromptBuilderTests {
             | UI | Lyra Morn | `MainWindow.xaml` |
             """);
 
-        var built = SquadBridgePromptBuilder.Build(
+        var built = new SquadBridgePromptBuilder().Build(
             "@lyra-morn please update the transcript layout.",
             "Quick replies enabled.",
             null,
@@ -271,7 +271,7 @@ internal sealed class SquadBridgePromptBuilderTests {
             - Own `WorkspaceConversationStore`
             """);
 
-        var built = SquadBridgePromptBuilder.Build(
+        var built = new SquadBridgePromptBuilder().Build(
             "Please update MainWindow.xaml to adjust the transcript chrome.",
             "Quick replies enabled.",
             null,
@@ -316,7 +316,7 @@ internal sealed class SquadBridgePromptBuilderTests {
             - Coordinate with Lyra Morn on coverage for new UI features
             """);
 
-        var built = SquadBridgePromptBuilder.Build(
+        var built = new SquadBridgePromptBuilder().Build(
             "Implement it - hand to Lyra Morn",
             "Quick replies enabled.",
             null,
@@ -363,7 +363,7 @@ internal sealed class SquadBridgePromptBuilderTests {
             - Own bridge prompt routing
             """);
 
-        var built = SquadBridgePromptBuilder.Build(
+        var built = new SquadBridgePromptBuilder().Build(
             "Please keep going on MainWindow.xaml.",
             "Quick replies enabled.",
             null,
@@ -411,7 +411,7 @@ internal sealed class SquadBridgePromptBuilderTests {
             - Coordinate with Arjun Sen, Lyra Morn, Jae Min Kade, and Talia Rune to understand new features needing coverage
             """);
 
-        var built = SquadBridgePromptBuilder.Build(
+        var built = new SquadBridgePromptBuilder().Build(
             "Implement it - hand to Lyra Morn",
             "Quick replies enabled.",
             null,

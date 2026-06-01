@@ -110,6 +110,7 @@ internal sealed class PromptExecutionController {
 
     // ── Injected — Prompt Instructions ───────────────────────────────────
     private readonly IPromptInstructionProvider _instructionProvider;
+    private readonly ISquadBridgePromptBuilder _promptBuilder;
 
     private static readonly TimeSpan PromptNoActivityWarningThreshold= TimeSpan.FromSeconds(45);
     private static readonly TimeSpan PromptNoActivityStallThreshold   = TimeSpan.FromMinutes(2);
@@ -373,7 +374,8 @@ internal sealed class PromptExecutionController {
         // Tool entries (for MarkActiveToolsAsFailed)
         IWorkspacePaths workspacePaths,
         IPromptInstructionProvider? instructionProvider = null,
-        Func<IReadOnlyList<FollowUpAttachment>>? getSubmittedAttachments = null) {
+        Func<IReadOnlyList<FollowUpAttachment>>? getSubmittedAttachments = null,
+        ISquadBridgePromptBuilder? promptBuilder = null) {
 
         _runPromptAsync                        = runPromptAsync;
         _runNamedAgentDelegationAsync          = runNamedAgentDelegationAsync;
@@ -424,6 +426,7 @@ internal sealed class PromptExecutionController {
         _workspacePaths                        = workspacePaths;
         _instructionProvider                   = instructionProvider ?? new DefaultPromptInstructionProvider();
         _getSubmittedAttachments               = getSubmittedAttachments ?? (() => Array.Empty<FollowUpAttachment>());
+        _promptBuilder                         = promptBuilder ?? new SquadBridgePromptBuilder();
 
         _promptHealthTimer.Tick += PromptHealthTimer_Tick;
     }
@@ -2165,7 +2168,7 @@ internal sealed class PromptExecutionController {
         var inboxCtx = _instructionProvider.Get().InboxMessage;
         var parts = new[] { pending, docsCtx, tasksCtx, queueCtx, triggeredCtx, inboxCtx, _instructionProvider.Get().TurnSummary, hostCmdCtx }.Where(p => p is not null).ToArray();
         var supplemental = parts.Length == 0 ? null : string.Join("\n\n", parts);
-        var buildResult = SquadBridgePromptBuilder.Build(
+        var buildResult = _promptBuilder.Build(
             prompt,
             BuildQuickReplyInstruction(PendingQueueItemCount),
             _getPendingQuickReplyRoutingInstruction(),

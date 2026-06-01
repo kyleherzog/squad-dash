@@ -1259,7 +1259,8 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             getModelObservedThisSession: () => _modelObservedThisSession,
             workspacePaths: _workspacePaths,
             instructionProvider: serviceProvider?.GetRequiredService<IPromptInstructionProvider>() ?? new DefaultPromptInstructionProvider(),
-            getSubmittedAttachments: () => _pendingTranscriptAttachments ?? Array.Empty<FollowUpAttachment>());
+            getSubmittedAttachments: () => _pendingTranscriptAttachments ?? Array.Empty<FollowUpAttachment>(),
+            promptBuilder: serviceProvider?.GetRequiredService<ISquadBridgePromptBuilder>());
 
         InitializeHostCommands();
         SquadDashTrace.Write(TraceCategory.Startup, $"Constructor: InitializeHostCommands {ctorSw.ElapsedMilliseconds}ms.");

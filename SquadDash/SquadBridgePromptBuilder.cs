@@ -7,7 +7,9 @@ using System.Text;
 
 namespace SquadDash;
 
-internal static class SquadBridgePromptBuilder {
+internal sealed record BuildResult(string PromptText, string RoutingSummary);
+
+internal sealed class SquadBridgePromptBuilder : ISquadBridgePromptBuilder {
     private static readonly Regex MentionRegex = new(@"(?<![A-Za-z0-9_-])@(?<handle>[a-z0-9][a-z0-9_-]{1,63})", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex BacktickTokenRegex = new(@"`(?<token>[^`\r\n]{3,})`", RegexOptions.CultureInvariant);
     private static readonly Regex[] HiringIntentRegexes = [
@@ -20,8 +22,6 @@ internal static class SquadBridgePromptBuilder {
         new(@"\b(?:window|dialog|screen|panel|view)\b[\s\S]{0,40}?\bhire\s+(?:a\s+)?new\s+agent\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
     ];
 
-    internal sealed record BuildResult(string PromptText, string RoutingSummary);
-
     private sealed record TeamRoutingMember(string Name, string Handle, string Role, string? CharterPath);
 
     private sealed record RoutingRule(string WorkType, string RouteTo, string Examples);
@@ -32,7 +32,7 @@ internal static class SquadBridgePromptBuilder {
         string? StrongInstruction,
         string Summary);
 
-    public static BuildResult Build(
+    public BuildResult Build(
         string prompt,
         string quickReplyInstruction,
         string? quickReplyRoutingInstruction,
@@ -74,7 +74,7 @@ internal static class SquadBridgePromptBuilder {
         return new BuildResult(builder.ToString(), routingContext.Summary);
     }
 
-    internal static string? BuildCustomUniverseContext(string prompt, string? workspaceFolder) {
+    internal string? BuildCustomUniverseContext(string prompt, string? workspaceFolder) {
         if (string.IsNullOrWhiteSpace(prompt) ||
             string.IsNullOrWhiteSpace(workspaceFolder) ||
             !LooksLikeHiringPrompt(prompt)) {
@@ -89,7 +89,7 @@ internal static class SquadBridgePromptBuilder {
         return "The authoritative roster is `.squad/team.md`. When adding or hiring a teammate in this workspace, consult `.squad/casting/policy.json`, `.squad/casting/history.json`, and `.squad/casting/registry.json` first. If the user's request explicitly names a preferred universe, treat that universe choice as authoritative for this hire as long as it is allowlisted; do not override it just because the workspace previously used the SquadDash Universe. Use `.squad/universes/squaddash.md` when the selected universe is the SquadDash Universe or when you need the SquadDash roster as a reference. Do not invent an ad hoc temporary role when a real team member should be recruited.";
     }
 
-    private static bool LooksLikeHiringPrompt(string prompt) {
+    private bool LooksLikeHiringPrompt(string prompt) {
         var normalizedPrompt = prompt.Trim();
         if (normalizedPrompt.Length == 0)
             return false;
@@ -100,7 +100,7 @@ internal static class SquadBridgePromptBuilder {
         return HiringIntentRegexes.Any(regex => regex.IsMatch(normalizedPrompt));
     }
 
-    private static RoutingContext BuildRoutingContext(string prompt, string? workspaceFolder, string? quickReplyRouteMode) {
+    private RoutingContext BuildRoutingContext(string prompt, string? workspaceFolder, string? quickReplyRouteMode) {
         if (string.IsNullOrWhiteSpace(prompt) || string.IsNullOrWhiteSpace(workspaceFolder))
             return new RoutingContext(null, null, null, "routing=none");
 
@@ -137,7 +137,7 @@ internal static class SquadBridgePromptBuilder {
             summaryParts.Count == 0 ? "routing=none" : $"routing={string.Join(",", summaryParts)}");
     }
 
-    private static string? BuildMentionRoutingInstruction(string prompt, IReadOnlyList<TeamRoutingMember> members) {
+    private string? BuildMentionRoutingInstruction(string prompt, IReadOnlyList<TeamRoutingMember> members) {
         if (members.Count == 0)
             return null;
 
@@ -162,7 +162,7 @@ internal static class SquadBridgePromptBuilder {
         return $"The user explicitly addressed {handles}. Keep the Coordinator responsible for orchestration long enough to involve those named specialists according to `.squad/team.md` and `.squad/routing.md`.";
     }
 
-    private static string? BuildStrongMatchRoutingInstruction(
+    private string? BuildStrongMatchRoutingInstruction(
         string prompt,
         IReadOnlyList<TeamRoutingMember> members,
         IReadOnlyList<RoutingRule> rules,
@@ -189,7 +189,7 @@ internal static class SquadBridgePromptBuilder {
         return $"This request contains direct ownership clues for {winner.Member.Name} ({signalList}). Route it to {winner.Member.Name} as the primary specialist unless the user explicitly asked the Coordinator to keep the work.";
     }
 
-    private static bool PromptContainsSignal(string prompt, string signal) {
+    private bool PromptContainsSignal(string prompt, string signal) {
         if (string.IsNullOrWhiteSpace(signal))
             return false;
 
@@ -202,7 +202,7 @@ internal static class SquadBridgePromptBuilder {
         return false;
     }
 
-    private static IReadOnlyList<string> BuildOwnershipSignals(
+    private IReadOnlyList<string> BuildOwnershipSignals(
         TeamRoutingMember member,
         IReadOnlyList<TeamRoutingMember> members,
         IReadOnlyList<RoutingRule> rules,
@@ -234,7 +234,7 @@ internal static class SquadBridgePromptBuilder {
         return signals.ToArray();
     }
 
-    private static IEnumerable<string> ExtractOwnershipTokens(string? text, IReadOnlySet<string> knownMemberNames) {
+    private IEnumerable<string> ExtractOwnershipTokens(string? text, IReadOnlySet<string> knownMemberNames) {
         if (string.IsNullOrWhiteSpace(text))
             yield break;
 
@@ -250,7 +250,7 @@ internal static class SquadBridgePromptBuilder {
         }
     }
 
-    private static bool LooksLikeOwnershipToken(string token, IReadOnlySet<string> knownMemberNames) {
+    private bool LooksLikeOwnershipToken(string token, IReadOnlySet<string> knownMemberNames) {
         if (string.IsNullOrWhiteSpace(token))
             return false;
 
@@ -264,20 +264,20 @@ internal static class SquadBridgePromptBuilder {
                 token.Any(char.IsUpper));
     }
 
-    private static bool IsForcedNamedAgentQuickReply(string? quickReplyRouteMode) {
+    private bool IsForcedNamedAgentQuickReply(string? quickReplyRouteMode) {
         var normalizedMode = quickReplyRouteMode?.Trim();
         return string.Equals(normalizedMode, "start_named_agent", StringComparison.OrdinalIgnoreCase) ||
                string.Equals(normalizedMode, "continue_current_agent", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string? GetForcedNamedAgentQuickReplySummary(string? quickReplyRouteMode) =>
+    private string? GetForcedNamedAgentQuickReplySummary(string? quickReplyRouteMode) =>
         quickReplyRouteMode?.Trim().ToLowerInvariant() switch {
             "start_named_agent" => "quick-reply-start-named-agent",
             "continue_current_agent" => "quick-reply-continue-current-agent",
             _ => null
         };
 
-    private static TeamRoutingMember[] LoadTeamMembers(string teamPath, string workspaceFolder) {
+    private TeamRoutingMember[] LoadTeamMembers(string teamPath, string workspaceFolder) {
         if (!File.Exists(teamPath))
             return [];
 
@@ -323,7 +323,7 @@ internal static class SquadBridgePromptBuilder {
         return rows.ToArray();
     }
 
-    private static RoutingRule[] LoadRoutingRules(string routingPath) {
+    private RoutingRule[] LoadRoutingRules(string routingPath) {
         if (!File.Exists(routingPath))
             return [];
 
@@ -334,7 +334,7 @@ internal static class SquadBridgePromptBuilder {
             .ToArray();
     }
 
-    private static RoutingRule? ParseRoutingRule(string line) {
+    private RoutingRule? ParseRoutingRule(string line) {
         var trimmed = line.Trim();
         if (!trimmed.StartsWith("|", StringComparison.Ordinal) ||
             trimmed.Contains("---", StringComparison.Ordinal)) {
@@ -357,7 +357,7 @@ internal static class SquadBridgePromptBuilder {
         return new RoutingRule(workType, routeTo, examples);
     }
 
-    private static string DeriveHandle(string name, string? charterPath) {
+    private string DeriveHandle(string name, string? charterPath) {
         if (!string.IsNullOrWhiteSpace(charterPath)) {
             var normalized = charterPath.Replace('\\', '/');
             const string marker = "agents/";
