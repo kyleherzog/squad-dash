@@ -12510,6 +12510,7 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                         Application.Current.Resources,
                         hoverBrush);
                     mapWindow.Owner = this;
+                    mapWindow.Closed += (_, _) => UpdateMainGridSideMargins();
                     mapWindow.ShowAtScreenPoint(screenPoint);
                 }
                 catch (Exception ex) { HandleUiCallbackException("GripStrip.OpenDockingMap", ex); }

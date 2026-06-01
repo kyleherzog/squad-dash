@@ -262,25 +262,37 @@ internal sealed class PanelDockingService
             case DockZone.Left:
                 AddToZone(_leftZonePanel!, _leftZonePanels, element, panelId, _leftZoneScrollViewer as FrameworkElement, insertAt);
                 if (element.Visibility != Visibility.Collapsed)
-                    ExpandZone(_leftZoneColumn!, _leftSplitterColumn!, _leftZoneScrollViewer!, _leftZoneSplitter!, element);
+                {
+                    if (ExpandZone(_leftZoneColumn!, _leftSplitterColumn!, _leftZoneScrollViewer!, _leftZoneSplitter!, element))
+                        ScheduleZoneHeightRefresh(_leftZonePanel!, _leftZoneScrollViewer as FrameworkElement);
+                }
                 break;
 
             case DockZone.Right:
                 AddToZone(_rightZonePanel!, _rightZonePanels, element, panelId, _rightZoneScrollViewer as FrameworkElement, insertAt);
                 if (element.Visibility != Visibility.Collapsed)
-                    ExpandZone(_rightZoneColumn!, _rightSplitterColumn!, _rightZoneScrollViewer!, _rightZoneSplitter!, element);
+                {
+                    if (ExpandZone(_rightZoneColumn!, _rightSplitterColumn!, _rightZoneScrollViewer!, _rightZoneSplitter!, element))
+                        ScheduleZoneHeightRefresh(_rightZonePanel!, _rightZoneScrollViewer as FrameworkElement);
+                }
                 break;
 
             case DockZone.Left2:
                 AddToZone(_left2ZonePanel!, _left2ZonePanels, element, panelId, _left2ZoneScrollViewer as FrameworkElement, insertAt);
                 if (element.Visibility != Visibility.Collapsed)
-                    ExpandZone(_left2ZoneColumn!, _left2SplitterColumn!, _left2ZoneScrollViewer!, _left2ZoneSplitter!, element);
+                {
+                    if (ExpandZone(_left2ZoneColumn!, _left2SplitterColumn!, _left2ZoneScrollViewer!, _left2ZoneSplitter!, element))
+                        ScheduleZoneHeightRefresh(_left2ZonePanel!, _left2ZoneScrollViewer as FrameworkElement);
+                }
                 break;
 
             case DockZone.Right2:
                 AddToZone(_right2ZonePanel!, _right2ZonePanels, element, panelId, _right2ZoneScrollViewer as FrameworkElement, insertAt);
                 if (element.Visibility != Visibility.Collapsed)
-                    ExpandZone(_right2ZoneColumn!, _right2SplitterColumn!, _right2ZoneScrollViewer!, _right2ZoneSplitter!, element);
+                {
+                    if (ExpandZone(_right2ZoneColumn!, _right2SplitterColumn!, _right2ZoneScrollViewer!, _right2ZoneSplitter!, element))
+                        ScheduleZoneHeightRefresh(_right2ZonePanel!, _right2ZoneScrollViewer as FrameworkElement);
+                }
                 break;
 
             case DockZone.Top:
@@ -427,6 +439,8 @@ internal sealed class PanelDockingService
                 .Where(el => el.Visibility != Visibility.Collapsed)
                 .ToList();
             RebuildZoneGrid(zoneGrid, orderedVisible, scrollViewer as FrameworkElement);
+            if (wasCollapsed)
+                ScheduleZoneHeightRefresh(zoneGrid, scrollViewer as FrameworkElement);
         }
     }
 
@@ -619,7 +633,9 @@ internal sealed class PanelDockingService
             visualParent.Children.Remove(element);
     }
 
-    private static void ExpandZone(
+    /// <returns><c>true</c> when the zone was collapsed and has just been expanded;
+    /// <c>false</c> when it was already visible (no change made).</returns>
+    private static bool ExpandZone(
         ColumnDefinition zoneCol,
         ColumnDefinition splitterCol,
         UIElement scrollViewer,
@@ -642,6 +658,29 @@ internal sealed class PanelDockingService
             SquadDashTrace.Write(TraceCategory.Docking,
                 $"ExpandZone: already expanded (w={zoneCol.Width.Value:F0}) — no change");
         }
+        return wasCollapsed;
+    }
+
+    /// <summary>
+    /// Schedules a deferred refresh of <paramref name="zonePanel"/>'s height binding at
+    /// <see cref="System.Windows.Threading.DispatcherPriority.Loaded"/> priority.
+    /// Call this after expanding a previously-collapsed zone: the layout pass triggered by
+    /// <see cref="ExpandZone"/> must complete before the scroll viewer's
+    /// <c>ActualHeight</c> is non-zero, and the deferred call re-applies the binding at
+    /// that point so the zone panel gets the correct height.
+    /// </summary>
+    private static void ScheduleZoneHeightRefresh(Grid zonePanel, FrameworkElement? scrollViewer)
+    {
+        if (scrollViewer is null) return;
+        Application.Current.Dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.Loaded,
+            new Action(() =>
+            {
+                if (scrollViewer.ActualHeight > 0)
+                    zonePanel.SetBinding(
+                        FrameworkElement.HeightProperty,
+                        new Binding(nameof(FrameworkElement.ActualHeight)) { Source = scrollViewer });
+            }));
     }
 
     private static void CollapseZone(
