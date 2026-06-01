@@ -80,6 +80,10 @@ internal sealed class UiRevealOverlay
         InputManager.Current.PreProcessInput += OnPreProcessInputForKeys;
 
         DiagLog("Activate() complete — PreProcessInput and PostProcessInput subscribed");
+
+        // Immediately reveal the element currently under the cursor so the user sees
+        // visual feedback the moment the mode activates, without needing to move the mouse.
+        RefreshAtCurrentCursor();
     }
 
     internal void Deactivate()
@@ -433,9 +437,46 @@ internal sealed class UiRevealOverlay
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Content building
-    // -------------------------------------------------------------------------
+    /// <summary>
+    /// Performs an immediate WPF hit-test at the current cursor position and updates the
+    /// overlay. Called once at activation so the user sees reveal feedback without needing
+    /// to move the mouse first.
+    /// </summary>
+    private void RefreshAtCurrentCursor()
+    {
+        if (_owner is null) return;
+        try
+        {
+            var screenPos = NativeMethods.GetCursorScreenPos();
+            var dpi       = VisualTreeHelper.GetDpi(_owner);
+            var localPt   = new Point(
+                screenPos.X / dpi.DpiScaleX - _owner.Left,
+                screenPos.Y / dpi.DpiScaleY - _owner.Top);
+
+            FrameworkElement? hit = null;
+            VisualTreeHelper.HitTest(
+                _owner,
+                null,
+                r =>
+                {
+                    if (r.VisualHit is FrameworkElement fe)
+                        hit ??= fe;
+                    return HitTestResultBehavior.Continue;
+                },
+                new PointHitTestParameters(localPt));
+
+            if (hit is null) return;
+
+            _lastElement = hit;
+            UpdatePopupContent(hit);
+            ApplyHighlight(hit);
+            PositionPopup(screenPos);
+            _popup!.IsOpen = true;
+        }
+        catch { }
+    }
+
+
 
     /// <summary>
     /// Shows a summary of all DynamicResource keys used anywhere in the tooltip's
