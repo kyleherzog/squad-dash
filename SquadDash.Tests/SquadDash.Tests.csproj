@@ -226,6 +226,7 @@
     <Compile Include="..\SquadDash\MarkdownHoverPopup.cs"            Link="Source\MarkdownHoverPopup.cs" />
     <Compile Include="..\SquadDash\MarkdownFlowDocumentBuilder.cs"  Link="Source\MarkdownFlowDocumentBuilder.cs" />
     <Compile Include="..\SquadDash\MaintenancePanelController.cs" Link="Source\MaintenancePanelController.cs" />
+    <Compile Include="..\SquadDash\MaintenancePanelViewModel.cs" Link="Source\MaintenancePanelViewModel.cs" />
     <Compile Include="..\SquadDash\MaintenancePanelUiState.cs"    Link="Source\MaintenancePanelUiState.cs" />
     <Compile Include="..\SquadDash\IdleDetectionService.cs"       Link="Source\IdleDetectionService.cs" />
 

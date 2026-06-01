@@ -28,8 +28,9 @@ internal sealed class TasksPanelController {
     private readonly Action<TaskItem>?  _addToNotes;
     private readonly Func<IReadOnlyList<SquadTeamMember>>? _getRoster;
 
-    private bool      _showCompleted;
-    private string    _filterText = string.Empty;
+    private readonly TasksPanelViewModel _viewModel = new();
+    internal TasksPanelViewModel ViewModel => _viewModel;
+
     private MenuItem? _toggleCompletedItem;
     private readonly List<MenuItem> _allToggleItems = [];
 
@@ -116,7 +117,7 @@ internal sealed class TasksPanelController {
     public void ShowEmpty(string message) => ShowEmptyInPanel(message);
 
     public void SetFilter(string text) {
-        _filterText = text.Trim();
+        _viewModel.FilterText = text.Trim();
         ApplyFilter();
     }
 
@@ -146,8 +147,8 @@ internal sealed class TasksPanelController {
         _toggleCompletedItem = MakeItem(string.Empty);
         UpdateToggleHeader();
         _toggleCompletedItem.Click += (_, _) => {
-            _showCompleted = !_showCompleted;
-            _completedSection.Visibility = _showCompleted ? Visibility.Visible : Visibility.Collapsed;
+            _viewModel.ShowCompleted = !_viewModel.ShowCompleted;
+            _completedSection.Visibility = _viewModel.ShowCompleted ? Visibility.Visible : Visibility.Collapsed;
             UpdateToggleHeader();
         };
         menu.Items.Add(_toggleCompletedItem);
@@ -162,7 +163,7 @@ internal sealed class TasksPanelController {
     }
 
     private void UpdateToggleHeader() {
-        var label = _showCompleted ? "Hide Completed Tasks" : "Show Completed Tasks";
+        var label = _viewModel.ShowCompleted ? "Hide Completed Tasks" : "Show Completed Tasks";
         if (_toggleCompletedItem is not null)
             _toggleCompletedItem.Header = label;
         foreach (var item in _allToggleItems)
@@ -170,11 +171,11 @@ internal sealed class TasksPanelController {
     }
 
     private MenuItem BuildToggleCompletedMenuItem() {
-        var item = MakeItem(_showCompleted ? "Hide Completed Tasks" : "Show Completed Tasks");
+        var item = MakeItem(_viewModel.ShowCompleted ? "Hide Completed Tasks" : "Show Completed Tasks");
         _allToggleItems.Add(item);
         item.Click += (_, _) => {
-            _showCompleted = !_showCompleted;
-            _completedSection.Visibility = _showCompleted ? Visibility.Visible : Visibility.Collapsed;
+            _viewModel.ShowCompleted = !_viewModel.ShowCompleted;
+            _completedSection.Visibility = _viewModel.ShowCompleted ? Visibility.Visible : Visibility.Collapsed;
             UpdateToggleHeader();
         };
         return item;
@@ -353,7 +354,7 @@ internal sealed class TasksPanelController {
     }
 
     private void ApplyFilterToPanel(StackPanel panel, bool syncHeadings) {
-        var (ownerCandidates, textFilter) = ParseFilter(_filterText);
+        var (ownerCandidates, textFilter) = ParseFilter(_viewModel.FilterText);
 
         // Pass 1: show/hide item rows.
         foreach (UIElement child in panel.Children) {

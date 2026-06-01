@@ -33,10 +33,8 @@ internal sealed class InboxPanelController
     private readonly Action<InboxMessage>?    _addToChat;
     private Func<string, TaskItem?>?          _lookupTask;
 
-    private List<InboxMessage> _messages      = [];
-    private string             _filterText    = string.Empty;
-    private bool               _unreadOnly    = false;
-    private InboxMessage?      _selectedMessage;
+    private readonly InboxPanelViewModel _viewModel = new();
+    internal InboxPanelViewModel ViewModel => _viewModel;
 
     // ── Construction ─────────────────────────────────────────────────────────
 
@@ -80,21 +78,21 @@ internal sealed class InboxPanelController
 
     public void Refresh(IReadOnlyList<InboxMessage> messages)
     {
-        _messages = [.. messages];
-        _selectedMessage = null;
+        _viewModel.Messages = [.. messages];
+        _viewModel.SelectedMessage = null;
         _viewerBorder.Visibility = Visibility.Collapsed;
         RebuildList();
     }
 
     public void SetFilter(string text)
     {
-        _filterText = text.Trim();
+        _viewModel.FilterText = text.Trim();
         ApplyFilter();
     }
 
     public void SetUnreadOnly(bool unreadOnly)
     {
-        _unreadOnly = unreadOnly;
+        _viewModel.UnreadOnly = unreadOnly;
         ApplyFilter();
     }
 
@@ -104,7 +102,7 @@ internal sealed class InboxPanelController
     {
         _listPanel.Children.Clear();
 
-        var sorted = _messages.OrderByDescending(m => m.Timestamp).ToList();
+        var sorted = _viewModel.Messages.OrderByDescending(m => m.Timestamp).ToList();
 
         if (sorted.Count == 0)
         {
@@ -120,15 +118,15 @@ internal sealed class InboxPanelController
 
     private bool MatchesFilter(InboxMessage msg)
     {
-        if (string.IsNullOrEmpty(_filterText))
+        if (string.IsNullOrEmpty(_viewModel.FilterText))
             return true;
 
         // Parse a leading @handle token from the filter text.
-        if (_filterText.StartsWith('@'))
+        if (_viewModel.FilterText.StartsWith('@'))
         {
-            var spaceIdx = _filterText.IndexOf(' ', 1);
-            string handle  = spaceIdx > 0 ? _filterText[1..spaceIdx] : _filterText[1..];
-            string remaining = spaceIdx > 0 ? _filterText[(spaceIdx + 1)..].Trim() : string.Empty;
+            var spaceIdx = _viewModel.FilterText.IndexOf(' ', 1);
+            string handle  = spaceIdx > 0 ? _viewModel.FilterText[1..spaceIdx] : _viewModel.FilterText[1..];
+            string remaining = spaceIdx > 0 ? _viewModel.FilterText[(spaceIdx + 1)..].Trim() : string.Empty;
 
             if (string.IsNullOrEmpty(handle))
                 return PanelFilterHelper.Matches(msg.Subject, remaining);
@@ -139,7 +137,7 @@ internal sealed class InboxPanelController
             return agentMatch && (string.IsNullOrEmpty(remaining) || PanelFilterHelper.Matches(msg.Subject, remaining));
         }
 
-        return PanelFilterHelper.Matches(msg.Subject, _filterText);
+        return PanelFilterHelper.Matches(msg.Subject, _viewModel.FilterText);
     }
 
     private void ApplyFilter()
@@ -151,7 +149,7 @@ internal sealed class InboxPanelController
         {
             if (child is Border { Tag: InboxMessage msg })
             {
-                bool visible = MatchesFilter(msg) && (!_unreadOnly || !msg.Read);
+                bool visible = MatchesFilter(msg) && (!_viewModel.UnreadOnly || !msg.Read);
                 child.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
                 if (visible) anyVisible = true;
             }
@@ -165,7 +163,7 @@ internal sealed class InboxPanelController
             {
                 if (!anyVisible)
                 {
-                    tb.Text = _unreadOnly ? "No unread messages" : "No messages";
+                    tb.Text = _viewModel.UnreadOnly ? "No unread messages" : "No messages";
                     tb.Visibility = Visibility.Visible;
                 }
                 else
@@ -177,7 +175,7 @@ internal sealed class InboxPanelController
         }
 
         if (!anyVisible && !emptyLabelPresent)
-            _listPanel.Children.Add(BuildEmptyLabel(_unreadOnly ? "No unread messages" : "No messages"));
+            _listPanel.Children.Add(BuildEmptyLabel(_viewModel.UnreadOnly ? "No unread messages" : "No messages"));
     }
 
     private UIElement BuildEmptyLabel(string text)
@@ -285,7 +283,7 @@ internal sealed class InboxPanelController
     private void SelectMessage(InboxMessage msg, Border row, Ellipse dot, TextBlock subjectLabel)
     {
         SquadDashTrace.Write(TraceCategory.Inbox, $"InboxPanelController.SelectMessage: msgId={msg.Id} subject='{msg.Subject}' read={msg.Read}");
-        _selectedMessage = msg;
+        _viewModel.SelectedMessage = msg;
 
         // Defer mark-as-read: the window fires the callback after 3 s of viewing
         // or on any scroll, whichever comes first.
@@ -597,11 +595,11 @@ internal sealed class InboxPanelController
     private void RemoveRow(Border row)
     {
         if (row.Tag is InboxMessage removed
-            && _selectedMessage is not null
-            && _selectedMessage.Id == removed.Id)
+            && _viewModel.SelectedMessage is not null
+            && _viewModel.SelectedMessage.Id == removed.Id)
         {
             _viewerBorder.Visibility = Visibility.Collapsed;
-            _selectedMessage = null;
+            _viewModel.SelectedMessage = null;
         }
 
         _listPanel.Children.Remove(row);

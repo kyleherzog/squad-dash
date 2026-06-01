@@ -22,9 +22,9 @@ internal sealed class NotesPanelController {
     private readonly Action<NoteItem>?        _attachFollowUp;
     private readonly Func<NoteItem, string>?  _loadPreview;
 
-    private List<NoteItem> _notes = [];
-    private string _filterText = string.Empty;
-    private NotesSortOrder _sortOrder = NotesSortOrder.MostRecentOnTop;
+    private readonly NotesPanelViewModel _viewModel = new();
+    internal NotesPanelViewModel ViewModel => _viewModel;
+
     private Action<NotesSortOrder>? _onSortOrderChanged;
 
     // ── Construction ─────────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ internal sealed class NotesPanelController {
         _newNote              = newNote;
         _attachFollowUp       = attachFollowUp;
         _loadPreview          = loadPreview;
-        _sortOrder            = initialSortOrder;
+        _viewModel.SortOrder  = initialSortOrder;
         _onSortOrderChanged   = onSortOrderChanged;
 
         AttachPanelContextMenu();
@@ -60,17 +60,17 @@ internal sealed class NotesPanelController {
     // ── Public API ────────────────────────────────────────────────────────────
 
     public void Refresh(IReadOnlyList<NoteItem> notes) {
-        _notes = [.. notes];
+        _viewModel.Notes = [.. notes];
         RebuildList();
     }
 
     public void AddNote(NoteItem note) {
-        _notes.Insert(0, note);
+        _viewModel.Notes.Insert(0, note);
         RebuildList();
     }
 
     public void SetFilter(string text) {
-        _filterText = text.Trim();
+        _viewModel.FilterText = text.Trim();
         ApplyFilterToList();
     }
 
@@ -79,7 +79,7 @@ internal sealed class NotesPanelController {
     private void RebuildList() {
         _listPanel.Children.Clear();
 
-        if (_notes.Count == 0) {
+        if (_viewModel.Notes.Count == 0) {
             var empty = new TextBlock {
                 Text         = "No notes yet",
                 FontStyle    = FontStyles.Italic,
@@ -92,9 +92,9 @@ internal sealed class NotesPanelController {
             return;
         }
 
-        var sorted = _sortOrder == NotesSortOrder.Alphabetical
-            ? _notes.OrderBy(n => n.Title, StringComparer.OrdinalIgnoreCase).ToList()
-            : _notes.OrderByDescending(n => n.CreatedAt).ToList();
+        var sorted = _viewModel.SortOrder == NotesSortOrder.Alphabetical
+            ? _viewModel.Notes.OrderBy(n => n.Title, StringComparer.OrdinalIgnoreCase).ToList()
+            : _viewModel.Notes.OrderByDescending(n => n.CreatedAt).ToList();
 
         foreach (var note in sorted)
             _listPanel.Children.Add(BuildRow(note));
@@ -105,7 +105,7 @@ internal sealed class NotesPanelController {
     private void ApplyFilterToList() {
         foreach (UIElement child in _listPanel.Children) {
             if (child is Border { Tag: NoteItem note })
-                child.Visibility = PanelFilterHelper.Matches(note.Title, _filterText)
+                child.Visibility = PanelFilterHelper.Matches(note.Title, _viewModel.FilterText)
                     ? Visibility.Visible : Visibility.Collapsed;
         }
     }
@@ -294,11 +294,11 @@ internal sealed class NotesPanelController {
 
         var alphabetItem = MakeItem("Alphabetically");
         alphabetItem.IsCheckable = true;
-        alphabetItem.IsChecked   = _sortOrder == NotesSortOrder.Alphabetical;
+        alphabetItem.IsChecked   = _viewModel.SortOrder == NotesSortOrder.Alphabetical;
 
         var recentItem = MakeItem("Most Recent on Top");
         recentItem.IsCheckable = true;
-        recentItem.IsChecked   = _sortOrder == NotesSortOrder.MostRecentOnTop;
+        recentItem.IsChecked   = _viewModel.SortOrder == NotesSortOrder.MostRecentOnTop;
 
         alphabetItem.Click += (_, _) => ApplySortOrder(NotesSortOrder.Alphabetical,   alphabetItem, recentItem);
         recentItem.Click   += (_, _) => ApplySortOrder(NotesSortOrder.MostRecentOnTop, alphabetItem, recentItem);
@@ -309,7 +309,7 @@ internal sealed class NotesPanelController {
     }
 
     private void ApplySortOrder(NotesSortOrder order, MenuItem alphabetItem, MenuItem recentItem) {
-        _sortOrder = order;
+        _viewModel.SortOrder = order;
         alphabetItem.IsChecked = order == NotesSortOrder.Alphabetical;
         recentItem.IsChecked   = order == NotesSortOrder.MostRecentOnTop;
         RebuildList();

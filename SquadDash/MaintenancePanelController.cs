@@ -26,16 +26,11 @@ internal sealed class MaintenancePanelController {
     private readonly Action<RichTextBox, string>?            _onReviseWithAi;
     private readonly Action<RichTextBox, string, string>?    _onDirectRevise;
 
-    private MaintenanceMdConfig?   _config;
-    private MaintenanceStateStore? _stateStore;
     private MaintenancePanelUiState? _uiState;
-    private readonly List<(string TaskId, StackPanel OptionsPanel)> _taskOptionsPanels = new();
-    private bool                   _runnerActive;
-    private string?                _runningTaskTitle;
+    private readonly MaintenancePanelViewModel _viewModel = new();
+    internal MaintenancePanelViewModel ViewModel => _viewModel;
     private DispatcherTimer?       _countdownTimer;
     private DispatcherTimer?       _transientStatusTimer;
-    private DateTimeOffset         _nextMaintenanceAt = DateTimeOffset.MaxValue;
-    private string                 _filterText = string.Empty;
 
     // ── Construction ─────────────────────────────────────────────────────────
 
@@ -171,15 +166,15 @@ internal sealed class MaintenancePanelController {
     // ── Public API ────────────────────────────────────────────────────────────
 
     private void CollapseAllTaskRows() {
-        foreach (var (taskId, panel) in _taskOptionsPanels) {
+        foreach (var (taskId, panel) in _viewModel.TaskOptionsPanels) {
             panel.Visibility = Visibility.Collapsed;
             _uiState?.SetExpanded(taskId, false);
         }
     }
 
     internal void Refresh(MaintenanceMdConfig? config, MaintenanceStateStore? stateStore) {
-        _config     = config;
-        _stateStore = stateStore;
+        _viewModel.Config     = config;
+        _viewModel.StateStore = stateStore;
 
         if (_uiState is null && _getWorkspacePath() is { } wp) {
             _uiState = new MaintenancePanelUiState(Path.Combine(wp, ".squad"));
@@ -192,16 +187,16 @@ internal sealed class MaintenancePanelController {
     }
 
     internal void SetFilter(string text) {
-        _filterText = text.Trim();
+        _viewModel.FilterText = text.Trim();
         ApplyFilter();
     }
 
     private void ApplyFilter() {
         foreach (UIElement child in _listPanel.Children) {
             if (child is FrameworkElement fe && fe.Tag is MaintenanceTask task) {
-                bool matches = string.IsNullOrEmpty(_filterText)
-                    || PanelFilterHelper.Matches(task.Title, _filterText)
-                    || PanelFilterHelper.Matches(task.Instructions ?? string.Empty, _filterText);
+                bool matches = string.IsNullOrEmpty(_viewModel.FilterText)
+                    || PanelFilterHelper.Matches(task.Title, _viewModel.FilterText)
+                    || PanelFilterHelper.Matches(task.Instructions ?? string.Empty, _viewModel.FilterText);
                 fe.Visibility = matches ? Visibility.Visible : Visibility.Collapsed;
             }
         }
@@ -211,8 +206,8 @@ internal sealed class MaintenancePanelController {
     /// Call when the runner starts a task. Updates the header to "Running now — [title]…"
     /// </summary>
     internal void OnRunnerStarted(string taskTitle) {
-        _runnerActive      = true;
-        _runningTaskTitle  = taskTitle;
+        _viewModel.RunnerActive     = true;
+        _viewModel.RunningTaskTitle = taskTitle;
         StopCountdown();
         SyncStatusLabel();
     }
@@ -221,8 +216,8 @@ internal sealed class MaintenancePanelController {
     /// Call when the runner finishes. Restarts the countdown.
     /// </summary>
     internal void OnRunnerCompleted() {
-        _runnerActive      = false;
-        _runningTaskTitle  = null;
+        _viewModel.RunnerActive     = false;
+        _viewModel.RunningTaskTitle = null;
         SyncStatusLabel();
     }
 
@@ -231,8 +226,8 @@ internal sealed class MaintenancePanelController {
     /// Pass <see cref="DateTimeOffset.MaxValue"/> to hide the countdown.
     /// </summary>
     internal void SetNextMaintenanceAt(DateTimeOffset next) {
-        _nextMaintenanceAt = next;
-        if (!_runnerActive)
+        _viewModel.NextMaintenanceAt = next;
+        if (!_viewModel.RunnerActive)
         {
             StopCountdown();
             StartCountdown();
@@ -361,9 +356,9 @@ internal sealed class MaintenancePanelController {
 
     private void RebuildList() {
         _listPanel.Children.Clear();
-        _taskOptionsPanels.Clear();
+        _viewModel.TaskOptionsPanels.Clear();
 
-        if (_config is null || _config.Tasks is null || _config.Tasks.Count == 0) {
+        if (_viewModel.Config is null || _viewModel.Config.Tasks is null || _viewModel.Config.Tasks.Count == 0) {
             var empty = new TextBlock {
                 Text         = "No maintenance tasks configured.",
                 TextWrapping = TextWrapping.Wrap,
@@ -374,7 +369,7 @@ internal sealed class MaintenancePanelController {
             empty.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
             _listPanel.Children.Add(empty);
         } else {
-            foreach (var task in _config.Tasks)
+            foreach (var task in _viewModel.Config.Tasks)
                 _listPanel.Children.Add(BuildTaskRow(task));
         }
 
@@ -609,7 +604,7 @@ internal sealed class MaintenancePanelController {
         rightPanel.Children.Add(chipRow);
 
         // Last-run status
-        var lastRun = _stateStore?.GetLastRunAt(task.Id);
+        var lastRun = _viewModel.StateStore?.GetLastRunAt(task.Id);
         if (lastRun.HasValue) {
             var relTime = StatusTimingPresentation.FormatRelativeTimestamp(
                 new DateTimeOffset(lastRun.Value, TimeSpan.Zero));
@@ -671,7 +666,7 @@ internal sealed class MaintenancePanelController {
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
-            _taskOptionsPanels.Add((task.Id, optionsPanel));
+            _viewModel.TaskOptionsPanels.Add((task.Id, optionsPanel));
         }
 
         // Double-click the row to expand or collapse the options panel.
@@ -800,20 +795,20 @@ internal sealed class MaintenancePanelController {
     }
 
     private void SyncStatusLabel() {
-        if (_runnerActive) {
-            var title = _runningTaskTitle ?? "task";
+        if (_viewModel.RunnerActive) {
+            var title = _viewModel.RunningTaskTitle ?? "task";
             _statusLabel.Text = $"● Running — {title}…";
             _statusLabel.Visibility = Visibility.Visible;
             return;
         }
 
-        if (_config is null) {
+        if (_viewModel.Config is null) {
             _statusLabel.Visibility = Visibility.Collapsed;
             return;
         }
 
         // If no next time set, hide the countdown
-        if (_nextMaintenanceAt == DateTimeOffset.MaxValue) {
+        if (_viewModel.NextMaintenanceAt == DateTimeOffset.MaxValue) {
             _statusLabel.Visibility = Visibility.Collapsed;
             return;
         }
@@ -822,7 +817,7 @@ internal sealed class MaintenancePanelController {
     }
 
     private void UpdateCountdownLabel() {
-        var remaining = _nextMaintenanceAt - DateTimeOffset.Now;
+        var remaining = _viewModel.NextMaintenanceAt - DateTimeOffset.Now;
         if (remaining <= TimeSpan.Zero) {
             _statusLabel.Text       = "Maintenance window — idle…";
             _statusLabel.Visibility = Visibility.Visible;
@@ -842,7 +837,7 @@ internal sealed class MaintenancePanelController {
     // ── Countdown timer ───────────────────────────────────────────────────────
 
     private void StartCountdown() {
-        if (_nextMaintenanceAt == DateTimeOffset.MaxValue) return;
+        if (_viewModel.NextMaintenanceAt == DateTimeOffset.MaxValue) return;
         _countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
         _countdownTimer.Tick += (_, _) => UpdateCountdownLabel();
         _countdownTimer.Start();
