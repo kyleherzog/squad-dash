@@ -143,24 +143,25 @@ Both methods are equivalent — the file is the single source of truth.
 
 ## Running tasks manually
 
-The **Run now** button in the Maintenance panel starts a maintenance cycle immediately without waiting for the idle timeout.
+### Run Now — force a single task
 
-**Frequency rules still apply** — the button only runs tasks that are:
-1. ✅ **Enabled** (checkbox checked)
-2. ✅ **Eligible** based on their frequency setting and last run time
+Right-click any task row in the Maintenance panel and choose **Run Now** to execute that task immediately.
 
-For example, if a `weekly` task ran yesterday, clicking "Run now" will skip it because it's not eligible yet. This is the same eligibility check used during automatic idle windows.
+**Frequency rules are bypassed** — the task runs regardless of when it last ran or what its frequency setting is. Use this to:
 
-### Use cases for "Run now"
+- Test a newly-created or newly-enabled task right away
+- Force a task to re-run after fixing a bug in its instructions
+- Run a task on demand without affecting the automatic idle schedule
 
-- Testing a newly-enabled task without waiting for the idle timeout
-- Re-running `always` frequency tasks on demand
-- Triggering `after-commits` tasks immediately after a commit
-- Running eligible tasks right now instead of waiting for idle
+### Simulate Idle — trigger a full cycle
+
+Right-click the **Maintenance Tasks:** picker button and choose **Simulate Idle** to trigger a full maintenance window immediately, exactly as the idle scheduler would.
+
+**Frequency rules still apply** — only enabled tasks that are eligible based on their frequency setting and last run time will execute. This is the equivalent of the old "Run now" button (now removed).
 
 ### Testing without frequency limits
 
-To force a task to run regardless of when it last ran:
+To force a specific task to run regardless of when it last ran, use **Run Now** (right-click the task row). To reset all frequency history:
 1. Delete or edit `maintenance-state.json` to remove that task's `lastRunAt` entry, OR
 2. Temporarily change the task's frequency to `always`
 
@@ -400,6 +401,9 @@ SquadDash will wait for any currently-running prompt or Loop iteration to finish
 | State file           | `<workspace-root>/maintenance-state.json`         |
 | Reset state          | Delete `maintenance-state.json`                   |
 | Test trigger         | `trigger_idle_cycle` command in SquadDash         |
+| Create a task        | Right-click panel background → **New Task**, or edit `.squad/maintenance.md` directly |
+| Force a single task  | Right-click task row → **Run Now** (bypasses frequency) |
+| Simulate idle cycle  | Right-click picker → **Simulate Idle** (respects frequency) |
 | `after-commits` frequency | Runs once per new HEAD commit SHA; alias: `per-commit`  |
 | Inbox messages   | `INBOX_MESSAGE_JSON` block at end of task output        |
 | Deferred actions | `actions` array in inbox messages; rendered as buttons  |
