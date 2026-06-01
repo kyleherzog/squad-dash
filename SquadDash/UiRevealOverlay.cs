@@ -814,12 +814,14 @@ internal sealed class UiRevealOverlay
 
     private sealed class HighlightAdorner : System.Windows.Documents.Adorner
     {
-        private static readonly Pen _outerPen = MakePen(0, 0, 0);
-        private static readonly Pen _innerPen = MakePen(255, 255, 255);
+        private static readonly Pen _outerPen   = MakePen(0, 0, 0, 128, 1.0);
+        private static readonly Pen _innerPen   = MakePen(255, 255, 255, 128, 1.0);
+        private static readonly Pen _marginPen  = MakePen(0, 120, 255, 200, 1.5);
+        private static readonly Pen _paddingPen = MakePen(220, 40, 40, 220, 1.5);
 
-        private static Pen MakePen(byte r, byte g, byte b)
+        private static Pen MakePen(byte r, byte g, byte b, byte a = 128, double thickness = 1.0)
         {
-            var pen = new Pen(new SolidColorBrush(Color.FromArgb(128, r, g, b)), 1.0);
+            var pen = new Pen(new SolidColorBrush(Color.FromArgb(a, r, g, b)), thickness);
             pen.Freeze();
             return pen;
         }
@@ -833,12 +835,77 @@ internal sealed class UiRevealOverlay
         {
             var w = ActualWidth;
             var h = ActualHeight;
-            // outer black rect (0.5px inset so the stroke falls on a pixel boundary)
-            dc.DrawRectangle(null, _outerPen,
-                new Rect(0.5, 0.5, Math.Max(0, w - 1), Math.Max(0, h - 1)));
-            // inner white rect (1.5px inset)
-            dc.DrawRectangle(null, _innerPen,
-                new Rect(1.5, 1.5, Math.Max(0, w - 3), Math.Max(0, h - 3)));
+
+            // Element bounds (1px black + 1px white inset)
+            dc.DrawRectangle(null, _outerPen, new Rect(0.5, 0.5, Math.Max(0, w - 1), Math.Max(0, h - 1)));
+            dc.DrawRectangle(null, _innerPen, new Rect(1.5, 1.5, Math.Max(0, w - 3), Math.Max(0, h - 3)));
+
+            if (AdornedElement is not FrameworkElement fe) return;
+
+            // Margin — blue corner L-shapes
+            DrawMarginCorners(dc, fe.Margin, w, h);
+
+            // Padding — red inward tick marks
+            Thickness padding = default;
+            if (fe is Control ctrl)       padding = ctrl.Padding;
+            else if (fe is Border border) padding = border.Padding;
+            DrawPaddingTicks(dc, padding, w, h);
+        }
+
+        private static void DrawMarginCorners(DrawingContext dc, Thickness m, double w, double h)
+        {
+            const double arm = 48;
+
+            // Top-left
+            if (m.Left > 0.01 || m.Top > 0.01)
+            {
+                dc.DrawLine(_marginPen, new Point(-m.Left, -m.Top), new Point(-m.Left + arm, -m.Top));
+                dc.DrawLine(_marginPen, new Point(-m.Left, -m.Top), new Point(-m.Left, -m.Top + arm));
+            }
+            // Top-right
+            if (m.Right > 0.01 || m.Top > 0.01)
+            {
+                dc.DrawLine(_marginPen, new Point(w + m.Right, -m.Top), new Point(w + m.Right - arm, -m.Top));
+                dc.DrawLine(_marginPen, new Point(w + m.Right, -m.Top), new Point(w + m.Right, -m.Top + arm));
+            }
+            // Bottom-left
+            if (m.Left > 0.01 || m.Bottom > 0.01)
+            {
+                dc.DrawLine(_marginPen, new Point(-m.Left, h + m.Bottom), new Point(-m.Left + arm, h + m.Bottom));
+                dc.DrawLine(_marginPen, new Point(-m.Left, h + m.Bottom), new Point(-m.Left, h + m.Bottom - arm));
+            }
+            // Bottom-right
+            if (m.Right > 0.01 || m.Bottom > 0.01)
+            {
+                dc.DrawLine(_marginPen, new Point(w + m.Right, h + m.Bottom), new Point(w + m.Right - arm, h + m.Bottom));
+                dc.DrawLine(_marginPen, new Point(w + m.Right, h + m.Bottom), new Point(w + m.Right, h + m.Bottom - arm));
+            }
+        }
+
+        private static void DrawPaddingTicks(DrawingContext dc, Thickness p, double w, double h)
+        {
+            const double crossbar = 16;
+
+            if (p.Top > 0.5)
+            {
+                dc.DrawLine(_paddingPen, new Point(w / 2, 0), new Point(w / 2, p.Top));
+                dc.DrawLine(_paddingPen, new Point(w / 2 - crossbar / 2, p.Top), new Point(w / 2 + crossbar / 2, p.Top));
+            }
+            if (p.Bottom > 0.5)
+            {
+                dc.DrawLine(_paddingPen, new Point(w / 2, h), new Point(w / 2, h - p.Bottom));
+                dc.DrawLine(_paddingPen, new Point(w / 2 - crossbar / 2, h - p.Bottom), new Point(w / 2 + crossbar / 2, h - p.Bottom));
+            }
+            if (p.Left > 0.5)
+            {
+                dc.DrawLine(_paddingPen, new Point(0, h / 2), new Point(p.Left, h / 2));
+                dc.DrawLine(_paddingPen, new Point(p.Left, h / 2 - crossbar / 2), new Point(p.Left, h / 2 + crossbar / 2));
+            }
+            if (p.Right > 0.5)
+            {
+                dc.DrawLine(_paddingPen, new Point(w, h / 2), new Point(w - p.Right, h / 2));
+                dc.DrawLine(_paddingPen, new Point(w - p.Right, h / 2 - crossbar / 2), new Point(w - p.Right, h / 2 + crossbar / 2));
+            }
         }
     }
 }
