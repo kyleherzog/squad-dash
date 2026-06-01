@@ -26,7 +26,9 @@ internal static class DockingMapBuilder
     private const double TopSlotWidth      = 40;
     private const double TopSlotHeight     = 50;
     private const double SlotGap           = 4;
-    private const double ZoneGutter        = 28; // pill (4px) + 10px breathing room on each side
+    private const double ZoneGutter        = 28;  // pill (4px) + 10px breathing room on each side; used between side zone and top zone
+    private const double InnerZoneGap      = 2;   // tight gap between sibling zone pairs (Left↔Left2, Right↔Right2)
+    private const double MaxInnerHeight    = 200.0; // caps popup height so stacked panels shrink gracefully
     private const double PopupPadding      = 8;
 
     /// <summary>
@@ -93,6 +95,8 @@ internal static class DockingMapBuilder
 
         // Clamp minimum inner height so popup never looks too small
         innerHeight = Math.Max(innerHeight, TopSlotHeight * 2 + ZoneGutter);
+        // Cap maximum inner height so stacked panels shrink rather than blowing out the popup
+        innerHeight = Math.Min(innerHeight, MaxInnerHeight);
 
         // ── Compute zone widths ──────────────────────────────────────────────
 
@@ -104,12 +108,14 @@ internal static class DockingMapBuilder
 
         double topZoneWidth = Math.Max(topContentWidth, TopSlotWidth);
 
-        // Only include gutter for non-suppressed zones
-        double innerWidth = (suppressLeft2  ? 0 : left2ZoneWidth  + ZoneGutter)
+        // Only include gutter for non-suppressed zones.
+        // Between sibling zone pairs (Left2↔Left, Right↔Right2) use the tight InnerZoneGap.
+        // Between the innermost side zone and the top zone use the full ZoneGutter (separator lives there).
+        double innerWidth = (suppressLeft2  ? 0 : left2ZoneWidth  + (suppressLeft   ? ZoneGutter : InnerZoneGap))
                           + (suppressLeft   ? 0 : leftZoneWidth   + ZoneGutter)
                           + topZoneWidth
                           + (suppressRight  ? 0 : ZoneGutter + rightZoneWidth)
-                          + (suppressRight2 ? 0 : ZoneGutter + right2ZoneWidth);
+                          + (suppressRight2 ? 0 : (suppressRight  ? ZoneGutter : InnerZoneGap) + right2ZoneWidth);
 
         double popupWidth  = innerWidth  + PopupPadding * 2;
         double popupHeight = innerHeight + PopupPadding * 2;
@@ -117,10 +123,10 @@ internal static class DockingMapBuilder
         // ── Layout slot positions (relative to inner canvas, 0,0 at top-left) ──
 
         double left2X  = 0;
-        double leftX   = suppressLeft2 ? left2X : left2X + left2ZoneWidth + ZoneGutter;
+        double leftX   = suppressLeft2 ? left2X : left2X + left2ZoneWidth + (suppressLeft ? ZoneGutter : InnerZoneGap);
         double topX    = suppressLeft  ? leftX  : leftX  + leftZoneWidth  + ZoneGutter;
         double rightX  = topX + topZoneWidth + (suppressRight ? 0 : ZoneGutter);
-        double right2X = suppressRight ? rightX : rightX + rightZoneWidth + (suppressRight2 ? 0 : ZoneGutter);
+        double right2X = suppressRight ? rightX : rightX + rightZoneWidth + InnerZoneGap;
 
         // Left2 zone slots (outermost left column — suppressed when both left zones are empty)
         if (!suppressLeft2)
@@ -304,7 +310,7 @@ internal static class DockingMapBuilder
         double effectiveSlotH = buttonCount > 0
             ? (zoneAvailableHeight - Math.Max(0, buttonCount - 1) * SlotGap) / buttonCount
             : slotH;
-        effectiveSlotH = Math.Max(effectiveSlotH, slotH); // never smaller than the nominal size
+        effectiveSlotH = Math.Max(effectiveSlotH, 16.0); // minimum slot height even when many panels stack
 
         double curY = zoneY;
 
