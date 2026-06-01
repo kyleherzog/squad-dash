@@ -15413,6 +15413,7 @@ public partial class MainWindow : Window, ILiveElementLocator
             {
                 _promptQueue.Enqueue(entry.Text, ++_promptQueueSeq, entry.IsDictated, isSystemInjected: entry.IsSystemInjected);
                 var restoredItem = _promptQueue.Items[^1];
+                restoredItem.QueueNumber = entry.QueueNumber > 0 ? entry.QueueNumber : NextQueueNumber();
                 if (entry.IsSimEntry)
                 {
                     restoredItem.IsSimEntry      = true;

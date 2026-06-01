@@ -680,7 +680,8 @@ internal sealed record QueuedPromptEntry(
     IReadOnlyList<FollowUpAttachmentDto>? Attachments = null,
     bool IsSimEntry = false,
     string? SimResponse = null,
-    int SimDelaySeconds = 0);
+    int SimDelaySeconds = 0,
+    int QueueNumber = 0);
 
 internal enum TranscriptThoughtPlacement {
     BeforeTools,
