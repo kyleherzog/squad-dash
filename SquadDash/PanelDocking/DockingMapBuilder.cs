@@ -26,7 +26,7 @@ internal static class DockingMapBuilder
     private const double TopSlotWidth      = 40;
     private const double TopSlotHeight     = 50;
     private const double SlotGap           = 4;
-    private const double ZoneGutter        = 8;
+    private const double ZoneGutter        = 28; // pill (4px) + 10px breathing room on each side
     private const double PopupPadding      = 8;
 
     /// <summary>
