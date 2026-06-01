@@ -67,18 +67,10 @@ internal sealed class DockingMapWindow : Window
         Color groundingColor = isDark ? Colors.Black : Colors.White;
         Color polarColor     = isDark ? Colors.White : Colors.Black;
 
-        // Background: derive from ChromeSurface but shift toward mid-tone in dark theme
-        // so opacity-based slot fills are visually distinguishable.
-        Color chromeBase = appResources.Contains("ChromeSurface") && appResources["ChromeSurface"] is SolidColorBrush scb
-            ? scb.Color
-            : (isDark ? Color.FromRgb(40, 40, 44) : Color.FromRgb(230, 230, 234));
-
-        Color bgColor = isDark
-            ? Color.FromRgb(
-                (byte)(chromeBase.R * 0.60 + 128 * 0.40),
-                (byte)(chromeBase.G * 0.60 + 128 * 0.40),
-                (byte)(chromeBase.B * 0.60 + 132 * 0.40))
-            : chromeBase;
+        // Background: use the same tinted panel background the status panels use.
+        Color bgColor = appResources.Contains("ActivePanelSurface") && appResources["ActivePanelSurface"] is SolidColorBrush aps
+            ? aps.Color
+            : (isDark ? Color.FromRgb(26, 37, 53) : Color.FromRgb(234, 244, 255));
 
         var root = new Border
         {
@@ -141,14 +133,6 @@ internal sealed class DockingMapWindow : Window
                 BorderBrush     = MakeBrush(polarColor, 0.10),
                 BorderThickness = new Thickness(1),
                 CornerRadius    = new CornerRadius(3),
-                Child           = new TextBlock
-                {
-                    Text                = slot.Label,
-                    Foreground          = MakeBrush(polarColor, 0.40),
-                    FontSize            = 11,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment   = VerticalAlignment.Center,
-                },
             };
         }
 
@@ -157,17 +141,6 @@ internal sealed class DockingMapWindow : Window
         var normalBorder = MakeBrush(polarColor,     0.10);
         var hoverBg      = MakeBrush(groundingColor, 0.90);
         var hoverBorder  = MakeBrush(polarColor,     0.50);
-        var normalLabel  = MakeBrush(polarColor,     0.75);
-        var hoverLabel   = MakeBrush(polarColor,     1.00);
-
-        var labelBlock = new TextBlock
-        {
-            Text                = slot.Label,
-            Foreground          = normalLabel,
-            FontSize            = 11,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment   = VerticalAlignment.Center,
-        };
 
         var border = new Border
         {
@@ -178,21 +151,18 @@ internal sealed class DockingMapWindow : Window
             BorderThickness = new Thickness(1),
             CornerRadius    = new CornerRadius(3),
             Cursor          = Cursors.Hand,
-            Child           = labelBlock,
         };
 
         border.MouseEnter += (_, _) =>
         {
             border.Background  = hoverBg;
             border.BorderBrush = hoverBorder;
-            labelBlock.Foreground = hoverLabel;
             OnSlotHover(slot);
         };
         border.MouseLeave += (_, _) =>
         {
             border.Background  = normalBg;
             border.BorderBrush = normalBorder;
-            labelBlock.Foreground = normalLabel;
             HidePreview();
         };
         border.MouseLeftButtonUp += (_, _) =>
