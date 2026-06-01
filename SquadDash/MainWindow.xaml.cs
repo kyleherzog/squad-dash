@@ -8833,6 +8833,17 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                 }
             }
 
+            // ── Shift+Enter: continue bullet/numbered list in prompt ─────────────
+            if ((e.Key is Key.Return or Key.Enter) && modifiers == ModifierKeys.Shift)
+            {
+                if (MarkdownEditorCommands.ContinueListOnShiftEnter(PromptTextBox))
+                {
+                    RecordHintFeatureUsed(PromptHintFeature.ShiftEnterNewline);
+                    e.Handled = true;
+                    return;
+                }
+            }
+
             // Record Shift+Enter before dispatching so the hint hides even though WPF
             // handles the newline insertion itself (action resolves to None for Shift+Enter).
             if ((e.Key is Key.Return or Key.Enter) && modifiers == ModifierKeys.Shift)
