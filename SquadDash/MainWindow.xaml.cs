@@ -11675,6 +11675,17 @@ public partial class MainWindow : Window, ILiveElementLocator
         {
             if (e.StagingItem.Input is not KeyEventArgs keyArgs) return;
             if (keyArgs.RoutedEvent != Keyboard.PreviewKeyDownEvent) return;
+
+            // Ctrl+C or Ctrl+Insert while UI Reveal is active → copy happened, exit reveal.
+            if (_uiRevealOverlay?.IsActive == true
+                && (Keyboard.Modifiers & ModifierKeys.Control) != 0
+                && (keyArgs.Key == Key.C || keyArgs.Key == Key.Insert))
+            {
+                _uiRevealOverlay.Deactivate();
+                // Don't mark Handled — let the copy go through normally.
+                return;
+            }
+
             if (keyArgs.Key != Key.F12) return;
             if ((Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift))
                 != (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift))
