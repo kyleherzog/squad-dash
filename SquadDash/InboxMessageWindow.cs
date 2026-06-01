@@ -137,6 +137,22 @@ internal sealed class InboxMessageWindow : ChromedWindow
             // genuinely overflows the viewport. Text paragraphs reflow normally.
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             Document                      = doc,
+            Focusable                     = true,
+        };
+
+        _bodyViewer.PreviewKeyDown += (_, e) =>
+        {
+            var sv = FindScrollViewer(_bodyViewer);
+            if (sv is null) return;
+            switch (e.Key)
+            {
+                case Key.PageDown: sv.PageDown(); e.Handled = true; break;
+                case Key.PageUp:   sv.PageUp();   e.Handled = true; break;
+                case Key.Home:     sv.ScrollToTop();    e.Handled = true; break;
+                case Key.End:      sv.ScrollToBottom(); e.Handled = true; break;
+                case Key.Down:     sv.LineDown(); e.Handled = true; break;
+                case Key.Up:       sv.LineUp();   e.Handled = true; break;
+            }
         };
 
         doc.FontSize = _bodyFontSize;
@@ -207,6 +223,8 @@ internal sealed class InboxMessageWindow : ChromedWindow
                         e.Handled = true;
                 };
             }
+
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => _bodyViewer.Focus());
         };
     }
 
