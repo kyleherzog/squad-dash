@@ -23,6 +23,8 @@ internal sealed class InboxMessageWindow : ChromedWindow
     private readonly InboxMessage _message;
     private readonly FlowDocumentScrollViewer _bodyViewer;
     private readonly Action? _onMarkedRead;
+    private readonly Action<double>? _onFontSizeChanged;
+    private double _bodyFontSize;
     private bool _markedRead;
 
     public InboxMessageWindow(
@@ -30,13 +32,17 @@ internal sealed class InboxMessageWindow : ChromedWindow
         Action<InboxAction, InboxMessage> onActionClicked,
         Func<string, TaskItem?>? lookupTask = null,
         Action<string, InboxMessage>? attachSelectedTextToChat = null,
-        Action? onMarkedRead = null)
+        Action? onMarkedRead = null,
+        double initialFontSize = 14,
+        Action<double>? onFontSizeChanged = null)
         : base(captionHeight: 28, resizeMode: ResizeMode.CanResize)
     {
         _lookupTask             = lookupTask;
         _attachSelectedTextToChat = attachSelectedTextToChat;
         _message                = message;
         _onMarkedRead           = onMarkedRead;
+        _onFontSizeChanged      = onFontSizeChanged;
+        _bodyFontSize           = initialFontSize > 0 ? initialFontSize : 14;
         MessageId               = message.Id;
         Title                   = message.Subject;
         SizeToContent           = SizeToContent.Manual;
@@ -133,10 +139,14 @@ internal sealed class InboxMessageWindow : ChromedWindow
             Document                      = doc,
         };
 
+        doc.FontSize = _bodyFontSize;
+
         // Fix for code block copying: FlowDocument's default copy handler can skip
         // Paragraph elements with backgrounds (code blocks). Intercept the copy event
         // to extract plain text from the selection, preserving all content.
         DataObject.AddCopyingHandler(_bodyViewer, OnFlowDocumentCopying);
+
+        _bodyViewer.PreviewMouseWheel += OnBodyViewerPreviewMouseWheel;
 
         var bodyBorder = new Border
         {
@@ -205,6 +215,22 @@ internal sealed class InboxMessageWindow : ChromedWindow
         if (_markedRead) return;
         _markedRead = true;
         _onMarkedRead?.Invoke();
+    }
+
+    private void OnBodyViewerPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) return;
+        e.Handled = true;
+
+        const double step = 1.0;
+        const double min  = 9.0;
+        const double max  = 28.0;
+        _bodyFontSize = Math.Clamp(_bodyFontSize + (e.Delta > 0 ? step : -step), min, max);
+
+        if (_bodyViewer.Document is not null)
+            _bodyViewer.Document.FontSize = _bodyFontSize;
+
+        _onFontSizeChanged?.Invoke(_bodyFontSize);
     }
 
     private static ScrollViewer? FindScrollViewer(DependencyObject parent)

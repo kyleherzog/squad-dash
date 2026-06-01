@@ -55,6 +55,8 @@ public partial class MainWindow : Window, ILiveElementLocator
     private const double DocSourceFontSizeMin = 8;
     private const double DocSourceFontSizeMax = 28;
     private const double DocSourceFontSizeStep = 1;
+    private const double InboxFontSizeMin = 9;
+    private const double InboxFontSizeMax = 28;
 
     private static readonly double[] FontScaleFactors = [0.75, 0.875, 1.0, 1.125, 1.25, 1.4, 1.6];
     private static readonly IReadOnlyDictionary<string, double> FontSizeBaseValues =
@@ -341,6 +343,7 @@ public partial class MainWindow : Window, ILiveElementLocator
     private double _transcriptFontSize = (double)Application.Current.Resources["FontSizeMedium"];
     private double _promptFontSize = (double)Application.Current.Resources["FontSizeMedium"];
     private double _docSourceFontSize = (double)Application.Current.Resources["FontSizeBody"];
+    private double _inboxFontSize = 14;
     private int _fontScaleLevel = 2; // Normal (1.0×)
     private double _docPreviewScrollY;
     private readonly List<Image> _toolIconImages = [];
@@ -1988,6 +1991,7 @@ public partial class MainWindow : Window, ILiveElementLocator
         _promptFontSize = Math.Clamp(_settingsSnapshot.PromptFontSize, PromptFontSizeMin, PromptFontSizeMax);
         _transcriptFontSize = Math.Clamp(_settingsSnapshot.TranscriptFontSize, TranscriptFontSizeMin, TranscriptFontSizeMax);
         _docSourceFontSize = Math.Clamp(_settingsSnapshot.DocSourceFontSize, DocSourceFontSizeMin, DocSourceFontSizeMax);
+        _inboxFontSize = Math.Clamp(_settingsSnapshot.InboxFontSize, InboxFontSizeMin, InboxFontSizeMax);
         _fontScaleLevel = Math.Clamp(_settingsSnapshot.FontSizeScaleLevel, 0, FontScaleFactors.Length - 1);
         _squadCliAdapter.LastObservedModel = _settingsSnapshot.LastUsedModel;
         ApplyViewMode();
@@ -26856,7 +26860,9 @@ public partial class MainWindow : Window, ILiveElementLocator
                         if (!msg.Read)
                             _inboxStore.MarkRead(id);
 
-                        var win = new InboxMessageWindow(msg, DispatchInboxAction, LookupTaskById);
+                        var win = new InboxMessageWindow(msg, DispatchInboxAction, LookupTaskById,
+                            initialFontSize:   _inboxFontSize,
+                            onFontSizeChanged: size => { _inboxFontSize = size; _settingsSnapshot = _settingsStore.SaveInboxFontSize(size); });
                         win.Owner = this;
                         _openInboxWindows.Add(win);
                         win.Closed += (_, _) => _openInboxWindows.Remove(win);
@@ -28351,7 +28357,9 @@ public partial class MainWindow : Window, ILiveElementLocator
             DispatchInboxAction, 
             LookupTaskById,
             attachSelectedTextToChat: AttachInboxMessageSelectedTextFollowUp,
-            onMarkedRead: onMarkedRead);
+            onMarkedRead: onMarkedRead,
+            initialFontSize:   _inboxFontSize,
+            onFontSizeChanged: size => { _inboxFontSize = size; _settingsSnapshot = _settingsStore.SaveInboxFontSize(size); });
         win.Owner = CanShowOwnedWindow() ? this : null;
         _openInboxWindows.Add(win);
         win.Closed += (_, _) => _openInboxWindows.Remove(win);
@@ -28383,7 +28391,9 @@ public partial class MainWindow : Window, ILiveElementLocator
             msg, 
             DispatchInboxAction, 
             LookupTaskById,
-            attachSelectedTextToChat: AttachInboxMessageSelectedTextFollowUp);
+            attachSelectedTextToChat: AttachInboxMessageSelectedTextFollowUp,
+            initialFontSize:   _inboxFontSize,
+            onFontSizeChanged: size => { _inboxFontSize = size; _settingsSnapshot = _settingsStore.SaveInboxFontSize(size); });
         win.Owner = CanShowOwnedWindow() ? this : null;
         _openInboxWindows.Add(win);
         win.Closed += (_, _) => _openInboxWindows.Remove(win);

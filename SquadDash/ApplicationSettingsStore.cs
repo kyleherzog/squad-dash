@@ -140,6 +140,16 @@ internal sealed class ApplicationSettingsStore {
         return updated;
     }
 
+    public ApplicationSettingsSnapshot SaveInboxFontSize(double inboxFontSize) {
+        using var mutex = AcquireMutex();
+
+        var current = LoadCore();
+        var updated = current with { InboxFontSize = NormalizeFontSize(inboxFontSize) };
+
+        SaveCore(updated);
+        return updated;
+    }
+
     public ApplicationSettingsSnapshot SaveAgentImagePath(
         string workspaceFolder,
         string agentKey,
@@ -975,6 +985,7 @@ internal sealed record ApplicationSettingsSnapshot(
     /// </summary>
     public string CleanupPrompt { get; init; } = "Clean up and clarify this text.";
     public double TranscriptFontSize { get; init; } = 14;
+    public double InboxFontSize { get; init; } = 14;
 
     /// <summary>
     /// Font size for the documentation source editor (DocSourceTextBox). Global/machine-wide.
@@ -1452,6 +1463,7 @@ internal sealed record ApplicationSettingsSnapshot(
             UserName = string.IsNullOrWhiteSpace(UserName) ? null : UserName.Trim(),
             SpeechRegion = string.IsNullOrWhiteSpace(SpeechRegion) ? null : SpeechRegion.Trim(),
             TranscriptFontSize = NormalizeFontSize(TranscriptFontSize),
+            InboxFontSize = NormalizeFontSize(InboxFontSize),
             DocSourceFontSize = NormalizeFontSize(DocSourceFontSize),
             Theme = Theme is "Light" or "Dark" or "Auto" ? Theme : null,
             LastUsedModel = string.IsNullOrWhiteSpace(LastUsedModel) ? null : LastUsedModel.Trim(),
