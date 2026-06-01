@@ -8728,6 +8728,8 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                         editor.ImageAccepted += edited =>
                         {
                             var path = _pastedImageStore.SaveImage(edited, workspace.FolderPath);
+                            if (editor.SourceImage != null && editor.AnnotationState != null)
+                                _pastedImageStore.SaveAnnotationSidecar(editor.SourceImage, editor.AnnotationState, path);
                             var att  = new FollowUpAttachment("", "Image", null, null, null, ImagePath: path);
                             var list = GetOrCreateFollowUpList(_activeTabId ?? "");
                             list.Add(att);
@@ -28557,7 +28559,14 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                     label.Cursor = System.Windows.Input.Cursors.Hand;
                     var capturedImg = capturedAtt;
                     label.MouseLeftButtonUp += (_, _) =>
-                        PromptAttachmentViewerWindow.Show(new[] { capturedImg }, CanShowOwnedWindow() ? this : null);
+                    {
+                        var annotJsonPath = capturedImg.ImagePath + ".annotation.json";
+                        var sourcePngPath = capturedImg.ImagePath + ".source.png";
+                        if (File.Exists(annotJsonPath) && File.Exists(sourcePngPath))
+                            ReopenImageForEditing(capturedImg);
+                        else
+                            PromptAttachmentViewerWindow.Show(new[] { capturedImg }, CanShowOwnedWindow() ? this : null);
+                    };
                 }
                 else if (att.ContentBlock != null)
                 {
@@ -28645,6 +28654,52 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             FollowUpItemsPanel.Children.Clear();
             FollowUpStrip.Visibility = Visibility.Collapsed;
         }
+    }
+
+    /// <summary>
+    /// Re-opens a queued image attachment in the annotation editor, loading the
+    /// saved source image and annotation state from their companion sidecar files.
+    /// On confirmation, overwrites the existing PNG and updates the sidecar.
+    /// </summary>
+    private void ReopenImageForEditing(FollowUpAttachment att)
+    {
+        if (att.ImagePath == null || _currentWorkspace == null) return;
+
+        var annotJsonPath = att.ImagePath + ".annotation.json";
+        var sourcePngPath = att.ImagePath + ".source.png";
+        if (!File.Exists(annotJsonPath) || !File.Exists(sourcePngPath)) return;
+
+        ClipboardAnnotationState? state    = null;
+        BitmapSource?             srcImage = null;
+        try
+        {
+            state = System.Text.Json.JsonSerializer.Deserialize<ClipboardAnnotationState>(
+                File.ReadAllText(annotJsonPath));
+            var bi = new System.Windows.Media.Imaging.BitmapImage(new Uri(sourcePngPath));
+            bi.Freeze();
+            srcImage = bi;
+        }
+        catch { /* fall through to plain viewer on corrupt sidecar */ }
+
+        if (state == null || srcImage == null)
+        {
+            PromptAttachmentViewerWindow.Show(new[] { att }, CanShowOwnedWindow() ? this : null);
+            return;
+        }
+
+        var capturedAtt = att;
+        var editor = new ClipboardImageEditorWindow(this, srcImage, isPromptMode: true, initialState: state);
+        editor.ImageAccepted += edited =>
+        {
+            _pastedImageStore.OverwriteImage(edited, capturedAtt.ImagePath!);
+            if (editor.SourceImage != null && editor.AnnotationState != null)
+                _pastedImageStore.SaveAnnotationSidecar(editor.SourceImage, editor.AnnotationState, capturedAtt.ImagePath!);
+            else
+                _pastedImageStore.DeleteAnnotationSidecar(capturedAtt.ImagePath!);
+            UpdateFollowUpStrip();
+            PersistDraftFollowUp();
+        };
+        OpenEditorModeless(editor);
     }
 
     private void AppendCommitFollowUpInlines(TextBlock label, FollowUpAttachment att)
@@ -28767,6 +28822,7 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             if (att.ImagePath != null)
             {
                 _pastedImageStore.SetSubmittedAt(att.ImagePath, submittedAt);
+                _pastedImageStore.DeleteAnnotationSidecar(att.ImagePath);
                 stamped.Add(att with { ImageSubmittedAt = submittedAt });
             }
             else

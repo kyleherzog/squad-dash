@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 
@@ -100,6 +101,8 @@ internal sealed class PastedImageStore
                             if (isProtected?.Invoke(png) == true) continue;
                             File.Delete(png);
                             File.Delete(sidecar);
+                            try { File.Delete(png + ".source.png"); }      catch { }
+                            try { File.Delete(png + ".annotation.json"); } catch { }
                         }
                     }
                     else
@@ -109,6 +112,8 @@ internal sealed class PastedImageStore
                         {
                             if (isProtected?.Invoke(png) == true) continue;
                             File.Delete(png);
+                            try { File.Delete(png + ".source.png"); }      catch { }
+                            try { File.Delete(png + ".annotation.json"); } catch { }
                         }
                     }
                 }
@@ -117,6 +122,53 @@ internal sealed class PastedImageStore
         }
         catch { /* swallow directory-level errors */ }
     });
+
+    /// <summary>
+    /// Overwrites an existing PNG at <paramref name="imagePath"/> with the supplied bitmap.
+    /// Used when the user re-edits a queued image attachment.
+    /// </summary>
+    public void OverwriteImage(BitmapSource bitmap, string imagePath)
+    {
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(imagePath);
+        encoder.Save(stream);
+    }
+
+    /// <summary>
+    /// Saves a companion <c>.source.png</c> (un-annotated source image) and
+    /// <c>.annotation.json</c> (annotation state) alongside <paramref name="imagePath"/>.
+    /// Both files are needed to re-open the image in the annotation editor.
+    /// </summary>
+    public void SaveAnnotationSidecar(BitmapSource sourceImage, ClipboardAnnotationState state, string imagePath)
+    {
+        try
+        {
+            var sourcePath = imagePath + ".source.png";
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(sourceImage));
+            using var stream = File.Create(sourcePath);
+            encoder.Save(stream);
+        }
+        catch { /* best-effort */ }
+
+        try
+        {
+            var jsonPath = imagePath + ".annotation.json";
+            File.WriteAllText(jsonPath, JsonSerializer.Serialize(state));
+        }
+        catch { /* best-effort */ }
+    }
+
+    /// <summary>
+    /// Deletes the annotation sidecar files (<c>.source.png</c> and <c>.annotation.json</c>)
+    /// for the given image path.  Called when the prompt is dispatched.
+    /// </summary>
+    public void DeleteAnnotationSidecar(string imagePath)
+    {
+        try { File.Delete(imagePath + ".source.png"); }    catch { /* best-effort */ }
+        try { File.Delete(imagePath + ".annotation.json"); } catch { /* best-effort */ }
+    }
 
     /// <summary>
     /// Deletes ALL images in the pasted-images folder for the given workspace.

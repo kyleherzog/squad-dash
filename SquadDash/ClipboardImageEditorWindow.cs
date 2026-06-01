@@ -34,6 +34,19 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
     internal BitmapSource? Result { get; private set; }
 
     /// <summary>
+    /// The un-annotated working image (source) at the moment the user accepted the result.
+    /// Set alongside <see cref="Result"/> just before <see cref="ImageAccepted"/> fires.
+    /// Null until the user confirms.
+    /// </summary>
+    internal BitmapSource? SourceImage { get; private set; }
+
+    /// <summary>
+    /// Serialisable annotation state captured just before <see cref="ImageAccepted"/> fires.
+    /// Null until the user confirms, or when there are no annotations and no crop selection.
+    /// </summary>
+    internal ClipboardAnnotationState? AnnotationState { get; private set; }
+
+    /// <summary>
     /// Fired (on the UI thread) when the user clicks "Insert Image" / "Attach Image".
     /// The argument is the rendered, annotated bitmap. The window closes immediately after.
     /// </summary>
@@ -331,15 +344,25 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
     // ── Annotation text-box voice / PTT ───────────────────────────────────────
     private readonly PttTextBoxAttachment _textBoxPttAttachment;
 
+    // ── Re-edit initial state ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// When non-null, the <see cref="System.Windows.FrameworkElement.Loaded"/> handler
+    /// restores this annotation state instead of entering crop mode.
+    /// </summary>
+    private readonly ClipboardAnnotationState? _initialState;
+
     // ────────────────────────────────────────────────────────────────────────
 
-    internal ClipboardImageEditorWindow(Window owner, BitmapSource clipboardImage, bool isPromptMode = false)
+    internal ClipboardImageEditorWindow(Window owner, BitmapSource clipboardImage, bool isPromptMode = false,
+                                        ClipboardAnnotationState? initialState = null)
         : base(captionHeight: 36) {
         _clipboardImage = clipboardImage ?? throw new ArgumentNullException(nameof(clipboardImage));
 
         _workingImage = clipboardImage;
         _isPromptMode = isPromptMode;
         _themeName = AgentStatusCard.IsDarkTheme ? "dark" : "light";
+        _initialState = initialState;
 
         // Owner is intentionally not set — this window is modeless and fully independent.
         Title = "Edit Clipboard Image";
@@ -775,7 +798,10 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         Loaded += (_, _) => {
             RefreshLayout();
             UpdateWindowSizeForZoom(); // center on first paint
-            EnterCropMode();
+            if (_initialState != null)
+                RestoreAnnotationState(_initialState);
+            else
+                EnterCropMode();
         };
     }
 
@@ -5186,6 +5212,8 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             foreach (var h in ar.Handles) h.Visibility = Visibility.Collapsed;
 
         try {
+            SourceImage = _workingImage;
+            AnnotationState = HasChanges() ? CaptureAnnotationState() : null;
             Result = RenderFinalBitmap();
             if (Result is not null)
                 ImageAccepted?.Invoke(Result);
@@ -5328,6 +5356,160 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         wb.WritePixels(new Int32Rect(0, 0, w, h), pixels, stride, 0);
         wb.Freeze();
         return wb;
+    }
+
+    // ── Annotation state serialisation (for re-editable prompt attachments) ───
+
+    /// <summary>
+    /// Captures the current annotation state as a JSON-serialisable object.
+    /// Called in <see cref="DoInsertImage"/> so the caller can persist it.
+    /// </summary>
+    private ClipboardAnnotationState CaptureAnnotationState() {
+        var state = new ClipboardAnnotationState {
+            CanvasScaleX  = _canvasScaleX,
+            CanvasScaleY  = _canvasScaleY,
+            HasCrop       = !_sel.IsEmpty,
+            CropX         = _sel.X,
+            CropY         = _sel.Y,
+            CropW         = _sel.Width,
+            CropH         = _sel.Height,
+            CursorEnabled = _cursorEnabled,
+            CursorX       = _cursorImage != null ? Canvas.GetLeft(_cursorImage) : 0,
+            CursorY       = _cursorImage != null ? Canvas.GetTop(_cursorImage)  : 0,
+        };
+
+        foreach (var a in _arrows) {
+            state.Arrows.Add(new ClipboardAnnotationArrowState {
+                TargetElementName = a.TargetElementName,
+                TargetBoundsX     = a.TargetElementBounds.X,
+                TargetBoundsY     = a.TargetElementBounds.Y,
+                TargetBoundsW     = a.TargetElementBounds.Width,
+                TargetBoundsH     = a.TargetElementBounds.Height,
+                ArrowheadAngleDeg = a.ArrowheadAngleDeg,
+                ArrowLength       = a.ArrowLength,
+                TailLength        = a.TailLength,
+                UserTailLength    = a.UserTailLength,
+                Color             = $"#{a.ArrowColor.R:X2}{a.ArrowColor.G:X2}{a.ArrowColor.B:X2}",
+                TargetCenterX     = a.TargetCenterOnCanvas.X,
+                TargetCenterY     = a.TargetCenterOnCanvas.Y,
+                OffsetX           = a.OffsetX,
+                OffsetY           = a.OffsetY,
+            });
+        }
+
+        foreach (var r in _annotRects) {
+            state.Rects.Add(new ClipboardAnnotationRectState {
+                X     = r.Bounds.X,
+                Y     = r.Bounds.Y,
+                W     = r.Bounds.Width,
+                H     = r.Bounds.Height,
+                Color = $"#{r.RectColor.R:X2}{r.RectColor.G:X2}{r.RectColor.B:X2}",
+            });
+        }
+
+        foreach (var t in _texts) {
+            state.Texts.Add(new ClipboardAnnotationTextState {
+                X        = t.Bounds.X,
+                Y        = t.Bounds.Y,
+                W        = t.Bounds.Width,
+                H        = t.Bounds.Height,
+                Text     = t.Text,
+                FontSize = t.FontSize,
+                FgColor  = $"#{t.TextColor.R:X2}{t.TextColor.G:X2}{t.TextColor.B:X2}",
+                BgColor  = t.BackgroundColor.A == 0
+                    ? "#00000000"
+                    : $"#{t.BackgroundColor.A:X2}{t.BackgroundColor.R:X2}{t.BackgroundColor.G:X2}{t.BackgroundColor.B:X2}",
+            });
+        }
+
+        foreach (var ml in _measureLines) {
+            state.MeasureLines.Add(new ClipboardAnnotationMeasureLineState {
+                X1           = ml.StartPt.X,
+                Y1           = ml.StartPt.Y,
+                X2           = ml.EndPt.X,
+                Y2           = ml.EndPt.Y,
+                IsHorizontal = ml.IsHorizontal,
+                Color        = $"#{ml.LineColor.R:X2}{ml.LineColor.G:X2}{ml.LineColor.B:X2}",
+            });
+        }
+
+        return state;
+    }
+
+    /// <summary>
+    /// Restores annotation state from a previously saved <see cref="ClipboardAnnotationState"/>.
+    /// Called from the <c>Loaded</c> handler when the editor is opened for re-editing.
+    /// </summary>
+    private void RestoreAnnotationState(ClipboardAnnotationState state) {
+        _suppressUndo = true;
+        try {
+            _sel = state.HasCrop
+                ? new Rect(state.CropX, state.CropY, state.CropW, state.CropH)
+                : Rect.Empty;
+
+            foreach (var a in state.Arrows) {
+                var targetBounds = new Rect(a.TargetBoundsX, a.TargetBoundsY, a.TargetBoundsW, a.TargetBoundsH);
+                var arrow = CreateArrow(targetBounds);
+                arrow.ArrowheadAngleDeg    = a.ArrowheadAngleDeg;
+                arrow.ArrowLength          = a.ArrowLength;
+                arrow.TailLength           = a.TailLength;
+                arrow.UserTailLength       = a.UserTailLength;
+                arrow.ArrowColor           = ParseHexColor(a.Color, Color.FromRgb(255, 120, 20));
+                arrow.TargetCenterOnCanvas = new Point(a.TargetCenterX, a.TargetCenterY);
+                arrow.OffsetX              = a.OffsetX;
+                arrow.OffsetY              = a.OffsetY;
+                UpdateArrowGeometry(arrow);
+            }
+            SelectArrow(null);
+
+            foreach (var r in state.Rects)
+                CreateAnnotationRect(new Rect(r.X, r.Y, r.W, r.H), ParseHexColor(r.Color, Color.FromRgb(255, 80, 80)));
+            SelectAnnotationRect(null);
+
+            foreach (var t in state.Texts) {
+                var at = new AnnotationText {
+                    Bounds          = new Rect(t.X, t.Y, t.W, t.H),
+                    Text            = t.Text,
+                    FontSize        = t.FontSize,
+                    TextColor       = ParseHexColor(t.FgColor, Colors.White),
+                    BackgroundColor = ParseHexColor(t.BgColor, Colors.Black),
+                };
+                _texts.Add(at);
+                UpdateTextDisplay(at);
+            }
+
+            foreach (var ml in state.MeasureLines)
+                CreateMeasureLine(
+                    new Point(ml.X1, ml.Y1), new Point(ml.X2, ml.Y2),
+                    ml.IsHorizontal,
+                    ParseHexColor(ml.Color, Color.FromRgb(255, 120, 20)));
+            SelectMeasureLine(null);
+
+            _cursorEnabled = state.CursorEnabled;
+            if (state.CursorEnabled) {
+                EnsureCursorImageCreated();
+                Canvas.SetLeft(_cursorImage!, state.CursorX);
+                Canvas.SetTop(_cursorImage!,  state.CursorY);
+                _cursorImage!.Visibility = Visibility.Visible;
+            }
+
+            RefreshLayout();
+            EnterMoveMode();
+        }
+        finally {
+            _suppressUndo = false;
+        }
+    }
+
+    /// <summary>Parses a WPF colour from a hex string (<c>#RGB</c>, <c>#RRGGBB</c>,
+    /// <c>#AARRGGBB</c>). Returns <paramref name="fallback"/> on any parse failure.</summary>
+    private static Color ParseHexColor(string hex, Color fallback) {
+        try {
+            return (Color)System.Windows.Media.ColorConverter.ConvertFromString(hex);
+        }
+        catch {
+            return fallback;
+        }
     }
 
     // ── Undo / redo ───────────────────────────────────────────────────────────
