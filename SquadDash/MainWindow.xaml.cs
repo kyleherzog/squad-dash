@@ -9213,6 +9213,13 @@ public partial class MainWindow : Window, ILiveElementLocator
                 return;
             }
 
+            if (e.Key == Key.F10)
+            {
+                RecordDockingTestMenuItem_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                return;
+            }
+
             if (e.Key == Key.F11 && (Keyboard.Modifiers & ModifierKeys.Shift) != 0)
             {
                 ToggleAgentsPanelFocusMode();
