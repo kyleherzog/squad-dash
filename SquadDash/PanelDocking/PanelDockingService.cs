@@ -262,37 +262,25 @@ internal sealed class PanelDockingService
             case DockZone.Left:
                 AddToZone(_leftZonePanel!, _leftZonePanels, element, panelId, _leftZoneScrollViewer as FrameworkElement, insertAt);
                 if (element.Visibility != Visibility.Collapsed)
-                {
                     ExpandZone(_leftZoneColumn!, _leftSplitterColumn!, _leftZoneScrollViewer!, _leftZoneSplitter!, element);
-                    EnsureZoneHeight(_leftZonePanel!, (_leftZoneScrollViewer as FrameworkElement)!);
-                }
                 break;
 
             case DockZone.Right:
                 AddToZone(_rightZonePanel!, _rightZonePanels, element, panelId, _rightZoneScrollViewer as FrameworkElement, insertAt);
                 if (element.Visibility != Visibility.Collapsed)
-                {
                     ExpandZone(_rightZoneColumn!, _rightSplitterColumn!, _rightZoneScrollViewer!, _rightZoneSplitter!, element);
-                    EnsureZoneHeight(_rightZonePanel!, (_rightZoneScrollViewer as FrameworkElement)!);
-                }
                 break;
 
             case DockZone.Left2:
                 AddToZone(_left2ZonePanel!, _left2ZonePanels, element, panelId, _left2ZoneScrollViewer as FrameworkElement, insertAt);
                 if (element.Visibility != Visibility.Collapsed)
-                {
                     ExpandZone(_left2ZoneColumn!, _left2SplitterColumn!, _left2ZoneScrollViewer!, _left2ZoneSplitter!, element);
-                    EnsureZoneHeight(_left2ZonePanel!, (_left2ZoneScrollViewer as FrameworkElement)!);
-                }
                 break;
 
             case DockZone.Right2:
                 AddToZone(_right2ZonePanel!, _right2ZonePanels, element, panelId, _right2ZoneScrollViewer as FrameworkElement, insertAt);
                 if (element.Visibility != Visibility.Collapsed)
-                {
                     ExpandZone(_right2ZoneColumn!, _right2SplitterColumn!, _right2ZoneScrollViewer!, _right2ZoneSplitter!, element);
-                    EnsureZoneHeight(_right2ZonePanel!, (_right2ZoneScrollViewer as FrameworkElement)!);
-                }
                 break;
 
             case DockZone.Top:
@@ -432,8 +420,6 @@ internal sealed class PanelDockingService
                 splCol!.Width = new GridLength(5);
                 sv!.Visibility  = Visibility.Visible;
                 spl!.Visibility = Visibility.Visible;
-                if (sv is FrameworkElement svFe)
-                    EnsureZoneHeight(zoneGrid, svFe);
             }
 
             // Rebuild including the now-visible panel, preserving zone order.
@@ -669,55 +655,6 @@ internal sealed class PanelDockingService
         splitterCol.Width = new GridLength(0);
         scrollViewer.Visibility = Visibility.Collapsed;
         splitter.Visibility = Visibility.Collapsed;
-    }
-
-    /// <summary>
-    /// Ensures the zone Grid's height is synchronised with the scroll viewer after the
-    /// scroll viewer transitions Collapsed → Visible.  Two mechanisms work together:
-    /// <list type="bullet">
-    ///   <item>A <see cref="FrameworkElement.SizeChanged"/> handler that fires once the
-    ///   layout engine assigns a non-zero height.  The handler stays subscribed until it
-    ///   sees a positive height so that an early zero-height layout pass (e.g. triggered
-    ///   by the docking-map window closing) does not cause it to unsubscribe prematurely.</item>
-    ///   <item>A <see cref="System.Windows.Threading.DispatcherPriority.Background"/> fallback
-    ///   that runs after all layout and rendering work has settled, guaranteeing the height is
-    ///   applied even when SizeChanged never fires with a positive value.</item>
-    /// </list>
-    /// </summary>
-    private static void EnsureZoneHeight(Grid zone, FrameworkElement scrollViewer)
-    {
-        // If the scrollViewer is already laid-out and has a real height, sync immediately.
-        // This handles zones that were already visible when a panel was dropped into them.
-        if (scrollViewer.ActualHeight > 0)
-        {
-            zone.Height = scrollViewer.ActualHeight;
-            return;
-        }
-
-        SizeChangedEventHandler? handler = null;
-        handler = (_, e) =>
-        {
-            if (e.NewSize.Height <= 0) return; // early layout pass — wait for a real height
-            scrollViewer.SizeChanged -= handler;
-            handler = null;
-            zone.Height = e.NewSize.Height;
-        };
-        scrollViewer.SizeChanged += handler;
-
-        // Belt-and-suspenders: sync height once the dispatcher is fully idle after layout/render,
-        // covering the case where SizeChanged fires only with 0 (e.g. map-window close) or not at all.
-        scrollViewer.Dispatcher.BeginInvoke(
-            System.Windows.Threading.DispatcherPriority.Background,
-            new Action(() =>
-            {
-                if (handler is not null)
-                {
-                    scrollViewer.SizeChanged -= handler;
-                    handler = null;
-                }
-                if (scrollViewer.ActualHeight > 0)
-                    zone.Height = scrollViewer.ActualHeight;
-            }));
     }
 
     private static readonly JsonSerializerOptions _jsonOptions = new()
