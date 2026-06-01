@@ -28811,7 +28811,7 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
 
         SquadDashTrace.Write(TraceCategory.UI, $"[ImageReEdit] Opening editor with restored state");
         var capturedAtt = att;
-        var editor = new ClipboardImageEditorWindow(this, srcImage, isPromptMode: true, initialState: state);
+        var editor = new ClipboardImageEditorWindow(this, srcImage, isPromptMode: true, initialState: state, isUpdateMode: true);
         editor.ImageAccepted += edited =>
         {
             _pastedImageStore.OverwriteImage(edited, capturedAtt.ImagePath!);

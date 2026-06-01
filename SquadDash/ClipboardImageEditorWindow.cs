@@ -284,6 +284,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
     /// When false the editor was opened from a documentation panel context.
     /// </summary>
     private readonly bool _isPromptMode;
+    private readonly bool _isUpdateMode;
 
     // ── Spacebar pan mode ─────────────────────────────────────────────────────
 
@@ -366,12 +367,13 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
     // ────────────────────────────────────────────────────────────────────────
 
     internal ClipboardImageEditorWindow(Window owner, BitmapSource clipboardImage, bool isPromptMode = false,
-                                        ClipboardAnnotationState? initialState = null)
+                                        ClipboardAnnotationState? initialState = null, bool isUpdateMode = false)
         : base(captionHeight: 36) {
         _clipboardImage = clipboardImage ?? throw new ArgumentNullException(nameof(clipboardImage));
 
         _workingImage = clipboardImage;
         _isPromptMode = isPromptMode;
+        _isUpdateMode = isUpdateMode;
         _themeName = AgentStatusCard.IsDarkTheme ? "dark" : "light";
         _initialState = initialState;
 
@@ -893,13 +895,15 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             ToolTip = $"Mask the {CornerRadiusPx}px corners transparent in the output PNG"
         };
 
-        string insertLabel = _isPromptMode ? "Attach Image" : "Insert Image";
-        string insertTooltip = _isPromptMode
-            ? "Attach this image to the prompt"
-            : "Insert this image into the documentation";
+        string insertLabel = _isUpdateMode ? "Update Image" : _isPromptMode ? "Attach Image" : "Insert Image";
+        string insertTooltip = _isUpdateMode
+            ? "Update the attached image with your edits"
+            : _isPromptMode
+                ? "Attach this image to the prompt"
+                : "Insert this image into the documentation";
         var insertBtn = new Button {
             Content = insertLabel,
-            Width = _isPromptMode ? 100 : 96,
+            Width = _isUpdateMode ? 110 : _isPromptMode ? 100 : 96,
             Height = 28,
             Margin = new Thickness(0, 0, 4, 0),
             ToolTip = insertTooltip
