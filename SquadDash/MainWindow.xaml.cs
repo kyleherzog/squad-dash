@@ -11688,6 +11688,16 @@ public partial class MainWindow : Window, ILiveElementLocator
                 return;
             }
 
+            // Escape while UI Reveal is active → cancel reveal.
+            if (_uiRevealOverlay?.IsActive == true
+                && keyArgs.Key == Key.Escape
+                && Keyboard.Modifiers == ModifierKeys.None)
+            {
+                _uiRevealOverlay.Deactivate();
+                keyArgs.Handled = true;
+                return;
+            }
+
             if (keyArgs.Key != Key.F12) return;
             if (Keyboard.Modifiers != ModifierKeys.None) return;
 
