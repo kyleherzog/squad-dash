@@ -28620,7 +28620,7 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                         var bmp = new BitmapImage();
                         bmp.BeginInit();
                         bmp.UriSource        = new Uri(att.ImagePath, UriKind.Absolute);
-                        bmp.DecodePixelWidth = 160;
+                        bmp.DecodePixelWidth = 200;
                         bmp.CacheOption      = BitmapCacheOption.OnLoad;
                         bmp.EndInit();
                         bmp.Freeze();
@@ -28628,19 +28628,19 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                         var thumb = new System.Windows.Controls.Image
                         {
                             Source  = bmp,
-                            Width   = 80,
-                            Height  = 80,
+                            Width   = 100,
+                            Height  = 100,
                             Stretch = Stretch.Uniform,
                         };
                         RenderOptions.SetBitmapScalingMode(thumb, BitmapScalingMode.HighQuality);
 
                         var border = new Border
                         {
-                            Child        = thumb,
-                            Padding      = new Thickness(4),
-                            CornerRadius = new CornerRadius(4),
+                            Child         = thumb,
+                            BorderThickness = new Thickness(1),
+                            CornerRadius  = new CornerRadius(2),
                         };
-                        border.SetResourceReference(Border.BackgroundProperty, "RosterPanelSurface");
+                        border.SetResourceReference(Border.BorderBrushProperty, "PanelBorder");
 
                         var tt = new ToolTip
                         {
