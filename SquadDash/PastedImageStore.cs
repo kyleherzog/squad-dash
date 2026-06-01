@@ -149,15 +149,24 @@ internal sealed class PastedImageStore
             encoder.Frames.Add(BitmapFrame.Create(sourceImage));
             using var stream = File.Create(sourcePath);
             encoder.Save(stream);
+            SquadDashTrace.Write(TraceCategory.UI, $"[ImageReEdit] SaveAnnotationSidecar: wrote {sourcePath}");
         }
-        catch { /* best-effort */ }
+        catch (Exception ex)
+        {
+            SquadDashTrace.Write(TraceCategory.UI, $"[ImageReEdit] SaveAnnotationSidecar: FAILED to write source.png — {ex.GetType().Name}: {ex.Message}");
+        }
 
         try
         {
             var jsonPath = imagePath + ".annotation.json";
-            File.WriteAllText(jsonPath, JsonSerializer.Serialize(state));
+            var opts = new JsonSerializerOptions { NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals };
+            File.WriteAllText(jsonPath, JsonSerializer.Serialize(state, opts));
+            SquadDashTrace.Write(TraceCategory.UI, $"[ImageReEdit] SaveAnnotationSidecar: wrote {jsonPath}");
         }
-        catch { /* best-effort */ }
+        catch (Exception ex)
+        {
+            SquadDashTrace.Write(TraceCategory.UI, $"[ImageReEdit] SaveAnnotationSidecar: FAILED to write annotation.json — {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     /// <summary>
