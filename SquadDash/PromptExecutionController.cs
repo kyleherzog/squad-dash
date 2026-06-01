@@ -2145,7 +2145,8 @@ internal sealed class PromptExecutionController {
         var pending   = _getPendingSupplementalInstruction();
         var docsCtx   = DocumentationModeActive ? BuildDocumentationContextInstruction() : null;
         var tasksCtx  = BuildTasksContextInstruction();
-        var queueCtx  = PendingQueueItemCount > 0 ? BuildQueueContextInstruction(PendingQueueItemCount) : null;
+        var queueCtx      = PendingQueueItemCount > 0 ? BuildQueueContextInstruction(PendingQueueItemCount) : null;
+        var questionCtx   = PendingQueueItemCount > 0 && prompt.Contains('?') ? BuildQueuedQuestionInboxHint() : null;
 
         if (_nextPromptShouldRetractAborted) {
             _nextPromptShouldRetractAborted = false;
@@ -2166,7 +2167,7 @@ internal sealed class PromptExecutionController {
         // InboxMessageInstruction is placed before TurnSummaryInstruction so the ordering is:
         //   … triggeredCtx, inboxCtx, TurnSummaryInstruction, hostCmdCtx
         var inboxCtx = _instructionProvider.Get().InboxMessage;
-        var parts = new[] { pending, docsCtx, tasksCtx, queueCtx, triggeredCtx, inboxCtx, _instructionProvider.Get().TurnSummary, hostCmdCtx }.Where(p => p is not null).ToArray();
+        var parts = new[] { pending, docsCtx, tasksCtx, queueCtx, questionCtx, triggeredCtx, inboxCtx, _instructionProvider.Get().TurnSummary, hostCmdCtx }.Where(p => p is not null).ToArray();
         var supplemental = parts.Length == 0 ? null : string.Join("\n\n", parts);
         var buildResult = _promptBuilder.Build(
             prompt,
@@ -2204,6 +2205,13 @@ internal sealed class PromptExecutionController {
             $"SquadDash will pause the queue and wait for user input before continuing. " +
             $"If you do not need human input, do not include the sentinel; the next queued prompt will run automatically.";
     }
+
+    private static string BuildQueuedQuestionInboxHint() =>
+        "The user's prompt contains a question. There are also queued prompts that will run " +
+        "automatically — the user may have stepped away and might not be watching the transcript " +
+        "in real time. If your answer is detailed or requires action on their part, send them an " +
+        "inbox message summarizing the key information so they can find it later. You do not need " +
+        "to send an inbox message for brief or trivial answers.";
 
     private string BuildQuickReplyInstruction(int pendingQueueCount) {
         if (pendingQueueCount <= 0)
