@@ -28637,34 +28637,29 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                         var bmp = new BitmapImage();
                         bmp.BeginInit();
                         bmp.UriSource        = new Uri(att.ImagePath, UriKind.Absolute);
-                        bmp.DecodePixelWidth = 200;
+                        bmp.DecodePixelWidth = 600;
                         bmp.CacheOption      = BitmapCacheOption.OnLoad;
                         bmp.EndInit();
                         bmp.Freeze();
 
                         var thumb = new System.Windows.Controls.Image
                         {
-                            Source  = bmp,
-                            Width   = 100,
-                            Height  = 100,
-                            Stretch = Stretch.Uniform,
+                            Source    = bmp,
+                            MaxWidth  = 300,
+                            MaxHeight = 100,
+                            Stretch   = Stretch.Uniform,
                         };
                         RenderOptions.SetBitmapScalingMode(thumb, BitmapScalingMode.HighQuality);
 
-                        var border = new Border
-                        {
-                            Child         = thumb,
-                            BorderThickness = new Thickness(1),
-                            CornerRadius  = new CornerRadius(2),
-                        };
-                        border.SetResourceReference(Border.BorderBrushProperty, "PanelBorder");
-
                         var tt = new ToolTip
                         {
-                            Content      = border,
-                            Placement    = System.Windows.Controls.Primitives.PlacementMode.Top,
-                            HasDropShadow = true,
-                            IsOpen       = false,
+                            Content         = thumb,
+                            Placement       = System.Windows.Controls.Primitives.PlacementMode.Top,
+                            HasDropShadow   = true,
+                            Background      = Brushes.Transparent,
+                            BorderThickness = new Thickness(0),
+                            Padding         = new Thickness(0),
+                            IsOpen          = false,
                         };
                         label.ToolTip = tt;
                     }
