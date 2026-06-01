@@ -31,6 +31,7 @@ internal sealed class MaintenancePanelController {
     internal MaintenancePanelViewModel ViewModel => _viewModel;
     private DispatcherTimer?       _countdownTimer;
     private DispatcherTimer?       _transientStatusTimer;
+    private readonly List<Button>  _runNowButtons = new();
 
     // ── Construction ─────────────────────────────────────────────────────────
 
@@ -75,6 +76,10 @@ internal sealed class MaintenancePanelController {
         simulateIdleItem.Click += (_, _) => _simulateIdle();
         pickerMenu.Items.Add(simulateIdleItem);
         _enabledOnIdlePicker.Control.ContextMenu = pickerMenu;
+        _enabledOnIdlePicker.Control.ContextMenuOpening += (_, e) => {
+            if (!SquadDashEnvironment.IsDeveloperMode || _enabledOnIdlePicker.SelectedValue != "on-idle")
+                e.Handled = true;
+        };
         enabledOnIdleHost.Content = _enabledOnIdlePicker.Control;
 
         WireListPanelContextMenu();
@@ -245,6 +250,13 @@ internal sealed class MaintenancePanelController {
         var mdPath = GetMaintenanceMdPath();
         if (mdPath is null) return;
         MaintenanceMdParser.UpdateEnabledOnIdle(mdPath, value);
+        SyncRunNowButtonVisibility(isManual: !value);
+    }
+
+    private void SyncRunNowButtonVisibility(bool isManual) {
+        var vis = isManual ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var btn in _runNowButtons)
+            btn.Visibility = vis;
     }
 
     /// <summary>
@@ -357,6 +369,7 @@ internal sealed class MaintenancePanelController {
     private void RebuildList() {
         _listPanel.Children.Clear();
         _viewModel.TaskOptionsPanels.Clear();
+        _runNowButtons.Clear();
 
         if (_viewModel.Config is null || _viewModel.Config.Tasks is null || _viewModel.Config.Tasks.Count == 0) {
             var empty = new TextBlock {
@@ -602,6 +615,26 @@ internal sealed class MaintenancePanelController {
         else if (!string.Equals(task.Safety, "branch", StringComparison.OrdinalIgnoreCase))
             chipRow.Children.Add(BuildChip(task.Safety, SafetyTooltip(task.Safety)));
         rightPanel.Children.Add(chipRow);
+
+        // Run Now button — only shown for enabled tasks when in manual mode
+        if (task.Enabled) {
+            var runNowBtn = new Button {
+                Content             = "▶ Run Now",
+                Margin              = new Thickness(0, 3, 0, 0),
+                Padding             = new Thickness(6, 2, 6, 2),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Cursor              = Cursors.Hand,
+                Visibility          = _enabledOnIdlePicker.SelectedValue == "on-idle"
+                                        ? Visibility.Collapsed
+                                        : Visibility.Visible,
+            };
+            runNowBtn.SetResourceReference(Button.StyleProperty,    "FlatButtonStyle");
+            runNowBtn.SetResourceReference(Button.FontSizeProperty, "FontSizeSmall");
+            var capturedIdForBtn = task.Id;
+            runNowBtn.Click += (_, _) => _runTask(capturedIdForBtn);
+            rightPanel.Children.Add(runNowBtn);
+            _runNowButtons.Add(runNowBtn);
+        }
 
         // Last-run status
         var lastRun = _viewModel.StateStore?.GetLastRunAt(task.Id);
