@@ -12,8 +12,14 @@ internal sealed record SlotButtonViewModel(
     double Height,
     DockZone TargetZone,
     int TargetOrder,
-    string SourcePanelId
-);
+    string SourcePanelId)
+{
+    /// <summary>
+    /// True for the thin vertical pill-shaped separators that flank the Top zone.
+    /// These are purely decorative — no click handling.
+    /// </summary>
+    public bool IsSeparator { get; init; } = false;
+}
 
 internal sealed record DockingMapViewModel(
     IReadOnlyList<SlotButtonViewModel> Slots,

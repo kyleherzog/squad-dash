@@ -181,6 +181,36 @@ internal static class DockingMapBuilder
                 innerHeight,
                 DockZone.Right2);
 
+        // ── Separators ───────────────────────────────────────────────────────
+        // Thin pill-shaped vertical dividers between the top zone and each side group.
+        // A separator is placed in the ZoneGutter midpoint when that side exists.
+        const double SeparatorWidth = 4.0;
+        // Left separator: topX > 0 means at least one left zone exists with a gutter before the top zone.
+        if (topX > 0)
+        {
+            double sepX = topX - ZoneGutter / 2.0 - SeparatorWidth / 2.0;
+            allSlots.Add(new SlotButtonViewModel(
+                Label: string.Empty, IsSourcePanel: false, IsExpansionButton: false,
+                X: sepX, Y: 0,
+                Width: SeparatorWidth, Height: innerHeight,
+                TargetZone: DockZone.Top, TargetOrder: -1,
+                SourcePanelId: sourcePanelId)
+            { IsSeparator = true });
+        }
+        // Right separator: top zone does not extend to innerWidth means a right side exists.
+        double topZoneRightEdge = topX + topZoneWidth;
+        if (topZoneRightEdge < innerWidth)
+        {
+            double sepX = topZoneRightEdge + ZoneGutter / 2.0 - SeparatorWidth / 2.0;
+            allSlots.Add(new SlotButtonViewModel(
+                Label: string.Empty, IsSourcePanel: false, IsExpansionButton: false,
+                X: sepX, Y: 0,
+                Width: SeparatorWidth, Height: innerHeight,
+                TargetZone: DockZone.Top, TargetOrder: -2,
+                SourcePanelId: sourcePanelId)
+            { IsSeparator = true });
+        }
+
         // ── Find the source panel slot center ───────────────────────────────
         var srcSlot = allSlots.FirstOrDefault(s => s.IsSourcePanel);
         double srcCenterX = srcSlot is not null

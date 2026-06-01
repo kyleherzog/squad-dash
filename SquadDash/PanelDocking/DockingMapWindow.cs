@@ -60,16 +60,34 @@ internal sealed class DockingMapWindow : Window
 
     private void BuildUI(ResourceDictionary appResources)
     {
+        bool isDark = AgentStatusCard.IsDarkTheme;
+
+        // Grounding = the "ground" of the theme (black in dark, white in light).
+        // Polar     = the contrasting pole (white in dark, black in light).
+        Color groundingColor = isDark ? Colors.Black : Colors.White;
+        Color polarColor     = isDark ? Colors.White : Colors.Black;
+
+        // Background: derive from ChromeSurface but shift toward mid-tone in dark theme
+        // so opacity-based slot fills are visually distinguishable.
+        Color chromeBase = appResources.Contains("ChromeSurface") && appResources["ChromeSurface"] is SolidColorBrush scb
+            ? scb.Color
+            : (isDark ? Color.FromRgb(40, 40, 44) : Color.FromRgb(230, 230, 234));
+
+        Color bgColor = isDark
+            ? Color.FromRgb(
+                (byte)(chromeBase.R * 0.60 + 128 * 0.40),
+                (byte)(chromeBase.G * 0.60 + 128 * 0.40),
+                (byte)(chromeBase.B * 0.60 + 132 * 0.40))
+            : chromeBase;
+
         var root = new Border
         {
-            Background = appResources.Contains("ChromeSurface")
-                ? (Brush)appResources["ChromeSurface"]
-                : new SolidColorBrush(Color.FromRgb(40, 40, 44)),
+            Background   = new SolidColorBrush(bgColor),
             CornerRadius = new CornerRadius(4),
-            Padding  = new Thickness(PopupPadding),
-            Width    = _viewModel.PopupWidth,
-            Height   = _viewModel.PopupHeight,
-            Effect   = new DropShadowEffect
+            Padding      = new Thickness(PopupPadding),
+            Width        = _viewModel.PopupWidth,
+            Height       = _viewModel.PopupHeight,
+            Effect       = new DropShadowEffect
             {
                 BlurRadius  = 8,
                 Opacity     = 0.35,
@@ -86,10 +104,10 @@ internal sealed class DockingMapWindow : Window
 
         foreach (var slot in _viewModel.Slots)
         {
-            var btn = BuildSlotButton(slot, appResources);
-            Canvas.SetLeft(btn, slot.X);
-            Canvas.SetTop(btn,  slot.Y);
-            canvas.Children.Add(btn);
+            var el = BuildSlotElement(slot, groundingColor, polarColor);
+            Canvas.SetLeft(el, slot.X);
+            Canvas.SetTop(el,  slot.Y);
+            canvas.Children.Add(el);
         }
 
         root.Child = canvas;
@@ -98,54 +116,102 @@ internal sealed class DockingMapWindow : Window
 
     private const double PopupPadding = 8;
 
-    private Button BuildSlotButton(SlotButtonViewModel slot, ResourceDictionary appResources)
+    private UIElement BuildSlotElement(SlotButtonViewModel slot, Color groundingColor, Color polarColor)
     {
-        var btn = new Button
+        // ── Separator (decorative vertical pill) ────────────────────────────
+        if (slot.IsSeparator)
         {
-            Width     = slot.Width,
-            Height    = slot.Height,
-            IsEnabled = !slot.IsSourcePanel,
-            FontSize  = 11,
-        };
+            return new Border
+            {
+                Width        = slot.Width,
+                Height       = slot.Height,
+                Background   = MakeBrush(polarColor, 0.15),
+                CornerRadius = new CornerRadius(slot.Width / 2.0),
+            };
+        }
 
-        if (appResources.Contains("DockSlotButtonStyle"))
-            btn.Style = (Style)appResources["DockSlotButtonStyle"];
-
-        Brush chromeSurface = GetRes(appResources, "ChromeSurface", Brushes.DimGray);
-        Brush labelText     = GetRes(appResources, "LabelText",     Brushes.White);
-        Brush subtleText    = GetRes(appResources, "SubtleText",    Brushes.DarkGray);
-        Brush panelBorder   = GetRes(appResources, "RosterPanelBorder", Brushes.SlateGray);
-
-        btn.Background      = chromeSurface;
-        btn.BorderBrush     = panelBorder;
-        btn.BorderThickness = new Thickness(1);
-
+        // ── Source panel (non-interactive "you are here" tile) ──────────────
         if (slot.IsSourcePanel)
         {
-            btn.Foreground = subtleText;
-        }
-        else
-        {
-            btn.Foreground = labelText;
-            btn.Click += (_, _) =>
+            return new Border
             {
-                try
+                Width           = slot.Width,
+                Height          = slot.Height,
+                Background      = MakeBrush(groundingColor, 0.20),
+                BorderBrush     = MakeBrush(polarColor, 0.10),
+                BorderThickness = new Thickness(1),
+                CornerRadius    = new CornerRadius(3),
+                Child           = new TextBlock
                 {
-                    _dockingService.MovePanel(slot.SourcePanelId, slot.TargetZone, slot.TargetOrder);
-                    if (!string.IsNullOrEmpty(_workspacePath))
-                        _dockingService.SaveLayout(_workspacePath);
-                }
-                catch { /* swallow — best effort */ }
-                Close();
+                    Text                = slot.Label,
+                    Foreground          = MakeBrush(polarColor, 0.40),
+                    FontSize            = 11,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment   = VerticalAlignment.Center,
+                },
             };
-
-            // Show/hide a semi-transparent overlay on the main window at the target location.
-            btn.MouseEnter += (_, _) => OnSlotHover(slot);
-            btn.MouseLeave += (_, _) => HidePreview();
         }
 
-        return btn;
+        // ── Target button (interactive drop target) ─────────────────────────
+        var normalBg     = MakeBrush(groundingColor, 0.70);
+        var normalBorder = MakeBrush(polarColor,     0.10);
+        var hoverBg      = MakeBrush(groundingColor, 0.90);
+        var hoverBorder  = MakeBrush(polarColor,     0.50);
+        var normalLabel  = MakeBrush(polarColor,     0.75);
+        var hoverLabel   = MakeBrush(polarColor,     1.00);
+
+        var labelBlock = new TextBlock
+        {
+            Text                = slot.Label,
+            Foreground          = normalLabel,
+            FontSize            = 11,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment   = VerticalAlignment.Center,
+        };
+
+        var border = new Border
+        {
+            Width           = slot.Width,
+            Height          = slot.Height,
+            Background      = normalBg,
+            BorderBrush     = normalBorder,
+            BorderThickness = new Thickness(1),
+            CornerRadius    = new CornerRadius(3),
+            Cursor          = Cursors.Hand,
+            Child           = labelBlock,
+        };
+
+        border.MouseEnter += (_, _) =>
+        {
+            border.Background  = hoverBg;
+            border.BorderBrush = hoverBorder;
+            labelBlock.Foreground = hoverLabel;
+            OnSlotHover(slot);
+        };
+        border.MouseLeave += (_, _) =>
+        {
+            border.Background  = normalBg;
+            border.BorderBrush = normalBorder;
+            labelBlock.Foreground = normalLabel;
+            HidePreview();
+        };
+        border.MouseLeftButtonUp += (_, _) =>
+        {
+            try
+            {
+                _dockingService.MovePanel(slot.SourcePanelId, slot.TargetZone, slot.TargetOrder);
+                if (!string.IsNullOrEmpty(_workspacePath))
+                    _dockingService.SaveLayout(_workspacePath);
+            }
+            catch { /* swallow — best effort */ }
+            Close();
+        };
+
+        return border;
     }
+
+    private static SolidColorBrush MakeBrush(Color color, double opacity) =>
+        new SolidColorBrush(Color.FromArgb((byte)Math.Round(opacity * 255), color.R, color.G, color.B));
 
     private void OnSlotHover(SlotButtonViewModel slot)
     {
@@ -256,9 +322,6 @@ internal sealed class DockingMapWindow : Window
         if (t < 2.0 / 3) return p + (q - p) * (2.0 / 3 - t) * 6;
         return p;
     }
-
-    private static Brush GetRes(ResourceDictionary r, string key, Brush fallback) =>
-        r.Contains(key) ? (Brush)r[key] : fallback;
 
     /// <summary>
     /// Opens the popup positioned so the source panel slot is centered on the given screen point.
