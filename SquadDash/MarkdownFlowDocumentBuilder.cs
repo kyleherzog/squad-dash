@@ -120,7 +120,7 @@ internal static class MarkdownFlowDocumentBuilder {
             if (IsHorizontalRule(trimmed)) {
                 document.Blocks.Add(new BlockUIContainer(new Border {
                     Height = 1,
-                    Margin = new Thickness(0, 6, 0, 12),
+                    Margin = new Thickness(0),
                     Background = tableRule
                 }));
                 blockLineRanges.Add((startIndex, index));
