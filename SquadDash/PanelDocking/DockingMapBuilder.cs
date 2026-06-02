@@ -22,6 +22,7 @@ internal static class DockingMapBuilder
 
     // Sizing constants
     private const double ColSlotWidth      = 48;
+    private const double ColSlotWidthEmpty = ColSlotWidth / 3;  // narrower placeholder for empty (drop-target-only) zones
     private const double ColSlotHeight     = 48;
     private const double TopSlotWidth      = 40;
     private const double TopSlotHeight     = 50;
@@ -113,13 +114,13 @@ internal static class DockingMapBuilder
 
         // ── Compute zone widths ──────────────────────────────────────────────
 
-        // All side zones: always ColSlotWidth wide (one column skeleton)
-        double leftZoneWidth   = suppressLeft   ? 0 : ColSlotWidth;
-        double rightZoneWidth  = suppressRight  ? 0 : ColSlotWidth;
-        double left2ZoneWidth  = suppressLeft2  ? 0 : ColSlotWidth;
-        double right2ZoneWidth = suppressRight2 ? 0 : ColSlotWidth;
-        double left3ZoneWidth  = suppressLeft3  ? 0 : ColSlotWidth;
-        double right3ZoneWidth = suppressRight3 ? 0 : ColSlotWidth;
+        // All side zones: ColSlotWidth when they have panels; ColSlotWidthEmpty when empty (drop-target only).
+        double leftZoneWidth   = suppressLeft   ? 0 : (leftPanels.Count   == 0 && !sourceInLeft   ? ColSlotWidthEmpty : ColSlotWidth);
+        double rightZoneWidth  = suppressRight  ? 0 : (rightPanels.Count  == 0 && !sourceInRight  ? ColSlotWidthEmpty : ColSlotWidth);
+        double left2ZoneWidth  = suppressLeft2  ? 0 : (left2Panels.Count  == 0 && !sourceInLeft2  ? ColSlotWidthEmpty : ColSlotWidth);
+        double right2ZoneWidth = suppressRight2 ? 0 : (right2Panels.Count == 0 && !sourceInRight2 ? ColSlotWidthEmpty : ColSlotWidth);
+        double left3ZoneWidth  = suppressLeft3  ? 0 : (left3Panels.Count  == 0 && !sourceInLeft3  ? ColSlotWidthEmpty : ColSlotWidth);
+        double right3ZoneWidth = suppressRight3 ? 0 : (right3Panels.Count == 0 && !sourceInRight3 ? ColSlotWidthEmpty : ColSlotWidth);
 
         double topZoneWidth = Math.Max(topContentWidth, TopSlotWidth);
 
@@ -157,7 +158,7 @@ internal static class DockingMapBuilder
                 left3Panels,
                 sourceInLeft3,
                 left3X, 0,
-                ColSlotWidth, ColSlotHeight,
+                left3ZoneWidth, ColSlotHeight,
                 innerHeight,
                 DockZone.Left3);
 
@@ -169,7 +170,7 @@ internal static class DockingMapBuilder
                 left2Panels,
                 sourceInLeft2,
                 left2X, 0,
-                ColSlotWidth, ColSlotHeight,
+                left2ZoneWidth, ColSlotHeight,
                 innerHeight,
                 DockZone.Left2);
 
@@ -181,7 +182,7 @@ internal static class DockingMapBuilder
             leftPanels,
             sourceInLeft,
             leftX, 0,
-            ColSlotWidth, ColSlotHeight,
+            leftZoneWidth, ColSlotHeight,
             innerHeight,
             DockZone.Left);
 
@@ -204,7 +205,7 @@ internal static class DockingMapBuilder
             rightPanels,
             sourceInRight,
             rightX, 0,
-            ColSlotWidth, ColSlotHeight,
+            rightZoneWidth, ColSlotHeight,
             innerHeight,
             DockZone.Right);
 
@@ -216,7 +217,7 @@ internal static class DockingMapBuilder
                 right2Panels,
                 sourceInRight2,
                 right2X, 0,
-                ColSlotWidth, ColSlotHeight,
+                right2ZoneWidth, ColSlotHeight,
                 innerHeight,
                 DockZone.Right2);
 
@@ -228,7 +229,7 @@ internal static class DockingMapBuilder
                 right3Panels,
                 sourceInRight3,
                 right3X, 0,
-                ColSlotWidth, ColSlotHeight,
+                right3ZoneWidth, ColSlotHeight,
                 innerHeight,
                 DockZone.Right3);
 
