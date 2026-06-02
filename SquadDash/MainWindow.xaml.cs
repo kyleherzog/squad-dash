@@ -682,6 +682,7 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             Left2ZoneSplitter,
             Right2ZoneSplitter);
         WireGripStripHandlers();
+        WireRight2ZoneSplitterDrag();
         SquadDashTrace.Write(TraceCategory.Startup, $"Constructor: InitializeComponent {ctorSw.ElapsedMilliseconds}ms.");
         SquadDashTrace.Write(
             TraceCategory.Startup,
@@ -12516,6 +12517,66 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                 catch (Exception ex) { HandleUiCallbackException("GripStrip.OpenDockingMap", ex); }
             };
         }
+    }
+
+    /// <summary>
+    /// Attaches a custom drag handler to Right2ZoneSplitter so that its resize direction
+    /// matches user expectation for an outermost-right zone:
+    ///   drag RIGHT → Right2Zone expands (takes space from Right zone or the star column)
+    ///   drag LEFT  → Right2Zone shrinks (gives space back)
+    ///
+    /// The default WPF GridSplitter PreviousAndNext behaviour is inverted for Right2:
+    ///   drag RIGHT → Previous (RightZone, col 6) grows, Next (Right2Zone, col 8) shrinks
+    ///   drag LEFT  → Previous shrinks — but when Right zone is collapsed (width=0) this is
+    ///                blocked, so Right2 can never expand via the standard handler.
+    /// This override negates the delta and redirects the donor column appropriately.
+    /// </summary>
+    private void WireRight2ZoneSplitterDrag()
+    {
+        double dragStartX     = 0;
+        double right2Start    = 0;
+        double rightStart     = 0;
+        bool   isDragging     = false;
+
+        Right2ZoneSplitter.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (Right2ZoneSplitter.Visibility != Visibility.Visible) return;
+            dragStartX  = e.GetPosition(ContentZoneGrid).X;
+            right2Start = Right2ZoneColumn.Width.IsAbsolute  ? Right2ZoneColumn.Width.Value  : 0;
+            rightStart  = RightZoneColumn.Width.IsAbsolute   ? RightZoneColumn.Width.Value   : 0;
+            isDragging  = true;
+            Right2ZoneSplitter.CaptureMouse();
+            e.Handled = true;   // prevent GridSplitter's built-in (wrong-direction) handler
+        };
+
+        Right2ZoneSplitter.MouseMove += (_, e) =>
+        {
+            if (!isDragging || e.LeftButton != System.Windows.Input.MouseButtonState.Pressed) return;
+
+            double dx             = e.GetPosition(ContentZoneGrid).X - dragStartX;
+            // dx > 0 = dragged right → Right2 should expand (negated from PreviousAndNext default)
+            double newRight2Width = Math.Max(0, right2Start + dx);
+
+            if (rightStart > 0)
+            {
+                // Right zone is active: exchange space between Right and Right2.
+                double total  = right2Start + rightStart;
+                newRight2Width = Math.Min(total, newRight2Width);
+                RightZoneColumn.Width = new GridLength(total - newRight2Width);
+            }
+            // When Right zone is collapsed the star column (*) auto-adjusts; no explicit set needed.
+
+            Right2ZoneColumn.Width = new GridLength(newRight2Width);
+        };
+
+        Right2ZoneSplitter.MouseLeftButtonUp += (_, e) =>
+        {
+            if (!isDragging) return;
+            isDragging = false;
+            Right2ZoneSplitter.ReleaseMouseCapture();
+        };
+
+        Right2ZoneSplitter.LostMouseCapture += (_, _) => { isDragging = false; };
     }
 
     private void ShowDockContextMenu(Border panelBorder, string panelId)
