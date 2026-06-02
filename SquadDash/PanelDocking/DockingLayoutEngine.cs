@@ -16,8 +16,10 @@ internal static class DockingLayoutEngine
         DockZone.Top    => "Top",
         DockZone.Left   => "Left 1",
         DockZone.Left2  => "Left 2",
+        DockZone.Left3  => "Left 3",
         DockZone.Right  => "Right 1",
         DockZone.Right2 => "Right 2",
+        DockZone.Right3 => "Right 3",
         _               => zone.ToString()
     };
 
@@ -26,8 +28,10 @@ internal static class DockingLayoutEngine
         DockZone.Top    => "Top",
         DockZone.Left   => "Left1",
         DockZone.Left2  => "Left2",
+        DockZone.Left3  => "Left3",
         DockZone.Right  => "Right1",
         DockZone.Right2 => "Right2",
+        DockZone.Right3 => "Right3",
         _               => zone.ToString()
     };
 
@@ -40,7 +44,7 @@ internal static class DockingLayoutEngine
         // can actually see.  Health/Trace and other always-hidden panels live in Slots
         // (they have a zone assignment) but must not pollute test-case snapshots.
         bool hasVisibility = layout.VisiblePanelIds.Count > 0;
-        foreach (var zone in new[] { DockZone.Top, DockZone.Left, DockZone.Left2, DockZone.Right, DockZone.Right2 })
+        foreach (var zone in new[] { DockZone.Top, DockZone.Left, DockZone.Left2, DockZone.Left3, DockZone.Right, DockZone.Right2, DockZone.Right3 })
         {
             result[GetZoneDisplayName(zone)] = layout.Slots
                 .Where(s => s.Zone == zone && (!hasVisibility || layout.VisiblePanelIds.Contains(s.PanelId)))
@@ -58,8 +62,10 @@ internal static class DockingLayoutEngine
             ["Top"]     = DockZone.Top,
             ["Left 1"]  = DockZone.Left,
             ["Left 2"]  = DockZone.Left2,
+            ["Left 3"]  = DockZone.Left3,
             ["Right 1"] = DockZone.Right,
             ["Right 2"] = DockZone.Right2,
+            ["Right 3"] = DockZone.Right3,
         };
 
         var slots = new List<PanelSlot>();
@@ -97,12 +103,16 @@ internal static class DockingLayoutEngine
         var rightPanels  = FilterZone(PanelsInZone(layout, DockZone.Right),  sourcePanelId, layout.VisiblePanelIds);
         var left2Panels  = FilterZone(PanelsInZone(layout, DockZone.Left2),  sourcePanelId, layout.VisiblePanelIds);
         var right2Panels = FilterZone(PanelsInZone(layout, DockZone.Right2), sourcePanelId, layout.VisiblePanelIds);
+        var left3Panels  = FilterZone(PanelsInZone(layout, DockZone.Left3),  sourcePanelId, layout.VisiblePanelIds);
+        var right3Panels = FilterZone(PanelsInZone(layout, DockZone.Right3), sourcePanelId, layout.VisiblePanelIds);
 
         bool sourceInTop    = topPanels.Any(p => Same(p, sourcePanelId));
         bool sourceInLeft   = leftPanels.Any(p => Same(p, sourcePanelId));
         bool sourceInRight  = rightPanels.Any(p => Same(p, sourcePanelId));
         bool sourceInLeft2  = left2Panels.Any(p => Same(p, sourcePanelId));
         bool sourceInRight2 = right2Panels.Any(p => Same(p, sourcePanelId));
+        bool sourceInLeft3  = left3Panels.Any(p => Same(p, sourcePanelId));
+        bool sourceInRight3 = right3Panels.Any(p => Same(p, sourcePanelId));
 
         // Mirrors DockingMapBuilder suppression logic exactly:
         // Case 1: both outer and inner zones are empty — suppress the outer zone.
@@ -111,8 +121,17 @@ internal static class DockingLayoutEngine
                            || (sourceInLeft  && leftPanels.Count  == 1 && left2Panels.Count  == 0);
         bool suppressRight2 = (right2Panels.Count == 0 && !sourceInRight2 && rightPanels.Count == 0 && !sourceInRight)
                            || (sourceInRight && rightPanels.Count == 1 && right2Panels.Count == 0);
+        // Symmetric: source sole in outer zone, inner zone is empty.
         bool suppressLeft   = sourceInLeft2  && left2Panels.Count  == 1 && leftPanels.Count  == 0;
         bool suppressRight  = sourceInRight2 && right2Panels.Count == 1 && rightPanels.Count == 0;
+
+        bool suppressLeft3  = (left3Panels.Count == 0 && !sourceInLeft3 && left2Panels.Count == 0 && !sourceInLeft2 && leftPanels.Count == 0 && !sourceInLeft)
+                           || (sourceInLeft2 && left2Panels.Count == 1 && left3Panels.Count == 0);
+        bool suppressRight3 = (right3Panels.Count == 0 && !sourceInRight3 && right2Panels.Count == 0 && !sourceInRight2 && rightPanels.Count == 0 && !sourceInRight)
+                           || (sourceInRight2 && right2Panels.Count == 1 && right3Panels.Count == 0);
+
+        if (!suppressLeft3)
+            AddZoneSlots(result, sourcePanelId, left3Panels, sourceInLeft3, DockZone.Left3);
 
         if (!suppressLeft2)
             AddZoneSlots(result, sourcePanelId, left2Panels, sourceInLeft2, DockZone.Left2);
@@ -127,6 +146,9 @@ internal static class DockingLayoutEngine
 
         if (!suppressRight2)
             AddZoneSlots(result, sourcePanelId, right2Panels, sourceInRight2, DockZone.Right2);
+
+        if (!suppressRight3)
+            AddZoneSlots(result, sourcePanelId, right3Panels, sourceInRight3, DockZone.Right3);
 
         return result;
     }

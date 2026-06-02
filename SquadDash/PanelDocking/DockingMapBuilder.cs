@@ -50,12 +50,16 @@ internal static class DockingMapBuilder
         var rightPanels  = FilterZone(PanelsInZone(currentLayout, DockZone.Right),  sourcePanelId, visiblePanelIds);
         var left2Panels  = FilterZone(PanelsInZone(currentLayout, DockZone.Left2),  sourcePanelId, visiblePanelIds);
         var right2Panels = FilterZone(PanelsInZone(currentLayout, DockZone.Right2), sourcePanelId, visiblePanelIds);
+        var left3Panels  = FilterZone(PanelsInZone(currentLayout, DockZone.Left3),  sourcePanelId, visiblePanelIds);
+        var right3Panels = FilterZone(PanelsInZone(currentLayout, DockZone.Right3), sourcePanelId, visiblePanelIds);
 
         bool sourceInTop    = topPanels.Any(p => Same(p, sourcePanelId));
         bool sourceInLeft   = leftPanels.Any(p => Same(p, sourcePanelId));
         bool sourceInRight  = rightPanels.Any(p => Same(p, sourcePanelId));
         bool sourceInLeft2  = left2Panels.Any(p => Same(p, sourcePanelId));
         bool sourceInRight2 = right2Panels.Any(p => Same(p, sourcePanelId));
+        bool sourceInLeft3  = left3Panels.Any(p => Same(p, sourcePanelId));
+        bool sourceInRight3 = right3Panels.Any(p => Same(p, sourcePanelId));
 
         // ── Suppress sibling zone when it would be a no-op target ─────────────
         // Case 1: both outer and inner zones are empty — suppress the outer zone
@@ -71,6 +75,11 @@ internal static class DockingMapBuilder
         bool suppressLeft   = sourceInLeft2  && left2Panels.Count  == 1 && leftPanels.Count  == 0;
         bool suppressRight  = sourceInRight2 && right2Panels.Count == 1 && rightPanels.Count == 0;
 
+        bool suppressLeft3  = (left3Panels.Count == 0 && !sourceInLeft3 && left2Panels.Count == 0 && !sourceInLeft2 && leftPanels.Count == 0 && !sourceInLeft)
+                           || (sourceInLeft2 && left2Panels.Count == 1 && left3Panels.Count == 0);
+        bool suppressRight3 = (right3Panels.Count == 0 && !sourceInRight3 && right2Panels.Count == 0 && !sourceInRight2 && rightPanels.Count == 0 && !sourceInRight)
+                           || (sourceInRight2 && right2Panels.Count == 1 && right3Panels.Count == 0);
+
         // ── Compute zone dimensions ──────────────────────────────────────────
 
         // Left/Left2 zone column content height = total slot heights + gaps.
@@ -81,6 +90,8 @@ internal static class DockingMapBuilder
         double rightColContentHeight  = suppressRight  ? 0 : ZoneColumnHeight(rightPanels.Count,  sourceInRight,  ColSlotHeight);
         double left2ColContentHeight  = suppressLeft2  ? 0 : ZoneColumnHeight(left2Panels.Count,  sourceInLeft2,  ColSlotHeight);
         double right2ColContentHeight = suppressRight2 ? 0 : ZoneColumnHeight(right2Panels.Count, sourceInRight2, ColSlotHeight);
+        double left3ColContentHeight  = suppressLeft3  ? 0 : ZoneColumnHeight(left3Panels.Count,  sourceInLeft3,  ColSlotHeight);
+        double right3ColContentHeight = suppressRight3 ? 0 : ZoneColumnHeight(right3Panels.Count, sourceInRight3, ColSlotHeight);
 
         // Top zone content width
         double topContentWidth = ZoneRowWidth(topPanels.Count, sourceInTop, TopSlotWidth);
@@ -89,8 +100,10 @@ internal static class DockingMapBuilder
         //   max of all column heights, top slot height + lower half breathing room
         double innerHeight = Math.Max(
             Math.Max(
-                Math.Max(leftColContentHeight,  left2ColContentHeight),
-                Math.Max(rightColContentHeight, right2ColContentHeight)),
+                Math.Max(
+                    Math.Max(leftColContentHeight,  left2ColContentHeight),
+                    Math.Max(left3ColContentHeight, rightColContentHeight)),
+                Math.Max(right2ColContentHeight, right3ColContentHeight)),
             TopSlotHeight * 2);   // top zone occupies upper half; lower half is breathing room
 
         // Clamp minimum inner height so popup never looks too small
@@ -105,30 +118,48 @@ internal static class DockingMapBuilder
         double rightZoneWidth  = suppressRight  ? 0 : ColSlotWidth;
         double left2ZoneWidth  = suppressLeft2  ? 0 : ColSlotWidth;
         double right2ZoneWidth = suppressRight2 ? 0 : ColSlotWidth;
+        double left3ZoneWidth  = suppressLeft3  ? 0 : ColSlotWidth;
+        double right3ZoneWidth = suppressRight3 ? 0 : ColSlotWidth;
 
         double topZoneWidth = Math.Max(topContentWidth, TopSlotWidth);
 
         // Only include gutter for non-suppressed zones.
-        // Between sibling zone pairs (Left2↔Left, Right↔Right2) use the tight InnerZoneGap.
+        // Between sibling zone pairs (Left3↔Left2↔Left, Right↔Right2↔Right3) use the tight InnerZoneGap.
         // Between the innermost side zone and the top zone use the full ZoneGutter (separator lives there).
-        double innerWidth = (suppressLeft2  ? 0 : left2ZoneWidth  + (suppressLeft   ? ZoneGutter : InnerZoneGap))
+        double innerWidth = (suppressLeft3  ? 0 : left3ZoneWidth  + (suppressLeft2  ? (suppressLeft  ? ZoneGutter : InnerZoneGap) : InnerZoneGap))
+                          + (suppressLeft2  ? 0 : left2ZoneWidth  + (suppressLeft   ? ZoneGutter : InnerZoneGap))
                           + (suppressLeft   ? 0 : leftZoneWidth   + ZoneGutter)
                           + topZoneWidth
                           + (suppressRight  ? 0 : ZoneGutter + rightZoneWidth)
-                          + (suppressRight2 ? 0 : (suppressRight  ? ZoneGutter : InnerZoneGap) + right2ZoneWidth);
+                          + (suppressRight2 ? 0 : (suppressRight  ? ZoneGutter : InnerZoneGap) + right2ZoneWidth)
+                          + (suppressRight3 ? 0 : (suppressRight2 ? (suppressRight ? ZoneGutter : InnerZoneGap) : InnerZoneGap) + right3ZoneWidth);
 
         double popupWidth  = innerWidth  + PopupPadding * 2;
         double popupHeight = innerHeight + PopupPadding * 2;
 
         // ── Layout slot positions (relative to inner canvas, 0,0 at top-left) ──
 
-        double left2X  = 0;
+        double left3X  = 0;
+        double left2X  = suppressLeft3 ? left3X : left3X + left3ZoneWidth + (suppressLeft2 ? (suppressLeft ? ZoneGutter : InnerZoneGap) : InnerZoneGap);
         double leftX   = suppressLeft2 ? left2X : left2X + left2ZoneWidth + (suppressLeft ? ZoneGutter : InnerZoneGap);
         double topX    = suppressLeft  ? leftX  : leftX  + leftZoneWidth  + ZoneGutter;
         double rightX  = topX + topZoneWidth + (suppressRight ? 0 : ZoneGutter);
         // When Right is suppressed, Right2 is the outermost right zone and needs a full ZoneGutter
         // gap from the top zone (separator lives there). When Right is present, use InnerZoneGap.
         double right2X = suppressRight ? rightX + ZoneGutter : rightX + rightZoneWidth + InnerZoneGap;
+        double right3X = suppressRight2 ? (suppressRight ? rightX + ZoneGutter : rightX + rightZoneWidth + InnerZoneGap) : right2X + right2ZoneWidth + InnerZoneGap;
+
+        // Left3 zone slots (outermost left column — suppressed when all left zones are empty)
+        if (!suppressLeft3)
+            BuildColumnSlots(
+                allSlots,
+                sourcePanelId,
+                left3Panels,
+                sourceInLeft3,
+                left3X, 0,
+                ColSlotWidth, ColSlotHeight,
+                innerHeight,
+                DockZone.Left3);
 
         // Left2 zone slots (outermost left column — suppressed when both left zones are empty)
         if (!suppressLeft2)
@@ -188,6 +219,18 @@ internal static class DockingMapBuilder
                 ColSlotWidth, ColSlotHeight,
                 innerHeight,
                 DockZone.Right2);
+
+        // Right3 zone slots (outermost right column — suppressed when all right zones are empty)
+        if (!suppressRight3)
+            BuildColumnSlots(
+                allSlots,
+                sourcePanelId,
+                right3Panels,
+                sourceInRight3,
+                right3X, 0,
+                ColSlotWidth, ColSlotHeight,
+                innerHeight,
+                DockZone.Right3);
 
         // ── Separators ───────────────────────────────────────────────────────
         // Thin pill-shaped vertical dividers between the top zone and each side group.

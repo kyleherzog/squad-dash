@@ -70,6 +70,10 @@
 ## 🟡 Mid Priority
 
 - [ ] **Maintenance — custom task editor** *(Owner: Arjun Sen + Lyra Morn)*
+- [ ] Test and evaluate the Decompose feature
+  Manually walk through decompose in a range of circumstances to verify reliability.
+  Define a test plan covering: typical prompts, edge cases (empty input, very long input,
+  ambiguous requests), and confirm output quality and consistency.
   Right-click a task row → "Edit Task" opens a custom WPF editor window (code-only, no XAML).
   Layout: Title textbox (large font, top); Properties section (enabled, frequency, safety);
   UI Options section (YAML editor for `options:` block on left, live rendered preview on right);

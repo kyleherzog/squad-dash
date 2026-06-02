@@ -31,7 +31,7 @@
 idle_timeout: 15
 max_tasks_per_session: 5
 safety: branch
-enabled_on_idle: true
+enabled_on_idle: false
 configured: false  # ← change to true to activate
 # ─────────────────────────────────────────────
 # DECOMPOSE POLICY
@@ -521,14 +521,14 @@ tasks:
       Inbox using an INBOX_MESSAGE_JSON block (from: "argus-weld").
 
   - id: run-tests
-    enabled: false
+    enabled: true
     frequency: daily
     safety: branch
     title: Run Tests
     instructions: |
       Run all tests in the repository. Use the appropriate test runner for this
       project (e.g. `dotnet test`, `npm test`, `go test ./...`).
-
+      
       {{#if if_failing == "fix"}}
       Diagnose each failing test. Fix the root cause in source — do not delete
       tests or weaken assertions. Commit all fixes to the branch.
@@ -542,14 +542,13 @@ tasks:
       if_failing:
         type: radio
         label: If failing tests are found
-        tooltip: "Fix failures or only report them"
+        tooltip: Fix failures or only report them
         value: fix
         choices:
           - value: fix
             tooltip: Fix each failing test; commit fixes to the branch
           - value: report
             tooltip: Report failures only — do not change any code
-
   - id: security-audit
     enabled: true
     frequency: weekly

@@ -5,49 +5,49 @@
       "name": "Default",
       "slots": [
         {
-          "panelId": "tasks",
-          "zone": "Left2",
-          "order": 1
-        },
-        {
-          "panelId": "loop",
-          "zone": "Left",
-          "order": 1
-        },
-        {
-          "panelId": "approvals",
-          "zone": "Left",
-          "order": 2
-        },
-        {
-          "panelId": "notes",
-          "zone": "Right",
-          "order": 1
-        },
-        {
-          "panelId": "inbox",
+          "panelId": "maintenance",
           "zone": "Top",
           "order": 0
         },
         {
-          "panelId": "maintenance",
+          "panelId": "inbox",
           "zone": "Top",
           "order": 1
         },
         {
           "panelId": "health",
           "zone": "Top",
-          "order": 2
+          "order": 5
         },
         {
           "panelId": "trace",
           "zone": "Top",
-          "order": 3
+          "order": 6
+        },
+        {
+          "panelId": "tasks",
+          "zone": "Right",
+          "order": 1
+        },
+        {
+          "panelId": "approvals",
+          "zone": "Left",
+          "order": 0
+        },
+        {
+          "panelId": "notes",
+          "zone": "Left",
+          "order": 1
+        },
+        {
+          "panelId": "loop",
+          "zone": "Left2",
+          "order": 0
         }
       ],
-      "leftZoneWidth": 273.94000000000005,
-      "rightZoneWidth": 273.94000000000005,
-      "left2ZoneWidth": null,
+      "leftZoneWidth": 295.24,
+      "rightZoneWidth": 295.24,
+      "left2ZoneWidth": 178.76,
       "right2ZoneWidth": null
     }
   ]

@@ -25,6 +25,12 @@ public sealed class DockLayout
     /// <summary>Saved width of the outer-right (Right2) dock zone column; null means use default.</summary>
     public double? Right2ZoneWidth { get; set; }
 
+    /// <summary>Saved width of the outermost-left (Left3) dock zone column; null means use default.</summary>
+    public double? Left3ZoneWidth { get; set; }
+
+    /// <summary>Saved width of the outermost-right (Right3) dock zone column; null means use default.</summary>
+    public double? Right3ZoneWidth { get; set; }
+
     /// <summary>
     /// Returns the canonical default layout: every dockable panel in the Top zone,
     /// ordered to match their current left-to-right position in the status strip.

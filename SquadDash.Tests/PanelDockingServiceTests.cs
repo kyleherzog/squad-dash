@@ -209,22 +209,32 @@ internal sealed class PanelDockingServiceTests
             new Grid(),              // rightZonePanel
             new Grid(),              // left2ZonePanel
             new Grid(),              // right2ZonePanel
+            new Grid(),              // left3ZonePanel
+            new Grid(),              // right3ZonePanel
             topZone,
             new ColumnDefinition(),  // leftZoneColumn
             new ColumnDefinition(),  // rightZoneColumn
             new ColumnDefinition(),  // left2ZoneColumn
             new ColumnDefinition(),  // right2ZoneColumn
+            new ColumnDefinition(),  // left3ZoneColumn
+            new ColumnDefinition(),  // right3ZoneColumn
             new ColumnDefinition(),  // leftSplitterColumn
             new ColumnDefinition(),  // rightSplitterColumn
             new ColumnDefinition(),  // left2SplitterColumn
             new ColumnDefinition(),  // right2SplitterColumn
+            new ColumnDefinition(),  // left3SplitterColumn
+            new ColumnDefinition(),  // right3SplitterColumn
             new ScrollViewer(),      // leftZoneScrollViewer
             new ScrollViewer(),      // rightZoneScrollViewer
             new ScrollViewer(),      // left2ZoneScrollViewer
             new ScrollViewer(),      // right2ZoneScrollViewer
+            new ScrollViewer(),      // left3ZoneScrollViewer
+            new ScrollViewer(),      // right3ZoneScrollViewer
             new GridSplitter(),      // leftZoneSplitter
             new GridSplitter(),      // rightZoneSplitter
             new GridSplitter(),      // left2ZoneSplitter
-            new GridSplitter());     // right2ZoneSplitter
+            new GridSplitter(),      // right2ZoneSplitter
+            new GridSplitter(),      // left3ZoneSplitter
+            new GridSplitter());     // right3ZoneSplitter
     }
 }

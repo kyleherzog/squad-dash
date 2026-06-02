@@ -664,25 +664,36 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             RightZonePanel,
             Left2ZonePanel,
             Right2ZonePanel,
+            Left3ZonePanel,
+            Right3ZonePanel,
             TopZonePanelsGrid,
             LeftZoneColumn,
             RightZoneColumn,
             Left2ZoneColumn,
             Right2ZoneColumn,
+            Left3ZoneColumn,
+            Right3ZoneColumn,
             LeftSplitterColumn,
             RightSplitterColumn,
             Left2SplitterColumn,
             Right2SplitterColumn,
+            Left3SplitterColumn,
+            Right3SplitterColumn,
             LeftZoneScrollViewer,
             RightZoneScrollViewer,
             Left2ZoneScrollViewer,
             Right2ZoneScrollViewer,
+            Left3ZoneScrollViewer,
+            Right3ZoneScrollViewer,
             LeftZoneSplitter,
             RightZoneSplitter,
             Left2ZoneSplitter,
-            Right2ZoneSplitter);
+            Right2ZoneSplitter,
+            Left3ZoneSplitter,
+            Right3ZoneSplitter);
         WireGripStripHandlers();
         WireRight2ZoneSplitterDrag();
+        WireRight3ZoneSplitterDrag();
         SquadDashTrace.Write(TraceCategory.Startup, $"Constructor: InitializeComponent {ctorSw.ElapsedMilliseconds}ms.");
         SquadDashTrace.Write(
             TraceCategory.Startup,
@@ -12454,8 +12465,8 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
 
     private void UpdateMainGridSideMargins()
     {
-        bool hasLeft  = LeftZoneColumn.Width.Value  > 0 || Left2ZoneColumn.Width.Value  > 0;
-        bool hasRight = RightZoneColumn.Width.Value > 0 || Right2ZoneColumn.Width.Value > 0;
+        bool hasLeft  = LeftZoneColumn.Width.Value  > 0 || Left2ZoneColumn.Width.Value  > 0 || Left3ZoneColumn.Width.Value  > 0;
+        bool hasRight = RightZoneColumn.Width.Value > 0 || Right2ZoneColumn.Width.Value > 0 || Right3ZoneColumn.Width.Value > 0;
         var current = MainGrid.Margin;
         MainGrid.Margin = new System.Windows.Thickness(
             hasLeft  ? 4 : 12,
@@ -12577,6 +12588,66 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
         };
 
         Right2ZoneSplitter.LostMouseCapture += (_, _) => { isDragging = false; };
+    }
+
+    /// <summary>
+    /// Attaches a custom drag handler to Right3ZoneSplitter so that its resize direction
+    /// matches user expectation for an outermost-right zone:
+    ///   drag RIGHT → Right3Zone expands (takes space from Right2 zone or the star column)
+    ///   drag LEFT  → Right3Zone shrinks (gives space back)
+    ///
+    /// The default WPF GridSplitter PreviousAndNext behaviour is inverted for Right3:
+    ///   drag RIGHT → Previous (Right2Zone) grows, Next (Right3Zone) shrinks
+    ///   drag LEFT  → Previous shrinks — but when Right2 zone is collapsed (width=0) this is
+    ///                blocked, so Right3 can never expand via the standard handler.
+    /// This override negates the delta and redirects the donor column appropriately.
+    /// </summary>
+    private void WireRight3ZoneSplitterDrag()
+    {
+        double dragStartX     = 0;
+        double right3Start    = 0;
+        double right2Start    = 0;
+        bool   isDragging     = false;
+
+        Right3ZoneSplitter.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (Right3ZoneSplitter.Visibility != Visibility.Visible) return;
+            dragStartX  = e.GetPosition(ContentZoneGrid).X;
+            right3Start = Right3ZoneColumn.Width.IsAbsolute  ? Right3ZoneColumn.Width.Value  : 0;
+            right2Start = Right2ZoneColumn.Width.IsAbsolute  ? Right2ZoneColumn.Width.Value  : 0;
+            isDragging  = true;
+            Right3ZoneSplitter.CaptureMouse();
+            e.Handled = true;   // prevent GridSplitter's built-in (wrong-direction) handler
+        };
+
+        Right3ZoneSplitter.MouseMove += (_, e) =>
+        {
+            if (!isDragging || e.LeftButton != System.Windows.Input.MouseButtonState.Pressed) return;
+
+            double dx             = e.GetPosition(ContentZoneGrid).X - dragStartX;
+            // dx > 0 = dragged right → splitter moves right → Right3 (rightmost col) shrinks
+            double newRight3Width = Math.Max(0, right3Start - dx);
+
+            if (right2Start > 0)
+            {
+                // Right2 zone is active: exchange space between Right2 and Right3.
+                double total  = right3Start + right2Start;
+                newRight3Width = Math.Min(total, newRight3Width);
+                Right2ZoneColumn.Width = new GridLength(total - newRight3Width);
+            }
+            // When Right2 zone is collapsed the star column (*) auto-adjusts; no explicit set needed.
+
+            Right3ZoneColumn.Width = new GridLength(newRight3Width);
+        };
+
+        Right3ZoneSplitter.MouseLeftButtonUp += (_, e) =>
+        {
+            if (!isDragging) return;
+            isDragging = false;
+            Right3ZoneSplitter.ReleaseMouseCapture();
+        };
+
+        Right3ZoneSplitter.LostMouseCapture += (_, _) => { isDragging = false; };
     }
 
     private void ShowDockContextMenu(Border panelBorder, string panelId)
@@ -15421,6 +15492,18 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             if (loadedLayout.RightZoneWidth is double rw && rw > 0
                 && RightZoneColumn.Width.Value > 0)
                 RightZoneColumn.Width = new System.Windows.GridLength(rw, System.Windows.GridUnitType.Pixel);
+            if (loadedLayout.Left2ZoneWidth is double l2w && l2w > 0
+                && Left2ZoneColumn.Width.Value > 0)
+                Left2ZoneColumn.Width = new System.Windows.GridLength(l2w, System.Windows.GridUnitType.Pixel);
+            if (loadedLayout.Right2ZoneWidth is double r2w && r2w > 0
+                && Right2ZoneColumn.Width.Value > 0)
+                Right2ZoneColumn.Width = new System.Windows.GridLength(r2w, System.Windows.GridUnitType.Pixel);
+            if (loadedLayout.Left3ZoneWidth is double l3w && l3w > 0
+                && Left3ZoneColumn.Width.Value > 0)
+                Left3ZoneColumn.Width = new System.Windows.GridLength(l3w, System.Windows.GridUnitType.Pixel);
+            if (loadedLayout.Right3ZoneWidth is double r3w && r3w > 0
+                && Right3ZoneColumn.Width.Value > 0)
+                Right3ZoneColumn.Width = new System.Windows.GridLength(r3w, System.Windows.GridUnitType.Pixel);
             UpdateMainGridSideMargins();
         }
 
