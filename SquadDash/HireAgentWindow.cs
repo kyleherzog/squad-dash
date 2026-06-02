@@ -481,7 +481,9 @@ internal sealed class HireAgentWindow : Window {
                         return lastUniverse!;
                 }
             }
-            catch {
+            catch (Exception ex)
+            {
+                SquadDashTrace.Write("HireAgent", $"Failed to read universe config: {ex.Message}");
             }
         }
 
@@ -500,7 +502,9 @@ internal sealed class HireAgentWindow : Window {
                     }
                 }
             }
-            catch {
+            catch (Exception ex)
+            {
+                SquadDashTrace.Write("HireAgent", $"Failed to read universe config: {ex.Message}");
             }
         }
 
