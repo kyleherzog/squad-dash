@@ -5,29 +5,29 @@
       "name": "Default",
       "slots": [
         {
-          "panelId": "maintenance",
+          "panelId": "inbox",
           "zone": "Top",
           "order": 0
         },
         {
-          "panelId": "inbox",
-          "zone": "Top",
-          "order": 1
-        },
-        {
           "panelId": "health",
           "zone": "Top",
-          "order": 5
+          "order": 1
         },
         {
           "panelId": "trace",
           "zone": "Top",
-          "order": 6
+          "order": 2
+        },
+        {
+          "panelId": "maintenance",
+          "zone": "Right3",
+          "order": 0
         },
         {
           "panelId": "tasks",
-          "zone": "Right",
-          "order": 1
+          "zone": "Left2",
+          "order": 0
         },
         {
           "panelId": "approvals",
@@ -41,14 +41,16 @@
         },
         {
           "panelId": "loop",
-          "zone": "Left2",
+          "zone": "Left3",
           "order": 0
         }
       ],
-      "leftZoneWidth": 295.24,
-      "rightZoneWidth": 295.24,
-      "left2ZoneWidth": 178.76,
-      "right2ZoneWidth": null
+      "leftZoneWidth": 280,
+      "rightZoneWidth": null,
+      "left2ZoneWidth": 280,
+      "right2ZoneWidth": null,
+      "left3ZoneWidth": 280,
+      "right3ZoneWidth": 280
     }
   ]
 }

@@ -130,25 +130,47 @@ internal static class DockingLayoutEngine
         bool suppressRight3 = (right3Panels.Count == 0 && !sourceInRight3 && right2Panels.Count == 0 && !sourceInRight2)
                            || (sourceInRight2 && right2Panels.Count == 1 && right3Panels.Count == 0);
 
-        if (!suppressLeft3)
-            AddZoneSlots(result, sourcePanelId, left3Panels, sourceInLeft3, DockZone.Left3);
+        // When source is outside a side, use column-position slots; otherwise use panel-position slots
+        bool sourceInLeftSide = sourceInLeft || sourceInLeft2 || sourceInLeft3;
+        bool sourceInRightSide = sourceInRight || sourceInRight2 || sourceInRight3;
 
-        if (!suppressLeft2)
-            AddZoneSlots(result, sourcePanelId, left2Panels, sourceInLeft2, DockZone.Left2);
+        if (!sourceInLeftSide)
+        {
+            AddSideColumnSlots(result, sourcePanelId, leftPanels, left2Panels, left3Panels,
+                suppressLeft, suppressLeft2, suppressLeft3,
+                DockZone.Left, DockZone.Left2, DockZone.Left3);
+        }
+        else
+        {
+            if (!suppressLeft3)
+                AddZoneSlots(result, sourcePanelId, left3Panels, sourceInLeft3, DockZone.Left3);
 
-        if (!suppressLeft)
-            AddZoneSlots(result, sourcePanelId, leftPanels, sourceInLeft, DockZone.Left);
+            if (!suppressLeft2)
+                AddZoneSlots(result, sourcePanelId, left2Panels, sourceInLeft2, DockZone.Left2);
+
+            if (!suppressLeft)
+                AddZoneSlots(result, sourcePanelId, leftPanels, sourceInLeft, DockZone.Left);
+        }
 
         AddZoneSlots(result, sourcePanelId, topPanels, sourceInTop, DockZone.Top);
 
-        if (!suppressRight)
-            AddZoneSlots(result, sourcePanelId, rightPanels, sourceInRight, DockZone.Right);
+        if (!sourceInRightSide)
+        {
+            AddSideColumnSlots(result, sourcePanelId, rightPanels, right2Panels, right3Panels,
+                suppressRight, suppressRight2, suppressRight3,
+                DockZone.Right, DockZone.Right2, DockZone.Right3);
+        }
+        else
+        {
+            if (!suppressRight)
+                AddZoneSlots(result, sourcePanelId, rightPanels, sourceInRight, DockZone.Right);
 
-        if (!suppressRight2)
-            AddZoneSlots(result, sourcePanelId, right2Panels, sourceInRight2, DockZone.Right2);
+            if (!suppressRight2)
+                AddZoneSlots(result, sourcePanelId, right2Panels, sourceInRight2, DockZone.Right2);
 
-        if (!suppressRight3)
-            AddZoneSlots(result, sourcePanelId, right3Panels, sourceInRight3, DockZone.Right3);
+            if (!suppressRight3)
+                AddZoneSlots(result, sourcePanelId, right3Panels, sourceInRight3, DockZone.Right3);
+        }
 
         return result;
     }
@@ -182,6 +204,46 @@ internal static class DockingLayoutEngine
         }
     }
 
+    /// <summary>
+    /// Adds column-position slots for an entire side when source is outside that side.
+    /// Shows N+1 slots for N occupied columns.
+    /// </summary>
+    private static void AddSideColumnSlots(
+        List<SlotButtonInfo> result,
+        string sourcePanelId,
+        List<string> innerPanels,
+        List<string> middlePanels,
+        List<string> outerPanels,
+        bool suppressInner,
+        bool suppressMiddle,
+        bool suppressOuter,
+        DockZone innerZone,
+        DockZone middleZone,
+        DockZone outerZone)
+    {
+        // Count occupied columns
+        int occupiedCount = 0;
+        bool innerOccupied = !suppressInner && innerPanels.Count > 0;
+        bool middleOccupied = !suppressMiddle && middlePanels.Count > 0;
+        bool outerOccupied = !suppressOuter && outerPanels.Count > 0;
+
+        if (innerOccupied) occupiedCount++;
+        if (middleOccupied) occupiedCount++;
+        if (outerOccupied) occupiedCount++;
+
+        // Always offer the innermost position
+        if (!suppressInner)
+            result.Add(new SlotButtonInfo(innerZone, -100)); // -100 = column-position marker
+
+        // If inner is occupied or middle exists, offer middle position
+        if (innerOccupied && !suppressMiddle)
+            result.Add(new SlotButtonInfo(middleZone, -100));
+
+        // If inner+middle are occupied or outer exists, offer outer position
+        if ((innerOccupied && middleOccupied) || (innerOccupied && suppressMiddle) && !suppressOuter)
+            result.Add(new SlotButtonInfo(outerZone, -100));
+    }
+
     // ── Move logic ───────────────────────────────────────────────────────────
 
     /// <summary>
@@ -194,6 +256,14 @@ internal static class DockingLayoutEngine
         int targetOrder,
         PanelLayoutData layout)
     {
+        // Special case: targetOrder == -100 indicates column-position insertion with cross-zone shuffling.
+        // This happens when dragging from outside a side to that side (e.g., Top → Left side).
+        // The system shuffles existing panels outward to make room at the target column.
+        if (targetOrder == -100)
+        {
+            return ApplyMoveWithColumnShuffle(sourcePanelId, targetZone, layout);
+        }
+
         var existing = layout.Slots.FirstOrDefault(s =>
             string.Equals(s.PanelId, sourcePanelId, StringComparison.OrdinalIgnoreCase));
 
@@ -257,6 +327,80 @@ internal static class DockingLayoutEngine
         };
     }
 
+    /// <summary>
+    /// Applies a move to a specific column position, shuffling existing panels outward to make room.
+    /// Used when dragging from outside a side (e.g., Top → Left side) to insert at a column position.
+    /// </summary>
+    private static PanelLayoutData ApplyMoveWithColumnShuffle(
+        string sourcePanelId,
+        DockZone targetZone,
+        PanelLayoutData layout)
+    {
+        // Determine which side the target zone belongs to
+        DockZone[] sideZones;
+        int targetColumnIndex; // 0=innermost, 1=middle, 2=outermost
+
+        if (targetZone == DockZone.Left || targetZone == DockZone.Left2 || targetZone == DockZone.Left3)
+        {
+            sideZones = new[] { DockZone.Left, DockZone.Left2, DockZone.Left3 };
+            targetColumnIndex = targetZone == DockZone.Left ? 0 : targetZone == DockZone.Left2 ? 1 : 2;
+        }
+        else if (targetZone == DockZone.Right || targetZone == DockZone.Right2 || targetZone == DockZone.Right3)
+        {
+            sideZones = new[] { DockZone.Right, DockZone.Right2, DockZone.Right3 };
+            targetColumnIndex = targetZone == DockZone.Right ? 0 : targetZone == DockZone.Right2 ? 1 : 2;
+        }
+        else
+        {
+            // Not a left/right zone; fall back to normal move at position 0
+            return ApplyMove(sourcePanelId, targetZone, 0, layout);
+        }
+
+        // Remove source panel from current location
+        var slotsWithoutSource = layout.Slots
+            .Where(s => !Same(s.PanelId, sourcePanelId))
+            .ToList();
+
+        // Collect panels currently in each column of this side
+        var columnPanels = new List<string>[3];
+        for (int i = 0; i < 3; i++)
+        {
+            columnPanels[i] = slotsWithoutSource
+                .Where(s => s.Zone == sideZones[i])
+                .OrderBy(s => s.Order)
+                .Select(s => s.PanelId)
+                .ToList();
+        }
+
+        // Shuffle panels outward from target column to make room.
+        // We must shift from outermost to innermost to avoid cascading everything to the outermost column.
+        // E.g., if dropping at column 0 (Left) when Left and Left2 are occupied:
+        //   - Left2 panels → Left3
+        //   - Left panels → Left2
+        //   - Insert incoming at Left
+        for (int i = 2; i > targetColumnIndex; i--)
+        {
+            // Move panels from column i-1 to column i
+            columnPanels[i] = columnPanels[i - 1];
+        }
+
+        // Clear target column and insert incoming panel at position 0
+        columnPanels[targetColumnIndex] = new List<string> { sourcePanelId };
+
+        // Rebuild slots from other zones + the shuffled side columns
+        var newSlots = slotsWithoutSource.Where(s => !sideZones.Contains(s.Zone)).ToList();
+        for (int i = 0; i < 3; i++)
+        {
+            newSlots.AddRange(columnPanels[i].Select((pid, order) => new PanelSlot(pid, sideZones[i], order)));
+        }
+
+        return new PanelLayoutData
+        {
+            Slots = newSlots,
+            VisiblePanelIds = layout.VisiblePanelIds,
+        };
+    }
+
     // ── Preview description ──────────────────────────────────────────────────
 
     /// <summary>
@@ -275,7 +419,10 @@ internal static class DockingLayoutEngine
             .Count(s => s.Zone == zone && layout.VisiblePanelIds.Contains(s.PanelId));
 
         int total    = visibleInZone + 1;
-        int position = targetOrder + 1;
+        
+        // Special case: targetOrder == -100 indicates column-position insertion (shuffle mode).
+        // In this case, the incoming panel will be inserted at position 1 within the target column.
+        int position = targetOrder == -100 ? 1 : targetOrder + 1;
 
         return $"{zoneName}, {position}/{total}";
     }

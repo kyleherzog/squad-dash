@@ -150,41 +150,43 @@ internal static class DockingMapBuilder
         double right2X = suppressRight ? rightX + ZoneGutter : rightX + rightZoneWidth + InnerZoneGap;
         double right3X = suppressRight2 ? (suppressRight ? rightX + ZoneGutter : rightX + rightZoneWidth + InnerZoneGap) : right2X + right2ZoneWidth + InnerZoneGap;
 
-        // Left3 zone slots (outermost left column — suppressed when all left zones are empty)
-        if (!suppressLeft3)
-            BuildColumnSlots(
+        // ── Left side slots ──────────────────────────────────────────────────
+        // When source is dragging from OUTSIDE the left side, show column-position slots (N+1 for N occupied).
+        // When source is IN the left side, show panel-position slots (current behavior).
+        bool sourceInLeftSide = sourceInLeft || sourceInLeft2 || sourceInLeft3;
+        
+        if (!sourceInLeftSide)
+        {
+            // Multi-position drop: show N+1 column slots for N occupied columns
+            BuildSideColumnPositionSlots(
                 allSlots,
                 sourcePanelId,
-                left3Panels,
-                sourceInLeft3,
-                left3X, 0,
-                left3ZoneWidth, ColSlotHeight,
-                innerHeight,
-                DockZone.Left3);
+                leftPanels, left2Panels, left3Panels,
+                suppressLeft, suppressLeft2, suppressLeft3,
+                leftX, leftZoneWidth,
+                left2X, left2ZoneWidth,
+                left3X, left3ZoneWidth,
+                0, ColSlotHeight, innerHeight,
+                DockZone.Left, DockZone.Left2, DockZone.Left3);
+        }
+        else
+        {
+            // Source is in left side: use panel-position slots (current behavior)
+            if (!suppressLeft3)
+                BuildColumnSlots(
+                    allSlots, sourcePanelId, left3Panels, sourceInLeft3,
+                    left3X, 0, left3ZoneWidth, ColSlotHeight, innerHeight, DockZone.Left3);
 
-        // Left2 zone slots (outermost left column — suppressed when both left zones are empty)
-        if (!suppressLeft2)
-            BuildColumnSlots(
-                allSlots,
-                sourcePanelId,
-                left2Panels,
-                sourceInLeft2,
-                left2X, 0,
-                left2ZoneWidth, ColSlotHeight,
-                innerHeight,
-                DockZone.Left2);
+            if (!suppressLeft2)
+                BuildColumnSlots(
+                    allSlots, sourcePanelId, left2Panels, sourceInLeft2,
+                    left2X, 0, left2ZoneWidth, ColSlotHeight, innerHeight, DockZone.Left2);
 
-        // Left zone slots
-        if (!suppressLeft)
-        BuildColumnSlots(
-            allSlots,
-            sourcePanelId,
-            leftPanels,
-            sourceInLeft,
-            leftX, 0,
-            leftZoneWidth, ColSlotHeight,
-            innerHeight,
-            DockZone.Left);
+            if (!suppressLeft)
+                BuildColumnSlots(
+                    allSlots, sourcePanelId, leftPanels, sourceInLeft,
+                    leftX, 0, leftZoneWidth, ColSlotHeight, innerHeight, DockZone.Left);
+        }
 
         // Top zone slots — top-aligned so their tops line up with the column panel tops
         BuildRowSlots(
@@ -197,41 +199,43 @@ internal static class DockingMapBuilder
             topZoneWidth,
             DockZone.Top);
 
-        // Right zone slots
-        if (!suppressRight)
-        BuildColumnSlots(
-            allSlots,
-            sourcePanelId,
-            rightPanels,
-            sourceInRight,
-            rightX, 0,
-            rightZoneWidth, ColSlotHeight,
-            innerHeight,
-            DockZone.Right);
-
-        // Right2 zone slots (outermost right column — suppressed when both right zones are empty)
-        if (!suppressRight2)
-            BuildColumnSlots(
+        // ── Right side slots ─────────────────────────────────────────────────
+        // When source is dragging from OUTSIDE the right side, show column-position slots (N+1 for N occupied).
+        // When source is IN the right side, show panel-position slots (current behavior).
+        bool sourceInRightSide = sourceInRight || sourceInRight2 || sourceInRight3;
+        
+        if (!sourceInRightSide)
+        {
+            // Multi-position drop: show N+1 column slots for N occupied columns
+            BuildSideColumnPositionSlots(
                 allSlots,
                 sourcePanelId,
-                right2Panels,
-                sourceInRight2,
-                right2X, 0,
-                right2ZoneWidth, ColSlotHeight,
-                innerHeight,
-                DockZone.Right2);
+                rightPanels, right2Panels, right3Panels,
+                suppressRight, suppressRight2, suppressRight3,
+                rightX, rightZoneWidth,
+                right2X, right2ZoneWidth,
+                right3X, right3ZoneWidth,
+                0, ColSlotHeight, innerHeight,
+                DockZone.Right, DockZone.Right2, DockZone.Right3);
+        }
+        else
+        {
+            // Source is in right side: use panel-position slots (current behavior)
+            if (!suppressRight)
+                BuildColumnSlots(
+                    allSlots, sourcePanelId, rightPanels, sourceInRight,
+                    rightX, 0, rightZoneWidth, ColSlotHeight, innerHeight, DockZone.Right);
 
-        // Right3 zone slots (outermost right column — suppressed when all right zones are empty)
-        if (!suppressRight3)
-            BuildColumnSlots(
-                allSlots,
-                sourcePanelId,
-                right3Panels,
-                sourceInRight3,
-                right3X, 0,
-                right3ZoneWidth, ColSlotHeight,
-                innerHeight,
-                DockZone.Right3);
+            if (!suppressRight2)
+                BuildColumnSlots(
+                    allSlots, sourcePanelId, right2Panels, sourceInRight2,
+                    right2X, 0, right2ZoneWidth, ColSlotHeight, innerHeight, DockZone.Right2);
+
+            if (!suppressRight3)
+                BuildColumnSlots(
+                    allSlots, sourcePanelId, right3Panels, sourceInRight3,
+                    right3X, 0, right3ZoneWidth, ColSlotHeight, innerHeight, DockZone.Right3);
+        }
 
         // ── Separators ───────────────────────────────────────────────────────
         // Thin pill-shaped vertical dividers between the top zone and each side group.
@@ -464,6 +468,94 @@ internal static class DockingMapBuilder
                 TargetZone:      zone,
                 TargetOrder:     zonePanels.Count,
                 SourcePanelId:   sourcePanelId));
+        }
+    }
+
+    /// <summary>
+    /// Builds column-position slots for an entire side (e.g., Left+Left2+Left3) when
+    /// source is dragging from outside that side. Shows N+1 drop targets for N occupied columns.
+    /// </summary>
+    private static void BuildSideColumnPositionSlots(
+        List<SlotButtonViewModel> result,
+        string sourcePanelId,
+        List<string> innerPanels,    // Left or Right
+        List<string> middlePanels,   // Left2 or Right2
+        List<string> outerPanels,    // Left3 or Right3
+        bool suppressInner,
+        bool suppressMiddle,
+        bool suppressOuter,
+        double innerX, double innerWidth,
+        double middleX, double middleWidth,
+        double outerX, double outerWidth,
+        double slotY, double slotH, double availableHeight,
+        DockZone innerZone, DockZone middleZone, DockZone outerZone)
+    {
+        // Count occupied columns (visible, non-suppressed)
+        int occupiedCount = 0;
+        bool innerOccupied = !suppressInner && innerPanels.Count > 0;
+        bool middleOccupied = !suppressMiddle && middlePanels.Count > 0;
+        bool outerOccupied = !suppressOuter && outerPanels.Count > 0;
+        
+        if (innerOccupied) occupiedCount++;
+        if (middleOccupied) occupiedCount++;
+        if (outerOccupied) occupiedCount++;
+
+        // Generate N+1 column-position slots
+        int slotCount = occupiedCount + 1;
+        double effectiveSlotH = slotCount > 0
+            ? (availableHeight - Math.Max(0, slotCount - 1) * SlotGap) / slotCount
+            : slotH;
+        effectiveSlotH = Math.Max(effectiveSlotH, 16.0);
+
+        double curY = slotY;
+
+        // Determine which zones to show slots for based on what's occupied
+        var columnTargets = new List<(DockZone zone, double x, double width, string label)>();
+        
+        // Always offer the innermost position
+        if (!suppressInner)
+            columnTargets.Add((innerZone, innerX, innerWidth, innerPanels.Count > 0 ? "#" : "—"));
+        
+        // If inner is occupied or middle exists, offer middle position
+        if (innerOccupied && !suppressMiddle)
+            columnTargets.Add((middleZone, middleX, middleWidth, middlePanels.Count > 0 ? "#" : "—"));
+        
+        // If inner+middle are occupied or outer exists, offer outer position
+        if ((innerOccupied && middleOccupied) || (innerOccupied && suppressMiddle) && !suppressOuter)
+            columnTargets.Add((outerZone, outerX, outerWidth, outerPanels.Count > 0 ? "#" : "—"));
+        
+        // Special case: if nothing is occupied, show just the inner slot
+        if (occupiedCount == 0 && !suppressInner)
+        {
+            result.Add(new SlotButtonViewModel(
+                Label: "—",
+                IsSourcePanel: false,
+                IsExpansionButton: false,
+                X: innerX,
+                Y: slotY,
+                Width: innerWidth,
+                Height: availableHeight,
+                TargetZone: innerZone,
+                TargetOrder: -100, // Special marker: insert at this column, shuffle others outward
+                SourcePanelId: sourcePanelId));
+            return;
+        }
+
+        // Generate one slot per column position
+        foreach (var (zone, x, width, label) in columnTargets)
+        {
+            result.Add(new SlotButtonViewModel(
+                Label: label,
+                IsSourcePanel: false,
+                IsExpansionButton: false,
+                X: x,
+                Y: curY,
+                Width: width,
+                Height: effectiveSlotH,
+                TargetZone: zone,
+                TargetOrder: -100, // Special marker: insert at this column, shuffle others outward
+                SourcePanelId: sourcePanelId));
+            curY += effectiveSlotH + SlotGap;
         }
     }
 }
