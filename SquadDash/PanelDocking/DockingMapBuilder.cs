@@ -500,15 +500,6 @@ internal static class DockingMapBuilder
         if (middleOccupied) occupiedCount++;
         if (outerOccupied) occupiedCount++;
 
-        // Generate N+1 column-position slots
-        int slotCount = occupiedCount + 1;
-        double effectiveSlotH = slotCount > 0
-            ? (availableHeight - Math.Max(0, slotCount - 1) * SlotGap) / slotCount
-            : slotH;
-        effectiveSlotH = Math.Max(effectiveSlotH, 16.0);
-
-        double curY = slotY;
-
         // Determine which zones to show slots for based on what's occupied
         var columnTargets = new List<(DockZone zone, double x, double width, string label)>();
         
@@ -541,7 +532,7 @@ internal static class DockingMapBuilder
             return;
         }
 
-        // Generate one slot per column position
+        // Generate one slot per column position — each fills the full column height at its own X
         foreach (var (zone, x, width, label) in columnTargets)
         {
             result.Add(new SlotButtonViewModel(
@@ -549,13 +540,12 @@ internal static class DockingMapBuilder
                 IsSourcePanel: false,
                 IsExpansionButton: false,
                 X: x,
-                Y: curY,
+                Y: slotY,
                 Width: width,
-                Height: effectiveSlotH,
+                Height: availableHeight,
                 TargetZone: zone,
                 TargetOrder: -100, // Special marker: insert at this column, shuffle others outward
                 SourcePanelId: sourcePanelId));
-            curY += effectiveSlotH + SlotGap;
         }
     }
 }
