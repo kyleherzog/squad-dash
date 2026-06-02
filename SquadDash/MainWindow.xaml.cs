@@ -328,6 +328,15 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
     private bool _promptPanelOnTop;
     private WindowState _preFullScreenWindowState;
     private Rect _preFullScreenBounds;
+
+    // Zone column widths saved when entering fullscreen transcript mode, so they can
+    // be restored exactly when exiting. 0.0 means "was already collapsed before entering".
+    private double _preFullScreenLeftZoneW;
+    private double _preFullScreenLeft2ZoneW;
+    private double _preFullScreenLeft3ZoneW;
+    private double _preFullScreenRightZoneW;
+    private double _preFullScreenRight2ZoneW;
+    private double _preFullScreenRight3ZoneW;
     private bool _agentsPanelFocusModeEnabled;
     private WindowState _preFocusModeWindowState;
     private double _preFocusModeHeight;
@@ -4367,9 +4376,12 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                             ? commitInfo.CommitMessage
                             : BuildApprovalDescription(notifSummary, doneCurrentTurn?.Prompt);
                         var hint = TruncatePromptHint(doneCurrentTurn?.Prompt, maxChars: 60);
+                        bool touchesDecisionsFile = CommitTouchesDecisionsFile(commitInfo.CommitSha,
+                            _currentWorkspace?.FolderPath ?? _workspacePaths.ApplicationRoot);
                         var item = CommitApprovalItem.Create(commitInfo.CommitSha, commitUrl, description,
                                                                       turnStartedAt, hint,
-                                                                      originalPrompt: doneCurrentTurn?.Prompt?.Trim());
+                                                                      originalPrompt: doneCurrentTurn?.Prompt?.Trim(),
+                                                                      touchesDecisionsFile: touchesDecisionsFile);
                         // Guard: never add a duplicate SHA — a stale agent CurrentTurn or context
                         // echo can cause the same SHA to be detected on a subsequent turn.
                         if (!_approvalItems.Any(a => string.Equals(a.CommitSha, item.CommitSha,
@@ -6603,6 +6615,30 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
         string.IsNullOrWhiteSpace(prompt) ? null
             : prompt.Length <= maxChars ? prompt.Trim()
             : prompt[..maxChars].Trim() + "…";
+
+    private static bool CommitTouchesDecisionsFile(string sha, string workingDirectory)
+    {
+        try
+        {
+            using var proc = new System.Diagnostics.Process();
+            proc.StartInfo = new System.Diagnostics.ProcessStartInfo("git",
+                $"diff-tree --no-commit-id -r --name-only {sha}")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute        = false,
+                CreateNoWindow         = true,
+                WorkingDirectory       = workingDirectory,
+            };
+            proc.Start();
+            string output = proc.StandardOutput.ReadToEnd();
+            proc.WaitForExit(3000);
+            return output.Contains(".squad/decisions.md", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     private void OnApprovalItemChanged(CommitApprovalItem updated)
     {
@@ -12087,6 +12123,29 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                 : new Rect(Left, Top, Width, Height);
             if (WindowState != WindowState.Maximized)
                 WindowState = WindowState.Maximized;
+
+            // Save and collapse all occupied docking zone columns so the transcript fills
+            // the full width. Splitter columns are zeroed alongside their zone columns.
+            _preFullScreenLeftZoneW   = LeftZoneColumn.Width.IsAbsolute   ? LeftZoneColumn.Width.Value   : 0;
+            _preFullScreenLeft2ZoneW  = Left2ZoneColumn.Width.IsAbsolute  ? Left2ZoneColumn.Width.Value  : 0;
+            _preFullScreenLeft3ZoneW  = Left3ZoneColumn.Width.IsAbsolute  ? Left3ZoneColumn.Width.Value  : 0;
+            _preFullScreenRightZoneW  = RightZoneColumn.Width.IsAbsolute  ? RightZoneColumn.Width.Value  : 0;
+            _preFullScreenRight2ZoneW = Right2ZoneColumn.Width.IsAbsolute ? Right2ZoneColumn.Width.Value : 0;
+            _preFullScreenRight3ZoneW = Right3ZoneColumn.Width.IsAbsolute ? Right3ZoneColumn.Width.Value : 0;
+
+            LeftZoneColumn.Width        = new GridLength(0);
+            Left2ZoneColumn.Width       = new GridLength(0);
+            Left3ZoneColumn.Width       = new GridLength(0);
+            RightZoneColumn.Width       = new GridLength(0);
+            Right2ZoneColumn.Width      = new GridLength(0);
+            Right3ZoneColumn.Width      = new GridLength(0);
+            LeftSplitterColumn.Width    = new GridLength(0);
+            Left2SplitterColumn.Width   = new GridLength(0);
+            Left3SplitterColumn.Width   = new GridLength(0);
+            RightSplitterColumn.Width   = new GridLength(0);
+            Right2SplitterColumn.Width  = new GridLength(0);
+            Right3SplitterColumn.Width  = new GridLength(0);
+            UpdateMainGridSideMargins();
         }
         else
         {
@@ -12117,6 +12176,29 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                 }
             }
             // If the window was already maximized before entering fullscreen, leave it maximized.
+
+            // Restore docking zone columns that were visible before entering fullscreen.
+            // Only restore the zone column; GridSplitter auto-shows when its adjacent zone is non-zero.
+            if (_preFullScreenLeftZoneW   > 0) LeftZoneColumn.Width   = new GridLength(_preFullScreenLeftZoneW);
+            if (_preFullScreenLeft2ZoneW  > 0) Left2ZoneColumn.Width  = new GridLength(_preFullScreenLeft2ZoneW);
+            if (_preFullScreenLeft3ZoneW  > 0) Left3ZoneColumn.Width  = new GridLength(_preFullScreenLeft3ZoneW);
+            if (_preFullScreenRightZoneW  > 0) RightZoneColumn.Width  = new GridLength(_preFullScreenRightZoneW);
+            if (_preFullScreenRight2ZoneW > 0) Right2ZoneColumn.Width = new GridLength(_preFullScreenRight2ZoneW);
+            if (_preFullScreenRight3ZoneW > 0) Right3ZoneColumn.Width = new GridLength(_preFullScreenRight3ZoneW);
+            // Restore splitter columns for each zone that was re-shown.
+            if (_preFullScreenLeftZoneW   > 0 || _preFullScreenLeft2ZoneW  > 0 || _preFullScreenLeft3ZoneW  > 0)
+            {
+                if (_preFullScreenLeftZoneW   > 0) LeftSplitterColumn.Width   = new GridLength(8);
+                if (_preFullScreenLeft2ZoneW  > 0) Left2SplitterColumn.Width  = new GridLength(8);
+                if (_preFullScreenLeft3ZoneW  > 0) Left3SplitterColumn.Width  = new GridLength(8);
+            }
+            if (_preFullScreenRightZoneW  > 0 || _preFullScreenRight2ZoneW > 0 || _preFullScreenRight3ZoneW > 0)
+            {
+                if (_preFullScreenRightZoneW  > 0) RightSplitterColumn.Width  = new GridLength(8);
+                if (_preFullScreenRight2ZoneW > 0) Right2SplitterColumn.Width = new GridLength(8);
+                if (_preFullScreenRight3ZoneW > 0) Right3SplitterColumn.Width = new GridLength(8);
+            }
+            UpdateMainGridSideMargins();
         }
 
         // Capture before ApplyViewMode changes the layout (and possibly the scroll extent).
@@ -27028,6 +27110,29 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                 _preFullScreenWindowState = WindowState.Maximized;
 
             _transcriptFullScreenEnabled = true;
+
+            // Collapse docking zone columns so the transcript fills the full width on startup.
+            // The zone widths were just applied by the workspace-load path, so capture them now.
+            _preFullScreenLeftZoneW   = LeftZoneColumn.Width.IsAbsolute   ? LeftZoneColumn.Width.Value   : 0;
+            _preFullScreenLeft2ZoneW  = Left2ZoneColumn.Width.IsAbsolute  ? Left2ZoneColumn.Width.Value  : 0;
+            _preFullScreenLeft3ZoneW  = Left3ZoneColumn.Width.IsAbsolute  ? Left3ZoneColumn.Width.Value  : 0;
+            _preFullScreenRightZoneW  = RightZoneColumn.Width.IsAbsolute  ? RightZoneColumn.Width.Value  : 0;
+            _preFullScreenRight2ZoneW = Right2ZoneColumn.Width.IsAbsolute ? Right2ZoneColumn.Width.Value : 0;
+            _preFullScreenRight3ZoneW = Right3ZoneColumn.Width.IsAbsolute ? Right3ZoneColumn.Width.Value : 0;
+            LeftZoneColumn.Width        = new GridLength(0);
+            Left2ZoneColumn.Width       = new GridLength(0);
+            Left3ZoneColumn.Width       = new GridLength(0);
+            RightZoneColumn.Width       = new GridLength(0);
+            Right2ZoneColumn.Width      = new GridLength(0);
+            Right3ZoneColumn.Width      = new GridLength(0);
+            LeftSplitterColumn.Width    = new GridLength(0);
+            Left2SplitterColumn.Width   = new GridLength(0);
+            Left3SplitterColumn.Width   = new GridLength(0);
+            RightSplitterColumn.Width   = new GridLength(0);
+            Right2SplitterColumn.Width  = new GridLength(0);
+            Right3SplitterColumn.Width  = new GridLength(0);
+            UpdateMainGridSideMargins();
+
             ApplyViewMode();
         }
 
