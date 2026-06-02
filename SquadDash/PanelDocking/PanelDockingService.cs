@@ -1115,21 +1115,26 @@ internal sealed class PanelDockingService
     /// </summary>
     private Rect GetInnerNeighborRect(DockZone zone)
     {
-        // For Left2/Right2/Left3/Right3 try the adjacent Left/Right/Left2/Right2 scroll-viewer first (non-empty check).
-        UIElement? adjacent = zone switch
+        // Try a chain of adjacent scroll-viewers from nearest to the top zone outward.
+        // This handles cases where an intermediate zone is empty/invisible.
+        UIElement?[] candidates = zone switch
         {
-            DockZone.Left2  => _leftZoneScrollViewer,
-            DockZone.Right2 => _rightZoneScrollViewer,
-            DockZone.Left3  => _left2ZoneScrollViewer,
-            DockZone.Right3 => _right2ZoneScrollViewer,
-            _               => null,
+            DockZone.Left2  => new UIElement?[] { _leftZoneScrollViewer },
+            DockZone.Left3  => new UIElement?[] { _left2ZoneScrollViewer, _leftZoneScrollViewer },
+            DockZone.Right2 => new UIElement?[] { _rightZoneScrollViewer },
+            DockZone.Right3 => new UIElement?[] { _right2ZoneScrollViewer, _rightZoneScrollViewer },
+            _               => Array.Empty<UIElement?>(),
         };
-        if (adjacent is FrameworkElement adjFe && adjFe.IsVisible && adjFe.ActualWidth > 0)
+
+        foreach (var candidate in candidates)
         {
-            var r = GetScreenRect(adjFe);
-            SquadDashTrace.Write(TraceCategory.Docking,
-                $"GetInnerNeighborRect: zone={zone} using adjacent SV IsVisible={adjFe.IsVisible} w={adjFe.ActualWidth:F0} → {r}");
-            if (!r.IsEmpty) return r;
+            if (candidate is FrameworkElement fe && fe.IsVisible && fe.ActualWidth > 0)
+            {
+                var r = GetScreenRect(fe);
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"GetInnerNeighborRect: zone={zone} using adjacent SV IsVisible={fe.IsVisible} w={fe.ActualWidth:F0} → {r}");
+                if (!r.IsEmpty) return r;
+            }
         }
 
         // Fall back to the always-visible center top-zone grid.

@@ -76,9 +76,9 @@ internal static class DockingMapBuilder
         bool suppressLeft   = sourceInLeft2  && left2Panels.Count  == 1 && leftPanels.Count  == 0;
         bool suppressRight  = sourceInRight2 && right2Panels.Count == 1 && rightPanels.Count == 0;
 
-        bool suppressLeft3  = (left3Panels.Count == 0 && !sourceInLeft3 && left2Panels.Count == 0 && !sourceInLeft2 && leftPanels.Count == 0 && !sourceInLeft)
+        bool suppressLeft3  = (left3Panels.Count == 0 && !sourceInLeft3 && left2Panels.Count == 0 && !sourceInLeft2)
                            || (sourceInLeft2 && left2Panels.Count == 1 && left3Panels.Count == 0);
-        bool suppressRight3 = (right3Panels.Count == 0 && !sourceInRight3 && right2Panels.Count == 0 && !sourceInRight2 && rightPanels.Count == 0 && !sourceInRight)
+        bool suppressRight3 = (right3Panels.Count == 0 && !sourceInRight3 && right2Panels.Count == 0 && !sourceInRight2)
                            || (sourceInRight2 && right2Panels.Count == 1 && right3Panels.Count == 0);
 
         // ── Compute zone dimensions ──────────────────────────────────────────
