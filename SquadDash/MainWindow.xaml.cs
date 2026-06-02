@@ -12554,8 +12554,8 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             if (!isDragging || e.LeftButton != System.Windows.Input.MouseButtonState.Pressed) return;
 
             double dx             = e.GetPosition(ContentZoneGrid).X - dragStartX;
-            // dx > 0 = dragged right → Right2 should expand (negated from PreviousAndNext default)
-            double newRight2Width = Math.Max(0, right2Start + dx);
+            // dx > 0 = dragged right → splitter moves right → Right2 (rightmost col) shrinks
+            double newRight2Width = Math.Max(0, right2Start - dx);
 
             if (rightStart > 0)
             {
