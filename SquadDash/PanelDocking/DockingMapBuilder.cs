@@ -126,7 +126,9 @@ internal static class DockingMapBuilder
         double leftX   = suppressLeft2 ? left2X : left2X + left2ZoneWidth + (suppressLeft ? ZoneGutter : InnerZoneGap);
         double topX    = suppressLeft  ? leftX  : leftX  + leftZoneWidth  + ZoneGutter;
         double rightX  = topX + topZoneWidth + (suppressRight ? 0 : ZoneGutter);
-        double right2X = suppressRight ? rightX : rightX + rightZoneWidth + InnerZoneGap;
+        // When Right is suppressed, Right2 is the outermost right zone and needs a full ZoneGutter
+        // gap from the top zone (separator lives there). When Right is present, use InnerZoneGap.
+        double right2X = suppressRight ? rightX + ZoneGutter : rightX + rightZoneWidth + InnerZoneGap;
 
         // Left2 zone slots (outermost left column — suppressed when both left zones are empty)
         if (!suppressLeft2)
