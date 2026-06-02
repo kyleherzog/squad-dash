@@ -16,6 +16,7 @@ namespace SquadDash;
 //  Version history
 //  ───────────────
 //  1 — initial (crop, arrows, rects, texts, measure lines, cursor)
+//  2 — added Xs list (X/cross annotation tool)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// <summary>
@@ -26,7 +27,7 @@ namespace SquadDash;
 internal sealed class ClipboardAnnotationState
 {
     [JsonPropertyName("version")]
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = 2;
 
     /// <summary>Canvas-to-pixel X scale at save time (always 1.0 for pasted images).</summary>
     [JsonPropertyName("canvasScaleX")]
@@ -105,6 +106,9 @@ internal sealed class ClipboardAnnotationState
 
     [JsonPropertyName("measureLines")]
     public List<ClipboardAnnotationMeasureLineState> MeasureLines { get; set; } = new();
+
+    [JsonPropertyName("xs")]
+    public List<ClipboardAnnotationXState> Xs { get; set; } = new();
 }
 
 /// <summary>Serialisable state for a single annotation arrow.</summary>
@@ -228,4 +232,24 @@ internal sealed class ClipboardAnnotationMeasureLineState
     /// <summary>Line colour as <c>#RRGGBB</c>.</summary>
     [JsonPropertyName("color")]
     public string Color { get; set; } = "#FF7814";
+}
+
+/// <summary>Serialisable state for a single X annotation.</summary>
+internal sealed class ClipboardAnnotationXState
+{
+    [JsonPropertyName("x")]
+    public double X { get; set; }
+
+    [JsonPropertyName("y")]
+    public double Y { get; set; }
+
+    [JsonPropertyName("w")]
+    public double W { get; set; }
+
+    [JsonPropertyName("h")]
+    public double H { get; set; }
+
+    /// <summary>Stroke colour as <c>#RRGGBB</c>.</summary>
+    [JsonPropertyName("color")]
+    public string Color { get; set; } = "#FF5050";
 }

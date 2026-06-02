@@ -28,6 +28,7 @@ internal static class AnnotationCursors {
     private static Cursor? _textTool;
     private static Cursor? _rotateEndpoint;
     private static Cursor? _measureLineTool;
+    private static Cursor? _xTool;
 
     // ── Public properties ─────────────────────────────────────────────────────
 
@@ -98,6 +99,13 @@ internal static class AnnotationCursors {
     /// </summary>
     public static Cursor MeasureLineTool
         => _measureLineTool ??= CreateCursorFromDrawing(CreateMeasureLineToolDrawing(), 32, 32, hotX: 16, hotY: 16);
+
+    /// <summary>
+    /// X-tool cursor: a small red X (two crossing lines) at upper-left corner plus a precision crosshair.
+    /// The crosshair centre is the hotspot (16, 16).
+    /// </summary>
+    public static Cursor XTool
+        => _xTool ??= CreateCursorFromDrawing(CreateXToolDrawing(), 32, 32, hotX: 16, hotY: 16);
 
     // ── Cursor factory ────────────────────────────────────────────────────────
 
@@ -530,6 +538,35 @@ internal static class AnnotationCursors {
                 sgc.LineTo(new Point(ax2 - headLen, ay + headH), true, false);
             }
             dc.DrawGeometry(new SolidColorBrush(Color.FromRgb(30, 30, 30)), null, rightHead);
+        }
+        return dg;
+    }
+
+    /// <summary>
+    /// X-tool cursor (32×32).
+    /// Upper-left: a small red X (two crossing diagonal lines).
+    /// Centre: a precision crosshair with a 3 px gap.  Hotspot = (16, 16).
+    /// </summary>
+    private static Drawing CreateXToolDrawing() {
+        var dg = new DrawingGroup();
+        using (var dc = dg.Open()) {
+            // ── X icon (upper-left quadrant) ──────────────────────────────────
+
+            var redClr = Color.FromRgb(255, 80, 80);
+            var shadowClr = Color.FromArgb(110, 0, 0, 0);
+
+            var xPen = new Pen(new SolidColorBrush(redClr), 1.5) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+            var shadowPen = new Pen(new SolidColorBrush(shadowClr), 1.5) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+
+            // Shadow shifted 1 px down-right
+            dc.DrawLine(shadowPen, new Point(3, 3), new Point(13, 13));
+            dc.DrawLine(shadowPen, new Point(14, 3), new Point(4, 13));
+            // X lines
+            dc.DrawLine(xPen, new Point(2, 2), new Point(12, 12));
+            dc.DrawLine(xPen, new Point(13, 2), new Point(3, 12));
+
+            // ── Crosshair at (16, 16) ─────────────────────────────────────────
+            DrawCrosshair(dc, cx: 16, cy: 16);
         }
         return dg;
     }
