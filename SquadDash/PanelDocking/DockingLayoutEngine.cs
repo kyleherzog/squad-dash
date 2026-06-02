@@ -131,46 +131,25 @@ internal static class DockingLayoutEngine
                            || (sourceInRight2 && right2Panels.Count == 1 && right3Panels.Count == 0);
 
         // When source is outside a side, use column-position slots; otherwise use panel-position slots
-        bool sourceInLeftSide = sourceInLeft || sourceInLeft2 || sourceInLeft3;
-        bool sourceInRightSide = sourceInRight || sourceInRight2 || sourceInRight3;
+        if (!suppressLeft3)
+            AddZoneSlots(result, sourcePanelId, left3Panels, sourceInLeft3, DockZone.Left3);
 
-        if (!sourceInLeftSide)
-        {
-            AddSideColumnSlots(result, sourcePanelId, leftPanels, left2Panels, left3Panels,
-                suppressLeft, suppressLeft2, suppressLeft3,
-                DockZone.Left, DockZone.Left2, DockZone.Left3);
-        }
-        else
-        {
-            if (!suppressLeft3)
-                AddZoneSlots(result, sourcePanelId, left3Panels, sourceInLeft3, DockZone.Left3);
+        if (!suppressLeft2)
+            AddZoneSlots(result, sourcePanelId, left2Panels, sourceInLeft2, DockZone.Left2);
 
-            if (!suppressLeft2)
-                AddZoneSlots(result, sourcePanelId, left2Panels, sourceInLeft2, DockZone.Left2);
-
-            if (!suppressLeft)
-                AddZoneSlots(result, sourcePanelId, leftPanels, sourceInLeft, DockZone.Left);
-        }
+        if (!suppressLeft)
+            AddZoneSlots(result, sourcePanelId, leftPanels, sourceInLeft, DockZone.Left);
 
         AddZoneSlots(result, sourcePanelId, topPanels, sourceInTop, DockZone.Top);
 
-        if (!sourceInRightSide)
-        {
-            AddSideColumnSlots(result, sourcePanelId, rightPanels, right2Panels, right3Panels,
-                suppressRight, suppressRight2, suppressRight3,
-                DockZone.Right, DockZone.Right2, DockZone.Right3);
-        }
-        else
-        {
-            if (!suppressRight)
-                AddZoneSlots(result, sourcePanelId, rightPanels, sourceInRight, DockZone.Right);
+        if (!suppressRight)
+            AddZoneSlots(result, sourcePanelId, rightPanels, sourceInRight, DockZone.Right);
 
-            if (!suppressRight2)
-                AddZoneSlots(result, sourcePanelId, right2Panels, sourceInRight2, DockZone.Right2);
+        if (!suppressRight2)
+            AddZoneSlots(result, sourcePanelId, right2Panels, sourceInRight2, DockZone.Right2);
 
-            if (!suppressRight3)
-                AddZoneSlots(result, sourcePanelId, right3Panels, sourceInRight3, DockZone.Right3);
-        }
+        if (!suppressRight3)
+            AddZoneSlots(result, sourcePanelId, right3Panels, sourceInRight3, DockZone.Right3);
 
         return result;
     }

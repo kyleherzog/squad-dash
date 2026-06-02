@@ -16,14 +16,19 @@
   },
   "slotButtons": [
     {
+      "zone": "Left 2",
+      "order": 0,
+      "preview": "Left 2, 1/1"
+    },
+    {
       "zone": "Left 1",
-      "order": -100,
+      "order": 0,
       "preview": "Left 1, 1/2"
     },
     {
-      "zone": "Left 2",
-      "order": -100,
-      "preview": "Left 2, 1/1"
+      "zone": "Left 1",
+      "order": 1,
+      "preview": "Left 1, 2/2"
     },
     {
       "zone": "Top",
@@ -37,13 +42,13 @@
     },
     {
       "zone": "Right 1",
-      "order": -100,
+      "order": 0,
       "preview": "Right 1, 1/1"
     }
   ],
   "action": {
     "targetZone": "Right 1",
-    "targetOrder": -100
+    "targetOrder": 0
   },
   "chosenPreview": "Right 1, 1/1",
   "expectedLayout": {
