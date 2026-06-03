@@ -131,6 +131,10 @@ internal static class DockingLayoutEngine
         var right3Panels = FilterZone(PanelsInZone(layout, DockZone.Right3), sourcePanelId, layout.VisiblePanelIds);
         var left4Panels  = FilterZone(PanelsInZone(layout, DockZone.Left4),  sourcePanelId, layout.VisiblePanelIds);
         var right4Panels = FilterZone(PanelsInZone(layout, DockZone.Right4), sourcePanelId, layout.VisiblePanelIds);
+        var left5Panels  = FilterZone(PanelsInZone(layout, DockZone.Left5),  sourcePanelId, layout.VisiblePanelIds);
+        var right5Panels = FilterZone(PanelsInZone(layout, DockZone.Right5), sourcePanelId, layout.VisiblePanelIds);
+        var left6Panels  = FilterZone(PanelsInZone(layout, DockZone.Left6),  sourcePanelId, layout.VisiblePanelIds);
+        var right6Panels = FilterZone(PanelsInZone(layout, DockZone.Right6), sourcePanelId, layout.VisiblePanelIds);
 
         bool sourceInTop    = topPanels.Any(p => Same(p, sourcePanelId));
         bool sourceInLeft   = leftPanels.Any(p => Same(p, sourcePanelId));
@@ -141,28 +145,32 @@ internal static class DockingLayoutEngine
         bool sourceInRight3 = right3Panels.Any(p => Same(p, sourcePanelId));
         bool sourceInLeft4  = left4Panels.Any(p => Same(p, sourcePanelId));
         bool sourceInRight4 = right4Panels.Any(p => Same(p, sourcePanelId));
+        bool sourceInLeft5  = left5Panels.Any(p => Same(p, sourcePanelId));
+        bool sourceInRight5 = right5Panels.Any(p => Same(p, sourcePanelId));
+        bool sourceInLeft6  = left6Panels.Any(p => Same(p, sourcePanelId));
+        bool sourceInRight6 = right6Panels.Any(p => Same(p, sourcePanelId));
 
         // Mirrors DockingMapBuilder suppression logic exactly:
         // Case 1: both outer and inner zones are empty — suppress the outer zone.
         // Case 2: source is the sole occupant of its zone AND the sibling is empty — no-op move.
-        // Bug 1 fix: don't suppress Left2/Right2 when the outer tier (Left3/Right3/Left4/Right4) has panels.
-        // Without this, Left3-occupied → Left2 never shown (only 1 thin instead of 2).
+        // Bug 1 fix: don't suppress Left2/Right2 when the outer tier has panels.
         bool suppressLeft2  = (left2Panels.Count == 0 && !sourceInLeft2 && leftPanels.Count  == 0 && !sourceInLeft
                                && left3Panels.Count == 0 && !sourceInLeft3
-                               && left4Panels.Count == 0 && !sourceInLeft4)
+                               && left4Panels.Count == 0 && !sourceInLeft4
+                               && left5Panels.Count == 0 && !sourceInLeft5
+                               && left6Panels.Count == 0 && !sourceInLeft6)
                            || (sourceInLeft  && leftPanels.Count  == 1 && left2Panels.Count  == 0);
         bool suppressRight2 = (right2Panels.Count == 0 && !sourceInRight2 && rightPanels.Count == 0 && !sourceInRight
                                && right3Panels.Count == 0 && !sourceInRight3
-                               && right4Panels.Count == 0 && !sourceInRight4)
+                               && right4Panels.Count == 0 && !sourceInRight4
+                               && right5Panels.Count == 0 && !sourceInRight5
+                               && right6Panels.Count == 0 && !sourceInRight6)
                            || (sourceInRight && rightPanels.Count == 1 && right2Panels.Count == 0);
         // Symmetric: source sole in outer zone, inner zone is empty.
         bool suppressLeft   = sourceInLeft2  && left2Panels.Count  == 1 && leftPanels.Count  == 0;
         bool suppressRight  = sourceInRight2 && right2Panels.Count == 1 && rightPanels.Count == 0;
 
         // For the outermost tier, tie suppression to whether the middle tier is suppressed.
-        // Suppress Left3/Right3 only when the entire outer tier has no panels and the middle
-        // tier is also suppressed (one outer thin is enough), or when both outer tiers are
-        // empty and only the innermost zone has panels.
         bool suppressLeft3  = (left3Panels.Count == 0 && !sourceInLeft3 && suppressLeft2)
                            || (left3Panels.Count == 0 && !sourceInLeft3
                                && left2Panels.Count == 0 && !sourceInLeft2
@@ -172,14 +180,29 @@ internal static class DockingLayoutEngine
                                && right2Panels.Count == 0 && !sourceInRight2
                                && rightPanels.Count > 0);
 
-        // Suppress Left4/Right4 when empty AND Left3/Right3 is also empty (suppress the redundant
-        // further-out thin slot; only the nearest empty zone shows as a drop-target).
+        // Suppress Left4/Right4 when empty AND Left3/Right3 is also empty.
         bool suppressLeft4  = left4Panels.Count == 0 && !sourceInLeft4
                            && (suppressLeft3 || (left3Panels.Count == 0 && !sourceInLeft3));
         bool suppressRight4 = right4Panels.Count == 0 && !sourceInRight4
                            && (suppressRight3 || (right3Panels.Count == 0 && !sourceInRight3));
 
+        bool suppressLeft5  = left5Panels.Count == 0 && !sourceInLeft5
+                           && (suppressLeft4 || (left4Panels.Count == 0 && !sourceInLeft4));
+        bool suppressRight5 = right5Panels.Count == 0 && !sourceInRight5
+                           && (suppressRight4 || (right4Panels.Count == 0 && !sourceInRight4));
+
+        bool suppressLeft6  = left6Panels.Count == 0 && !sourceInLeft6
+                           && (suppressLeft5 || (left5Panels.Count == 0 && !sourceInLeft5));
+        bool suppressRight6 = right6Panels.Count == 0 && !sourceInRight6
+                           && (suppressRight5 || (right5Panels.Count == 0 && !sourceInRight5));
+
         // When source is outside a side, use column-position slots; otherwise use panel-position slots
+        if (!suppressLeft6)
+            AddZoneSlots(result, sourcePanelId, left6Panels, sourceInLeft6, DockZone.Left6);
+
+        if (!suppressLeft5)
+            AddZoneSlots(result, sourcePanelId, left5Panels, sourceInLeft5, DockZone.Left5);
+
         if (!suppressLeft4)
             AddZoneSlots(result, sourcePanelId, left4Panels, sourceInLeft4, DockZone.Left4);
 
@@ -205,6 +228,12 @@ internal static class DockingLayoutEngine
 
         if (!suppressRight4)
             AddZoneSlots(result, sourcePanelId, right4Panels, sourceInRight4, DockZone.Right4);
+
+        if (!suppressRight5)
+            AddZoneSlots(result, sourcePanelId, right5Panels, sourceInRight5, DockZone.Right5);
+
+        if (!suppressRight6)
+            AddZoneSlots(result, sourcePanelId, right6Panels, sourceInRight6, DockZone.Right6);
 
         return result;
     }

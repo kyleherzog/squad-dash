@@ -282,7 +282,7 @@ internal sealed class DockingMapWindow : Window
     /// Derives a border brush from the fill brush — same hue, but shifted toward
     /// higher contrast against the background (brighter in dark theme, darker in light theme).
     /// </summary>
-    private static SolidColorBrush? DeriveBorderBrush(Brush? fillBrush)
+    internal static SolidColorBrush? DeriveBorderBrush(Brush? fillBrush)
     {
         if (fillBrush is not SolidColorBrush scb) return null;
         var c = scb.Color;
@@ -344,6 +344,21 @@ internal sealed class DockingMapWindow : Window
         Show();
 
         // Clamp to monitor work area using the project's existing helper
+        WindowPlacementHelper.EnsureOnScreen(this);
+    }
+
+    /// <summary>
+    /// Opens the popup with its top edge at <paramref name="panelScreenTop"/> + 40px,
+    /// centered horizontally over the panel. Used by docking test playback where the
+    /// anchor should be the panel border, not a mouse click point.
+    /// </summary>
+    public void ShowAtPanelTopCenter(double panelScreenCenterX, double panelScreenTop)
+    {
+        // Set Top before Show so WPF uses it as the initial position during SizeToContent layout.
+        Top  = panelScreenTop + 40;
+        Show();
+        // ActualWidth is valid after Show() — center horizontally now.
+        Left = panelScreenCenterX - ActualWidth / 2;
         WindowPlacementHelper.EnsureOnScreen(this);
     }
 }

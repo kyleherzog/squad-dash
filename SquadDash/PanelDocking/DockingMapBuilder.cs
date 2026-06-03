@@ -56,6 +56,10 @@ internal static class DockingMapBuilder
         var right3Panels = FilterZone(PanelsInZone(currentLayout, DockZone.Right3), sourcePanelId, visiblePanelIds);
         var left4Panels  = FilterZone(PanelsInZone(currentLayout, DockZone.Left4),  sourcePanelId, visiblePanelIds);
         var right4Panels = FilterZone(PanelsInZone(currentLayout, DockZone.Right4), sourcePanelId, visiblePanelIds);
+        var left5Panels  = FilterZone(PanelsInZone(currentLayout, DockZone.Left5),  sourcePanelId, visiblePanelIds);
+        var right5Panels = FilterZone(PanelsInZone(currentLayout, DockZone.Right5), sourcePanelId, visiblePanelIds);
+        var left6Panels  = FilterZone(PanelsInZone(currentLayout, DockZone.Left6),  sourcePanelId, visiblePanelIds);
+        var right6Panels = FilterZone(PanelsInZone(currentLayout, DockZone.Right6), sourcePanelId, visiblePanelIds);
 
         bool sourceInTop    = topPanels.Any(p => Same(p, sourcePanelId));
         bool sourceInLeft   = leftPanels.Any(p => Same(p, sourcePanelId));
@@ -66,6 +70,10 @@ internal static class DockingMapBuilder
         bool sourceInRight3 = right3Panels.Any(p => Same(p, sourcePanelId));
         bool sourceInLeft4  = left4Panels.Any(p => Same(p, sourcePanelId));
         bool sourceInRight4 = right4Panels.Any(p => Same(p, sourcePanelId));
+        bool sourceInLeft5  = left5Panels.Any(p => Same(p, sourcePanelId));
+        bool sourceInRight5 = right5Panels.Any(p => Same(p, sourcePanelId));
+        bool sourceInLeft6  = left6Panels.Any(p => Same(p, sourcePanelId));
+        bool sourceInRight6 = right6Panels.Any(p => Same(p, sourcePanelId));
 
         // ── Suppress sibling zone when it would be a no-op target ─────────────
         // Case 1: both outer and inner zones are empty — suppress the outer zone
@@ -77,11 +85,15 @@ internal static class DockingMapBuilder
         // Without this, Left3-occupied → Left2 never shown (only 1 thin instead of 2).
         bool suppressLeft2  = (left2Panels.Count == 0 && !sourceInLeft2 && leftPanels.Count  == 0 && !sourceInLeft
                                && left3Panels.Count == 0 && !sourceInLeft3
-                               && left4Panels.Count == 0 && !sourceInLeft4)
+                               && left4Panels.Count == 0 && !sourceInLeft4
+                               && left5Panels.Count == 0 && !sourceInLeft5
+                               && left6Panels.Count == 0 && !sourceInLeft6)
                            || (sourceInLeft  && leftPanels.Count  == 1 && left2Panels.Count  == 0);
         bool suppressRight2 = (right2Panels.Count == 0 && !sourceInRight2 && rightPanels.Count == 0 && !sourceInRight
                                && right3Panels.Count == 0 && !sourceInRight3
-                               && right4Panels.Count == 0 && !sourceInRight4)
+                               && right4Panels.Count == 0 && !sourceInRight4
+                               && right5Panels.Count == 0 && !sourceInRight5
+                               && right6Panels.Count == 0 && !sourceInRight6)
                            || (sourceInRight && rightPanels.Count == 1 && right2Panels.Count == 0);
         // Symmetric: source sole in outer zone, inner zone is empty.
         bool suppressLeft   = sourceInLeft2  && left2Panels.Count  == 1 && leftPanels.Count  == 0;
@@ -108,21 +120,35 @@ internal static class DockingMapBuilder
         bool suppressRight4 = right4Panels.Count == 0 && !sourceInRight4
                            && (suppressRight3 || (right3Panels.Count == 0 && !sourceInRight3));
 
+        bool suppressLeft5  = left5Panels.Count == 0 && !sourceInLeft5
+                           && (suppressLeft4 || (left4Panels.Count == 0 && !sourceInLeft4));
+        bool suppressRight5 = right5Panels.Count == 0 && !sourceInRight5
+                           && (suppressRight4 || (right4Panels.Count == 0 && !sourceInRight4));
+
+        bool suppressLeft6  = left6Panels.Count == 0 && !sourceInLeft6
+                           && (suppressLeft5 || (left5Panels.Count == 0 && !sourceInLeft5));
+        bool suppressRight6 = right6Panels.Count == 0 && !sourceInRight6
+                           && (suppressRight5 || (right5Panels.Count == 0 && !sourceInRight5));
+
         // ── Algorithmic N+1 thin drop-target generation ──────────────────────
         // General rule: For N occupied adjacent zones on a side, insert N+1 thin drop-targets.
         // Occupied flags (computed here for synthetic-width calculation; also reused in layout walk).
+        bool left6Occupied  = !suppressLeft6 && left6Panels.Count > 0;
+        bool left5Occupied  = !suppressLeft5 && left5Panels.Count > 0;
         bool left4Occupied  = !suppressLeft4 && left4Panels.Count > 0;
         bool left3Occupied = !suppressLeft3 && left3Panels.Count > 0;
         bool left2Occupied = !suppressLeft2 && left2Panels.Count > 0;
         bool leftOccupied  = !suppressLeft  && leftPanels.Count  > 0;
+        bool right6Occupied = !suppressRight6 && right6Panels.Count > 0;
+        bool right5Occupied = !suppressRight5 && right5Panels.Count > 0;
         bool right4Occupied  = !suppressRight4 && right4Panels.Count > 0;
         bool right3Occupied = !suppressRight3 && right3Panels.Count > 0;
         bool right2Occupied = !suppressRight2 && right2Panels.Count > 0;
         bool rightOccupied  = !suppressRight  && rightPanels.Count  > 0;
 
         // Count occupied zones on each side (non-suppressed with panels).
-        int leftOccupiedCount  = (left4Occupied ? 1 : 0) + (left3Occupied ? 1 : 0) + (left2Occupied ? 1 : 0) + (leftOccupied  ? 1 : 0);
-        int rightOccupiedCount = (rightOccupied ? 1 : 0) + (right2Occupied ? 1 : 0) + (right3Occupied ? 1 : 0) + (right4Occupied ? 1 : 0);
+        int leftOccupiedCount  = (left6Occupied ? 1 : 0) + (left5Occupied ? 1 : 0) + (left4Occupied ? 1 : 0) + (left3Occupied ? 1 : 0) + (left2Occupied ? 1 : 0) + (leftOccupied  ? 1 : 0);
+        int rightOccupiedCount = (rightOccupied ? 1 : 0) + (right2Occupied ? 1 : 0) + (right3Occupied ? 1 : 0) + (right4Occupied ? 1 : 0) + (right5Occupied ? 1 : 0) + (right6Occupied ? 1 : 0);
 
         // ── Compute zone dimensions ──────────────────────────────────────────
 
@@ -138,6 +164,10 @@ internal static class DockingMapBuilder
         double right3ColContentHeight = suppressRight3 ? 0 : ZoneColumnHeight(right3Panels.Count, sourceInRight3, ColSlotHeight);
         double left4ColContentHeight  = suppressLeft4  ? 0 : ZoneColumnHeight(left4Panels.Count,  sourceInLeft4,  ColSlotHeight);
         double right4ColContentHeight = suppressRight4 ? 0 : ZoneColumnHeight(right4Panels.Count, sourceInRight4, ColSlotHeight);
+        double left5ColContentHeight  = suppressLeft5  ? 0 : ZoneColumnHeight(left5Panels.Count,  sourceInLeft5,  ColSlotHeight);
+        double right5ColContentHeight = suppressRight5 ? 0 : ZoneColumnHeight(right5Panels.Count, sourceInRight5, ColSlotHeight);
+        double left6ColContentHeight  = suppressLeft6  ? 0 : ZoneColumnHeight(left6Panels.Count,  sourceInLeft6,  ColSlotHeight);
+        double right6ColContentHeight = suppressRight6 ? 0 : ZoneColumnHeight(right6Panels.Count, sourceInRight6, ColSlotHeight);
 
         // Top zone content width
         double topContentWidth = ZoneRowWidth(topPanels.Count, sourceInTop, TopSlotWidth);
@@ -148,11 +178,15 @@ internal static class DockingMapBuilder
             Math.Max(
                 Math.Max(
                     Math.Max(
-                        Math.Max(leftColContentHeight,  left2ColContentHeight),
-                        Math.Max(left3ColContentHeight, left4ColContentHeight)),
+                        Math.Max(
+                            Math.Max(leftColContentHeight,  left2ColContentHeight),
+                            Math.Max(left3ColContentHeight, left4ColContentHeight)),
+                        Math.Max(
+                            Math.Max(left5ColContentHeight, left6ColContentHeight),
+                            Math.Max(rightColContentHeight, right2ColContentHeight))),
                     Math.Max(
-                        Math.Max(rightColContentHeight, right2ColContentHeight),
-                        Math.Max(right3ColContentHeight, right4ColContentHeight))),
+                        Math.Max(right3ColContentHeight, right4ColContentHeight),
+                        Math.Max(right5ColContentHeight, right6ColContentHeight))),
                 TopSlotHeight * 2),   // top zone occupies upper half; lower half is breathing room
             0);
 
@@ -172,6 +206,10 @@ internal static class DockingMapBuilder
         double right3ZoneWidth = suppressRight3 ? 0 : (right3Panels.Count == 0 && !sourceInRight3 ? ColSlotWidthEmpty : ColSlotWidth);
         double left4ZoneWidth  = suppressLeft4  ? 0 : (left4Panels.Count  == 0 && !sourceInLeft4  ? ColSlotWidthEmpty : ColSlotWidth);
         double right4ZoneWidth = suppressRight4 ? 0 : (right4Panels.Count == 0 && !sourceInRight4 ? ColSlotWidthEmpty : ColSlotWidth);
+        double left5ZoneWidth  = suppressLeft5  ? 0 : (left5Panels.Count  == 0 && !sourceInLeft5  ? ColSlotWidthEmpty : ColSlotWidth);
+        double right5ZoneWidth = suppressRight5 ? 0 : (right5Panels.Count == 0 && !sourceInRight5 ? ColSlotWidthEmpty : ColSlotWidth);
+        double left6ZoneWidth  = suppressLeft6  ? 0 : (left6Panels.Count  == 0 && !sourceInLeft6  ? ColSlotWidthEmpty : ColSlotWidth);
+        double right6ZoneWidth = suppressRight6 ? 0 : (right6Panels.Count == 0 && !sourceInRight6 ? ColSlotWidthEmpty : ColSlotWidth);
 
         double topZoneWidth = Math.Max(topContentWidth, TopSlotWidth);
 
@@ -186,13 +224,61 @@ internal static class DockingMapBuilder
         double curX = 0;
         var leftThinPositions  = new List<(double X, DockZone TargetZone, int TargetOrder, SyntheticInsertKind Kind)>();
         
-        // Left side layout: walk outermost (Left4) to innermost (Left)
-        double left4X = 0, left3X = 0, left2X = 0, leftX = 0;
+        // Left side layout: walk outermost (Left6) to innermost (Left)
+        double left6X = 0, left5X = 0, left4X = 0, left3X = 0, left2X = 0, leftX = 0;
         
+        if (!suppressLeft6)
+        {
+            // Add synthetic outer thin only when Left6 is occupied (no natural outer-edge thin exists)
+            if (left6Occupied && leftOccupiedCount >= 2)
+            {
+                leftThinPositions.Add((curX, DockZone.Left6, 0, SyntheticInsertKind.InsertBefore));
+                curX += ColSlotWidthEmpty + InnerZoneGap;
+            }
+            left6X = curX;
+            curX += left6ZoneWidth;
+
+            // Thin between Left6 and Left5 if both occupied
+            if (left6Occupied && left5Occupied)
+            {
+                curX += InnerZoneGap;
+                leftThinPositions.Add((curX, DockZone.Left5, 0, SyntheticInsertKind.InsertBefore));
+                curX += ColSlotWidthEmpty + InnerZoneGap;
+            }
+            else if (!suppressLeft5)
+            {
+                curX += InnerZoneGap;
+            }
+        }
+
+        if (!suppressLeft5)
+        {
+            // Add synthetic outer thin only when Left5 is occupied and Left6 is NOT occupied
+            if (left5Occupied && !left6Occupied && leftOccupiedCount >= 2)
+            {
+                leftThinPositions.Add((curX, DockZone.Left5, 0, SyntheticInsertKind.InsertBefore));
+                curX += ColSlotWidthEmpty + InnerZoneGap;
+            }
+            left5X = curX;
+            curX += left5ZoneWidth;
+
+            // Thin between Left5 and Left4 if both occupied
+            if (left5Occupied && left4Occupied)
+            {
+                curX += InnerZoneGap;
+                leftThinPositions.Add((curX, DockZone.Left4, 0, SyntheticInsertKind.InsertBefore));
+                curX += ColSlotWidthEmpty + InnerZoneGap;
+            }
+            else if (!suppressLeft4)
+            {
+                curX += InnerZoneGap;
+            }
+        }
+
         if (!suppressLeft4)
         {
-            // Add synthetic outer thin only when Left4 is occupied (no natural outer-edge thin exists)
-            if (left4Occupied && leftOccupiedCount >= 2)
+            // Add synthetic outer thin only when Left4 is the outermost occupied zone (Left5/Left6 not occupied)
+            if (left4Occupied && !left5Occupied && !left6Occupied && leftOccupiedCount >= 2)
             {
                 leftThinPositions.Add((curX, DockZone.Left4, 0, SyntheticInsertKind.InsertBefore));
                 curX += ColSlotWidthEmpty + InnerZoneGap;
@@ -215,8 +301,8 @@ internal static class DockingMapBuilder
         
         if (!suppressLeft3)
         {
-            // Add synthetic outer thin only when Left3 is occupied and Left4 is NOT occupied
-            if (left3Occupied && !left4Occupied && leftOccupiedCount >= 2)
+            // Add synthetic outer thin only when Left3 is occupied and Left4/Left5/Left6 are NOT occupied
+            if (left3Occupied && !left4Occupied && !left5Occupied && !left6Occupied && leftOccupiedCount >= 2)
             {
                 leftThinPositions.Add((curX, DockZone.Left3, 0, SyntheticInsertKind.InsertBefore));
                 curX += ColSlotWidthEmpty + InnerZoneGap;
@@ -263,26 +349,26 @@ internal static class DockingMapBuilder
         if (!suppressLeft)
         {
             // If all outer zones suppressed and Left is empty but would need outer thin
-            if (suppressLeft4 && suppressLeft3 && suppressLeft2 && !leftOccupied && leftOccupiedCount >= 2)
+            if (suppressLeft6 && suppressLeft5 && suppressLeft4 && suppressLeft3 && suppressLeft2 && !leftOccupied && leftOccupiedCount >= 2)
             {
                 leftThinPositions.Add((curX, DockZone.Left, 0, SyntheticInsertKind.InsertBefore));
                 curX += ColSlotWidthEmpty + InnerZoneGap;
             }
             leftX = curX;
             curX += leftZoneWidth;
-            // Inner-edge thin after Left when L3/L4 is the natural outer thin and L2+L both occupied.
-            // This is the 3rd required thin: L3/L4=outer-natural, L2↔L=between, inner=after-L.
-            if (!left3Occupied && !left4Occupied && left2Occupied && leftOccupied)
+            // Inner-edge thin after Left when L3/L4/L5/L6 is the natural outer thin and L2+L both occupied.
+            // This is the 3rd required thin: L3+/L4+/L5+/L6+=outer-natural, L2↔L=between, inner=after-L.
+            if (!left3Occupied && !left4Occupied && !left5Occupied && !left6Occupied && left2Occupied && leftOccupied)
             {
                 curX += InnerZoneGap;
                 leftThinPositions.Add((curX, DockZone.Left, leftPanels.Count, SyntheticInsertKind.InsertAfter));
                 curX += ColSlotWidthEmpty;
                 // No trailing InnerZoneGap; ZoneGutter follows immediately after
             }
-            // Inner-edge thin after Left when L3/L4 is occupied, L2 is the natural empty thin, and Left is occupied.
-            // 3 thins: L3/L4-outer-synth (x=0), L2-natural-middle (x=M), inner-after-L (x=here).
+            // Inner-edge thin after Left when L3/L4/L5/L6 is occupied, L2 is the natural empty thin, and Left is occupied.
+            // 3 thins: L3+/L4+/L5+/L6+-outer-synth (x=0), L2-natural-middle (x=M), inner-after-L (x=here).
             // Drop on inner thin → InsertBefore Left@0 (Case B): shifts Left→Left2, panel lands at Left.
-            else if ((left3Occupied || left4Occupied) && !left2Occupied && leftOccupied)
+            else if ((left3Occupied || left4Occupied || left5Occupied || left6Occupied) && !left2Occupied && leftOccupied)
             {
                 curX += InnerZoneGap;
                 leftThinPositions.Add((curX, DockZone.Left, 0, SyntheticInsertKind.InsertBefore));
@@ -292,7 +378,7 @@ internal static class DockingMapBuilder
             // Inner-edge thin after Left when only Left is occupied (N=1 case).
             // Left2 is the natural outer thin — Left provides the inner thin.
             // N+1 for N=1: Left2-natural (outer) + inner-after-Left = 2 thins total.
-            else if (!left4Occupied && !left3Occupied && !left2Occupied && leftOccupied && !suppressLeft2)
+            else if (!left6Occupied && !left5Occupied && !left4Occupied && !left3Occupied && !left2Occupied && leftOccupied && !suppressLeft2)
             {
                 curX += InnerZoneGap;
                 leftThinPositions.Add((curX, DockZone.Left, leftPanels.Count, SyntheticInsertKind.InsertAfter));
@@ -308,6 +394,10 @@ internal static class DockingMapBuilder
             curX += ZoneGutter;
         else if (!suppressLeft4)
             curX += ZoneGutter;
+        else if (!suppressLeft5)
+            curX += ZoneGutter;
+        else if (!suppressLeft6)
+            curX += ZoneGutter;
         
         double topX = curX;
         curX += topZoneWidth;
@@ -321,22 +411,26 @@ internal static class DockingMapBuilder
             curX += ZoneGutter;
         else if (!suppressRight4)
             curX += ZoneGutter;
+        else if (!suppressRight5)
+            curX += ZoneGutter;
+        else if (!suppressRight6)
+            curX += ZoneGutter;
         
-        // Right side layout: walk innermost (Right) to outermost (Right4)
-        double rightX = 0, right2X = 0, right3X = 0, right4X = 0;
+        // Right side layout: walk innermost (Right) to outermost (Right6)
+        double rightX = 0, right2X = 0, right3X = 0, right4X = 0, right5X = 0, right6X = 0;
         var rightThinPositions = new List<(double X, DockZone TargetZone, int TargetOrder, SyntheticInsertKind Kind)>();
         
         if (!suppressRight)
         {
             // If all outer zones suppressed and Right is empty but would need outer thin
-            if (suppressRight2 && suppressRight3 && suppressRight4 && !rightOccupied && rightOccupiedCount >= 2)
+            if (suppressRight2 && suppressRight3 && suppressRight4 && suppressRight5 && suppressRight6 && !rightOccupied && rightOccupiedCount >= 2)
             {
                 rightThinPositions.Add((curX, DockZone.Right, 0, SyntheticInsertKind.InsertBefore));
                 curX += ColSlotWidthEmpty + InnerZoneGap;
             }
-            // When R3/R4 is a natural thin (empty) and R+R2 are both occupied, add inner-thin before Right
-            // to provide the 3rd drop point (inner=before-R, mid=between-R-and-R2, R3/R4=outer-natural)
-            if (!suppressRight3 && !right3Occupied && !right4Occupied && rightOccupied && right2Occupied)
+            // When R3/R4/R5/R6 is a natural thin (empty) and R+R2 are both occupied, add inner-thin before Right
+            // to provide the 3rd drop point (inner=before-R, mid=between-R-and-R2, R3+/R4+=outer-natural)
+            if (!suppressRight3 && !right3Occupied && !right4Occupied && !right5Occupied && !right6Occupied && rightOccupied && right2Occupied)
             {
                 rightThinPositions.Add((curX, DockZone.Right, 0, SyntheticInsertKind.InsertBefore));
                 curX += ColSlotWidthEmpty + InnerZoneGap;
@@ -344,7 +438,14 @@ internal static class DockingMapBuilder
             // Inner-edge thin before Right when only Right is occupied (N=1 case).
             // Right2 is the natural outer thin — this provides the inner drop target.
             // N+1 for N=1: inner-before-Right + Right2-natural (outer) = 2 thins total.
-            else if (suppressRight3 && suppressRight4 && !right2Occupied && rightOccupied && !suppressRight2)
+            else if (suppressRight3 && suppressRight4 && suppressRight5 && suppressRight6 && !right2Occupied && rightOccupied && !suppressRight2)
+            {
+                rightThinPositions.Add((curX, DockZone.Right, 0, SyntheticInsertKind.InsertBefore));
+                curX += ColSlotWidthEmpty + InnerZoneGap;
+            }
+            // N=3+ case: Right3 or Right4 or Right5 or Right6 is also occupied. The above branches only cover
+            // Right3+ being empty. When outer zones are occupied we still need the inner-left thin.
+            else if (rightOccupied && (right3Occupied || right4Occupied || right5Occupied || right6Occupied))
             {
                 rightThinPositions.Add((curX, DockZone.Right, 0, SyntheticInsertKind.InsertBefore));
                 curX += ColSlotWidthEmpty + InnerZoneGap;
@@ -388,38 +489,92 @@ internal static class DockingMapBuilder
         
         if (!suppressRight3)
         {
-            // Add synthetic outer thin only when Right3 is occupied and Right4 is NOT occupied
-            if (right3Occupied && !right4Occupied && rightOccupiedCount >= 2)
-            {
-                rightThinPositions.Add((curX, DockZone.Right3, right3Panels.Count, SyntheticInsertKind.InsertAfter));
-                curX += ColSlotWidthEmpty + InnerZoneGap;
-            }
             right3X = curX;
             curX += right3ZoneWidth;
 
-            // Thin between Right3 and Right4 if both occupied
+            // Thin between Right3 and Right4 if both occupied.
+            // InsertBefore Right4@0: user wants to insert between R3 and R4; preview shows left edge of R4.
             if (right3Occupied && right4Occupied)
             {
                 curX += InnerZoneGap;
-                rightThinPositions.Add((curX, DockZone.Right4, right4Panels.Count, SyntheticInsertKind.InsertAfter));
+                rightThinPositions.Add((curX, DockZone.Right4, 0, SyntheticInsertKind.InsertBefore));
                 curX += ColSlotWidthEmpty + InnerZoneGap;
             }
             else if (!suppressRight4)
             {
                 curX += InnerZoneGap;
             }
+            // Add synthetic outer thin AFTER Right3 zone slot when Right3 is the outermost occupied zone
+            // and Right4 is suppressed (no natural outer-edge thin zone exists beyond Right3).
+            else if (right3Occupied && !right4Occupied && rightOccupiedCount >= 2)
+            {
+                curX += InnerZoneGap;
+                rightThinPositions.Add((curX, DockZone.Right3, right3Panels.Count, SyntheticInsertKind.InsertAfter));
+                curX += ColSlotWidthEmpty;
+            }
         }
 
         if (!suppressRight4)
         {
-            // Add synthetic outer thin only when Right4 is occupied (no natural outer-edge thin exists)
-            if (right4Occupied && rightOccupiedCount >= 2)
-            {
-                rightThinPositions.Add((curX, DockZone.Right4, right4Panels.Count, SyntheticInsertKind.InsertAfter));
-                curX += ColSlotWidthEmpty + InnerZoneGap;
-            }
             right4X = curX;
             curX += right4ZoneWidth;
+            // Thin between Right4 and Right5 if both occupied.
+            if (right4Occupied && right5Occupied)
+            {
+                curX += InnerZoneGap;
+                rightThinPositions.Add((curX, DockZone.Right5, 0, SyntheticInsertKind.InsertBefore));
+                curX += ColSlotWidthEmpty + InnerZoneGap;
+            }
+            else if (!suppressRight5)
+            {
+                curX += InnerZoneGap;
+            }
+            // Add synthetic outer thin AFTER Right4 zone slot when Right4 is the outermost occupied zone
+            // and Right5/Right6 are suppressed.
+            else if (right4Occupied && !right5Occupied && !right6Occupied && rightOccupiedCount >= 2)
+            {
+                curX += InnerZoneGap;
+                rightThinPositions.Add((curX, DockZone.Right4, right4Panels.Count, SyntheticInsertKind.InsertAfter));
+                curX += ColSlotWidthEmpty;
+            }
+        }
+
+        if (!suppressRight5)
+        {
+            right5X = curX;
+            curX += right5ZoneWidth;
+            // Thin between Right5 and Right6 if both occupied.
+            if (right5Occupied && right6Occupied)
+            {
+                curX += InnerZoneGap;
+                rightThinPositions.Add((curX, DockZone.Right6, 0, SyntheticInsertKind.InsertBefore));
+                curX += ColSlotWidthEmpty + InnerZoneGap;
+            }
+            else if (!suppressRight6)
+            {
+                curX += InnerZoneGap;
+            }
+            // Add synthetic outer thin AFTER Right5 zone slot when Right5 is the outermost occupied zone
+            // and Right6 is suppressed (no natural outer-edge thin zone exists beyond Right5).
+            else if (right5Occupied && !right6Occupied && rightOccupiedCount >= 2)
+            {
+                curX += InnerZoneGap;
+                rightThinPositions.Add((curX, DockZone.Right5, right5Panels.Count, SyntheticInsertKind.InsertAfter));
+                curX += ColSlotWidthEmpty;
+            }
+        }
+
+        if (!suppressRight6)
+        {
+            right6X = curX;
+            curX += right6ZoneWidth;
+            // Add synthetic outer thin AFTER Right6 zone slot (outer-right edge).
+            if (right6Occupied && rightOccupiedCount >= 2)
+            {
+                curX += InnerZoneGap;
+                rightThinPositions.Add((curX, DockZone.Right6, right6Panels.Count, SyntheticInsertKind.InsertAfter));
+                curX += ColSlotWidthEmpty;
+            }
         }
 
         double innerWidth = curX;
@@ -450,6 +605,16 @@ internal static class DockingMapBuilder
         }
 
         // ── Left side slots ──────────────────────────────────────────────────
+        if (!suppressLeft6)
+            BuildColumnSlots(
+                allSlots, sourcePanelId, left6Panels, sourceInLeft6,
+                left6X, LabelRowHeight, left6ZoneWidth, ColSlotHeight, innerHeight, DockZone.Left6);
+
+        if (!suppressLeft5)
+            BuildColumnSlots(
+                allSlots, sourcePanelId, left5Panels, sourceInLeft5,
+                left5X, LabelRowHeight, left5ZoneWidth, ColSlotHeight, innerHeight, DockZone.Left5);
+
         if (!suppressLeft4)
             BuildColumnSlots(
                 allSlots, sourcePanelId, left4Panels, sourceInLeft4,
@@ -502,6 +667,16 @@ internal static class DockingMapBuilder
                 allSlots, sourcePanelId, right4Panels, sourceInRight4,
                 right4X, LabelRowHeight, right4ZoneWidth, ColSlotHeight, innerHeight, DockZone.Right4);
 
+        if (!suppressRight5)
+            BuildColumnSlots(
+                allSlots, sourcePanelId, right5Panels, sourceInRight5,
+                right5X, LabelRowHeight, right5ZoneWidth, ColSlotHeight, innerHeight, DockZone.Right5);
+
+        if (!suppressRight6)
+            BuildColumnSlots(
+                allSlots, sourcePanelId, right6Panels, sourceInRight6,
+                right6X, LabelRowHeight, right6ZoneWidth, ColSlotHeight, innerHeight, DockZone.Right6);
+
         // ── Separators ───────────────────────────────────────────────────────
         // Thin pill-shaped vertical dividers between the top zone and each side group.
         // A separator is placed in the ZoneGutter midpoint when that side exists.
@@ -543,7 +718,7 @@ internal static class DockingMapBuilder
 
         // ── Section label center X positions ────────────────────────────────
         var leftZoneSlots = allSlots.Where(s => !s.IsSeparator &&
-            (s.TargetZone == DockZone.Left || s.TargetZone == DockZone.Left2 || s.TargetZone == DockZone.Left3 || s.TargetZone == DockZone.Left4)).ToList();
+            (s.TargetZone == DockZone.Left || s.TargetZone == DockZone.Left2 || s.TargetZone == DockZone.Left3 || s.TargetZone == DockZone.Left4 || s.TargetZone == DockZone.Left5 || s.TargetZone == DockZone.Left6)).ToList();
         bool hasLeftSection = leftZoneSlots.Count > 0;
         double leftSectionCenterX = hasLeftSection
             ? (leftZoneSlots.Min(s => s.X) + leftZoneSlots.Max(s => s.X + s.Width)) / 2
@@ -555,7 +730,7 @@ internal static class DockingMapBuilder
             : innerWidth / 2;
 
         var rightZoneSlots = allSlots.Where(s => !s.IsSeparator &&
-            (s.TargetZone == DockZone.Right || s.TargetZone == DockZone.Right2 || s.TargetZone == DockZone.Right3 || s.TargetZone == DockZone.Right4)).ToList();
+            (s.TargetZone == DockZone.Right || s.TargetZone == DockZone.Right2 || s.TargetZone == DockZone.Right3 || s.TargetZone == DockZone.Right4 || s.TargetZone == DockZone.Right5 || s.TargetZone == DockZone.Right6)).ToList();
         bool hasRightSection = rightZoneSlots.Count > 0;
         double rightSectionCenterX = hasRightSection
             ? (rightZoneSlots.Min(s => s.X) + rightZoneSlots.Max(s => s.X + s.Width)) / 2
@@ -574,16 +749,16 @@ internal static class DockingMapBuilder
 
         // Thin-check summary: synthetic thins + natural empty zone thins per side
         int actualThinLeft  = allSlots.Count(s => !s.IsSeparator && s.Width < ColSlotWidth
-            && (s.TargetZone == DockZone.Left  || s.TargetZone == DockZone.Left2  || s.TargetZone == DockZone.Left3  || s.TargetZone == DockZone.Left4));
+            && (s.TargetZone == DockZone.Left  || s.TargetZone == DockZone.Left2  || s.TargetZone == DockZone.Left3  || s.TargetZone == DockZone.Left4  || s.TargetZone == DockZone.Left5  || s.TargetZone == DockZone.Left6));
         int actualThinRight = allSlots.Count(s => !s.IsSeparator && s.Width < ColSlotWidth
-            && (s.TargetZone == DockZone.Right || s.TargetZone == DockZone.Right2 || s.TargetZone == DockZone.Right3 || s.TargetZone == DockZone.Right4));
+            && (s.TargetZone == DockZone.Right || s.TargetZone == DockZone.Right2 || s.TargetZone == DockZone.Right3 || s.TargetZone == DockZone.Right4 || s.TargetZone == DockZone.Right5 || s.TargetZone == DockZone.Right6));
 
         // Validate: warn if adjacent thin slots exist on the same side (visual regression indicator)
         var leftThinSlots  = allSlots.Where(s => !s.IsSeparator && s.Width < ColSlotWidth
-            && (s.TargetZone == DockZone.Left  || s.TargetZone == DockZone.Left2  || s.TargetZone == DockZone.Left3  || s.TargetZone == DockZone.Left4))
+            && (s.TargetZone == DockZone.Left  || s.TargetZone == DockZone.Left2  || s.TargetZone == DockZone.Left3  || s.TargetZone == DockZone.Left4  || s.TargetZone == DockZone.Left5  || s.TargetZone == DockZone.Left6))
             .OrderBy(s => s.X).ToList();
         var rightThinSlots = allSlots.Where(s => !s.IsSeparator && s.Width < ColSlotWidth
-            && (s.TargetZone == DockZone.Right || s.TargetZone == DockZone.Right2 || s.TargetZone == DockZone.Right3 || s.TargetZone == DockZone.Right4))
+            && (s.TargetZone == DockZone.Right || s.TargetZone == DockZone.Right2 || s.TargetZone == DockZone.Right3 || s.TargetZone == DockZone.Right4 || s.TargetZone == DockZone.Right5 || s.TargetZone == DockZone.Right6))
             .OrderBy(s => s.X).ToList();
         for (int i = 1; i < leftThinSlots.Count; i++)
         {
@@ -633,6 +808,9 @@ internal static class DockingMapBuilder
     /// (1) Adjacent thin slots on the same side — two narrow drop-target columns side by side.
     /// (2) N+1 thin rule — for N occupied zones on a side, exactly N+1 thin drop-targets are required.
     ///     Applies for N >= 1 (single occupied zone still needs an outer AND an inner thin).
+    /// (3) No-op outer thin — source is the sole, innermost-occupied panel on a side and a Rule-D
+    ///     thin for the immediately adjacent outer zone is present.  Dropping there would leave the
+    ///     panel at the same visual position (source zone collapses, adjacent zone opens in its place).
     /// Returns one description string per violation found; empty list means no violations.
     /// </summary>
     internal static IReadOnlyList<string> FindAdjacentThinViolations(IReadOnlyList<SlotButtonViewModel> slots)
@@ -672,6 +850,49 @@ internal static class DockingMapBuilder
 
         CheckSide([DockZone.Left, DockZone.Left2, DockZone.Left3, DockZone.Left4],    "Left");
         CheckSide([DockZone.Right, DockZone.Right2, DockZone.Right3, DockZone.Right4], "Right");
+
+        // Rule (3): No-op outer thin.
+        // sideZones[0] = innermost, sideZones[N-1] = outermost.
+        var srcSlot = slots.FirstOrDefault(s => !s.IsSeparator && s.IsSourcePanel);
+        if (srcSlot is not null)
+        {
+            void CheckNoopLateral(DockZone[] sideZones, string sideName)
+            {
+                int srcIdx = Array.IndexOf(sideZones, srcSlot.TargetZone);
+                if (srcIdx < 0) return; // source not on this side
+
+                // Source must be sole occupant of its zone (exactly one full-width slot there)
+                bool isSole = slots.Count(s => !s.IsSeparator
+                    && s.TargetZone == sideZones[srcIdx] && s.Width >= ColSlotWidth) == 1;
+                if (!isSole) return;
+
+                // Source must be the innermost occupied zone on this side
+                for (int i = 0; i < srcIdx; i++)
+                {
+                    if (slots.Any(s => !s.IsSeparator && s.TargetZone == sideZones[i] && s.Width >= ColSlotWidth))
+                        return; // a more-inward zone has panels
+                }
+
+                // Adjacent outer zone must have a Rule-D thin (empty-zone placeholder, not a synthetic insert)
+                if (srcIdx + 1 >= sideZones.Length) return;
+                var adjacentOutward = sideZones[srcIdx + 1];
+                bool hasNoopThin = slots.Any(s =>
+                    !s.IsSeparator &&
+                    s.TargetZone == adjacentOutward &&
+                    !s.IsSyntheticInsert &&
+                    s.Width < ColSlotWidth);
+                if (hasNoopThin)
+                    violations.Add(
+                        $"{sideName}: no-op outer thin — '{srcSlot.SourcePanelId}' is sole at innermost position " +
+                        $"({DockingLayoutEngine.GetZoneDisplayName(sideZones[srcIdx])}), " +
+                        $"but thin for {DockingLayoutEngine.GetZoneDisplayName(adjacentOutward)} is shown; " +
+                        $"dropping there is visually identical to staying in place");
+            }
+
+            CheckNoopLateral([DockZone.Left, DockZone.Left2, DockZone.Left3, DockZone.Left4], "Left");
+            CheckNoopLateral([DockZone.Right, DockZone.Right2, DockZone.Right3, DockZone.Right4], "Right");
+        }
+
         return violations;
     }
 

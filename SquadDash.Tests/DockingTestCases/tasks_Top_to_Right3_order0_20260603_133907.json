@@ -1,30 +1,31 @@
 {
-  "name": "tasks_Left2_to_Left3_order0",
+  "name": "tasks_Top_to_Right3_order0",
   "sourcePanelId": "tasks",
   "initialLayout": {
     "Top": [
-      "loop"
-    ],
-    "Left 1": [
+      "tasks",
       "approvals"
     ],
-    "Left 2": [
-      "tasks"
+    "Left 1": [
+      "loop"
     ],
+    "Left 2": [],
     "Left 3": [],
+    "Left 4": [],
     "Right 1": [
       "maintenance"
     ],
     "Right 2": [
       "inbox"
     ],
-    "Right 3": []
+    "Right 3": [],
+    "Right 4": []
   },
   "slotButtons": [
     {
-      "zone": "Left 3",
+      "zone": "Left 2",
       "order": 0,
-      "preview": "Left 3, 1/1"
+      "preview": "Left 2, 1/1"
     },
     {
       "zone": "Left 1",
@@ -38,13 +39,8 @@
     },
     {
       "zone": "Top",
-      "order": 0,
-      "preview": "Top, 1/2"
-    },
-    {
-      "zone": "Top",
       "order": 1,
-      "preview": "Top, 2/2"
+      "preview": "Top, 2/3"
     },
     {
       "zone": "Right 1",
@@ -73,27 +69,29 @@
     }
   ],
   "action": {
-    "targetZone": "Left 3",
+    "targetZone": "Right 3",
     "targetOrder": 0
   },
-  "chosenPreview": "Left 3, 1/1",
+  "chosenPreview": "Right 3, 1/1",
   "expectedLayout": {
     "Top": [
-      "loop"
-    ],
-    "Left 1": [
       "approvals"
     ],
-    "Left 2": [],
-    "Left 3": [
-      "tasks"
+    "Left 1": [
+      "loop"
     ],
+    "Left 2": [],
+    "Left 3": [],
+    "Left 4": [],
     "Right 1": [
       "maintenance"
     ],
     "Right 2": [
       "inbox"
     ],
-    "Right 3": []
+    "Right 3": [
+      "tasks"
+    ],
+    "Right 4": []
   }
 }

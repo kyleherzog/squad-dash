@@ -25,8 +25,12 @@ public enum DockZone
     Left3,
     Right3,
     Left4,
-    Right4
-    // Future: Left5, Right5, Bottom, …
+    Right4,
+    Left5,
+    Right5,
+    Left6,
+    Right6
+    // Future: Bottom, …
 }
 
 /// <summary>
