@@ -255,6 +255,20 @@ const bridge = new SquadBridgeService({
             chunk: subagent.text
         });
     },
+    onSubagentThinkingDelta(sessionId, subagent) {
+        emit({
+            type: "subagent_thinking_delta",
+            sessionId,
+            parentToolCallId: subagent.parentToolCallId,
+            agentId: subagent.agentId,
+            agentName: subagent.agentName,
+            agentDisplayName: subagent.agentDisplayName,
+            agentDescription: subagent.agentDescription,
+            text: subagent.reasoningText,
+            reasoningText: subagent.reasoningText,
+            speaker: subagent.agentName
+        });
+    },
     onSubagentMessage(sessionId, subagent) {
         emit({
             type: "subagent_message",

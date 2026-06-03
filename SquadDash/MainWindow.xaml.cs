@@ -4799,6 +4799,7 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
         thread.DetailText = FormatThinkingText(thought);
         SyncThreadChip(thread);
         FindAgentCardForThread(thread)?.FireActivityPulse(SpinnerActivityKind.Thinking);
+        _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, "subagent_thinking_delta");
         UpdateAgentCardFromThread(thread, syncBuckets: false);
         _conversationManager.SchedulePersistAgentThreadSnapshot(thread);
     }

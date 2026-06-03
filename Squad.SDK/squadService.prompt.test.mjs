@@ -174,3 +174,65 @@ test("background task cancel diagnostics include remembered mapping and snapshot
     assert.match(diagnostics, /mappedTaskId=queue-held-restart-bug/);
     assert.match(diagnostics, /matchingAgents=queue-held-restart-bug\/toolu_bdrk_014NnSZxJapiCigA8z7DfSS3/);
 });
+
+test("subagent reasoning deltas stream as thinking without duplicating final reasoning", () => {
+    const thinkingDeltas = [];
+    const messages = [];
+    const service = new SquadBridgeService({
+        onSubagentThinkingDelta(sessionId, subagent) {
+            thinkingDeltas.push({ sessionId, subagent });
+        },
+        onSubagentMessage(sessionId, subagent) {
+            messages.push({ sessionId, subagent });
+        }
+    });
+    const listeners = new Map();
+    const session = {
+        sessionId: "session-1",
+        on(eventName, callback) {
+            listeners.set(eventName, callback);
+        }
+    };
+    const state = {
+        session,
+        activeTools: new Map(),
+        backgroundTasks: { agents: [], shells: [] },
+        subagentsByToolCallId: new Map([
+            ["tool-call-1", {
+                toolCallId: "tool-call-1",
+                agentName: "wanda-review",
+                agentDisplayName: "Wanda Review"
+            }]
+        ]),
+        backgroundTaskIdsByToolCallId: new Map(),
+        subagentReasoningByToolCallId: new Map(),
+        lastAssistantMessageContent: "",
+        createdAt: Date.now(),
+        completedPromptCount: 0
+    };
+
+    service.attachSessionListeners(state);
+
+    listeners.get("reasoning_delta")({
+        parentToolCallId: "tool-call-1",
+        deltaContent: "Checking "
+    });
+    listeners.get("reasoning_delta")({
+        data: { deltaContent: "the failure path." },
+        parentToolCallId: "tool-call-1"
+    });
+    listeners.get("message")({
+        parentToolCallId: "tool-call-1",
+        content: "Done.",
+        reasoningText: "Checking the failure path."
+    });
+
+    assert.equal(thinkingDeltas.length, 2);
+    assert.deepEqual(thinkingDeltas.map(item => item.subagent.reasoningText), [
+        "Checking ",
+        "the failure path."
+    ]);
+    assert.equal(messages.length, 1);
+    assert.equal(messages[0].subagent.text, "Done.");
+    assert.equal(messages[0].subagent.reasoningText, undefined);
+});
