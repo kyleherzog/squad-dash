@@ -1806,6 +1806,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         SelectArrow(null);
         SelectAnnotationRect(null);
         SelectMeasureLine(null);
+        SelectAnnotationX(null);
 
         var pt = e.GetPosition(_canvas);
 
@@ -1948,6 +1949,11 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         if (_creatingArrowByDrag && _arrowDragPreviewLine != null && _arrowDragPreviewHead != null) {
             var headPt = e.GetPosition(_canvas);
             var tailPt = _arrowDragTailPt;
+
+            // Shift-snap: constrain to nearest horizontal or vertical axis.
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+                headPt = SnapArrowToAxis(tailPt, headPt);
+
             _arrowDragPreviewLine.X1 = tailPt.X;
             _arrowDragPreviewLine.Y1 = tailPt.Y;
             _arrowDragPreviewLine.X2 = headPt.X;
@@ -2311,6 +2317,11 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
 
             var headPt = e.GetPosition(_canvas);
             var tailPt = _arrowDragTailPt;
+
+            // Shift-snap: constrain to nearest horizontal or vertical axis.
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+                headPt = SnapArrowToAxis(tailPt, headPt);
+
             var dx = headPt.X - tailPt.X;
             var dy = headPt.Y - tailPt.Y;
             var dist = Math.Sqrt(dx * dx + dy * dy);
@@ -2558,9 +2569,10 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 e.Handled = true;
                 return;
             }
-            // Priority 2 — deselect a selected annotation (arrow, rect, or text label).
+            // Priority 2 — deselect a selected annotation (arrow, rect, X, measure line, or text label).
             if (_selectedArrow != null) { SelectArrow(null); e.Handled = true; return; }
             if (_selectedAnnotRect != null) { SelectAnnotationRect(null); e.Handled = true; return; }
+            if (_selectedAnnotX != null) { SelectAnnotationX(null); e.Handled = true; return; }
             if (_selectedMeasureLine != null) { SelectMeasureLine(null); e.Handled = true; return; }
             if (_selectedText != null) { SelectText(null); e.Handled = true; return; }
 
@@ -3349,6 +3361,16 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         Canvas.SetLeft(_colorPickerPanel, cx);
         Canvas.SetTop(_colorPickerPanel, cy);
     }
+    /// <summary>Snaps <paramref name="head"/> to the closest horizontal or vertical line through <paramref name="tail"/>.</summary>
+    private static Point SnapArrowToAxis(Point tail, Point head)
+    {
+        var dx = Math.Abs(head.X - tail.X);
+        var dy = Math.Abs(head.Y - tail.Y);
+        return dx >= dy
+            ? new Point(head.X, tail.Y)   // horizontal
+            : new Point(tail.X, head.Y);  // vertical
+    }
+
     private void PlaceArrowFromDrag(Point tailPt, Point headPt, double dist) {
         headPt = new Point(
             Math.Max(0, Math.Min(headPt.X, _canvas.Width)),
@@ -4004,7 +4026,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         if (_annotXPreviewLine1 == null) {
             _annotXPreviewLine1 = new Line {
                 Stroke = new SolidColorBrush(_defaultXColor),
-                StrokeThickness = 2,
+                StrokeThickness = 4,
                 StrokeDashArray = new DoubleCollection { 4, 2 },
                 IsHitTestVisible = false,
                 Opacity = 0.7,
@@ -4016,7 +4038,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         if (_annotXPreviewLine2 == null) {
             _annotXPreviewLine2 = new Line {
                 Stroke = new SolidColorBrush(_defaultXColor),
-                StrokeThickness = 2,
+                StrokeThickness = 4,
                 StrokeDashArray = new DoubleCollection { 4, 2 },
                 IsHitTestVisible = false,
                 Opacity = 0.7,
@@ -4035,10 +4057,10 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         var brush = new SolidColorBrush(xColor);
         var shadowBrush = new SolidColorBrush(Color.FromArgb(102, 0, 0, 0));
 
-        var shadow1 = new Line { Stroke = shadowBrush, StrokeThickness = 3.5, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, IsHitTestVisible = false };
-        var shadow2 = new Line { Stroke = shadowBrush, StrokeThickness = 3.5, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, IsHitTestVisible = false };
-        var line1 = new Line { Stroke = brush, StrokeThickness = 3.0, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, IsHitTestVisible = false };
-        var line2 = new Line { Stroke = brush, StrokeThickness = 3.0, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, IsHitTestVisible = false };
+        var shadow1 = new Line { Stroke = shadowBrush, StrokeThickness = 7.0, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, IsHitTestVisible = false };
+        var shadow2 = new Line { Stroke = shadowBrush, StrokeThickness = 7.0, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, IsHitTestVisible = false };
+        var line1 = new Line { Stroke = brush, StrokeThickness = 6.0, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, IsHitTestVisible = false };
+        var line2 = new Line { Stroke = brush, StrokeThickness = 6.0, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, IsHitTestVisible = false };
 
         var hitZone = new Rectangle {
             Fill = Brushes.Transparent,

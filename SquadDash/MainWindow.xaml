@@ -415,6 +415,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" MinWidth="120" MaxWidth="320" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <!-- Left: menu bar -->
@@ -732,6 +733,29 @@
                 </Button>
             </Grid>
 
+            <!-- Recording indicator — shown while a docking test case is being recorded -->
+            <Border x:Name="RecordingIndicatorBorder"
+                    Grid.Column="2"
+                    Padding="8,0,8,0"
+                    Margin="8,0,0,0"
+                    Background="Transparent"
+                    VerticalAlignment="Center"
+                    Visibility="Collapsed"
+                    shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                <StackPanel Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <Ellipse Width="8"
+                             Height="8"
+                             Margin="0,0,6,0"
+                             VerticalAlignment="Center"
+                             Fill="{DynamicResource DangerButtonBg}" />
+                    <TextBlock Text="Recording — dock a panel to complete (Esc to cancel)"
+                               VerticalAlignment="Center"
+                               FontSize="{DynamicResource FontSizeSmall}"
+                               Foreground="{DynamicResource ImportantText}" />
+                </StackPanel>
+            </Border>
+
         </Grid>  <!-- end TitlebarGrid -->
 
         <Grid x:Name="MainGrid" Grid.Column="6" Margin="12,52,14,14">
@@ -748,30 +772,6 @@
             <ColumnDefinition x:Name="DocsPanelColumn" Width="0" />
         </Grid.ColumnDefinitions>
 
-
-        <!-- Recording indicator — shown while a docking test case is being recorded -->
-        <Border x:Name="RecordingIndicatorBorder"
-                Grid.Row="0"
-                Grid.Column="0"
-                Padding="10,5,10,5"
-                Background="{DynamicResource ChromeSurface}"
-                BorderBrush="{DynamicResource DangerButtonBg}"
-                BorderThickness="0,0,0,1"
-                VerticalAlignment="Top"
-                Visibility="Collapsed">
-            <StackPanel Orientation="Horizontal"
-                        VerticalAlignment="Center">
-                <Ellipse Width="9"
-                         Height="9"
-                         Margin="0,0,7,0"
-                         VerticalAlignment="Center"
-                         Fill="{DynamicResource DangerButtonBg}" />
-                <TextBlock Text="Recording docking test case — dock a panel to complete"
-                           VerticalAlignment="Center"
-                           FontSize="{DynamicResource FontSizeSmall}"
-                           Foreground="{DynamicResource ImportantText}" />
-            </StackPanel>
-        </Border>
 
         <Border x:Name="WorkspaceIssuePanelBorder"
                 Grid.Row="0"

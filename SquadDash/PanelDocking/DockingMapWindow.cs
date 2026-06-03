@@ -102,6 +102,14 @@ internal sealed class DockingMapWindow : Window
             canvas.Children.Add(el);
         }
 
+        // ── Section labels ───────────────────────────────────────────────────
+        const double LabelWidth = 60;
+        if (_viewModel.HasLeftSection)
+            canvas.Children.Add(MakeSectionLabel("Left:", _viewModel.LeftSectionCenterX, LabelWidth, polarColor));
+        canvas.Children.Add(MakeSectionLabel("Top:", _viewModel.TopSectionCenterX, LabelWidth, polarColor));
+        if (_viewModel.HasRightSection)
+            canvas.Children.Add(MakeSectionLabel("Right:", _viewModel.RightSectionCenterX, LabelWidth, polarColor));
+
         root.Child = canvas;
         Content    = root;
     }
@@ -169,7 +177,7 @@ internal sealed class DockingMapWindow : Window
         {
             try
             {
-                _dockingService.MovePanel(slot.SourcePanelId, slot.TargetZone, slot.TargetOrder);
+                _dockingService.MovePanel(slot.SourcePanelId, slot.TargetZone, slot.TargetOrder, slot.InsertKind);
                 if (!string.IsNullOrEmpty(_workspacePath))
                     _dockingService.SaveLayout(_workspacePath);
             }
@@ -178,6 +186,22 @@ internal sealed class DockingMapWindow : Window
         };
 
         return border;
+    }
+
+    private UIElement MakeSectionLabel(string text, double centerX, double width, Color polarColor)
+    {
+        double fontSize = Application.Current?.TryFindResource("FontSizeXSmall") is double d ? d : 10.0;
+        var lbl = new TextBlock
+        {
+            Text          = text,
+            Width         = width,
+            TextAlignment = TextAlignment.Center,
+            FontSize      = fontSize,
+            Foreground    = MakeBrush(polarColor, 0.45),
+        };
+        Canvas.SetLeft(lbl, centerX - width / 2);
+        Canvas.SetTop(lbl, 0);
+        return lbl;
     }
 
     private static SolidColorBrush MakeBrush(Color color, double opacity) =>

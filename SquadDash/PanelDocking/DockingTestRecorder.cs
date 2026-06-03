@@ -95,6 +95,12 @@ internal sealed class DockingTestRecorder : IDockingMoveRecorder
         RecordingCompleted?.Invoke();
     }
 
+    /// <summary>
+    /// Cancels an in-progress recording without writing a file or invoking
+    /// <see cref="RecordingCompleted"/>.
+    /// </summary>
+    internal void Cancel() => Reset();
+
     private void Reset()
     {
         _state            = RecorderState.Idle;

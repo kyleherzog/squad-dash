@@ -117,18 +117,30 @@ internal static class DockingLayoutEngine
         // Mirrors DockingMapBuilder suppression logic exactly:
         // Case 1: both outer and inner zones are empty — suppress the outer zone.
         // Case 2: source is the sole occupant of its zone AND the sibling is empty — no-op move.
-        bool suppressLeft2  = (left2Panels.Count == 0 && !sourceInLeft2 && leftPanels.Count  == 0 && !sourceInLeft)
+        // Bug 1 fix: don't suppress Left2/Right2 when the outer tier (Left3/Right3) has panels.
+        // Without this, Left3-occupied → Left2 never shown (only 1 thin instead of 2).
+        bool suppressLeft2  = (left2Panels.Count == 0 && !sourceInLeft2 && leftPanels.Count  == 0 && !sourceInLeft
+                               && left3Panels.Count == 0 && !sourceInLeft3)
                            || (sourceInLeft  && leftPanels.Count  == 1 && left2Panels.Count  == 0);
-        bool suppressRight2 = (right2Panels.Count == 0 && !sourceInRight2 && rightPanels.Count == 0 && !sourceInRight)
+        bool suppressRight2 = (right2Panels.Count == 0 && !sourceInRight2 && rightPanels.Count == 0 && !sourceInRight
+                               && right3Panels.Count == 0 && !sourceInRight3)
                            || (sourceInRight && rightPanels.Count == 1 && right2Panels.Count == 0);
         // Symmetric: source sole in outer zone, inner zone is empty.
         bool suppressLeft   = sourceInLeft2  && left2Panels.Count  == 1 && leftPanels.Count  == 0;
         bool suppressRight  = sourceInRight2 && right2Panels.Count == 1 && rightPanels.Count == 0;
 
-        bool suppressLeft3  = (left3Panels.Count == 0 && !sourceInLeft3 && left2Panels.Count == 0 && !sourceInLeft2)
-                           || (sourceInLeft2 && left2Panels.Count == 1 && left3Panels.Count == 0);
-        bool suppressRight3 = (right3Panels.Count == 0 && !sourceInRight3 && right2Panels.Count == 0 && !sourceInRight2)
-                           || (sourceInRight2 && right2Panels.Count == 1 && right3Panels.Count == 0);
+        // For the outermost tier, tie suppression to whether the middle tier is suppressed.
+        // Suppress Left3/Right3 only when the entire outer tier has no panels and the middle
+        // tier is also suppressed (one outer thin is enough), or when both outer tiers are
+        // empty and only the innermost zone has panels.
+        bool suppressLeft3  = (left3Panels.Count == 0 && !sourceInLeft3 && suppressLeft2)
+                           || (left3Panels.Count == 0 && !sourceInLeft3
+                               && left2Panels.Count == 0 && !sourceInLeft2
+                               && leftPanels.Count > 0);
+        bool suppressRight3 = (right3Panels.Count == 0 && !sourceInRight3 && suppressRight2)
+                           || (right3Panels.Count == 0 && !sourceInRight3
+                               && right2Panels.Count == 0 && !sourceInRight2
+                               && rightPanels.Count > 0);
 
         // When source is outside a side, use column-position slots; otherwise use panel-position slots
         if (!suppressLeft3)

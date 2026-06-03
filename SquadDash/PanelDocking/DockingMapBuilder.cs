@@ -31,6 +31,7 @@ internal static class DockingMapBuilder
     private const double InnerZoneGap      = 2;   // tight gap between sibling zone pairs (Left↔Left2, Right↔Right2)
     private const double MaxInnerHeight    = 200.0; // caps popup height so stacked panels shrink gracefully
     private const double PopupPadding      = 8;
+    private const double LabelRowHeight    = 16;    // reserved space above slots for section labels
 
     /// <summary>
     /// Builds the full DockingMapViewModel for the given source panel and current layout.
@@ -68,18 +69,45 @@ internal static class DockingMapBuilder
         // Case 2: source is the SOLE occupant of its zone AND the sibling zone is
         //         empty — moving there is visually identical (source zone collapses,
         //         sibling expands with the same single panel). Suppress that target.
-        bool suppressLeft2  = (left2Panels.Count == 0 && !sourceInLeft2 && leftPanels.Count  == 0 && !sourceInLeft)
+        // Bug 1 fix: don't suppress Left2/Right2 when the outer tier (Left3/Right3) has panels.
+        // Without this, Left3-occupied → Left2 never shown (only 1 thin instead of 2).
+        bool suppressLeft2  = (left2Panels.Count == 0 && !sourceInLeft2 && leftPanels.Count  == 0 && !sourceInLeft
+                               && left3Panels.Count == 0 && !sourceInLeft3)
                            || (sourceInLeft  && leftPanels.Count  == 1 && left2Panels.Count  == 0);
-        bool suppressRight2 = (right2Panels.Count == 0 && !sourceInRight2 && rightPanels.Count == 0 && !sourceInRight)
+        bool suppressRight2 = (right2Panels.Count == 0 && !sourceInRight2 && rightPanels.Count == 0 && !sourceInRight
+                               && right3Panels.Count == 0 && !sourceInRight3)
                            || (sourceInRight && rightPanels.Count == 1 && right2Panels.Count == 0);
         // Symmetric: source sole in outer zone, inner zone is empty.
         bool suppressLeft   = sourceInLeft2  && left2Panels.Count  == 1 && leftPanels.Count  == 0;
         bool suppressRight  = sourceInRight2 && right2Panels.Count == 1 && rightPanels.Count == 0;
 
-        bool suppressLeft3  = (left3Panels.Count == 0 && !sourceInLeft3 && left2Panels.Count == 0 && !sourceInLeft2)
-                           || (sourceInLeft2 && left2Panels.Count == 1 && left3Panels.Count == 0);
-        bool suppressRight3 = (right3Panels.Count == 0 && !sourceInRight3 && right2Panels.Count == 0 && !sourceInRight2)
-                           || (sourceInRight2 && right2Panels.Count == 1 && right3Panels.Count == 0);
+        // For the outermost tier, tie suppression to whether the middle tier is suppressed.
+        // Bug 2 fix: when the innermost zone (Left/Right) is the sole occupied zone and
+        // Left2/Right2 is already thin, suppress Left3/Right3 — one outer thin is enough.
+        // (Two adjacent outer-edge thins with nothing beyond them violates the "no two adjacent
+        // narrow columns" rule.)
+        bool suppressLeft3  = (left3Panels.Count == 0 && !sourceInLeft3 && suppressLeft2)
+                           || (left3Panels.Count == 0 && !sourceInLeft3
+                               && left2Panels.Count == 0 && !sourceInLeft2
+                               && leftPanels.Count > 0);
+        bool suppressRight3 = (right3Panels.Count == 0 && !sourceInRight3 && suppressRight2)
+                           || (right3Panels.Count == 0 && !sourceInRight3
+                               && right2Panels.Count == 0 && !sourceInRight2
+                               && rightPanels.Count > 0);
+
+        // ── Algorithmic N+1 thin drop-target generation ──────────────────────
+        // General rule: For N occupied adjacent zones on a side, insert N+1 thin drop-targets.
+        // Occupied flags (computed here for synthetic-width calculation; also reused in layout walk).
+        bool left3Occupied = !suppressLeft3 && left3Panels.Count > 0;
+        bool left2Occupied = !suppressLeft2 && left2Panels.Count > 0;
+        bool leftOccupied  = !suppressLeft  && leftPanels.Count  > 0;
+        bool right3Occupied = !suppressRight3 && right3Panels.Count > 0;
+        bool right2Occupied = !suppressRight2 && right2Panels.Count > 0;
+        bool rightOccupied  = !suppressRight  && rightPanels.Count  > 0;
+
+        // Count occupied zones on each side (non-suppressed with panels).
+        int leftOccupiedCount  = (left3Occupied ? 1 : 0) + (left2Occupied ? 1 : 0) + (leftOccupied  ? 1 : 0);
+        int rightOccupiedCount = (rightOccupied ? 1 : 0) + (right2Occupied ? 1 : 0) + (right3Occupied ? 1 : 0);
 
         // ── Compute zone dimensions ──────────────────────────────────────────
 
@@ -124,47 +152,231 @@ internal static class DockingMapBuilder
 
         double topZoneWidth = Math.Max(topContentWidth, TopSlotWidth);
 
-        // Only include gutter for non-suppressed zones.
-        // Between sibling zone pairs (Left3↔Left2↔Left, Right↔Right2↔Right3) use the tight InnerZoneGap.
-        // Between the innermost side zone and the top zone use the full ZoneGutter (separator lives there).
-        double innerWidth = (suppressLeft3  ? 0 : left3ZoneWidth  + (suppressLeft2  ? (suppressLeft  ? ZoneGutter : InnerZoneGap) : InnerZoneGap))
-                          + (suppressLeft2  ? 0 : left2ZoneWidth  + (suppressLeft   ? ZoneGutter : InnerZoneGap))
-                          + (suppressLeft   ? 0 : leftZoneWidth   + ZoneGutter)
-                          + topZoneWidth
-                          + (suppressRight  ? 0 : ZoneGutter + rightZoneWidth)
-                          + (suppressRight2 ? 0 : (suppressRight  ? ZoneGutter : InnerZoneGap) + right2ZoneWidth)
-                          + (suppressRight3 ? 0 : (suppressRight2 ? (suppressRight ? ZoneGutter : InnerZoneGap) : InnerZoneGap) + right3ZoneWidth);
-
-        double popupWidth  = innerWidth  + PopupPadding * 2;
-        double popupHeight = innerHeight + PopupPadding * 2;
+        double popupHeight = innerHeight + PopupPadding * 2 + LabelRowHeight;
 
         // ── Layout slot positions (relative to inner canvas, 0,0 at top-left) ──
 
-        double left3X  = 0;
-        double left2X  = suppressLeft3 ? left3X : left3X + left3ZoneWidth + (suppressLeft2 ? (suppressLeft ? ZoneGutter : InnerZoneGap) : InnerZoneGap);
-        double leftX   = suppressLeft2 ? left2X : left2X + left2ZoneWidth + (suppressLeft ? ZoneGutter : InnerZoneGap);
-        double topX    = suppressLeft  ? leftX  : leftX  + leftZoneWidth  + ZoneGutter;
-        double rightX  = topX + topZoneWidth + (suppressRight ? 0 : ZoneGutter);
-        // When Right is suppressed, Right2 is the outermost right zone and needs a full ZoneGutter
-        // gap from the top zone (separator lives there). When Right is present, use InnerZoneGap.
-        double right2X = suppressRight ? rightX + ZoneGutter : rightX + rightZoneWidth + InnerZoneGap;
-        double right3X = suppressRight2 ? (suppressRight ? rightX + ZoneGutter : rightX + rightZoneWidth + InnerZoneGap) : right2X + right2ZoneWidth + InnerZoneGap;
+        // Compute zone positions algorithmically by walking left-to-right.
+        // When we encounter a pair of adjacent occupied zones, insert a thin between them.
+        // If the outermost occupied zone isn't at the edge, add an outer thin first.
+        
+        double curX = 0;
+        var leftThinPositions  = new List<(double X, DockZone TargetZone, int TargetOrder, SyntheticInsertKind Kind)>();
+        
+        // Left side layout: walk outermost (Left3) to innermost (Left)
+        double left3X = 0, left2X = 0, leftX = 0;
+        
+        if (!suppressLeft3)
+        {
+            // Add synthetic outer thin only when Left3 is occupied (no natural outer-edge thin exists)
+            if (left3Occupied && leftOccupiedCount >= 2)
+            {
+                leftThinPositions.Add((curX, DockZone.Left3, 0, SyntheticInsertKind.InsertBefore));
+                curX += ColSlotWidthEmpty + InnerZoneGap;
+            }
+            left3X = curX;
+            curX += left3ZoneWidth;
+            
+            // Thin between Left3 and Left2 if both occupied
+            if (left3Occupied && left2Occupied)
+            {
+                curX += InnerZoneGap;
+                leftThinPositions.Add((curX, DockZone.Left2, 0, SyntheticInsertKind.InsertBefore));
+                curX += ColSlotWidthEmpty + InnerZoneGap;
+            }
+            else if (!suppressLeft2)
+            {
+                curX += InnerZoneGap;
+            }
+        }
+        
+        if (!suppressLeft2)
+        {
+            // If Left3 was suppressed and Left2 is empty but Left is occupied, add outer thin
+            if (suppressLeft3 && !left2Occupied && leftOccupied)
+            {
+                leftThinPositions.Add((curX, DockZone.Left2, 0, SyntheticInsertKind.InsertBefore));
+                curX += ColSlotWidthEmpty + InnerZoneGap;
+            }
+            left2X = curX;
+            curX += left2ZoneWidth;
+            
+            // Thin between Left2 and Left if both occupied.
+            if (left2Occupied && leftOccupied)
+            {
+                curX += InnerZoneGap;
+                leftThinPositions.Add((curX, DockZone.Left, 0, SyntheticInsertKind.InsertBefore));
+                curX += ColSlotWidthEmpty + InnerZoneGap;
+            }
+            else if (!suppressLeft)
+            {
+                curX += InnerZoneGap;
+            }
+        }
+        
+        if (!suppressLeft)
+        {
+            // If both outer zones suppressed and Left is empty but would need outer thin
+            if (suppressLeft3 && suppressLeft2 && !leftOccupied && leftOccupiedCount >= 2)
+            {
+                leftThinPositions.Add((curX, DockZone.Left, 0, SyntheticInsertKind.InsertBefore));
+                curX += ColSlotWidthEmpty + InnerZoneGap;
+            }
+            leftX = curX;
+            curX += leftZoneWidth;
+            // Inner-edge thin after Left when L3 is the natural outer thin and L2+L both occupied.
+            // This is the 3rd required thin: L3=outer-natural, L2↔L=between, inner=after-L.
+            if (!left3Occupied && left2Occupied && leftOccupied)
+            {
+                curX += InnerZoneGap;
+                leftThinPositions.Add((curX, DockZone.Left, leftPanels.Count, SyntheticInsertKind.InsertAfter));
+                curX += ColSlotWidthEmpty;
+                // No trailing InnerZoneGap; ZoneGutter follows immediately after
+            }
+            // Inner-edge thin after Left when L3 is occupied, L2 is the natural empty thin, and Left is occupied.
+            // 3 thins: L3-outer-synth (x=0), L2-natural-middle (x=M), inner-after-L (x=here).
+            // Drop on inner thin → InsertBefore Left@0 (Case B): shifts Left→Left2, panel lands at Left.
+            else if (left3Occupied && !left2Occupied && leftOccupied)
+            {
+                curX += InnerZoneGap;
+                leftThinPositions.Add((curX, DockZone.Left, 0, SyntheticInsertKind.InsertBefore));
+                curX += ColSlotWidthEmpty;
+                // No trailing InnerZoneGap; ZoneGutter follows immediately after
+            }
+        }
+        
+        // Gap before top zone
+        if (!suppressLeft)
+            curX += ZoneGutter;
+        else if (!suppressLeft2)
+            curX += ZoneGutter;
+        else if (!suppressLeft3)
+            curX += ZoneGutter;
+        
+        double topX = curX;
+        curX += topZoneWidth;
+        
+        // Gap after top zone
+        if (!suppressRight)
+            curX += ZoneGutter;
+        else if (!suppressRight2)
+            curX += ZoneGutter;
+        else if (!suppressRight3)
+            curX += ZoneGutter;
+        
+        // Right side layout: walk innermost (Right) to outermost (Right3)
+        double rightX = 0, right2X = 0, right3X = 0;
+        var rightThinPositions = new List<(double X, DockZone TargetZone, int TargetOrder, SyntheticInsertKind Kind)>();
+        
+        if (!suppressRight)
+        {
+            // If both outer zones suppressed and Right is empty but would need outer thin
+            if (suppressRight2 && suppressRight3 && !rightOccupied && rightOccupiedCount >= 2)
+            {
+                rightThinPositions.Add((curX, DockZone.Right, 0, SyntheticInsertKind.InsertBefore));
+                curX += ColSlotWidthEmpty + InnerZoneGap;
+            }
+            // When R3 is a natural thin (empty) and R+R2 are both occupied, add inner-thin before Right
+            // to provide the 3rd drop point (inner=before-R, mid=between-R-and-R2, R3=outer-natural)
+            if (!suppressRight3 && !right3Occupied && rightOccupied && right2Occupied)
+            {
+                rightThinPositions.Add((curX, DockZone.Right, 0, SyntheticInsertKind.InsertBefore));
+                curX += ColSlotWidthEmpty + InnerZoneGap;
+            }
+            rightX = curX;
+            curX += rightZoneWidth;
+            
+            // Thin between Right and Right2 if both occupied
+            if (rightOccupied && right2Occupied)
+            {
+                curX += InnerZoneGap;
+                rightThinPositions.Add((curX, DockZone.Right2, 0, SyntheticInsertKind.InsertBefore));
+                curX += ColSlotWidthEmpty + InnerZoneGap;
+            }
+            else if (!suppressRight2)
+            {
+                curX += InnerZoneGap;
+            }
+        }
+        
+        if (!suppressRight2)
+        {
+            // If Right was suppressed and Right2 is empty but Right3 is occupied, add outer thin
+            if (suppressRight && !right2Occupied && right3Occupied)
+            {
+                rightThinPositions.Add((curX, DockZone.Right2, 0, SyntheticInsertKind.InsertBefore));
+                curX += ColSlotWidthEmpty + InnerZoneGap;
+            }
+            right2X = curX;
+            curX += right2ZoneWidth;
+            
+            // Thin between Right2 and Right3 if both occupied
+            if (right2Occupied && right3Occupied)
+            {
+                curX += InnerZoneGap;
+                rightThinPositions.Add((curX, DockZone.Right3, 0, SyntheticInsertKind.InsertBefore));
+                curX += ColSlotWidthEmpty + InnerZoneGap;
+            }
+            else if (!suppressRight3)
+            {
+                curX += InnerZoneGap;
+            }
+        }
+        
+        if (!suppressRight3)
+        {
+            // Add synthetic outer thin only when Right3 is occupied (no natural outer-edge thin exists)
+            if (right3Occupied && rightOccupiedCount >= 2)
+            {
+                rightThinPositions.Add((curX, DockZone.Right3, right3Panels.Count, SyntheticInsertKind.InsertAfter));
+                curX += ColSlotWidthEmpty + InnerZoneGap;
+            }
+            right3X = curX;
+            curX += right3ZoneWidth;
+        }
+
+        double innerWidth = curX;
+        double popupWidth = innerWidth + PopupPadding * 2;
+
+        // ── Synthetic thin drop-target slots ─────────────────────────────────
+        // Algorithmically generated based on occupied zone pairs
+        foreach (var (x, targetZone, targetOrder, kind) in leftThinPositions)
+        {
+            allSlots.Add(new SlotButtonViewModel(
+                Label: "—", IsSourcePanel: false, IsExpansionButton: false,
+                X: x, Y: LabelRowHeight,
+                Width: ColSlotWidthEmpty, Height: innerHeight,
+                TargetZone: targetZone, TargetOrder: targetOrder,
+                SourcePanelId: sourcePanelId)
+            { InsertKind = kind });
+        }
+        
+        foreach (var (x, targetZone, targetOrder, kind) in rightThinPositions)
+        {
+            allSlots.Add(new SlotButtonViewModel(
+                Label: "—", IsSourcePanel: false, IsExpansionButton: false,
+                X: x, Y: LabelRowHeight,
+                Width: ColSlotWidthEmpty, Height: innerHeight,
+                TargetZone: targetZone, TargetOrder: targetOrder,
+                SourcePanelId: sourcePanelId)
+            { InsertKind = kind });
+        }
 
         // ── Left side slots ──────────────────────────────────────────────────
         if (!suppressLeft3)
             BuildColumnSlots(
                 allSlots, sourcePanelId, left3Panels, sourceInLeft3,
-                left3X, 0, left3ZoneWidth, ColSlotHeight, innerHeight, DockZone.Left3);
+                left3X, LabelRowHeight, left3ZoneWidth, ColSlotHeight, innerHeight, DockZone.Left3);
 
         if (!suppressLeft2)
             BuildColumnSlots(
                 allSlots, sourcePanelId, left2Panels, sourceInLeft2,
-                left2X, 0, left2ZoneWidth, ColSlotHeight, innerHeight, DockZone.Left2);
+                left2X, LabelRowHeight, left2ZoneWidth, ColSlotHeight, innerHeight, DockZone.Left2);
 
         if (!suppressLeft)
             BuildColumnSlots(
                 allSlots, sourcePanelId, leftPanels, sourceInLeft,
-                leftX, 0, leftZoneWidth, ColSlotHeight, innerHeight, DockZone.Left);
+                leftX, LabelRowHeight, leftZoneWidth, ColSlotHeight, innerHeight, DockZone.Left);
 
         // Top zone slots — top-aligned so their tops line up with the column panel tops
         BuildRowSlots(
@@ -172,7 +384,7 @@ internal static class DockingMapBuilder
             sourcePanelId,
             topPanels,
             sourceInTop,
-            topX, 0,
+            topX, LabelRowHeight,
             TopSlotWidth, TopSlotHeight,
             topZoneWidth,
             DockZone.Top);
@@ -181,17 +393,17 @@ internal static class DockingMapBuilder
         if (!suppressRight)
             BuildColumnSlots(
                 allSlots, sourcePanelId, rightPanels, sourceInRight,
-                rightX, 0, rightZoneWidth, ColSlotHeight, innerHeight, DockZone.Right);
+                rightX, LabelRowHeight, rightZoneWidth, ColSlotHeight, innerHeight, DockZone.Right);
 
         if (!suppressRight2)
             BuildColumnSlots(
                 allSlots, sourcePanelId, right2Panels, sourceInRight2,
-                right2X, 0, right2ZoneWidth, ColSlotHeight, innerHeight, DockZone.Right2);
+                right2X, LabelRowHeight, right2ZoneWidth, ColSlotHeight, innerHeight, DockZone.Right2);
 
         if (!suppressRight3)
             BuildColumnSlots(
                 allSlots, sourcePanelId, right3Panels, sourceInRight3,
-                right3X, 0, right3ZoneWidth, ColSlotHeight, innerHeight, DockZone.Right3);
+                right3X, LabelRowHeight, right3ZoneWidth, ColSlotHeight, innerHeight, DockZone.Right3);
 
         // ── Separators ───────────────────────────────────────────────────────
         // Thin pill-shaped vertical dividers between the top zone and each side group.
@@ -203,7 +415,7 @@ internal static class DockingMapBuilder
             double sepX = topX - ZoneGutter / 2.0 - SeparatorWidth / 2.0;
             allSlots.Add(new SlotButtonViewModel(
                 Label: string.Empty, IsSourcePanel: false, IsExpansionButton: false,
-                X: sepX, Y: 0,
+                X: sepX, Y: LabelRowHeight,
                 Width: SeparatorWidth, Height: innerHeight,
                 TargetZone: DockZone.Top, TargetOrder: -1,
                 SourcePanelId: sourcePanelId)
@@ -216,7 +428,7 @@ internal static class DockingMapBuilder
             double sepX = topZoneRightEdge + ZoneGutter / 2.0 - SeparatorWidth / 2.0;
             allSlots.Add(new SlotButtonViewModel(
                 Label: string.Empty, IsSourcePanel: false, IsExpansionButton: false,
-                X: sepX, Y: 0,
+                X: sepX, Y: LabelRowHeight,
                 Width: SeparatorWidth, Height: innerHeight,
                 TargetZone: DockZone.Top, TargetOrder: -2,
                 SourcePanelId: sourcePanelId)
@@ -232,12 +444,89 @@ internal static class DockingMapBuilder
             ? srcSlot.Y + srcSlot.Height / 2 + PopupPadding
             : popupHeight / 2;
 
+        // ── Section label center X positions ────────────────────────────────
+        var leftZoneSlots = allSlots.Where(s => !s.IsSeparator &&
+            (s.TargetZone == DockZone.Left || s.TargetZone == DockZone.Left2 || s.TargetZone == DockZone.Left3)).ToList();
+        bool hasLeftSection = leftZoneSlots.Count > 0;
+        double leftSectionCenterX = hasLeftSection
+            ? (leftZoneSlots.Min(s => s.X) + leftZoneSlots.Max(s => s.X + s.Width)) / 2
+            : 0;
+
+        var topZoneSlots = allSlots.Where(s => !s.IsSeparator && s.TargetZone == DockZone.Top).ToList();
+        double topSectionCenterX = topZoneSlots.Count > 0
+            ? (topZoneSlots.Min(s => s.X) + topZoneSlots.Max(s => s.X + s.Width)) / 2
+            : innerWidth / 2;
+
+        var rightZoneSlots = allSlots.Where(s => !s.IsSeparator &&
+            (s.TargetZone == DockZone.Right || s.TargetZone == DockZone.Right2 || s.TargetZone == DockZone.Right3)).ToList();
+        bool hasRightSection = rightZoneSlots.Count > 0;
+        double rightSectionCenterX = hasRightSection
+            ? (rightZoneSlots.Min(s => s.X) + rightZoneSlots.Max(s => s.X + s.Width)) / 2
+            : 0;
+
+        // ── Trace slot dump (visible in the Docking trace panel at runtime) ───
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"BuildDockingMap src={sourcePanelId}: {allSlots.Count} slots, popup={popupWidth:F0}×{popupHeight:F0}");
+        foreach (var s in allSlots)
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"  zone={s.TargetZone,-8} order={s.TargetOrder,3}  x={s.X,5:F0} y={s.Y,4:F0}"
+                + $"  w={s.Width,4:F0} h={s.Height,3:F0}"
+                + (s.IsSourcePanel ? "  [src]" : "")
+                + (s.IsSeparator   ? "  [sep]" : "")
+                + (string.IsNullOrEmpty(s.Label) ? "" : $"  '{s.Label}'"));
+
+        // Thin-check summary: synthetic thins + natural empty zone thins per side
+        int actualThinLeft  = allSlots.Count(s => !s.IsSeparator && s.Width < ColSlotWidth
+            && (s.TargetZone == DockZone.Left  || s.TargetZone == DockZone.Left2  || s.TargetZone == DockZone.Left3));
+        int actualThinRight = allSlots.Count(s => !s.IsSeparator && s.Width < ColSlotWidth
+            && (s.TargetZone == DockZone.Right || s.TargetZone == DockZone.Right2 || s.TargetZone == DockZone.Right3));
+
+        // Validate: warn if adjacent thin slots exist on the same side (visual regression indicator)
+        var leftThinSlots  = allSlots.Where(s => !s.IsSeparator && s.Width < ColSlotWidth
+            && (s.TargetZone == DockZone.Left  || s.TargetZone == DockZone.Left2  || s.TargetZone == DockZone.Left3))
+            .OrderBy(s => s.X).ToList();
+        var rightThinSlots = allSlots.Where(s => !s.IsSeparator && s.Width < ColSlotWidth
+            && (s.TargetZone == DockZone.Right || s.TargetZone == DockZone.Right2 || s.TargetZone == DockZone.Right3))
+            .OrderBy(s => s.X).ToList();
+        for (int i = 1; i < leftThinSlots.Count; i++)
+        {
+            var s1 = leftThinSlots[i - 1]; var s2 = leftThinSlots[i];
+            if (Math.Abs(s2.X - s1.X) < ColSlotWidth)
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"  [thin-layout WARNING] adjacent thin slots detected: {s1.TargetZone} x={s1.X:F0} and {s2.TargetZone} x={s2.X:F0}");
+        }
+        for (int i = 1; i < rightThinSlots.Count; i++)
+        {
+            var s1 = rightThinSlots[i - 1]; var s2 = rightThinSlots[i];
+            if (Math.Abs(s2.X - s1.X) < ColSlotWidth)
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"  [thin-layout WARNING] adjacent thin slots detected: {s1.TargetZone} x={s1.X:F0} and {s2.TargetZone} x={s2.X:F0}");
+        }
+
+        var leftSynthDesc  = string.Join(", ", leftThinPositions.Select(t  => $"{t.Kind} {t.TargetZone}@{t.TargetOrder}"));
+        var rightSynthDesc = string.Join(", ", rightThinPositions.Select(t => $"{t.Kind} {t.TargetZone}@{t.TargetOrder}"));
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"  [thin-check] left: thinSlots={actualThinLeft} (synth={leftThinPositions.Count}: [{leftSynthDesc}])  right: thinSlots={actualThinRight} (synth={rightThinPositions.Count}: [{rightSynthDesc}])");
+
+        // N+1 rule: for N>=2 occupied zones on a side, expect exactly N+1 thin drop-target slots
+        int expectedThinLeft  = leftOccupiedCount  >= 2 ? leftOccupiedCount  + 1 : 0;
+        int expectedThinRight = rightOccupiedCount >= 2 ? rightOccupiedCount + 1 : 0;
+        if ((expectedThinLeft  > 0 && actualThinLeft  != expectedThinLeft)
+         || (expectedThinRight > 0 && actualThinRight != expectedThinRight))
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"  [thin-check WARNING] left: expected={expectedThinLeft} actual={actualThinLeft}  right: expected={expectedThinRight} actual={actualThinRight}");
+
         return new DockingMapViewModel(
             allSlots,
             popupWidth,
             popupHeight,
             srcCenterX,
-            srcCenterY);
+            srcCenterY,
+            leftSectionCenterX,
+            topSectionCenterX,
+            rightSectionCenterX,
+            hasLeftSection,
+            hasRightSection);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

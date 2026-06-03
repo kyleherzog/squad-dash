@@ -9200,6 +9200,20 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                 return;
             }
 
+            // ── Escape: cancel docking test recording ────────────────────────────────
+            if (e.Key == Key.Escape && _dockingRecorder?.IsIdle == false)
+            {
+                _dockingRecorder.Cancel();
+                _dockingRecorder = null;
+                if (_dockingService is not null)
+                    _dockingService.TestRecorder = null;
+                RecordingIndicatorBorder.Visibility = Visibility.Collapsed;
+                RecordDockingTestMenuItem.Header    = "Record Docking Test Case";
+                RecordDockingTestMenuItem.IsEnabled = true;
+                e.Handled = true;
+                return;
+            }
+
             // ── Escape: dismiss doc find bar from any focus position (incl. WebBrowser preview) ──
             if (e.Key == Key.Escape && _docSourceFindBar is not null)
             {
