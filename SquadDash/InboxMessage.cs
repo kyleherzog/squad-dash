@@ -74,7 +74,8 @@ public sealed record InboxAction
 
     /// <summary>
     /// Routing mode. Valid values: "start_named_agent", "start_coordinator", "draft", "done".
-    /// Use "done" for dismiss/no-op actions that require no prompt injection.
+    /// Use "done" only when the label records a meaningful decision (e.g. "Mark resolved", "Already fixed").
+    /// Never use "done" for acknowledgement-only actions that record nothing — omit those entirely.
     /// Use "draft" to pre-fill the user's input box with the prompt text without sending it.
     /// </summary>
     [JsonPropertyName("routeMode")]

@@ -1497,11 +1497,18 @@ internal sealed class PreferencesWindow : Window {
             if (raw.StartsWith("\"") && raw.EndsWith("\"") && raw.Length >= 2) {
                 var phrase = raw[1..^1];
                 _ = Task.Run(async () => {
-                    var tts = TryBuildTtsProviderFromStore();
-                    if (tts != null)
-                        await tts.SpeakAsync(phrase);
-                    else
-                        await Dispatcher.InvokeAsync(() => System.Media.SystemSounds.Asterisk.Play());
+                    try
+                    {
+                        var tts = TryBuildTtsProviderFromStore();
+                        if (tts != null)
+                            await tts.SpeakAsync(phrase);
+                        else
+                            await Dispatcher.InvokeAsync(() => System.Media.SystemSounds.Asterisk.Play());
+                    }
+                    catch (Exception ex)
+                    {
+                        SquadDashTrace.Write("TTS", $"SpeakAsync failed: {ex.Message}");
+                    }
                 });
             } else if (!string.IsNullOrEmpty(raw) && System.IO.File.Exists(raw)) {
                 try {
@@ -1703,8 +1710,15 @@ internal sealed class PreferencesWindow : Window {
 
         // SetEnvironmentVariable(EnvironmentVariableTarget.User) broadcasts WM_SETTINGCHANGE to all
         // top-level windows synchronously, which can block the UI thread for 10+ seconds.
-        await Task.Run(() =>
-            Environment.SetEnvironmentVariable("SQUAD_SPEECH_KEY", apiKey, EnvironmentVariableTarget.User));
+        try
+        {
+            await Task.Run(() =>
+                Environment.SetEnvironmentVariable("SQUAD_SPEECH_KEY", apiKey, EnvironmentVariableTarget.User));
+        }
+        catch (Exception ex)
+        {
+            SquadDashTrace.Write("Preferences", $"SetEnvironmentVariable failed: {ex.Message}");
+        }
     }
 
     public static PreferencesWindow Open(
@@ -1850,8 +1864,15 @@ internal sealed class PreferencesWindow : Window {
         }
         _statusText.Text = "Sending test...";
         var tempProvider = new NtfyNotificationProvider(topic);
-        await tempProvider.SendAsync("SquadDash Test", "Notifications are working!");
-        _statusText.Text = "Test sent!";
+        try
+        {
+            await tempProvider.SendAsync("SquadDash Test", "Notifications are working!");
+            _statusText.Text = "Test sent!";
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = $"Send failed: {ex.Message}";
+        }
     }
 
     private static bool GetToggle(ApplicationSettingsSnapshot s, string key, bool defaultValue) {

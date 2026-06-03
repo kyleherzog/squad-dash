@@ -184,6 +184,7 @@ export type SquadBridgeHandlers = {
     onSubagentCompleted?: (sessionId: string, subagent: SubagentLifecycleInfo) => void;
     onSubagentFailed?: (sessionId: string, subagent: SubagentLifecycleInfo) => void;
     onSubagentMessageDelta?: (sessionId: string, subagent: SubagentTranscriptInfo) => void;
+    onSubagentThinkingDelta?: (sessionId: string, subagent: SubagentTranscriptInfo) => void;
     onSubagentMessage?: (sessionId: string, subagent: SubagentTranscriptInfo) => void;
     onSubagentToolStart?: (sessionId: string, subagent: SubagentLifecycleInfo, tool: ToolLifecycleEvent) => void;
     onSubagentToolProgress?: (sessionId: string, subagent: SubagentLifecycleInfo, tool: ToolLifecycleEvent) => void;
@@ -217,6 +218,7 @@ type SessionState = {
     backgroundTasks: BackgroundTaskSnapshot;
     subagentsByToolCallId: Map<string, SubagentLifecycleInfo>;
     backgroundTaskIdsByToolCallId: Map<string, string>;
+    subagentReasoningByToolCallId: Map<string, string>;
     currentRequest?: RequestContext;
     lastAssistantMessageContent: string;
     createdAt: number;
@@ -1222,6 +1224,35 @@ export class SquadBridgeService {
         };
     }
 
+    private recordSubagentReasoningDelta(
+        state: SessionState,
+        parentToolCallId: string,
+        text: string
+    ): void {
+        const existing = state.subagentReasoningByToolCallId.get(parentToolCallId) ?? "";
+        state.subagentReasoningByToolCallId.set(parentToolCallId, existing + text);
+    }
+
+    private takeUnstreamedSubagentFinalReasoning(
+        state: SessionState,
+        parentToolCallId: string,
+        reasoningText: string | undefined
+    ): string | undefined {
+        const streamed = state.subagentReasoningByToolCallId.get(parentToolCallId);
+        if (streamed !== undefined)
+            state.subagentReasoningByToolCallId.delete(parentToolCallId);
+
+        if (!reasoningText)
+            return undefined;
+        if (streamed === undefined)
+            return reasoningText;
+        if (reasoningText.startsWith(streamed)) {
+            const suffix = reasoningText.slice(streamed.length);
+            return suffix.trim().length > 0 ? suffix : undefined;
+        }
+        return undefined;
+    }
+
     private async refreshBackgroundTasks(state: SessionState): Promise<void> {
         const nextTasks = await this.loadBackgroundTasks(state);
         if (backgroundTasksEqual(state.backgroundTasks, nextTasks))
@@ -1432,6 +1463,7 @@ export class SquadBridgeService {
             backgroundTasks: EmptyBackgroundTasks(),
             subagentsByToolCallId: new Map<string, SubagentLifecycleInfo>(),
             backgroundTaskIdsByToolCallId: new Map<string, string>(),
+            subagentReasoningByToolCallId: new Map<string, string>(),
             lastAssistantMessageContent: "",
             createdAt: Date.now(),
             completedPromptCount: 0
@@ -1544,8 +1576,22 @@ export class SquadBridgeService {
         };
 
         state.session.on("reasoning_delta", (event: unknown) => {
+            const text = getEventRawStringValue(event, "deltaContent") ?? "";
+            const parentToolCallId = extractParentToolCallId(event);
+            if (parentToolCallId) {
+                if (text.length === 0)
+                    return;
+
+                this.recordSubagentReasoningDelta(state, parentToolCallId, text);
+                this.bridgeHandlers.onSubagentThinkingDelta?.(
+                    state.session.sessionId,
+                    this.buildSubagentTranscriptInfo(state, parentToolCallId, {
+                        reasoningText: text
+                    }));
+                return;
+            }
+
             const request = state.currentRequest;
-            const text = getRawStringValue(event, "deltaContent") ?? "";
             if (request && text.length > 0)
                 request.handlers.onThinking?.(text, extractThinkingSpeaker(event));
         });
@@ -1578,14 +1624,19 @@ export class SquadBridgeService {
             const content = extractAssistantMessageContent(event);
             const parentToolCallId = extractParentToolCallId(event);
             if (parentToolCallId) {
-                if (!content && !extractAssistantReasoningText(event))
+                const reasoningText = this.takeUnstreamedSubagentFinalReasoning(
+                    state,
+                    parentToolCallId,
+                    extractAssistantReasoningText(event));
+
+                if (!content && !reasoningText)
                     return;
 
                 this.bridgeHandlers.onSubagentMessage?.(
                     state.session.sessionId,
                     this.buildSubagentTranscriptInfo(state, parentToolCallId, {
                         text: content,
-                        reasoningText: extractAssistantReasoningText(event)
+                        reasoningText
                     }));
                 return;
             }

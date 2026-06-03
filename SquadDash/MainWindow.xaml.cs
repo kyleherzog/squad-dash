@@ -328,6 +328,21 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
     private bool _promptPanelOnTop;
     private WindowState _preFullScreenWindowState;
     private Rect _preFullScreenBounds;
+
+    // Zone column widths saved when entering fullscreen transcript mode, so they can
+    // be restored exactly when exiting. 0.0 means "was already collapsed before entering".
+    private double _preFullScreenLeftZoneW;
+    private double _preFullScreenLeft2ZoneW;
+    private double _preFullScreenLeft3ZoneW;
+    private double _preFullScreenLeft4ZoneW;
+    private double _preFullScreenLeft5ZoneW;
+    private double _preFullScreenLeft6ZoneW;
+    private double _preFullScreenRightZoneW;
+    private double _preFullScreenRight2ZoneW;
+    private double _preFullScreenRight3ZoneW;
+    private double _preFullScreenRight4ZoneW;
+    private double _preFullScreenRight5ZoneW;
+    private double _preFullScreenRight6ZoneW;
     private bool _agentsPanelFocusModeEnabled;
     private WindowState _preFocusModeWindowState;
     private double _preFocusModeHeight;
@@ -498,7 +513,8 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
     private WorkspaceOwnershipLease? _workspaceOwnershipLease;
     private bool _startupInitialized;
     private (string FolderPath, WorkspaceWindowPlacement Placement)? _pendingWindowPlacement;
-    private (bool TasksOpen, bool TraceOpen)? _pendingUtilityWindowState;
+    private (bool TasksOpen, bool TraceOpen, bool PlaybackWindowOpen)? _pendingUtilityWindowState;
+    private SquadDash.PanelDocking.DockingTestPlaybackWindow? _dockingTestPlaybackWindow;
     private (bool Open, List<string>? ExpandedNodes, string? SelectedTopic, double? DocsPanelWidth, double? DocsTopicsWidth, double? DocsPanelWidthFraction, double? DocsTopicsWidthFraction, bool? DocsSourceOpen, double? DocsSourceWidth)? _pendingDocsPanelState;
     private WorkspaceDocsPanelState? _docsPanelState; // loaded at startup, updated on save
     private bool _docSourceLayoutTopBottom; // false = side-by-side (default), true = top-bottom
@@ -664,25 +680,69 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             RightZonePanel,
             Left2ZonePanel,
             Right2ZonePanel,
+            Left3ZonePanel,
+            Right3ZonePanel,
+            Left4ZonePanel,
+            Right4ZonePanel,
+            Left5ZonePanel,
+            Right5ZonePanel,
+            Left6ZonePanel,
+            Right6ZonePanel,
             TopZonePanelsGrid,
             LeftZoneColumn,
             RightZoneColumn,
             Left2ZoneColumn,
             Right2ZoneColumn,
+            Left3ZoneColumn,
+            Right3ZoneColumn,
+            Left4ZoneColumn,
+            Right4ZoneColumn,
+            Left5ZoneColumn,
+            Right5ZoneColumn,
+            Left6ZoneColumn,
+            Right6ZoneColumn,
             LeftSplitterColumn,
             RightSplitterColumn,
             Left2SplitterColumn,
             Right2SplitterColumn,
+            Left3SplitterColumn,
+            Right3SplitterColumn,
+            Left4SplitterColumn,
+            Right4SplitterColumn,
+            Left5SplitterColumn,
+            Right5SplitterColumn,
+            Left6SplitterColumn,
+            Right6SplitterColumn,
             LeftZoneScrollViewer,
             RightZoneScrollViewer,
             Left2ZoneScrollViewer,
             Right2ZoneScrollViewer,
+            Left3ZoneScrollViewer,
+            Right3ZoneScrollViewer,
+            Left4ZoneScrollViewer,
+            Right4ZoneScrollViewer,
+            Left5ZoneScrollViewer,
+            Right5ZoneScrollViewer,
+            Left6ZoneScrollViewer,
+            Right6ZoneScrollViewer,
             LeftZoneSplitter,
             RightZoneSplitter,
             Left2ZoneSplitter,
-            Right2ZoneSplitter);
+            Right2ZoneSplitter,
+            Left3ZoneSplitter,
+            Right3ZoneSplitter,
+            Left4ZoneSplitter,
+            Right4ZoneSplitter,
+            Left5ZoneSplitter,
+            Right5ZoneSplitter,
+            Left6ZoneSplitter,
+            Right6ZoneSplitter);
         WireGripStripHandlers();
         WireRight2ZoneSplitterDrag();
+        WireRight3ZoneSplitterDrag();
+        WireRight4ZoneSplitterDrag();
+        WireRight5ZoneSplitterDrag();
+        WireRight6ZoneSplitterDrag();
         SquadDashTrace.Write(TraceCategory.Startup, $"Constructor: InitializeComponent {ctorSw.ElapsedMilliseconds}ms.");
         SquadDashTrace.Write(
             TraceCategory.Startup,
@@ -4356,9 +4416,12 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                             ? commitInfo.CommitMessage
                             : BuildApprovalDescription(notifSummary, doneCurrentTurn?.Prompt);
                         var hint = TruncatePromptHint(doneCurrentTurn?.Prompt, maxChars: 60);
+                        bool touchesDecisionsFile = CommitTouchesDecisionsFile(commitInfo.CommitSha,
+                            _currentWorkspace?.FolderPath ?? _workspacePaths.ApplicationRoot);
                         var item = CommitApprovalItem.Create(commitInfo.CommitSha, commitUrl, description,
                                                                       turnStartedAt, hint,
-                                                                      originalPrompt: doneCurrentTurn?.Prompt?.Trim());
+                                                                      originalPrompt: doneCurrentTurn?.Prompt?.Trim(),
+                                                                      touchesDecisionsFile: touchesDecisionsFile);
                         // Guard: never add a duplicate SHA — a stale agent CurrentTurn or context
                         // echo can cause the same SHA to be detected on a subsequent turn.
                         if (!_approvalItems.Any(a => string.Equals(a.CommitSha, item.CommitSha,
@@ -4762,6 +4825,7 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
         thread.DetailText = FormatThinkingText(thought);
         SyncThreadChip(thread);
         FindAgentCardForThread(thread)?.FireActivityPulse(SpinnerActivityKind.Thinking);
+        _backgroundTaskPresenter.ObserveBackgroundAgentActivity(thread, "subagent_thinking_delta");
         UpdateAgentCardFromThread(thread, syncBuckets: false);
         _conversationManager.SchedulePersistAgentThreadSnapshot(thread);
     }
@@ -6592,6 +6656,30 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
         string.IsNullOrWhiteSpace(prompt) ? null
             : prompt.Length <= maxChars ? prompt.Trim()
             : prompt[..maxChars].Trim() + "…";
+
+    private static bool CommitTouchesDecisionsFile(string sha, string workingDirectory)
+    {
+        try
+        {
+            using var proc = new System.Diagnostics.Process();
+            proc.StartInfo = new System.Diagnostics.ProcessStartInfo("git",
+                $"diff-tree --no-commit-id -r --name-only {sha}")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute        = false,
+                CreateNoWindow         = true,
+                WorkingDirectory       = workingDirectory,
+            };
+            proc.Start();
+            string output = proc.StandardOutput.ReadToEnd();
+            proc.WaitForExit(3000);
+            return output.Contains(".squad/decisions.md", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     private void OnApprovalItemChanged(CommitApprovalItem updated)
     {
@@ -9149,6 +9237,20 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                 && (Keyboard.Modifiers & ModifierKeys.Shift)   == 0)
             {
                 SetWorkspaceTintStop((_activeTintStop + 7) % 8);
+                e.Handled = true;
+                return;
+            }
+
+            // ── Escape: cancel docking test recording ────────────────────────────────
+            if (e.Key == Key.Escape && _dockingRecorder?.IsIdle == false)
+            {
+                _dockingRecorder.Cancel();
+                _dockingRecorder = null;
+                if (_dockingService is not null)
+                    _dockingService.TestRecorder = null;
+                RecordingIndicatorBorder.Visibility = Visibility.Collapsed;
+                RecordDockingTestMenuItem.Header    = "Record Docking Test Case";
+                RecordDockingTestMenuItem.IsEnabled = true;
                 e.Handled = true;
                 return;
             }
@@ -11790,6 +11892,305 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
         System.Diagnostics.Process.Start("explorer.exe", folderPath);
     }
 
+    private void DockingTestPlaybackMenuItem_Click(object sender, RoutedEventArgs e)
+        => ShowDockingTestPlaybackWindow();
+
+    private void ShowDockingTestPlaybackWindow()
+    {
+        // If already open, just bring it to front.
+        if (_dockingTestPlaybackWindow is { IsVisible: true })
+        {
+            _dockingTestPlaybackWindow.Activate();
+            return;
+        }
+
+        if (_dockingService is null || _currentWorkspace is null) return;
+        var folderPath = Path.Combine(_currentWorkspace.FolderPath, "SquadDash.Tests", "DockingTestCases");
+
+        Brush? hoverBrush = null;
+        if (Application.Current.Resources["ActivePanelSurface"] is SolidColorBrush accentBrush)
+        {
+            var c = accentBrush.Color;
+            hoverBrush = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromArgb(64, c.R, c.G, c.B));
+        }
+
+        // Overlay window for the drop-target preview shown while a test is selected.
+        Window? dropPreviewOverlay = null;
+
+        // Red rounded-rect overlay that highlights the source panel being moved.
+        Window? sourceHighlightOverlay = null;
+
+        void EnsureSourceHighlightOverlay()
+        {
+            if (sourceHighlightOverlay is not null) return;
+            var border = new Border
+            {
+                Background      = new System.Windows.Media.SolidColorBrush(
+                                      System.Windows.Media.Color.FromArgb(25, 220, 50, 50)),
+                BorderBrush     = new System.Windows.Media.SolidColorBrush(
+                                      System.Windows.Media.Color.FromArgb(220, 220, 60, 60)),
+                BorderThickness = new Thickness(3),
+                CornerRadius    = new CornerRadius(6),
+            };
+            sourceHighlightOverlay = new Window
+            {
+                WindowStyle           = WindowStyle.None,
+                AllowsTransparency    = true,
+                Background            = Brushes.Transparent,
+                Topmost               = false,
+                Owner                 = this,
+                ShowInTaskbar         = false,
+                ResizeMode            = ResizeMode.NoResize,
+                ShowActivated         = false,
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Content               = border,
+            };
+            MakeWindowClickThrough(sourceHighlightOverlay);
+        }
+
+        // Track the currently-open docking-map window so re-selection closes the old one.
+        Window? currentMapWindow = null;
+
+        void EnsureDropPreviewOverlay()
+        {
+            if (dropPreviewOverlay is not null) return;
+            var border = new Border
+            {
+                Background      = hoverBrush,
+                BorderBrush     = SquadDash.PanelDocking.DockingMapWindow.DeriveBorderBrush(hoverBrush),
+                BorderThickness = new Thickness(2),
+                CornerRadius    = new CornerRadius(6),
+            };
+            dropPreviewOverlay = new Window
+            {
+                WindowStyle           = WindowStyle.None,
+                AllowsTransparency    = true,
+                Background            = Brushes.Transparent,
+                Topmost               = false,
+                Owner                 = this,
+                ShowInTaskbar         = false,
+                ResizeMode            = ResizeMode.NoResize,
+                ShowActivated         = false,
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Content               = border,
+            };
+            MakeWindowClickThrough(dropPreviewOverlay);
+        }
+
+        // Map panelId → its named Border for screen-position lookup.
+        var panelBorderMap = new Dictionary<string, FrameworkElement>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["tasks"]       = TasksPanelBorder,
+            ["approvals"]   = ApprovalPanelBorder,
+            ["notes"]       = NotesPanelBorder,
+            ["maintenance"] = MaintenancePanelBorder,
+            ["inbox"]       = InboxPanelBorder,
+            ["loop"]        = LoopPanelBorder,
+        };
+
+        var window = new SquadDash.PanelDocking.DockingTestPlaybackWindow(
+            folderPath,
+            zoneMap => Dispatcher.Invoke(() =>
+            {
+                try { _dockingService.ApplyTestLayout(zoneMap); }
+                catch (Exception ex) { HandleUiCallbackException("DockingTestPlayback.ApplyLayout", ex); }
+            }),
+            (panelId, target) =>
+            {
+                // Close the stale map window synchronously (before layout re-runs).
+                Dispatcher.Invoke(() =>
+                {
+                    if (currentMapWindow is { IsVisible: true })
+                        currentMapWindow.Close();
+                });
+
+                // Defer map creation and positioning to Render priority so WPF has time to
+                // finish its layout/arrange pass after ApplyTestLayout moved panels around.
+                // Without this, PointToScreen returns stale coordinates from the old layout.
+                Dispatcher.InvokeAsync(() =>
+                {
+                    try
+                    {
+                        var layoutData = _dockingService.GetCurrentLayoutData();
+                        var visibleIds = layoutData.VisiblePanelIds;
+                        var viewModel = SquadDash.PanelDocking.DockingMapBuilder.BuildDockingMap(
+                            panelId, _dockingService.CurrentLayout, visibleIds);
+                        var mapWindow = new SquadDash.PanelDocking.DockingMapWindow(
+                            viewModel, _dockingService,
+                            _currentWorkspace?.FolderPath ?? string.Empty,
+                            Application.Current.Resources,
+                            hoverBrush,
+                            target);
+                        mapWindow.Owner = this;
+                        mapWindow.Closed += (_, _) =>
+                        {
+                            if (ReferenceEquals(currentMapWindow, mapWindow)) currentMapWindow = null;
+                            UpdateMainGridSideMargins();
+                        };
+
+                        // Position the map so its top edge is 40px below the source panel's
+                        // top edge, centered horizontally over the panel.
+                        double centerX, panelTop;
+                        if (panelBorderMap.TryGetValue(panelId, out var srcBorder) && srcBorder.IsVisible)
+                        {
+                            var tl = srcBorder.PointToScreen(new Point(0, 0));
+                            centerX  = tl.X + srcBorder.ActualWidth / 2;
+                            panelTop = tl.Y;
+                        }
+                        else
+                        {
+                            var fallback = PointToScreen(new Point(ActualWidth / 2, ActualHeight / 2));
+                            centerX  = fallback.X;
+                            panelTop = fallback.Y;
+                        }
+
+                        currentMapWindow = mapWindow;
+                        // ShowActivated = false keeps keyboard focus on the playback window's
+                        // ListBox so arrow-key navigation continues to work while the map is open.
+                        // Don't call Activate() — that would steal focus and trigger Deactivated
+                        // close-on-blur before the user can press another arrow key.
+                        mapWindow.ShowActivated = false;
+                        mapWindow.ShowAtPanelTopCenter(centerX, panelTop);
+                    }
+                    catch (Exception ex) { HandleUiCallbackException("DockingTestPlayback.OpenMap", ex); }
+                }, System.Windows.Threading.DispatcherPriority.Render);
+            },
+            (filePath, description) => Dispatcher.Invoke(() =>
+            {
+                try
+                {
+                    var list = GetOrCreateFollowUpList(_activeTabId ?? "");
+                    if (list.Count < 15 && !list.Any(a => a.FileReferencePath == filePath))
+                    {
+                        list.Add(new FollowUpAttachment(
+                            CommitSha:         string.Empty,
+                            Description:       description,
+                            OriginalPrompt:    null,
+                            FileReferencePath: filePath));
+                        UpdateFollowUpStrip();
+                        SyncQueuePanel();
+                        if (_activeTabId is null) PersistDraftFollowUp();
+                    }
+                }
+                catch (Exception ex) { HandleUiCallbackException("DockingTestPlayback.AddToChat", ex); }
+            }),
+            (panelId, targetZone, targetOrder) => Dispatcher.Invoke(() =>
+            {
+                try
+                {
+                    _dockingService.MovePanel(panelId, targetZone, targetOrder);
+                    if (_currentWorkspace is not null)
+                        _dockingService.SaveLayout(_currentWorkspace.FolderPath);
+                }
+                catch (Exception ex) { HandleUiCallbackException("DockingTestPlayback.ExecuteMove", ex); }
+            }),
+            () =>
+            {
+                var layoutData = _dockingService.GetCurrentLayoutData();
+                return SquadDash.PanelDocking.DockingLayoutEngine.LayoutToJson(layoutData);
+            },
+            Application.Current.Resources,
+            (panelId, targetZone, targetOrder) => Dispatcher.Invoke(() =>
+            {
+                try
+                {
+                    if (hoverBrush is null) return;
+                    var rect = _dockingService.GetDropPreviewRect(panelId, targetZone, targetOrder);
+                    if (rect.IsEmpty) return;
+                    EnsureDropPreviewOverlay();
+                    dropPreviewOverlay!.Left   = rect.Left;
+                    dropPreviewOverlay!.Top    = rect.Top;
+                    dropPreviewOverlay!.Width  = Math.Max(rect.Width,  1);
+                    dropPreviewOverlay!.Height = Math.Max(rect.Height, 1);
+                    if (!dropPreviewOverlay.IsVisible)
+                        dropPreviewOverlay.Show();
+                }
+                catch (Exception ex) { HandleUiCallbackException("DockingTestPlayback.ShowDropPreview", ex); }
+            }),
+            () => Dispatcher.Invoke(() =>
+            {
+                try { dropPreviewOverlay?.Hide(); }
+                catch (Exception ex) { HandleUiCallbackException("DockingTestPlayback.HideDropPreview", ex); }
+            }),
+            getMapViolations: (panelId, target) => Dispatcher.Invoke(() =>
+            {
+                try
+                {
+                    var layoutData = _dockingService.GetCurrentLayoutData();
+                    var visibleIds = layoutData.VisiblePanelIds;
+                    var viewModel  = SquadDash.PanelDocking.DockingMapBuilder.BuildDockingMap(
+                        panelId, _dockingService.CurrentLayout, visibleIds);
+                    return SquadDash.PanelDocking.DockingMapBuilder.FindAdjacentThinViolations(viewModel.Slots);
+                }
+                catch (Exception ex)
+                {
+                    HandleUiCallbackException("DockingTestPlayback.GetMapViolations", ex);
+                    return System.Array.Empty<string>();
+                }
+            }),
+            showSourceHighlight: panelId => Dispatcher.InvokeAsync(() =>
+            {
+                try
+                {
+                    if (!panelBorderMap.TryGetValue(panelId, out var fe)) return;
+                    EnsureSourceHighlightOverlay();
+                    var topLeft = fe.PointToScreen(new System.Windows.Point(0, 0));
+                    sourceHighlightOverlay!.Left   = topLeft.X;
+                    sourceHighlightOverlay.Top    = topLeft.Y;
+                    sourceHighlightOverlay.Width  = fe.ActualWidth;
+                    sourceHighlightOverlay.Height = fe.ActualHeight;
+                    sourceHighlightOverlay.Show();
+                }
+                catch (Exception ex) { HandleUiCallbackException("DockingTestPlayback.ShowSourceHighlight", ex); }
+            }, System.Windows.Threading.DispatcherPriority.Render),
+            hideSourceHighlight: () => Dispatcher.Invoke(() =>
+            {
+                try { sourceHighlightOverlay?.Hide(); }
+                catch (Exception ex) { HandleUiCallbackException("DockingTestPlayback.HideSourceHighlight", ex); }
+            }),
+            closeMapWindow: () => Dispatcher.Invoke(() =>
+            {
+                try
+                {
+                    if (currentMapWindow is { IsVisible: true })
+                        currentMapWindow.Close();
+                    currentMapWindow = null;
+                }
+                catch (Exception ex) { HandleUiCallbackException("DockingTestPlayback.CloseMapWindow", ex); }
+            }));
+
+        window.Owner = this;
+        window.Closed += (_, _) =>
+        {
+            dropPreviewOverlay?.Close();
+            dropPreviewOverlay = null;
+            sourceHighlightOverlay?.Close();
+            sourceHighlightOverlay = null;
+            currentMapWindow = null;
+            _dockingTestPlaybackWindow = null;
+        };
+        _dockingTestPlaybackWindow = window;
+        window.Topmost = true;
+        window.Show();
+    }
+
+    // Win32 helpers to make overlay windows fully click-through (WS_EX_TRANSPARENT).
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int GetWindowLong(IntPtr hwnd, int nIndex);
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int SetWindowLong(IntPtr hwnd, int nIndex, int dwNewLong);
+
+    private static void MakeWindowClickThrough(Window window)
+    {
+        const int GWL_EXSTYLE      = -20;
+        const int WS_EX_TRANSPARENT = 0x00000020;
+        var helper = new System.Windows.Interop.WindowInteropHelper(window);
+        helper.EnsureHandle();
+        int style = GetWindowLong(helper.Handle, GWL_EXSTYLE);
+        SetWindowLong(helper.Handle, GWL_EXSTYLE, style | WS_EX_TRANSPARENT);
+    }
+
     private void SimulateBridgeDisposed_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -12076,6 +12477,47 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                 : new Rect(Left, Top, Width, Height);
             if (WindowState != WindowState.Maximized)
                 WindowState = WindowState.Maximized;
+
+            // Save and collapse all occupied docking zone columns so the transcript fills
+            // the full width. Splitter columns are zeroed alongside their zone columns.
+            _preFullScreenLeftZoneW   = LeftZoneColumn.Width.IsAbsolute   ? LeftZoneColumn.Width.Value   : 0;
+            _preFullScreenLeft2ZoneW  = Left2ZoneColumn.Width.IsAbsolute  ? Left2ZoneColumn.Width.Value  : 0;
+            _preFullScreenLeft3ZoneW  = Left3ZoneColumn.Width.IsAbsolute  ? Left3ZoneColumn.Width.Value  : 0;
+            _preFullScreenLeft4ZoneW  = Left4ZoneColumn.Width.IsAbsolute  ? Left4ZoneColumn.Width.Value  : 0;
+            _preFullScreenLeft5ZoneW  = Left5ZoneColumn.Width.IsAbsolute  ? Left5ZoneColumn.Width.Value  : 0;
+            _preFullScreenLeft6ZoneW  = Left6ZoneColumn.Width.IsAbsolute  ? Left6ZoneColumn.Width.Value  : 0;
+            _preFullScreenRightZoneW  = RightZoneColumn.Width.IsAbsolute  ? RightZoneColumn.Width.Value  : 0;
+            _preFullScreenRight2ZoneW = Right2ZoneColumn.Width.IsAbsolute ? Right2ZoneColumn.Width.Value : 0;
+            _preFullScreenRight3ZoneW = Right3ZoneColumn.Width.IsAbsolute ? Right3ZoneColumn.Width.Value : 0;
+            _preFullScreenRight4ZoneW = Right4ZoneColumn.Width.IsAbsolute ? Right4ZoneColumn.Width.Value : 0;
+            _preFullScreenRight5ZoneW = Right5ZoneColumn.Width.IsAbsolute ? Right5ZoneColumn.Width.Value : 0;
+            _preFullScreenRight6ZoneW = Right6ZoneColumn.Width.IsAbsolute ? Right6ZoneColumn.Width.Value : 0;
+
+            LeftZoneColumn.Width        = new GridLength(0);
+            Left2ZoneColumn.Width       = new GridLength(0);
+            Left3ZoneColumn.Width       = new GridLength(0);
+            Left4ZoneColumn.Width       = new GridLength(0);
+            Left5ZoneColumn.Width       = new GridLength(0);
+            Left6ZoneColumn.Width       = new GridLength(0);
+            RightZoneColumn.Width       = new GridLength(0);
+            Right2ZoneColumn.Width      = new GridLength(0);
+            Right3ZoneColumn.Width      = new GridLength(0);
+            Right4ZoneColumn.Width      = new GridLength(0);
+            Right5ZoneColumn.Width      = new GridLength(0);
+            Right6ZoneColumn.Width      = new GridLength(0);
+            LeftSplitterColumn.Width    = new GridLength(0);
+            Left2SplitterColumn.Width   = new GridLength(0);
+            Left3SplitterColumn.Width   = new GridLength(0);
+            Left4SplitterColumn.Width   = new GridLength(0);
+            Left5SplitterColumn.Width   = new GridLength(0);
+            Left6SplitterColumn.Width   = new GridLength(0);
+            RightSplitterColumn.Width   = new GridLength(0);
+            Right2SplitterColumn.Width  = new GridLength(0);
+            Right3SplitterColumn.Width  = new GridLength(0);
+            Right4SplitterColumn.Width  = new GridLength(0);
+            Right5SplitterColumn.Width  = new GridLength(0);
+            Right6SplitterColumn.Width  = new GridLength(0);
+            UpdateMainGridSideMargins();
         }
         else
         {
@@ -12106,6 +12548,41 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                 }
             }
             // If the window was already maximized before entering fullscreen, leave it maximized.
+
+            // Restore docking zone columns that were visible before entering fullscreen.
+            // Only restore the zone column; GridSplitter auto-shows when its adjacent zone is non-zero.
+            if (_preFullScreenLeftZoneW   > 0) LeftZoneColumn.Width   = new GridLength(_preFullScreenLeftZoneW);
+            if (_preFullScreenLeft2ZoneW  > 0) Left2ZoneColumn.Width  = new GridLength(_preFullScreenLeft2ZoneW);
+            if (_preFullScreenLeft3ZoneW  > 0) Left3ZoneColumn.Width  = new GridLength(_preFullScreenLeft3ZoneW);
+            if (_preFullScreenLeft4ZoneW  > 0) Left4ZoneColumn.Width  = new GridLength(_preFullScreenLeft4ZoneW);
+            if (_preFullScreenLeft5ZoneW  > 0) Left5ZoneColumn.Width  = new GridLength(_preFullScreenLeft5ZoneW);
+            if (_preFullScreenLeft6ZoneW  > 0) Left6ZoneColumn.Width  = new GridLength(_preFullScreenLeft6ZoneW);
+            if (_preFullScreenRightZoneW  > 0) RightZoneColumn.Width  = new GridLength(_preFullScreenRightZoneW);
+            if (_preFullScreenRight2ZoneW > 0) Right2ZoneColumn.Width = new GridLength(_preFullScreenRight2ZoneW);
+            if (_preFullScreenRight3ZoneW > 0) Right3ZoneColumn.Width = new GridLength(_preFullScreenRight3ZoneW);
+            if (_preFullScreenRight4ZoneW > 0) Right4ZoneColumn.Width = new GridLength(_preFullScreenRight4ZoneW);
+            if (_preFullScreenRight5ZoneW > 0) Right5ZoneColumn.Width = new GridLength(_preFullScreenRight5ZoneW);
+            if (_preFullScreenRight6ZoneW > 0) Right6ZoneColumn.Width = new GridLength(_preFullScreenRight6ZoneW);
+            // Restore splitter columns for each zone that was re-shown.
+            if (_preFullScreenLeftZoneW   > 0 || _preFullScreenLeft2ZoneW  > 0 || _preFullScreenLeft3ZoneW  > 0 || _preFullScreenLeft4ZoneW  > 0 || _preFullScreenLeft5ZoneW  > 0 || _preFullScreenLeft6ZoneW  > 0)
+            {
+                if (_preFullScreenLeftZoneW   > 0) LeftSplitterColumn.Width   = new GridLength(8);
+                if (_preFullScreenLeft2ZoneW  > 0) Left2SplitterColumn.Width  = new GridLength(8);
+                if (_preFullScreenLeft3ZoneW  > 0) Left3SplitterColumn.Width  = new GridLength(8);
+                if (_preFullScreenLeft4ZoneW  > 0) Left4SplitterColumn.Width  = new GridLength(8);
+                if (_preFullScreenLeft5ZoneW  > 0) Left5SplitterColumn.Width  = new GridLength(8);
+                if (_preFullScreenLeft6ZoneW  > 0) Left6SplitterColumn.Width  = new GridLength(8);
+            }
+            if (_preFullScreenRightZoneW  > 0 || _preFullScreenRight2ZoneW > 0 || _preFullScreenRight3ZoneW > 0 || _preFullScreenRight4ZoneW > 0 || _preFullScreenRight5ZoneW > 0 || _preFullScreenRight6ZoneW > 0)
+            {
+                if (_preFullScreenRightZoneW  > 0) RightSplitterColumn.Width  = new GridLength(8);
+                if (_preFullScreenRight2ZoneW > 0) Right2SplitterColumn.Width = new GridLength(8);
+                if (_preFullScreenRight3ZoneW > 0) Right3SplitterColumn.Width = new GridLength(8);
+                if (_preFullScreenRight4ZoneW > 0) Right4SplitterColumn.Width = new GridLength(8);
+                if (_preFullScreenRight5ZoneW > 0) Right5SplitterColumn.Width = new GridLength(8);
+                if (_preFullScreenRight6ZoneW > 0) Right6SplitterColumn.Width = new GridLength(8);
+            }
+            UpdateMainGridSideMargins();
         }
 
         // Capture before ApplyViewMode changes the layout (and possibly the scroll extent).
@@ -12454,8 +12931,8 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
 
     private void UpdateMainGridSideMargins()
     {
-        bool hasLeft  = LeftZoneColumn.Width.Value  > 0 || Left2ZoneColumn.Width.Value  > 0;
-        bool hasRight = RightZoneColumn.Width.Value > 0 || Right2ZoneColumn.Width.Value > 0;
+        bool hasLeft  = LeftZoneColumn.Width.Value  > 0 || Left2ZoneColumn.Width.Value  > 0 || Left3ZoneColumn.Width.Value  > 0 || Left4ZoneColumn.Width.Value  > 0 || Left5ZoneColumn.Width.Value  > 0 || Left6ZoneColumn.Width.Value  > 0;
+        bool hasRight = RightZoneColumn.Width.Value > 0 || Right2ZoneColumn.Width.Value > 0 || Right3ZoneColumn.Width.Value > 0 || Right4ZoneColumn.Width.Value > 0 || Right5ZoneColumn.Width.Value > 0 || Right6ZoneColumn.Width.Value > 0;
         var current = MainGrid.Margin;
         MainGrid.Margin = new System.Windows.Thickness(
             hasLeft  ? 4 : 12,
@@ -12498,6 +12975,9 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                     }
                     var viewModel   = SquadDash.PanelDocking.DockingMapBuilder.BuildDockingMap(
                         id, _dockingService.CurrentLayout, visibleIds);
+                    var mapViolations = SquadDash.PanelDocking.DockingMapBuilder.FindAdjacentThinViolations(viewModel.Slots);
+                    foreach (var v in mapViolations)
+                        SquadDashTrace.Write(TraceCategory.Docking, $"[DockingMap violation] panel={id}: {v}");
                     Brush? hoverBrush = null;
                     if (Application.Current.Resources["ActivePanelSurface"] is SolidColorBrush accentBrush)
                     {
@@ -12577,6 +13057,204 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
         };
 
         Right2ZoneSplitter.LostMouseCapture += (_, _) => { isDragging = false; };
+    }
+
+    /// <summary>
+    /// Attaches a custom drag handler to Right3ZoneSplitter so that its resize direction
+    /// matches user expectation for an outermost-right zone:
+    ///   drag RIGHT → Right3Zone expands (takes space from Right2 zone or the star column)
+    ///   drag LEFT  → Right3Zone shrinks (gives space back)
+    ///
+    /// The default WPF GridSplitter PreviousAndNext behaviour is inverted for Right3:
+    ///   drag RIGHT → Previous (Right2Zone) grows, Next (Right3Zone) shrinks
+    ///   drag LEFT  → Previous shrinks — but when Right2 zone is collapsed (width=0) this is
+    ///                blocked, so Right3 can never expand via the standard handler.
+    /// This override negates the delta and redirects the donor column appropriately.
+    /// </summary>
+    private void WireRight3ZoneSplitterDrag()
+    {
+        double dragStartX     = 0;
+        double right3Start    = 0;
+        double right2Start    = 0;
+        bool   isDragging     = false;
+
+        Right3ZoneSplitter.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (Right3ZoneSplitter.Visibility != Visibility.Visible) return;
+            dragStartX  = e.GetPosition(ContentZoneGrid).X;
+            right3Start = Right3ZoneColumn.Width.IsAbsolute  ? Right3ZoneColumn.Width.Value  : 0;
+            right2Start = Right2ZoneColumn.Width.IsAbsolute  ? Right2ZoneColumn.Width.Value  : 0;
+            isDragging  = true;
+            Right3ZoneSplitter.CaptureMouse();
+            e.Handled = true;   // prevent GridSplitter's built-in (wrong-direction) handler
+        };
+
+        Right3ZoneSplitter.MouseMove += (_, e) =>
+        {
+            if (!isDragging || e.LeftButton != System.Windows.Input.MouseButtonState.Pressed) return;
+
+            double dx             = e.GetPosition(ContentZoneGrid).X - dragStartX;
+            // dx > 0 = dragged right → splitter moves right → Right3 (rightmost col) shrinks
+            double newRight3Width = Math.Max(0, right3Start - dx);
+
+            if (right2Start > 0)
+            {
+                // Right2 zone is active: exchange space between Right2 and Right3.
+                double total  = right3Start + right2Start;
+                newRight3Width = Math.Min(total, newRight3Width);
+                Right2ZoneColumn.Width = new GridLength(total - newRight3Width);
+            }
+            // When Right2 zone is collapsed the star column (*) auto-adjusts; no explicit set needed.
+
+            Right3ZoneColumn.Width = new GridLength(newRight3Width);
+        };
+
+        Right3ZoneSplitter.MouseLeftButtonUp += (_, e) =>
+        {
+            if (!isDragging) return;
+            isDragging = false;
+            Right3ZoneSplitter.ReleaseMouseCapture();
+        };
+
+        Right3ZoneSplitter.LostMouseCapture += (_, _) => { isDragging = false; };
+    }
+
+    private void WireRight4ZoneSplitterDrag()
+    {
+        double dragStartX     = 0;
+        double right4Start    = 0;
+        double right3Start    = 0;
+        bool   isDragging     = false;
+
+        Right4ZoneSplitter.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (Right4ZoneSplitter.Visibility != Visibility.Visible) return;
+            dragStartX  = e.GetPosition(ContentZoneGrid).X;
+            right4Start = Right4ZoneColumn.Width.IsAbsolute  ? Right4ZoneColumn.Width.Value  : 0;
+            right3Start = Right3ZoneColumn.Width.IsAbsolute  ? Right3ZoneColumn.Width.Value  : 0;
+            isDragging  = true;
+            Right4ZoneSplitter.CaptureMouse();
+            e.Handled = true;
+        };
+
+        Right4ZoneSplitter.MouseMove += (_, e) =>
+        {
+            if (!isDragging || e.LeftButton != System.Windows.Input.MouseButtonState.Pressed) return;
+
+            double dx             = e.GetPosition(ContentZoneGrid).X - dragStartX;
+            // dx > 0 = dragged right → splitter moves right → Right4 (rightmost col) shrinks
+            double newRight4Width = Math.Max(0, right4Start - dx);
+
+            if (right3Start > 0)
+            {
+                // Right3 zone is active: exchange space between Right3 and Right4.
+                double total  = right4Start + right3Start;
+                newRight4Width = Math.Min(total, newRight4Width);
+                Right3ZoneColumn.Width = new GridLength(total - newRight4Width);
+            }
+            // When Right3 zone is collapsed the star column (*) auto-adjusts; no explicit set needed.
+
+            Right4ZoneColumn.Width = new GridLength(newRight4Width);
+        };
+
+        Right4ZoneSplitter.MouseLeftButtonUp += (_, e) =>
+        {
+            if (!isDragging) return;
+            isDragging = false;
+            Right4ZoneSplitter.ReleaseMouseCapture();
+        };
+
+        Right4ZoneSplitter.LostMouseCapture += (_, _) => { isDragging = false; };
+    }
+
+    private void WireRight5ZoneSplitterDrag()
+    {
+        double dragStartX     = 0;
+        double right5Start    = 0;
+        double right4Start    = 0;
+        bool   isDragging     = false;
+
+        Right5ZoneSplitter.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (Right5ZoneSplitter.Visibility != Visibility.Visible) return;
+            dragStartX  = e.GetPosition(ContentZoneGrid).X;
+            right5Start = Right5ZoneColumn.Width.IsAbsolute ? Right5ZoneColumn.Width.Value : 0;
+            right4Start = Right4ZoneColumn.Width.IsAbsolute ? Right4ZoneColumn.Width.Value : 0;
+            isDragging  = true;
+            Right5ZoneSplitter.CaptureMouse();
+            e.Handled = true;
+        };
+
+        Right5ZoneSplitter.MouseMove += (_, e) =>
+        {
+            if (!isDragging || e.LeftButton != System.Windows.Input.MouseButtonState.Pressed) return;
+
+            double dx             = e.GetPosition(ContentZoneGrid).X - dragStartX;
+            double newRight5Width = Math.Max(0, right5Start - dx);
+
+            if (right4Start > 0)
+            {
+                double total  = right5Start + right4Start;
+                newRight5Width = Math.Min(total, newRight5Width);
+                Right4ZoneColumn.Width = new GridLength(total - newRight5Width);
+            }
+
+            Right5ZoneColumn.Width = new GridLength(newRight5Width);
+        };
+
+        Right5ZoneSplitter.MouseLeftButtonUp += (_, e) =>
+        {
+            if (!isDragging) return;
+            isDragging = false;
+            Right5ZoneSplitter.ReleaseMouseCapture();
+        };
+
+        Right5ZoneSplitter.LostMouseCapture += (_, _) => { isDragging = false; };
+    }
+
+    private void WireRight6ZoneSplitterDrag()
+    {
+        double dragStartX     = 0;
+        double right6Start    = 0;
+        double right5Start    = 0;
+        bool   isDragging     = false;
+
+        Right6ZoneSplitter.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (Right6ZoneSplitter.Visibility != Visibility.Visible) return;
+            dragStartX  = e.GetPosition(ContentZoneGrid).X;
+            right6Start = Right6ZoneColumn.Width.IsAbsolute ? Right6ZoneColumn.Width.Value : 0;
+            right5Start = Right5ZoneColumn.Width.IsAbsolute ? Right5ZoneColumn.Width.Value : 0;
+            isDragging  = true;
+            Right6ZoneSplitter.CaptureMouse();
+            e.Handled = true;
+        };
+
+        Right6ZoneSplitter.MouseMove += (_, e) =>
+        {
+            if (!isDragging || e.LeftButton != System.Windows.Input.MouseButtonState.Pressed) return;
+
+            double dx             = e.GetPosition(ContentZoneGrid).X - dragStartX;
+            double newRight6Width = Math.Max(0, right6Start - dx);
+
+            if (right5Start > 0)
+            {
+                double total  = right6Start + right5Start;
+                newRight6Width = Math.Min(total, newRight6Width);
+                Right5ZoneColumn.Width = new GridLength(total - newRight6Width);
+            }
+
+            Right6ZoneColumn.Width = new GridLength(newRight6Width);
+        };
+
+        Right6ZoneSplitter.MouseLeftButtonUp += (_, e) =>
+        {
+            if (!isDragging) return;
+            isDragging = false;
+            Right6ZoneSplitter.ReleaseMouseCapture();
+        };
+
+        Right6ZoneSplitter.LostMouseCapture += (_, _) => { isDragging = false; };
     }
 
     private void ShowDockContextMenu(Border panelBorder, string panelId)
@@ -15421,6 +16099,36 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             if (loadedLayout.RightZoneWidth is double rw && rw > 0
                 && RightZoneColumn.Width.Value > 0)
                 RightZoneColumn.Width = new System.Windows.GridLength(rw, System.Windows.GridUnitType.Pixel);
+            if (loadedLayout.Left2ZoneWidth is double l2w && l2w > 0
+                && Left2ZoneColumn.Width.Value > 0)
+                Left2ZoneColumn.Width = new System.Windows.GridLength(l2w, System.Windows.GridUnitType.Pixel);
+            if (loadedLayout.Right2ZoneWidth is double r2w && r2w > 0
+                && Right2ZoneColumn.Width.Value > 0)
+                Right2ZoneColumn.Width = new System.Windows.GridLength(r2w, System.Windows.GridUnitType.Pixel);
+            if (loadedLayout.Left3ZoneWidth is double l3w && l3w > 0
+                && Left3ZoneColumn.Width.Value > 0)
+                Left3ZoneColumn.Width = new System.Windows.GridLength(l3w, System.Windows.GridUnitType.Pixel);
+            if (loadedLayout.Right3ZoneWidth is double r3w && r3w > 0
+                && Right3ZoneColumn.Width.Value > 0)
+                Right3ZoneColumn.Width = new System.Windows.GridLength(r3w, System.Windows.GridUnitType.Pixel);
+            if (loadedLayout.Left4ZoneWidth is double l4w && l4w > 0
+                && Left4ZoneColumn.Width.Value > 0)
+                Left4ZoneColumn.Width = new System.Windows.GridLength(l4w, System.Windows.GridUnitType.Pixel);
+            if (loadedLayout.Right4ZoneWidth is double r4w && r4w > 0
+                && Right4ZoneColumn.Width.Value > 0)
+                Right4ZoneColumn.Width = new System.Windows.GridLength(r4w, System.Windows.GridUnitType.Pixel);
+            if (loadedLayout.Left5ZoneWidth is double l5w && l5w > 0
+                && Left5ZoneColumn.Width.Value > 0)
+                Left5ZoneColumn.Width = new System.Windows.GridLength(l5w, System.Windows.GridUnitType.Pixel);
+            if (loadedLayout.Right5ZoneWidth is double r5w && r5w > 0
+                && Right5ZoneColumn.Width.Value > 0)
+                Right5ZoneColumn.Width = new System.Windows.GridLength(r5w, System.Windows.GridUnitType.Pixel);
+            if (loadedLayout.Left6ZoneWidth is double l6w && l6w > 0
+                && Left6ZoneColumn.Width.Value > 0)
+                Left6ZoneColumn.Width = new System.Windows.GridLength(l6w, System.Windows.GridUnitType.Pixel);
+            if (loadedLayout.Right6ZoneWidth is double r6w && r6w > 0
+                && Right6ZoneColumn.Width.Value > 0)
+                Right6ZoneColumn.Width = new System.Windows.GridLength(r6w, System.Windows.GridUnitType.Pixel);
             UpdateMainGridSideMargins();
         }
 
@@ -23466,7 +24174,7 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                     if (pendingPlacement is { } p)
                         _settingsStore.SaveWindowPlacement(p.FolderPath, p.Placement);
                     if (pendingUtilityWindowState is { } u)
-                        _settingsStore.SaveUtilityWindowState(u.TasksOpen, u.TraceOpen);
+                        _settingsStore.SaveUtilityWindowState(u.TasksOpen, u.TraceOpen, dockingTestPlaybackWindowOpen: u.PlaybackWindowOpen);
                     if (pendingDocsPanelState is { } docs)
                         _settingsStore.SaveDocsPanelState(_currentWorkspace?.FolderPath, new WorkspaceDocsPanelState
                         {
@@ -23684,7 +24392,8 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             CaptureWindowPlacement();
             _pendingUtilityWindowState = (
                 _tasksStatusWindow is { IsVisible: true },
-                _traceWindow is { IsVisible: true });
+                _traceWindow is { IsVisible: true },
+                _dockingTestPlaybackWindow is { IsVisible: true });
 
             // Persist open inbox viewer IDs.
             if (_inboxStore is not null)
@@ -26924,6 +27633,12 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             ShowTraceWindow();
         }
 
+        if (_settingsSnapshot.DockingTestPlaybackWindowOpen && SquadDashEnvironment.IsDeveloperMode)
+        {
+            SquadDashTrace.Write("Startup", "Restoring docking test playback window from previous session.");
+            ShowDockingTestPlaybackWindow();
+        }
+
         RestoreDocsPanelState();
     }
 
@@ -26945,6 +27660,47 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                 _preFullScreenWindowState = WindowState.Maximized;
 
             _transcriptFullScreenEnabled = true;
+
+            // Collapse docking zone columns so the transcript fills the full width on startup.
+            // The zone widths were just applied by the workspace-load path, so capture them now.
+            _preFullScreenLeftZoneW   = LeftZoneColumn.Width.IsAbsolute   ? LeftZoneColumn.Width.Value   : 0;
+            _preFullScreenLeft2ZoneW  = Left2ZoneColumn.Width.IsAbsolute  ? Left2ZoneColumn.Width.Value  : 0;
+            _preFullScreenLeft3ZoneW  = Left3ZoneColumn.Width.IsAbsolute  ? Left3ZoneColumn.Width.Value  : 0;
+            _preFullScreenLeft4ZoneW  = Left4ZoneColumn.Width.IsAbsolute  ? Left4ZoneColumn.Width.Value  : 0;
+            _preFullScreenLeft5ZoneW  = Left5ZoneColumn.Width.IsAbsolute  ? Left5ZoneColumn.Width.Value  : 0;
+            _preFullScreenLeft6ZoneW  = Left6ZoneColumn.Width.IsAbsolute  ? Left6ZoneColumn.Width.Value  : 0;
+            _preFullScreenRightZoneW  = RightZoneColumn.Width.IsAbsolute  ? RightZoneColumn.Width.Value  : 0;
+            _preFullScreenRight2ZoneW = Right2ZoneColumn.Width.IsAbsolute ? Right2ZoneColumn.Width.Value : 0;
+            _preFullScreenRight3ZoneW = Right3ZoneColumn.Width.IsAbsolute ? Right3ZoneColumn.Width.Value : 0;
+            _preFullScreenRight4ZoneW = Right4ZoneColumn.Width.IsAbsolute ? Right4ZoneColumn.Width.Value : 0;
+            _preFullScreenRight5ZoneW = Right5ZoneColumn.Width.IsAbsolute ? Right5ZoneColumn.Width.Value : 0;
+            _preFullScreenRight6ZoneW = Right6ZoneColumn.Width.IsAbsolute ? Right6ZoneColumn.Width.Value : 0;
+            LeftZoneColumn.Width        = new GridLength(0);
+            Left2ZoneColumn.Width       = new GridLength(0);
+            Left3ZoneColumn.Width       = new GridLength(0);
+            Left4ZoneColumn.Width       = new GridLength(0);
+            Left5ZoneColumn.Width       = new GridLength(0);
+            Left6ZoneColumn.Width       = new GridLength(0);
+            RightZoneColumn.Width       = new GridLength(0);
+            Right2ZoneColumn.Width      = new GridLength(0);
+            Right3ZoneColumn.Width      = new GridLength(0);
+            Right4ZoneColumn.Width      = new GridLength(0);
+            Right5ZoneColumn.Width      = new GridLength(0);
+            Right6ZoneColumn.Width      = new GridLength(0);
+            LeftSplitterColumn.Width    = new GridLength(0);
+            Left2SplitterColumn.Width   = new GridLength(0);
+            Left3SplitterColumn.Width   = new GridLength(0);
+            Left4SplitterColumn.Width   = new GridLength(0);
+            Left5SplitterColumn.Width   = new GridLength(0);
+            Left6SplitterColumn.Width   = new GridLength(0);
+            RightSplitterColumn.Width   = new GridLength(0);
+            Right2SplitterColumn.Width  = new GridLength(0);
+            Right3SplitterColumn.Width  = new GridLength(0);
+            Right4SplitterColumn.Width  = new GridLength(0);
+            Right5SplitterColumn.Width  = new GridLength(0);
+            Right6SplitterColumn.Width  = new GridLength(0);
+            UpdateMainGridSideMargins();
+
             ApplyViewMode();
         }
 

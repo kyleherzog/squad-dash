@@ -765,6 +765,24 @@ export class SquadBridgeService {
             reasoningText: fields.reasoningText
         };
     }
+    recordSubagentReasoningDelta(state, parentToolCallId, text) {
+        const existing = state.subagentReasoningByToolCallId.get(parentToolCallId) ?? "";
+        state.subagentReasoningByToolCallId.set(parentToolCallId, existing + text);
+    }
+    takeUnstreamedSubagentFinalReasoning(state, parentToolCallId, reasoningText) {
+        const streamed = state.subagentReasoningByToolCallId.get(parentToolCallId);
+        if (streamed !== undefined)
+            state.subagentReasoningByToolCallId.delete(parentToolCallId);
+        if (!reasoningText)
+            return undefined;
+        if (streamed === undefined)
+            return reasoningText;
+        if (reasoningText.startsWith(streamed)) {
+            const suffix = reasoningText.slice(streamed.length);
+            return suffix.trim().length > 0 ? suffix : undefined;
+        }
+        return undefined;
+    }
     async refreshBackgroundTasks(state) {
         const nextTasks = await this.loadBackgroundTasks(state);
         if (backgroundTasksEqual(state.backgroundTasks, nextTasks))
@@ -938,6 +956,7 @@ export class SquadBridgeService {
             backgroundTasks: EmptyBackgroundTasks(),
             subagentsByToolCallId: new Map(),
             backgroundTaskIdsByToolCallId: new Map(),
+            subagentReasoningByToolCallId: new Map(),
             lastAssistantMessageContent: "",
             createdAt: Date.now(),
             completedPromptCount: 0
@@ -1032,8 +1051,18 @@ export class SquadBridgeService {
             return true;
         };
         state.session.on("reasoning_delta", (event) => {
+            const text = getEventRawStringValue(event, "deltaContent") ?? "";
+            const parentToolCallId = extractParentToolCallId(event);
+            if (parentToolCallId) {
+                if (text.length === 0)
+                    return;
+                this.recordSubagentReasoningDelta(state, parentToolCallId, text);
+                this.bridgeHandlers.onSubagentThinkingDelta?.(state.session.sessionId, this.buildSubagentTranscriptInfo(state, parentToolCallId, {
+                    reasoningText: text
+                }));
+                return;
+            }
             const request = state.currentRequest;
-            const text = getRawStringValue(event, "deltaContent") ?? "";
             if (request && text.length > 0)
                 request.handlers.onThinking?.(text, extractThinkingSpeaker(event));
         });
@@ -1060,11 +1089,12 @@ export class SquadBridgeService {
             const content = extractAssistantMessageContent(event);
             const parentToolCallId = extractParentToolCallId(event);
             if (parentToolCallId) {
-                if (!content && !extractAssistantReasoningText(event))
+                const reasoningText = this.takeUnstreamedSubagentFinalReasoning(state, parentToolCallId, extractAssistantReasoningText(event));
+                if (!content && !reasoningText)
                     return;
                 this.bridgeHandlers.onSubagentMessage?.(state.session.sessionId, this.buildSubagentTranscriptInfo(state, parentToolCallId, {
                     text: content,
-                    reasoningText: extractAssistantReasoningText(event)
+                    reasoningText
                 }));
                 return;
             }

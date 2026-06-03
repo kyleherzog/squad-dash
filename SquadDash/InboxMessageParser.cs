@@ -111,6 +111,7 @@ internal static class InboxMessageParser
             if (dto is null)
                 return false;
 
+            dto = StripNoOpDoneActions(dto);
             body = StripTrailingCodeFence(normalized[..markerIdx].TrimEnd());
             return true;
         }
@@ -182,6 +183,45 @@ internal static class InboxMessageParser
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Strips 'done' actions whose labels are purely acknowledgement-only (e.g. Dismiss, OK, Close).
+    /// These add no value — clicking them records nothing and can't launch any agent.
+    /// </summary>
+    private static readonly System.Collections.Generic.HashSet<string> NoOpDoneLabels =
+        new(System.StringComparer.OrdinalIgnoreCase)
+        {
+            "dismiss", "ok", "okay", "close", "cancel", "got it", "done",
+            "acknowledge", "acknowledged", "clear", "ignore", "never mind",
+            "no thanks", "not now", "skip"
+        };
+
+    private static InboxMessageDto StripNoOpDoneActions(InboxMessageDto dto)
+    {
+        if (dto.Actions.Count == 0)
+            return dto;
+
+        var filtered = new System.Collections.Generic.List<InboxAction>(dto.Actions.Count);
+        foreach (var action in dto.Actions)
+        {
+            bool isNoOp = string.Equals(action.RouteMode, "done", System.StringComparison.OrdinalIgnoreCase)
+                       && NoOpDoneLabels.Contains(action.Label.Trim());
+            if (!isNoOp)
+                filtered.Add(action);
+        }
+
+        if (filtered.Count == dto.Actions.Count)
+            return dto;
+
+        return new InboxMessageDto
+        {
+            Subject     = dto.Subject,
+            From        = dto.From,
+            Body        = dto.Body,
+            Attachments = dto.Attachments,
+            Actions     = filtered,
+        };
     }
 
     /// <summary>

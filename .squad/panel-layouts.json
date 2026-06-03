@@ -5,50 +5,42 @@
       "name": "Default",
       "slots": [
         {
+          "panelId": "maintenance",
+          "zone": "Top",
+          "order": 0
+        },
+        {
           "panelId": "tasks",
-          "zone": "Left2",
+          "zone": "Top",
           "order": 1
         },
         {
           "panelId": "loop",
           "zone": "Left",
-          "order": 1
-        },
-        {
-          "panelId": "approvals",
-          "zone": "Left",
-          "order": 2
-        },
-        {
-          "panelId": "notes",
-          "zone": "Right",
-          "order": 1
-        },
-        {
-          "panelId": "inbox",
-          "zone": "Top",
           "order": 0
         },
         {
-          "panelId": "maintenance",
-          "zone": "Top",
-          "order": 1
-        },
-        {
-          "panelId": "health",
-          "zone": "Top",
-          "order": 2
-        },
-        {
-          "panelId": "trace",
+          "panelId": "notes",
           "zone": "Top",
           "order": 3
+        },
+        {
+          "panelId": "approvals",
+          "zone": "Top",
+          "order": 4
+        },
+        {
+          "panelId": "inbox",
+          "zone": "Right",
+          "order": 0
         }
       ],
-      "leftZoneWidth": 273.94000000000005,
-      "rightZoneWidth": 273.94000000000005,
+      "leftZoneWidth": 280,
+      "rightZoneWidth": 275.62333333333333,
       "left2ZoneWidth": null,
-      "right2ZoneWidth": null
+      "right2ZoneWidth": null,
+      "left3ZoneWidth": null,
+      "right3ZoneWidth": null
     }
   ]
 }

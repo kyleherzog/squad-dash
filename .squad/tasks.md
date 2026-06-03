@@ -9,7 +9,20 @@
 
 ## 🟡 Mid Priority
 
+- [ ] **[Docking] Refactor DockingMapBuilder to loop-based zone layout** *(Owner: Lyra Morn)*
+  DockingMapBuilder.BuildDockingMap currently uses hardcoded per-zone if/else chains for suppression,
+  thin generation, and slot layout (Left3/Left2/Left, Right/Right2/Right3). This makes adding a 4th
+  zone tier a near-rewrite. Prerequisite: lock down test cases for all N=0/1/2 configurations (Left and
+  Right sides) via the docking test playback window. Then replace the hardcoded chains with a data-driven
+  loop: represent each side as an ordered list of ZoneDescriptor records (zone, panels, sourceInZone,
+  suppressFlag), derive occupied/thin counts algorithmically, and emit slots in a single forward pass.
+  The N+1 thin rule and adjacent-thin check should fall out naturally from the loop without special cases.
+  Prerequisite: All 1/2/0-zone docking test cases recorded and passing.
 
+- [x] **[Docking] Fix: Left3/Right3 empty-zone preview strips at wrong screen position** *(Owner: Lyra Morn)* — commit e227bbd
+- [x] **[Docking] Fix: Left3/Right3 over-eagerly shown in docking map when Left2/Right2 are empty** *(Owner: Lyra Morn)* — commit e227bbd
+
+- [x] **[Docking] Feature: "insert at column position" model for left/right zones** *(Owner: Lyra Morn)* — commit 62b1aaa
 
 - [x] **[Docking] Panel docking UI spec** *(Owner: mira-quill)* — commit fc205b2
 
@@ -50,8 +63,13 @@
 
 ## 🔴 High Priority
 
+- [ ] **[Bug] Prompt history cycling (Ctrl+Up/Down) doesn't copy attachments to queued item** *(Owner: Lyra Morn)*
+  When a queued prompt item is selected and the user cycles through prompt history with Ctrl+Up/Down,
+  only the text content is brought in — attachments from the history entry are not copied to the queued item.
+  Attachments appear on the active draft instead. Expected: cycling history into a queued item should
+  populate both text and attachments on that queued item, not the draft.
 
-- [ ] **WinGet — smoke-test installer on clean VM** *(Owner: you — manual step)*
+- [ ] **WinGet — smoke-test installer on clean VM***(Owner: you — manual step)*
   Run `.\installer\build-installer.ps1 -Version 1.0.0` (requires Inno Setup 6 installed locally),
   then install on a clean Windows VM with only Node.js pre-installed. Verify: launcher starts,
   SDK bridge connects, workspaces resolve correctly from `%LocalAppData%\SquadDash\app\`.
@@ -70,6 +88,10 @@
 ## 🟡 Mid Priority
 
 - [ ] **Maintenance — custom task editor** *(Owner: Arjun Sen + Lyra Morn)*
+- [ ] Test and evaluate the Decompose feature
+  Manually walk through decompose in a range of circumstances to verify reliability.
+  Define a test plan covering: typical prompts, edge cases (empty input, very long input,
+  ambiguous requests), and confirm output quality and consistency.
   Right-click a task row → "Edit Task" opens a custom WPF editor window (code-only, no XAML).
   Layout: Title textbox (large font, top); Properties section (enabled, frequency, safety);
   UI Options section (YAML editor for `options:` block on left, live rendered preview on right);

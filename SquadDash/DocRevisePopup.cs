@@ -297,7 +297,10 @@ internal sealed class DocRevisePopup : Window {
             if (!string.IsNullOrWhiteSpace(revised))
                 _onRevised(revised);
         }
-        catch { /* popup already dismissed — swallow silently */ }
+        catch (Exception ex)
+        {
+            SquadDashTrace.Write("Revision", $"RunRevisionAsync: AI revision failed after popup dismiss: {ex.Message}");
+        }
         finally {
             _onRevisionComplete?.Invoke();
             _cts?.Dispose();

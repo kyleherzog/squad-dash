@@ -1,0 +1,67 @@
+{
+  "name": "inbox_Top_to_Top_order1",
+  "sourcePanelId": "inbox",
+  "initialLayout": {
+    "Top": [
+      "inbox",
+      "maintenance",
+      "tasks"
+    ],
+    "Left 1": [
+      "loop"
+    ],
+    "Left 2": [],
+    "Right 1": [],
+    "Right 2": []
+  },
+  "slotButtons": [
+    {
+      "zone": "Left 2",
+      "order": 0,
+      "preview": "Left 2, 1/1"
+    },
+    {
+      "zone": "Left 1",
+      "order": 0,
+      "preview": "Left 1, 1/2"
+    },
+    {
+      "zone": "Left 1",
+      "order": 1,
+      "preview": "Left 1, 2/2"
+    },
+    {
+      "zone": "Top",
+      "order": 1,
+      "preview": "Top, 2/4"
+    },
+    {
+      "zone": "Top",
+      "order": 2,
+      "preview": "Top, 3/4"
+    },
+    {
+      "zone": "Right 1",
+      "order": 0,
+      "preview": "Right 1, 1/1"
+    }
+  ],
+  "action": {
+    "targetZone": "Top",
+    "targetOrder": 1
+  },
+  "chosenPreview": "Top, 2/4",
+  "expectedLayout": {
+    "Top": [
+      "maintenance",
+      "inbox",
+      "tasks"
+    ],
+    "Left 1": [
+      "loop"
+    ],
+    "Left 2": [],
+    "Right 1": [],
+    "Right 2": []
+  }
+}

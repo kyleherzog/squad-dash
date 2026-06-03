@@ -13,6 +13,7 @@ internal sealed class DockingMapWindow : Window
     private readonly PanelDockingService _dockingService;
     private readonly string _workspacePath;
     private readonly Brush? _hoverBrush;
+    private readonly (DockZone Zone, int Order, bool IsInsert)? _targetSlot;
 
     private Window? _previewOverlay;
 
@@ -21,12 +22,14 @@ internal sealed class DockingMapWindow : Window
         PanelDockingService dockingService,
         string workspacePath,
         ResourceDictionary appResources,
-        Brush? hoverBrush = null)
+        Brush? hoverBrush = null,
+        (DockZone Zone, int Order, bool IsInsert)? targetSlot = null)
     {
         _viewModel      = viewModel;
         _dockingService = dockingService;
         _workspacePath  = workspacePath;
         _hoverBrush     = hoverBrush;
+        _targetSlot     = targetSlot;
 
         WindowStyle      = WindowStyle.None;
         AllowsTransparency = true;
@@ -102,6 +105,14 @@ internal sealed class DockingMapWindow : Window
             canvas.Children.Add(el);
         }
 
+        // ── Section labels ───────────────────────────────────────────────────
+        const double LabelWidth = 60;
+        if (_viewModel.HasLeftSection)
+            canvas.Children.Add(MakeSectionLabel("Left:", _viewModel.LeftSectionCenterX, LabelWidth, polarColor));
+        canvas.Children.Add(MakeSectionLabel("Top:", _viewModel.TopSectionCenterX, LabelWidth, polarColor));
+        if (_viewModel.HasRightSection)
+            canvas.Children.Add(MakeSectionLabel("Right:", _viewModel.RightSectionCenterX, LabelWidth, polarColor));
+
         root.Child = canvas;
         Content    = root;
     }
@@ -137,8 +148,17 @@ internal sealed class DockingMapWindow : Window
         }
 
         // ── Target button (interactive drop target) ─────────────────────────
-        var normalBg     = MakeBrush(groundingColor, 0.70);
-        var normalBorder = MakeBrush(polarColor,     0.10);
+        bool isPlaybackTarget = _targetSlot.HasValue
+            && slot.IsSyntheticInsert   == _targetSlot.Value.IsInsert
+            && slot.TargetZone  == _targetSlot.Value.Zone
+            && slot.TargetOrder == _targetSlot.Value.Order;
+
+        var normalBg     = isPlaybackTarget
+            ? MakeBrush(Colors.Orange, 0.25)
+            : MakeBrush(groundingColor, 0.70);
+        var normalBorder = isPlaybackTarget
+            ? MakeBrush(Colors.Orange, 0.85)
+            : MakeBrush(polarColor, 0.10);
         var hoverBg      = MakeBrush(groundingColor, 0.90);
         var hoverBorder  = MakeBrush(polarColor,     0.50);
 
@@ -165,11 +185,13 @@ internal sealed class DockingMapWindow : Window
             border.BorderBrush = normalBorder;
             HidePreview();
         };
+        if (isPlaybackTarget)
+            border.ToolTip = $"Playback target: {DockingLayoutEngine.GetZoneDisplayName(slot.TargetZone)} @ {slot.TargetOrder}";
         border.MouseLeftButtonUp += (_, _) =>
         {
             try
             {
-                _dockingService.MovePanel(slot.SourcePanelId, slot.TargetZone, slot.TargetOrder);
+                _dockingService.MovePanel(slot.SourcePanelId, slot.TargetZone, slot.TargetOrder, slot.InsertKind);
                 if (!string.IsNullOrEmpty(_workspacePath))
                     _dockingService.SaveLayout(_workspacePath);
             }
@@ -178,6 +200,22 @@ internal sealed class DockingMapWindow : Window
         };
 
         return border;
+    }
+
+    private UIElement MakeSectionLabel(string text, double centerX, double width, Color polarColor)
+    {
+        double fontSize = Application.Current?.TryFindResource("FontSizeXSmall") is double d ? d : 10.0;
+        var lbl = new TextBlock
+        {
+            Text          = text,
+            Width         = width,
+            TextAlignment = TextAlignment.Center,
+            FontSize      = fontSize,
+            Foreground    = MakeBrush(polarColor, 0.45),
+        };
+        Canvas.SetLeft(lbl, centerX - width / 2);
+        Canvas.SetTop(lbl, 0);
+        return lbl;
     }
 
     private static SolidColorBrush MakeBrush(Color color, double opacity) =>
@@ -244,7 +282,7 @@ internal sealed class DockingMapWindow : Window
     /// Derives a border brush from the fill brush — same hue, but shifted toward
     /// higher contrast against the background (brighter in dark theme, darker in light theme).
     /// </summary>
-    private static SolidColorBrush? DeriveBorderBrush(Brush? fillBrush)
+    internal static SolidColorBrush? DeriveBorderBrush(Brush? fillBrush)
     {
         if (fillBrush is not SolidColorBrush scb) return null;
         var c = scb.Color;
@@ -306,6 +344,21 @@ internal sealed class DockingMapWindow : Window
         Show();
 
         // Clamp to monitor work area using the project's existing helper
+        WindowPlacementHelper.EnsureOnScreen(this);
+    }
+
+    /// <summary>
+    /// Opens the popup with its top edge at <paramref name="panelScreenTop"/> + 40px,
+    /// centered horizontally over the panel. Used by docking test playback where the
+    /// anchor should be the panel border, not a mouse click point.
+    /// </summary>
+    public void ShowAtPanelTopCenter(double panelScreenCenterX, double panelScreenTop)
+    {
+        // Set Top before Show so WPF uses it as the initial position during SizeToContent layout.
+        Top  = panelScreenTop + 40;
+        Show();
+        // ActualWidth is valid after Show() — center horizontally now.
+        Left = panelScreenCenterX - ActualWidth / 2;
         WindowPlacementHelper.EnsureOnScreen(this);
     }
 }

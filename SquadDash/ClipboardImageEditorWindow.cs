@@ -231,6 +231,34 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
     private TextBlock? _mlPreviewBadgeText;
     private bool _mlPreviewIsHorizontal;
 
+    // ── Annotation — X shapes ─────────────────────────────────────────────────
+
+    private readonly List<AnnotationX> _annotXShapes = new();
+    private AnnotationX? _selectedAnnotX;
+    private bool _inXMode;
+    private Button? _addXBtn;
+    private AnnotationX? _colorPickerX;
+
+    // X drag sub-state
+    private AnnotationX? _draggingAnnotX;
+    private Point _annotXDragStart;
+    private Rect _annotXDragOriginal;
+    private bool _annotXBodyDragging;
+    private int _draggingAnnotXHandleIdx = -1;
+
+    // Rubber-band state for drawing a new X
+    private bool _creatingAnnotX;
+    private Point _annotXAnchor;
+    private Line? _annotXPreviewLine1;
+    private Line? _annotXPreviewLine2;
+
+    // X annotation defaults
+    private Color _defaultXColor = Color.FromRgb(255, 80, 80);
+
+    // Last-used X size for click-to-place
+    private double _lastDragXWidth = 80.0;
+    private double _lastDragXHeight = 80.0;
+
     // Last-used arrow angle/tail and rect size — used for click-without-drag placement.
     private double _lastDragArrowAngleDeg = 225.0;  // same as _defaultArrowAngleDeg default
     private double _lastDragArrowTailLength = 80.0;
@@ -304,6 +332,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
     private bool _inArrowMultiDropMode;
     private bool _inRectMultiDropMode;
     private bool _inMeasureLineMultiDropMode;
+    private bool _inXMultiDropMode;
     private bool _inMoveMode;
     private bool _inCropMode;
 
@@ -870,6 +899,14 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             Margin = new Thickness(0, 0, 4, 0),
             ToolTip = "Dimension line (D) \u00B7 drag horizontally or vertically to measure pixel distance"
         };
+        _addXBtn = new Button {
+            Content = MakeToolIcon("ImageEditorXIcon"),
+            Width = 32,
+            Height = 28,
+            Padding = new Thickness(4, 3, 4, 3),
+            Margin = new Thickness(0, 0, 4, 0),
+            ToolTip = "X annotation (X) · drag to draw · Shift+click for multi-drop"
+        };
         _cursorBtn = new Button {
             Content = MakeToolIcon("ImageEditorCursorIcon"),
             Width = 32,
@@ -954,8 +991,8 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             roundCornersBtn.Visibility = Visibility.Collapsed;
 
         var styleButtons = _isPromptMode
-            ? new[] { _moveSelectBtn, _cropBtn, _addArrowBtn, _addRectBtn, _addTextBtn, _addMeasureLineBtn, _cursorBtn, _eyedropperBtn, insertBtn, cancelBtn }
-            : new[] { _moveSelectBtn, _cropBtn, _addArrowBtn, _addRectBtn, _addTextBtn, _addMeasureLineBtn, _cursorBtn, _eyedropperBtn, roundCornersBtn, insertBtn, cancelBtn };
+            ? new[] { _moveSelectBtn, _cropBtn, _addArrowBtn, _addRectBtn, _addTextBtn, _addMeasureLineBtn, _addXBtn, _cursorBtn, _eyedropperBtn, insertBtn, cancelBtn }
+            : new[] { _moveSelectBtn, _cropBtn, _addArrowBtn, _addRectBtn, _addTextBtn, _addMeasureLineBtn, _addXBtn, _cursorBtn, _eyedropperBtn, roundCornersBtn, insertBtn, cancelBtn };
         foreach (var btn in styleButtons)
             btn.SetResourceReference(Control.StyleProperty, "ThemedButtonStyle");
 
@@ -1018,6 +1055,16 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             else {
                 _addMeasureLineBtn.Content = MakeToolIcon("ImageEditorMeasureLineIcon", active: true);
             }
+        };
+
+        _addXBtn!.Click += (_, _) => {
+            bool isShift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+            if (_inXMode && !isShift) { ExitXMode(returnToMove: true); return; }
+            ExitAllToolModes();
+            _inXMultiDropMode = isShift;
+            EnterXMode();
+            if (isShift) ShowModeHint("Multi-drop: drag to place X shapes · ESC to exit");
+            _addXBtn.Content = MakeToolIcon("ImageEditorXIcon", active: true, multiDrop: isShift);
         };
 
         _cursorBtn.Click += (_, _) => {
@@ -1127,6 +1174,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         leftStack.Children.Add(_addRectBtn);
         leftStack.Children.Add(_addTextBtn);
         leftStack.Children.Add(_addMeasureLineBtn);
+        leftStack.Children.Add(_addXBtn);
         leftStack.Children.Add(_cursorBtn);
         leftStack.Children.Add(_eyedropperBtn);
         leftStack.Children.Add(_eyedropperSwatch);
@@ -1688,6 +1736,29 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             if (_selectedText != ann)
                 SelectText(ann);
 
+            // Ctrl+drag — duplicate annotation and drag the clone
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) {
+                PushUndo();
+                var clone = new AnnotationText {
+                    Bounds = ann.Bounds,
+                    Text = ann.Text,
+                    FontSize = ann.FontSize,
+                    TextColor = ann.TextColor,
+                    BackgroundColor = ann.BackgroundColor
+                };
+                _texts.Add(clone);
+                UpdateTextDisplay(clone);
+                SelectText(clone);
+                _preDragSnapshot = null;
+                _canvasTextDragActive = true;
+                _canvasTextDragAnnotation = clone;
+                _canvasTextDragStart = pt;
+                _canvasTextDragOrigBounds = clone.Bounds;
+                _canvas.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
+
             _preDragSnapshot = CaptureSnapshot();
             _canvasTextDragActive = true;
             _canvasTextDragAnnotation = ann;
@@ -1758,6 +1829,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         SelectArrow(null);
         SelectAnnotationRect(null);
         SelectMeasureLine(null);
+        SelectAnnotationX(null);
 
         var pt = e.GetPosition(_canvas);
 
@@ -1828,6 +1900,21 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             return;
         }
 
+        // X drawing mode: start rubber-band.
+        if (_inXMode) {
+            _creatingAnnotX = true;
+            _annotXAnchor = pt;
+            _preDragSnapshot = CaptureSnapshot();
+            _canvas.CaptureMouse();
+            var (pl1, pl2) = EnsureAnnotXPreview();
+            pl1.Visibility = Visibility.Visible;
+            pl2.Visibility = Visibility.Visible;
+            pl1.X1 = pt.X; pl1.Y1 = pt.Y; pl1.X2 = pt.X; pl1.Y2 = pt.Y;
+            pl2.X1 = pt.X; pl2.Y1 = pt.Y; pl2.X2 = pt.X; pl2.Y2 = pt.Y;
+            e.Handled = true;
+            return;
+        }
+
         // Measure-line drawing mode: start drag-to-draw.
         if (_inMeasureLineMode) {
             _creatingMeasureLine = true;
@@ -1885,6 +1972,11 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         if (_creatingArrowByDrag && _arrowDragPreviewLine != null && _arrowDragPreviewHead != null) {
             var headPt = e.GetPosition(_canvas);
             var tailPt = _arrowDragTailPt;
+
+            // Shift-snap: constrain to nearest horizontal or vertical axis.
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+                headPt = SnapArrowToAxis(tailPt, headPt);
+
             _arrowDragPreviewLine.X1 = tailPt.X;
             _arrowDragPreviewLine.Y1 = tailPt.Y;
             _arrowDragPreviewLine.X2 = headPt.X;
@@ -1966,6 +2058,20 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             Canvas.SetTop(preview, t);
             preview.Width = r - l;
             preview.Height = b2 - t;
+            e.Handled = true;
+            return;
+        }
+
+        // Rubber-band draw of an X annotation.
+        if (_creatingAnnotX) {
+            var cur = e.GetPosition(_canvas);
+            double x = Math.Min(_annotXAnchor.X, cur.X);
+            double y = Math.Min(_annotXAnchor.Y, cur.Y);
+            double w = Math.Abs(cur.X - _annotXAnchor.X);
+            double h = Math.Abs(cur.Y - _annotXAnchor.Y);
+            var (pl1, pl2) = EnsureAnnotXPreview();
+            pl1.X1 = x; pl1.Y1 = y; pl1.X2 = x + w; pl1.Y2 = y + h;
+            pl2.X1 = x + w; pl2.Y1 = y; pl2.X2 = x; pl2.Y2 = y + h;
             e.Handled = true;
             return;
         }
@@ -2161,6 +2267,8 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 _canvas.Cursor = AnnotationCursors.ArrowTool;
             else if (_inRectMode)
                 _canvas.Cursor = AnnotationCursors.RectTool;
+            else if (_inXMode)
+                _canvas.Cursor = AnnotationCursors.XTool;
             else if (_inTextMode)
                 _canvas.Cursor = AnnotationCursors.TextTool;
             else if (_inCursorPlacementMode)
@@ -2180,7 +2288,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             // Hover cursor: show the standard arrow pointer over any draggable annotation
             // (arrow shaft/head, rect border, cursor indicator) in the neutral tool state.
             // This overrides whatever crop/cross cursor was set above.
-            if (!_inArrowMode && !_inRectMode && !_inTextMode && !_inCursorPlacementMode && !_inEyedropperMode
+            if (!_inArrowMode && !_inRectMode && !_inXMode && !_inTextMode && !_inCursorPlacementMode && !_inEyedropperMode
                 && IsHoveringOverAnnotation(e.GetPosition(_canvas)))
                 _canvas.Cursor = Cursors.Arrow;
 
@@ -2232,6 +2340,11 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
 
             var headPt = e.GetPosition(_canvas);
             var tailPt = _arrowDragTailPt;
+
+            // Shift-snap: constrain to nearest horizontal or vertical axis.
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+                headPt = SnapArrowToAxis(tailPt, headPt);
+
             var dx = headPt.X - tailPt.X;
             var dy = headPt.Y - tailPt.Y;
             var dist = Math.Sqrt(dx * dx + dy * dy);
@@ -2291,6 +2404,50 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             }
             else {
                 ExitRectMode(returnToMove: true);
+            }
+            e.Handled = true;
+            return;
+        }
+
+        if (_creatingAnnotX) {
+            _creatingAnnotX = false;
+            _canvas.ReleaseMouseCapture();
+            RemoveAnnotXPreview();
+
+            var cur = e.GetPosition(_canvas);
+            double dx = Math.Abs(cur.X - _annotXAnchor.X);
+            double dy = Math.Abs(cur.Y - _annotXAnchor.Y);
+            bool wasDrag = dx >= MinSize && dy >= MinSize;
+
+            if (wasDrag) {
+                var bounds = new Rect(
+                    Math.Min(_annotXAnchor.X, cur.X),
+                    Math.Min(_annotXAnchor.Y, cur.Y),
+                    dx, dy);
+                _preDragSnapshot = null;
+                _lastDragXWidth = bounds.Width;
+                _lastDragXHeight = bounds.Height;
+                CreateAnnotationX(bounds);
+            }
+            else if (dx < 5 && dy < 5) {
+                _preDragSnapshot = null;
+                var rw = _lastDragXWidth;
+                var rh = _lastDragXHeight;
+                var rx = Math.Max(0, Math.Min(_canvas.Width - rw, _annotXAnchor.X - rw / 2));
+                var ry = Math.Max(0, Math.Min(_canvas.Height - rh, _annotXAnchor.Y - rh / 2));
+                CreateAnnotationX(new Rect(rx, ry, rw, rh));
+            }
+            else {
+                _preDragSnapshot = null;
+            }
+
+            CommitDragUndo();
+            if (_inXMultiDropMode) {
+                _canvas.Cursor = AnnotationCursors.XTool;
+                ShowModeHint("Multi-drop: drag to place X shapes · ESC to exit");
+            }
+            else {
+                ExitXMode(returnToMove: true);
             }
             e.Handled = true;
             return;
@@ -2399,6 +2556,15 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 ExitArrowMode(returnToMove: true); e.Handled = true; return;
             }
             if (_inRectMode) { ExitRectMode(returnToMove: true); e.Handled = true; return; }
+            if (_inXMode) {
+                if (_creatingAnnotX) {
+                    _creatingAnnotX = false;
+                    _canvas.ReleaseMouseCapture();
+                    RemoveAnnotXPreview();
+                    _preDragSnapshot = null;
+                }
+                ExitXMode(returnToMove: true); e.Handled = true; return;
+            }
             if (_inMeasureLineMode) {
                 if (_creatingMeasureLine) {
                     _creatingMeasureLine = false;
@@ -2426,9 +2592,10 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 e.Handled = true;
                 return;
             }
-            // Priority 2 — deselect a selected annotation (arrow, rect, or text label).
+            // Priority 2 — deselect a selected annotation (arrow, rect, X, measure line, or text label).
             if (_selectedArrow != null) { SelectArrow(null); e.Handled = true; return; }
             if (_selectedAnnotRect != null) { SelectAnnotationRect(null); e.Handled = true; return; }
+            if (_selectedAnnotX != null) { SelectAnnotationX(null); e.Handled = true; return; }
             if (_selectedMeasureLine != null) { SelectMeasureLine(null); e.Handled = true; return; }
             if (_selectedText != null) { SelectText(null); e.Handled = true; return; }
 
@@ -2464,6 +2631,12 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             _selectedAnnotRect = null;
             e.Handled = true;
         }
+        else if (e.Key == Key.Delete && _selectedAnnotX != null) {
+            PushUndo();
+            RemoveAnnotationX(_selectedAnnotX);
+            _selectedAnnotX = null;
+            e.Handled = true;
+        }
         else if (e.Key == Key.Delete && _selectedMeasureLine != null) {
             PushUndo();
             RemoveMeasureLine(_selectedMeasureLine);
@@ -2489,6 +2662,11 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             e.Handled = true;
         }
         else if (e.Key == Key.Y && (Keyboard.Modifiers & ModifierKeys.Control) != 0) {
+            if (Keyboard.FocusedElement is TextBox) return;
+            PerformRedo();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Z && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift)) {
             if (Keyboard.FocusedElement is TextBox) return;
             PerformRedo();
             e.Handled = true;
@@ -2535,6 +2713,20 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 _inRectMultiDropMode = true;
                 ShowModeHint("Multi-drop: drag to place rectangles · ESC to exit");
                 if (_addRectBtn != null) _addRectBtn.Content = MakeToolIcon("ImageEditorRectIcon", active: true, multiDrop: true);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.X && !shift) {
+                ExitAllToolModes();
+                EnterXMode();
+                if (_addXBtn != null) _addXBtn.Content = MakeToolIcon("ImageEditorXIcon", active: true);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.X && shift) {
+                ExitAllToolModes();
+                _inXMultiDropMode = true;
+                EnterXMode();
+                ShowModeHint("Multi-drop: drag to place X shapes · ESC to exit");
+                if (_addXBtn != null) _addXBtn.Content = MakeToolIcon("ImageEditorXIcon", active: true, multiDrop: true);
                 e.Handled = true;
             }
             else if (e.Key == Key.T) {
@@ -2660,6 +2852,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
     private void ExitAllToolModes() {
         if (_inArrowMode) ExitArrowMode();
         if (_inRectMode) ExitRectMode();
+        if (_inXMode) ExitXMode();
         if (_inTextMode) ExitTextMode();
         if (_activeTextBox != null) CommitActiveTextBox(); // commit in-progress edit even if text mode was already exited
         if (_inEyedropperMode) ExitEyedropperMode();
@@ -2922,6 +3115,22 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
 
         // Body drag — select + translate the whole line
         hitLine.MouseLeftButtonDown += (_, e2) => {
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) {
+                // Ctrl+drag: duplicate the measure line; original stays, clone is dragged.
+                PushUndo();
+                _suppressUndo = true;
+                var clone = CreateMeasureLine(ml.StartPt, ml.EndPt, ml.IsHorizontal, ml.LineColor);
+                _suppressUndo = false;
+                SelectMeasureLine(clone);
+                _draggingMeasureLine = clone;
+                _measureLineDragStart = e2.GetPosition(_canvas);
+                _measureLineDragOrigStart = clone.StartPt;
+                _measureLineDragOrigEnd = clone.EndPt;
+                _preDragSnapshot = null;
+                clone.HitLine.CaptureMouse();
+                e2.Handled = true;
+                return;
+            }
             SelectMeasureLine(ml);
             _preDragSnapshot = CaptureSnapshot();
             _draggingMeasureLine = ml;
@@ -3196,6 +3405,16 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         Canvas.SetLeft(_colorPickerPanel, cx);
         Canvas.SetTop(_colorPickerPanel, cy);
     }
+    /// <summary>Snaps <paramref name="head"/> to the closest horizontal or vertical line through <paramref name="tail"/>.</summary>
+    private static Point SnapArrowToAxis(Point tail, Point head)
+    {
+        var dx = Math.Abs(head.X - tail.X);
+        var dy = Math.Abs(head.Y - tail.Y);
+        return dx >= dy
+            ? new Point(head.X, tail.Y)   // horizontal
+            : new Point(tail.X, head.Y);  // vertical
+    }
+
     private void PlaceArrowFromDrag(Point tailPt, Point headPt, double dist) {
         headPt = new Point(
             Math.Max(0, Math.Min(headPt.X, _canvas.Width)),
@@ -3453,6 +3672,31 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
     private void AttachBodyDrag(Shape shape, AnnotationArrow arrow) {
         shape.MouseLeftButtonDown += (_, e) => {
             if (_draggingArrow != null) return;
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) {
+                // Ctrl+drag: duplicate the arrow; original stays, clone is dragged.
+                PushUndo();
+                _suppressUndo = true;
+                var clone = CreateArrow(arrow.TargetElementBounds);
+                _suppressUndo = false;
+                clone.ArrowheadAngleDeg = arrow.ArrowheadAngleDeg;
+                clone.ArrowLength = arrow.ArrowLength;
+                clone.TailLength = arrow.TailLength;
+                clone.UserTailLength = arrow.UserTailLength;
+                clone.ArrowColor = arrow.ArrowColor;
+                clone.OffsetX = arrow.OffsetX;
+                clone.OffsetY = arrow.OffsetY;
+                UpdateArrowGeometry(clone);
+                HideColorPicker();
+                _draggingArrow = clone;
+                _bodyDragging = true;
+                _bodyDragStartMouse = e.GetPosition(_canvas);
+                _bodyDragStartOffsetX = clone.OffsetX;
+                _bodyDragStartOffsetY = clone.OffsetY;
+                _preDragSnapshot = null;
+                clone.HitLine.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
             SelectArrow(arrow);
             HideColorPicker();
             _preDragSnapshot = CaptureSnapshot();
@@ -3787,6 +4031,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         _colorPickerRect = null;
         _colorPickerText = null;
         _colorPickerMeasureLine = null;
+        _colorPickerX = null;
         _selectedText = null;
         // Don't remove handles while a text box is actively being edited.
         if (_activeTextBox == null) {
@@ -3809,6 +4054,326 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         _canvas.Children.Remove(arrow.TailHandle);
         _canvas.Children.Remove(arrow.HitLine);
         _arrows.Remove(arrow);
+    }
+
+    // ── X mode ───────────────────────────────────────────────────────────────
+
+    private void EnterXMode() {
+        SelectArrow(null);
+        if (_selectedText != null) SelectText(null);
+        _inMoveMode = false;
+        _inCropMode = false;
+        _inXMode = true;
+        Cursor = AnnotationCursors.XTool;
+        _canvas.Cursor = AnnotationCursors.XTool;
+        ShowModeHint("Drag to draw an X");
+    }
+
+    private void ExitXMode(bool returnToMove = false) {
+        _inXMode = false;
+        _inXMultiDropMode = false;
+        Cursor = Cursors.Arrow;
+        _canvas.Cursor = Cursors.Arrow;
+        HideModeHint();
+        RemoveAnnotXPreview();
+        if (_addXBtn != null) _addXBtn.Content = MakeToolIcon("ImageEditorXIcon");
+        if (returnToMove) EnterMoveMode();
+    }
+
+    private void RemoveAnnotXPreview() {
+        if (_annotXPreviewLine1 != null) {
+            _canvas.Children.Remove(_annotXPreviewLine1);
+            _annotXPreviewLine1 = null;
+        }
+        if (_annotXPreviewLine2 != null) {
+            _canvas.Children.Remove(_annotXPreviewLine2);
+            _annotXPreviewLine2 = null;
+        }
+    }
+
+    private (Line l1, Line l2) EnsureAnnotXPreview() {
+        if (_annotXPreviewLine1 == null) {
+            _annotXPreviewLine1 = new Line {
+                Stroke = new SolidColorBrush(_defaultXColor),
+                StrokeThickness = 4,
+                StrokeDashArray = new DoubleCollection { 4, 2 },
+                IsHitTestVisible = false,
+                Opacity = 0.7,
+                Visibility = Visibility.Hidden
+            };
+            Panel.SetZIndex(_annotXPreviewLine1, 50);
+            _canvas.Children.Add(_annotXPreviewLine1);
+        }
+        if (_annotXPreviewLine2 == null) {
+            _annotXPreviewLine2 = new Line {
+                Stroke = new SolidColorBrush(_defaultXColor),
+                StrokeThickness = 4,
+                StrokeDashArray = new DoubleCollection { 4, 2 },
+                IsHitTestVisible = false,
+                Opacity = 0.7,
+                Visibility = Visibility.Hidden
+            };
+            Panel.SetZIndex(_annotXPreviewLine2, 50);
+            _canvas.Children.Add(_annotXPreviewLine2);
+        }
+        return (_annotXPreviewLine1, _annotXPreviewLine2);
+    }
+
+    private AnnotationX CreateAnnotationX(Rect bounds, Color? color = null) {
+        if (!_suppressUndo) PushUndo();
+
+        var xColor = color ?? _defaultXColor;
+        var brush = new SolidColorBrush(xColor);
+        var shadowBrush = new SolidColorBrush(Color.FromArgb(102, 0, 0, 0));
+
+        var shadow1 = new Line { Stroke = shadowBrush, StrokeThickness = 7.0, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, IsHitTestVisible = false };
+        var shadow2 = new Line { Stroke = shadowBrush, StrokeThickness = 7.0, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, IsHitTestVisible = false };
+        var line1 = new Line { Stroke = brush, StrokeThickness = 6.0, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, IsHitTestVisible = false };
+        var line2 = new Line { Stroke = brush, StrokeThickness = 6.0, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, IsHitTestVisible = false };
+
+        var hitZone = new Rectangle {
+            Fill = Brushes.Transparent,
+            StrokeThickness = 0,
+            IsHitTestVisible = true
+        };
+
+        var handles = new Rectangle[8];
+        for (int i = 0; i < 8; i++) {
+            var cursor = i switch {
+                0 or 3 => Cursors.SizeNWSE,
+                1 or 2 => Cursors.SizeNESW,
+                4 or 5 => Cursors.SizeNS,
+                6 or 7 => Cursors.SizeWE,
+                _ => Cursors.SizeAll
+            };
+            handles[i] = new Rectangle {
+                Width = 8, Height = 8,
+                Fill = Brushes.White, Stroke = Brushes.Black, StrokeThickness = 1,
+                Cursor = cursor,
+                Visibility = Visibility.Hidden
+            };
+            _canvas.Children.Add(handles[i]);
+            Panel.SetZIndex(handles[i], 10);
+        }
+
+        _canvas.Children.Add(shadow1);
+        _canvas.Children.Add(shadow2);
+        _canvas.Children.Add(line1);
+        _canvas.Children.Add(line2);
+        Panel.SetZIndex(shadow1, 2);
+        Panel.SetZIndex(shadow2, 2);
+        Panel.SetZIndex(line1, 5);
+        Panel.SetZIndex(line2, 5);
+        _canvas.Children.Add(hitZone);
+        Panel.SetZIndex(hitZone, 4);
+
+        var annotX = new AnnotationX {
+            Bounds = bounds, XColor = xColor,
+            Line1 = line1, Line2 = line2,
+            Shadow1 = shadow1, Shadow2 = shadow2,
+            Handles = handles, HitZoneRect = hitZone
+        };
+
+        hitZone.MouseLeftButtonDown += (_, e) => {
+            if (_draggingAnnotX != null || _inArrowMode || _inXMode) return;
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) {
+                // Ctrl+drag: duplicate the X shape; original stays, clone is dragged.
+                PushUndo();
+                _suppressUndo = true;
+                var clone = CreateAnnotationX(annotX.Bounds, annotX.XColor);
+                _suppressUndo = false;
+                _draggingAnnotX = clone;
+                _annotXBodyDragging = true;
+                _draggingAnnotXHandleIdx = -1;
+                _annotXDragStart = e.GetPosition(_canvas);
+                _annotXDragOriginal = clone.Bounds;
+                _preDragSnapshot = null;
+                clone.HitZoneRect.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
+            SelectAnnotationX(annotX);
+            _preDragSnapshot = CaptureSnapshot();
+            _draggingAnnotX = annotX;
+            _annotXBodyDragging = true;
+            _draggingAnnotXHandleIdx = -1;
+            _annotXDragStart = e.GetPosition(_canvas);
+            _annotXDragOriginal = annotX.Bounds;
+            hitZone.CaptureMouse();
+            e.Handled = true;
+        };
+        hitZone.MouseMove += (_, e) => {
+            if (_draggingAnnotX != annotX || !_annotXBodyDragging) return;
+            var pt = e.GetPosition(_canvas);
+            var dx = pt.X - _annotXDragStart.X;
+            var dy = pt.Y - _annotXDragStart.Y;
+            var cw = _canvas.Width; var ch = _canvas.Height;
+            var nb = new Rect(
+                Math.Max(0, Math.Min(_annotXDragOriginal.X + dx, cw - _annotXDragOriginal.Width)),
+                Math.Max(0, Math.Min(_annotXDragOriginal.Y + dy, ch - _annotXDragOriginal.Height)),
+                _annotXDragOriginal.Width, _annotXDragOriginal.Height);
+            annotX.Bounds = nb;
+            UpdateXGeometry(annotX);
+            e.Handled = true;
+        };
+        hitZone.MouseLeftButtonUp += (_, e) => {
+            if (_draggingAnnotX != annotX || !_annotXBodyDragging) return;
+            _annotXBodyDragging = false;
+            _draggingAnnotX = null;
+            hitZone.ReleaseMouseCapture();
+            CommitDragUndo();
+            e.Handled = true;
+        };
+        hitZone.MouseRightButtonDown += (_, e) => {
+            PushUndo();
+            RemoveAnnotationX(annotX);
+            if (_selectedAnnotX == annotX) { _selectedAnnotX = null; HideColorPicker(); }
+            e.Handled = true;
+        };
+
+        for (int i = 0; i < 8; i++) {
+            int idx = i;
+            handles[i].MouseLeftButtonDown += (_, e) => {
+                if (_draggingAnnotX != null) return;
+                SelectAnnotationX(annotX);
+                _preDragSnapshot = CaptureSnapshot();
+                _draggingAnnotX = annotX;
+                _annotXBodyDragging = false;
+                _draggingAnnotXHandleIdx = idx;
+                _annotXDragStart = e.GetPosition(_canvas);
+                _annotXDragOriginal = annotX.Bounds;
+                handles[idx].CaptureMouse();
+                e.Handled = true;
+            };
+            handles[i].MouseMove += (_, e) => {
+                if (_draggingAnnotX != annotX || _draggingAnnotXHandleIdx != idx) return;
+                var pt = e.GetPosition(_canvas);
+                var dx = pt.X - _annotXDragStart.X;
+                var dy = pt.Y - _annotXDragStart.Y;
+                var ob = _annotXDragOriginal;
+                double nx = ob.X, ny = ob.Y, nr = ob.Right, nb2 = ob.Bottom;
+                if (idx == 0 || idx == 2 || idx == 6) nx = Math.Min(ob.X + dx, ob.Right - MinSize);
+                if (idx == 1 || idx == 3 || idx == 7) nr = Math.Max(ob.Right + dx, ob.X + MinSize);
+                if (idx == 0 || idx == 1 || idx == 4) ny = Math.Min(ob.Y + dy, ob.Bottom - MinSize);
+                if (idx == 2 || idx == 3 || idx == 5) nb2 = Math.Max(ob.Bottom + dy, ob.Y + MinSize);
+                annotX.Bounds = new Rect(nx, ny, nr - nx, nb2 - ny);
+                UpdateXGeometry(annotX);
+                e.Handled = true;
+            };
+            handles[i].MouseLeftButtonUp += (_, e) => {
+                if (_draggingAnnotX != annotX || _draggingAnnotXHandleIdx != idx) return;
+                _draggingAnnotX = null;
+                _draggingAnnotXHandleIdx = -1;
+                handles[idx].ReleaseMouseCapture();
+                CommitDragUndo();
+                e.Handled = true;
+            };
+        }
+
+        _annotXShapes.Add(annotX);
+        UpdateXGeometry(annotX);
+        SelectAnnotationX(annotX);
+        return annotX;
+    }
+
+    private void UpdateXGeometry(AnnotationX x) {
+        var b = x.Bounds;
+        var brush = new SolidColorBrush(x.XColor);
+        var shadowBrush = new SolidColorBrush(Color.FromArgb(102, 0, 0, 0));
+        double so = 2.0;
+
+        x.Shadow1.X1 = b.Left + so;  x.Shadow1.Y1 = b.Top + so;
+        x.Shadow1.X2 = b.Right + so; x.Shadow1.Y2 = b.Bottom + so;
+        x.Line1.X1   = b.Left;       x.Line1.Y1   = b.Top;
+        x.Line1.X2   = b.Right;      x.Line1.Y2   = b.Bottom;
+
+        x.Shadow2.X1 = b.Right + so; x.Shadow2.Y1 = b.Top + so;
+        x.Shadow2.X2 = b.Left + so;  x.Shadow2.Y2 = b.Bottom + so;
+        x.Line2.X1   = b.Right;      x.Line2.Y1   = b.Top;
+        x.Line2.X2   = b.Left;       x.Line2.Y2   = b.Bottom;
+
+        x.Line1.Stroke   = brush;
+        x.Line2.Stroke   = brush;
+        x.Shadow1.Stroke = shadowBrush;
+        x.Shadow2.Stroke = shadowBrush;
+
+        Canvas.SetLeft(x.HitZoneRect, b.X - 3);
+        Canvas.SetTop(x.HitZoneRect, b.Y - 3);
+        x.HitZoneRect.Width  = b.Width  + 6;
+        x.HitZoneRect.Height = b.Height + 6;
+
+        var hps = new Point[] {
+            new(b.Left, b.Top), new(b.Right, b.Top),
+            new(b.Left, b.Bottom), new(b.Right, b.Bottom),
+            new(b.Left + b.Width / 2, b.Top), new(b.Left + b.Width / 2, b.Bottom),
+            new(b.Left, b.Top + b.Height / 2), new(b.Right, b.Top + b.Height / 2)
+        };
+        for (int i = 0; i < 8; i++) {
+            Canvas.SetLeft(x.Handles[i], hps[i].X - 4);
+            Canvas.SetTop(x.Handles[i],  hps[i].Y - 4);
+        }
+    }
+
+    private void RemoveAnnotationX(AnnotationX x) {
+        if (!_suppressUndo) PushUndo();
+        if (x == _colorPickerX) HideColorPicker();
+        _canvas.Children.Remove(x.Shadow1);
+        _canvas.Children.Remove(x.Shadow2);
+        _canvas.Children.Remove(x.Line1);
+        _canvas.Children.Remove(x.Line2);
+        _canvas.Children.Remove(x.HitZoneRect);
+        foreach (var h in x.Handles) _canvas.Children.Remove(h);
+        _annotXShapes.Remove(x);
+    }
+
+    private void SelectAnnotationX(AnnotationX? x) {
+        if (_selectedAnnotX != null && _selectedAnnotX != x)
+            foreach (var h in _selectedAnnotX.Handles) h.Visibility = Visibility.Hidden;
+        _selectedAnnotX = x;
+        if (x != null) {
+            if (_selectedText != null) SelectText(null);
+            SelectArrow(null);
+            if (_selectedAnnotRect != null) SelectAnnotationRect(null);
+            if (_selectedMeasureLine != null) {
+                _selectedMeasureLine.Handle1.Visibility = Visibility.Hidden;
+                _selectedMeasureLine.Handle2.Visibility = Visibility.Hidden;
+                _selectedMeasureLine = null;
+            }
+            foreach (var h in x.Handles) h.Visibility = Visibility.Visible;
+            ShowColorPickerForX(x);
+        }
+        else {
+            if (_colorPickerX != null) HideColorPicker();
+        }
+    }
+
+    private void ShowColorPickerForX(AnnotationX x) {
+        HideColorPicker();
+        _colorPickerX = x;
+        var palette = GetArrowPalette();
+        _colorPickerPanel = new StackPanel { Orientation = Orientation.Horizontal };
+        Panel.SetZIndex(_colorPickerPanel, 300);
+
+        foreach (var color in palette) {
+            var c = color;
+            bool isSelected = c == x.XColor;
+            var swatch = MakeColorSwatch(c, isSelected, picked => {
+                x.XColor = picked;
+                _defaultXColor = picked;
+                UpdateXGeometry(x);
+                ShowColorPickerForX(x);
+            });
+            _colorPickerPanel.Children.Add(swatch);
+        }
+
+        _canvas.Children.Add(_colorPickerPanel);
+
+        double cx = x.Bounds.Left + x.Bounds.Width / 2;
+        double cy = x.Bounds.Top;
+        _colorPickerPanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double pw = _colorPickerPanel.DesiredSize.Width;
+        Canvas.SetLeft(_colorPickerPanel, Math.Max(0, cx - pw / 2));
+        Canvas.SetTop(_colorPickerPanel, Math.Max(0, cy - 30));
     }
 
     // ── Rect mode ─────────────────────────────────────────────────────────────
@@ -3925,6 +4490,22 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             if (_draggingAnnotRect != null || _inArrowMode || _inRectMode) return;
             // Only initiate drag when clicking on or near the border edge — not the interior.
             if (!IsOnRectBorder(annotRect.Bounds, e.GetPosition(_canvas), 6.0)) return;
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) {
+                // Ctrl+drag: duplicate the rect; original stays, clone is dragged.
+                PushUndo();
+                _suppressUndo = true;
+                var clone = CreateAnnotationRect(annotRect.Bounds, annotRect.RectColor);
+                _suppressUndo = false;
+                _draggingAnnotRect = clone;
+                _annotRectBodyDragging = true;
+                _draggingAnnotRectHandleIdx = -1;
+                _annotRectDragStart = e.GetPosition(_canvas);
+                _annotRectDragOriginal = clone.Bounds;
+                _preDragSnapshot = null;
+                clone.Border.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
             SelectAnnotationRect(annotRect);
             _preDragSnapshot = CaptureSnapshot();
             _draggingAnnotRect = annotRect;
@@ -3971,6 +4552,22 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             if (_draggingAnnotRect != null || _inArrowMode || _inRectMode) return;
             // Only initiate drag when clicking on or near the border edge — not the interior.
             if (!IsOnRectBorder(annotRect.Bounds, e.GetPosition(_canvas), 6.0)) return;
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) {
+                // Ctrl+drag: duplicate the rect; original stays, clone is dragged.
+                PushUndo();
+                _suppressUndo = true;
+                var clone = CreateAnnotationRect(annotRect.Bounds, annotRect.RectColor);
+                _suppressUndo = false;
+                _draggingAnnotRect = clone;
+                _annotRectBodyDragging = true;
+                _draggingAnnotRectHandleIdx = -1;
+                _annotRectDragStart = e.GetPosition(_canvas);
+                _annotRectDragOriginal = clone.Bounds;
+                _preDragSnapshot = null;
+                clone.HitZoneRect.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
             SelectAnnotationRect(annotRect);
             _preDragSnapshot = CaptureSnapshot();
             _draggingAnnotRect = annotRect;
@@ -4216,6 +4813,14 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         const double MlTol = 6.0;
         foreach (var ml in _measureLines) {
             if (PointToSegmentDist(pt, ml.StartPt, ml.EndPt) <= MlTol) return true;
+        }
+
+        // X annotations: proximity to either diagonal line
+        const double XTol = 6.0;
+        foreach (var x in _annotXShapes) {
+            var b = x.Bounds;
+            if (PointToSegmentDist(pt, b.TopLeft, b.BottomRight) <= XTol) return true;
+            if (PointToSegmentDist(pt, b.TopRight, b.BottomLeft) <= XTol) return true;
         }
 
         return false;
@@ -4924,6 +5529,30 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                     e.Handled = true;
                     return;
                 }
+
+                // Ctrl+drag — duplicate annotation and drag the clone
+                if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) {
+                    PushUndo();
+                    var clone = new AnnotationText {
+                        Bounds = annotation.Bounds,
+                        Text = annotation.Text,
+                        FontSize = annotation.FontSize,
+                        TextColor = annotation.TextColor,
+                        BackgroundColor = annotation.BackgroundColor
+                    };
+                    _texts.Add(clone);
+                    UpdateTextDisplay(clone);
+                    SelectText(clone);
+                    _preDragSnapshot = null;
+                    _canvasTextDragActive = true;
+                    _canvasTextDragAnnotation = clone;
+                    _canvasTextDragStart = e.GetPosition(_canvas);
+                    _canvasTextDragOrigBounds = clone.Bounds;
+                    _canvas.CaptureMouse();
+                    e.Handled = true;
+                    return;
+                }
+
                 if (!_inTextMode && _selectedText != annotation)
                     SelectText(annotation);
                 _preDragSnapshot = CaptureSnapshot();
@@ -5229,6 +5858,9 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         foreach (var ar in _annotRects)
             foreach (var h in ar.Handles) h.Visibility = Visibility.Collapsed;
 
+        foreach (var xShape in _annotXShapes)
+            foreach (var h in xShape.Handles) h.Visibility = Visibility.Collapsed;
+
         try {
             SourceImage = _originalImage;
             AnnotationState = CaptureAnnotationState();
@@ -5261,6 +5893,9 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         foreach (var ar in _annotRects)
             foreach (var h in ar.Handles) h.Visibility = Visibility.Collapsed;
 
+        foreach (var xShape in _annotXShapes)
+            foreach (var h in xShape.Handles) h.Visibility = Visibility.Collapsed;
+
         try {
             var bmp = RenderFinalBitmap();
             if (bmp != null)
@@ -5275,6 +5910,8 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             }
             foreach (var ar in _annotRects)
                 foreach (var h in ar.Handles) h.Visibility = Visibility.Visible;
+            foreach (var xShape in _annotXShapes)
+                foreach (var h in xShape.Handles) h.Visibility = Visibility.Visible;
         }
     }
 
@@ -5459,6 +6096,16 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             });
         }
 
+        foreach (var x in _annotXShapes) {
+            state.Xs.Add(new ClipboardAnnotationXState {
+                X     = x.Bounds.X,
+                Y     = x.Bounds.Y,
+                W     = x.Bounds.Width,
+                H     = x.Bounds.Height,
+                Color = $"#{x.XColor.R:X2}{x.XColor.G:X2}{x.XColor.B:X2}",
+            });
+        }
+
         return state;
     }
 
@@ -5501,6 +6148,10 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             foreach (var r in state.Rects)
                 CreateAnnotationRect(new Rect(r.X + ox, r.Y + oy, r.W, r.H), ParseHexColor(r.Color, Color.FromRgb(255, 80, 80)));
             SelectAnnotationRect(null);
+
+            foreach (var xs in state.Xs)
+                CreateAnnotationX(new Rect(xs.X + ox, xs.Y + oy, xs.W, xs.H), ParseHexColor(xs.Color, Color.FromRgb(255, 80, 80)));
+            SelectAnnotationX(null);
 
             foreach (var t in state.Texts) {
                 var at = new AnnotationText {
@@ -5568,7 +6219,8 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         CanvasH: _canvas.Height,
         CanvasScaleX: _canvasScaleX,
         CanvasScaleY: _canvasScaleY,
-        MeasureLines: _measureLines.Select(ml => new MeasureLineSnap(ml.StartPt, ml.EndPt, ml.IsHorizontal, ml.LineColor)).ToList());
+        MeasureLines: _measureLines.Select(ml => new MeasureLineSnap(ml.StartPt, ml.EndPt, ml.IsHorizontal, ml.LineColor)).ToList(),
+        Xs: _annotXShapes.Select(x => new XSnap(x.Bounds, x.XColor)).ToList());
 
     private void PushUndo() {
         if (_suppressUndo) return;
@@ -5613,8 +6265,10 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         try {
             SelectArrow(null);
             SelectAnnotationRect(null);
+            SelectAnnotationX(null);
             foreach (var a in _arrows.ToList()) RemoveArrow(a);
             foreach (var r in _annotRects.ToList()) RemoveAnnotationRect(r);
+            foreach (var xl in _annotXShapes.ToList()) RemoveAnnotationX(xl);
             foreach (var ml in _measureLines.ToList()) RemoveMeasureLine(ml);
 
             foreach (var s in snap.Arrows) {
@@ -5637,6 +6291,9 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 CreateAnnotationRect(rs.Bounds, rs.RectColor);
 
             SelectAnnotationRect(null);
+            foreach (var xs in snap.Xs)
+                CreateAnnotationX(xs.Bounds, xs.XColor);
+            SelectAnnotationX(null);
             foreach (var t in _texts.ToList()) RemoveTextAnnotation(t);
 
             foreach (var ms in snap.MeasureLines)
@@ -6145,7 +6802,8 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         double CanvasH,
         double CanvasScaleX,
         double CanvasScaleY,
-        IReadOnlyList<MeasureLineSnap> MeasureLines);
+        IReadOnlyList<MeasureLineSnap> MeasureLines,
+        IReadOnlyList<XSnap> Xs);
 
     private sealed record ArrowSnap(
         string TargetElementName,
@@ -6165,6 +6823,8 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
 
     private sealed record MeasureLineSnap(Point StartPt, Point EndPt, bool IsHorizontal, Color LineColor);
 
+    private sealed record XSnap(Rect Bounds, Color XColor);
+
     // ── Change detection ──────────────────────────────────────────────────────
 
     /// <summary>
@@ -6180,6 +6840,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         || _annotRects.Count > 0
         || _texts.Count > 0
         || _measureLines.Count > 0
+        || _annotXShapes.Count > 0
         || (_cursorEnabled && _cursorImage != null)
         || !_sel.IsEmpty;
 }

@@ -4,6 +4,30 @@
 
 ---
 
+### 2026-06-02 — Never swallow exceptions silently in try/catch blocks
+
+**Decision:**
+
+> **Every `catch` block that does not rethrow must log the exception via `SquadDashTrace.Write()`.**  
+> A bare `catch { }` or `catch (Exception) { }` with no logging is **never** acceptable (except for the intentional best-effort P/Invoke and teardown sites listed in the Error Handling Audit).
+
+**Implementation pattern:**
+
+```csharp
+catch (Exception ex)
+{
+    SquadDashTrace.Write("Category", $"Operation failed: {ex.Message}");
+}
+```
+
+Use a descriptive category string (e.g. `"Preferences"`, `"HireAgent"`, `"Revision"`) so failures are discoverable in the Trace panel.
+
+**Rationale:** Silent swallows make failures completely invisible — no trace entry, no user feedback, nothing to diagnose from logs. Even when a failure is non-fatal (e.g., post-dismiss cleanup), logging it is free and allows future diagnosis. The only accepted exceptions are Win32/P/Invoke best-effort fallbacks (e.g., `NativeMethods.cs`) and trace-write failures themselves (logging must never crash the app).
+
+**Scope:** All agents. Applies to all new and modified catch blocks in the SquadDash C# codebase.
+
+---
+
 ### 2026-05-21 — All `.md` files open in the internal MarkdownDocumentWindow editor
 
 **Decision:**

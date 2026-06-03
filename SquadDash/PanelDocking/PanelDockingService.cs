@@ -23,23 +23,63 @@ internal sealed class PanelDockingService
     private readonly Grid? _rightZonePanel;
     private readonly Grid? _left2ZonePanel;
     private readonly Grid? _right2ZonePanel;
+    private readonly Grid? _left3ZonePanel;
+    private readonly Grid? _right3ZonePanel;
+    private readonly Grid? _left4ZonePanel;
+    private readonly Grid? _right4ZonePanel;
+    private readonly Grid? _left5ZonePanel;
+    private readonly Grid? _right5ZonePanel;
+    private readonly Grid? _left6ZonePanel;
+    private readonly Grid? _right6ZonePanel;
     private readonly Grid? _topZoneGrid;
     private readonly ColumnDefinition? _leftZoneColumn;
     private readonly ColumnDefinition? _rightZoneColumn;
     private readonly ColumnDefinition? _left2ZoneColumn;
     private readonly ColumnDefinition? _right2ZoneColumn;
+    private readonly ColumnDefinition? _left3ZoneColumn;
+    private readonly ColumnDefinition? _right3ZoneColumn;
+    private readonly ColumnDefinition? _left4ZoneColumn;
+    private readonly ColumnDefinition? _right4ZoneColumn;
+    private readonly ColumnDefinition? _left5ZoneColumn;
+    private readonly ColumnDefinition? _right5ZoneColumn;
+    private readonly ColumnDefinition? _left6ZoneColumn;
+    private readonly ColumnDefinition? _right6ZoneColumn;
     private readonly ColumnDefinition? _leftSplitterColumn;
     private readonly ColumnDefinition? _rightSplitterColumn;
     private readonly ColumnDefinition? _left2SplitterColumn;
     private readonly ColumnDefinition? _right2SplitterColumn;
+    private readonly ColumnDefinition? _left3SplitterColumn;
+    private readonly ColumnDefinition? _right3SplitterColumn;
+    private readonly ColumnDefinition? _left4SplitterColumn;
+    private readonly ColumnDefinition? _right4SplitterColumn;
+    private readonly ColumnDefinition? _left5SplitterColumn;
+    private readonly ColumnDefinition? _right5SplitterColumn;
+    private readonly ColumnDefinition? _left6SplitterColumn;
+    private readonly ColumnDefinition? _right6SplitterColumn;
     private readonly UIElement? _leftZoneScrollViewer;
     private readonly UIElement? _rightZoneScrollViewer;
     private readonly UIElement? _left2ZoneScrollViewer;
     private readonly UIElement? _right2ZoneScrollViewer;
+    private readonly UIElement? _left3ZoneScrollViewer;
+    private readonly UIElement? _right3ZoneScrollViewer;
+    private readonly UIElement? _left4ZoneScrollViewer;
+    private readonly UIElement? _right4ZoneScrollViewer;
+    private readonly UIElement? _left5ZoneScrollViewer;
+    private readonly UIElement? _right5ZoneScrollViewer;
+    private readonly UIElement? _left6ZoneScrollViewer;
+    private readonly UIElement? _right6ZoneScrollViewer;
     private readonly UIElement? _leftZoneSplitter;
     private readonly UIElement? _rightZoneSplitter;
     private readonly UIElement? _left2ZoneSplitter;
     private readonly UIElement? _right2ZoneSplitter;
+    private readonly UIElement? _left3ZoneSplitter;
+    private readonly UIElement? _right3ZoneSplitter;
+    private readonly UIElement? _left4ZoneSplitter;
+    private readonly UIElement? _right4ZoneSplitter;
+    private readonly UIElement? _left5ZoneSplitter;
+    private readonly UIElement? _right5ZoneSplitter;
+    private readonly UIElement? _left6ZoneSplitter;
+    private readonly UIElement? _right6ZoneSplitter;
 
     // Maps each dockable panel ID to its column index within TopZonePanelsGrid.
     // Used only to validate which panels may live in the top zone.
@@ -57,6 +97,10 @@ internal sealed class PanelDockingService
     // Column 5 is occupied by WatchPanelBorder (non-dockable) so it is skipped.
     private static readonly int[] TopZonePhysicalColumns = [3, 4, 6, 7, 8, 9];
 
+    // Maximum width for panels placed in the Top zone, preventing side-zone panels from
+    // expanding too wide when moved here (consistent with MaxWidth="320" in MainWindow.xaml).
+    private const double TopZonePanelMaxWidth = 320;
+
     // Saves each panel's original XAML Height binding so it can be restored when the
     // panel moves back to the Top zone after having been in a Left/Right zone.
     private readonly Dictionary<string, MultiBinding?> _savedHeightBindings =
@@ -67,6 +111,14 @@ internal sealed class PanelDockingService
     private readonly List<FrameworkElement> _rightZonePanels  = new();
     private readonly List<FrameworkElement> _left2ZonePanels  = new();
     private readonly List<FrameworkElement> _right2ZonePanels = new();
+    private readonly List<FrameworkElement> _left3ZonePanels  = new();
+    private readonly List<FrameworkElement> _right3ZonePanels = new();
+    private readonly List<FrameworkElement> _left4ZonePanels  = new();
+    private readonly List<FrameworkElement> _right4ZonePanels = new();
+    private readonly List<FrameworkElement> _left5ZonePanels  = new();
+    private readonly List<FrameworkElement> _right5ZonePanels = new();
+    private readonly List<FrameworkElement> _left6ZonePanels  = new();
+    private readonly List<FrameworkElement> _right6ZonePanels = new();
 
     /// <summary>Data-model-only constructor for unit tests.</summary>
     public PanelDockingService() { }
@@ -106,46 +158,126 @@ internal sealed class PanelDockingService
         Grid rightZonePanel,
         Grid left2ZonePanel,
         Grid right2ZonePanel,
+        Grid left3ZonePanel,
+        Grid right3ZonePanel,
+        Grid left4ZonePanel,
+        Grid right4ZonePanel,
+        Grid left5ZonePanel,
+        Grid right5ZonePanel,
+        Grid left6ZonePanel,
+        Grid right6ZonePanel,
         Grid topZoneGrid,
         ColumnDefinition leftZoneColumn,
         ColumnDefinition rightZoneColumn,
         ColumnDefinition left2ZoneColumn,
         ColumnDefinition right2ZoneColumn,
+        ColumnDefinition left3ZoneColumn,
+        ColumnDefinition right3ZoneColumn,
+        ColumnDefinition left4ZoneColumn,
+        ColumnDefinition right4ZoneColumn,
+        ColumnDefinition left5ZoneColumn,
+        ColumnDefinition right5ZoneColumn,
+        ColumnDefinition left6ZoneColumn,
+        ColumnDefinition right6ZoneColumn,
         ColumnDefinition leftSplitterColumn,
         ColumnDefinition rightSplitterColumn,
         ColumnDefinition left2SplitterColumn,
         ColumnDefinition right2SplitterColumn,
+        ColumnDefinition left3SplitterColumn,
+        ColumnDefinition right3SplitterColumn,
+        ColumnDefinition left4SplitterColumn,
+        ColumnDefinition right4SplitterColumn,
+        ColumnDefinition left5SplitterColumn,
+        ColumnDefinition right5SplitterColumn,
+        ColumnDefinition left6SplitterColumn,
+        ColumnDefinition right6SplitterColumn,
         UIElement leftZoneScrollViewer,
         UIElement rightZoneScrollViewer,
         UIElement left2ZoneScrollViewer,
         UIElement right2ZoneScrollViewer,
+        UIElement left3ZoneScrollViewer,
+        UIElement right3ZoneScrollViewer,
+        UIElement left4ZoneScrollViewer,
+        UIElement right4ZoneScrollViewer,
+        UIElement left5ZoneScrollViewer,
+        UIElement right5ZoneScrollViewer,
+        UIElement left6ZoneScrollViewer,
+        UIElement right6ZoneScrollViewer,
         UIElement leftZoneSplitter,
         UIElement rightZoneSplitter,
         UIElement left2ZoneSplitter,
-        UIElement right2ZoneSplitter)
+        UIElement right2ZoneSplitter,
+        UIElement left3ZoneSplitter,
+        UIElement right3ZoneSplitter,
+        UIElement left4ZoneSplitter,
+        UIElement right4ZoneSplitter,
+        UIElement left5ZoneSplitter,
+        UIElement right5ZoneSplitter,
+        UIElement left6ZoneSplitter,
+        UIElement right6ZoneSplitter)
     {
         _panelRegistry = panelRegistry;
         _leftZonePanel = leftZonePanel;
         _rightZonePanel = rightZonePanel;
         _left2ZonePanel = left2ZonePanel;
         _right2ZonePanel = right2ZonePanel;
+        _left3ZonePanel = left3ZonePanel;
+        _right3ZonePanel = right3ZonePanel;
+        _left4ZonePanel = left4ZonePanel;
+        _right4ZonePanel = right4ZonePanel;
+        _left5ZonePanel = left5ZonePanel;
+        _right5ZonePanel = right5ZonePanel;
+        _left6ZonePanel = left6ZonePanel;
+        _right6ZonePanel = right6ZonePanel;
         _topZoneGrid = topZoneGrid;
         _leftZoneColumn = leftZoneColumn;
         _rightZoneColumn = rightZoneColumn;
         _left2ZoneColumn = left2ZoneColumn;
         _right2ZoneColumn = right2ZoneColumn;
+        _left3ZoneColumn = left3ZoneColumn;
+        _right3ZoneColumn = right3ZoneColumn;
+        _left4ZoneColumn = left4ZoneColumn;
+        _right4ZoneColumn = right4ZoneColumn;
+        _left5ZoneColumn = left5ZoneColumn;
+        _right5ZoneColumn = right5ZoneColumn;
+        _left6ZoneColumn = left6ZoneColumn;
+        _right6ZoneColumn = right6ZoneColumn;
         _leftSplitterColumn = leftSplitterColumn;
         _rightSplitterColumn = rightSplitterColumn;
         _left2SplitterColumn = left2SplitterColumn;
         _right2SplitterColumn = right2SplitterColumn;
+        _left3SplitterColumn = left3SplitterColumn;
+        _right3SplitterColumn = right3SplitterColumn;
+        _left4SplitterColumn = left4SplitterColumn;
+        _right4SplitterColumn = right4SplitterColumn;
+        _left5SplitterColumn = left5SplitterColumn;
+        _right5SplitterColumn = right5SplitterColumn;
+        _left6SplitterColumn = left6SplitterColumn;
+        _right6SplitterColumn = right6SplitterColumn;
         _leftZoneScrollViewer = leftZoneScrollViewer;
         _rightZoneScrollViewer = rightZoneScrollViewer;
         _left2ZoneScrollViewer = left2ZoneScrollViewer;
         _right2ZoneScrollViewer = right2ZoneScrollViewer;
+        _left3ZoneScrollViewer = left3ZoneScrollViewer;
+        _right3ZoneScrollViewer = right3ZoneScrollViewer;
+        _left4ZoneScrollViewer = left4ZoneScrollViewer;
+        _right4ZoneScrollViewer = right4ZoneScrollViewer;
+        _left5ZoneScrollViewer = left5ZoneScrollViewer;
+        _right5ZoneScrollViewer = right5ZoneScrollViewer;
+        _left6ZoneScrollViewer = left6ZoneScrollViewer;
+        _right6ZoneScrollViewer = right6ZoneScrollViewer;
         _leftZoneSplitter = leftZoneSplitter;
         _rightZoneSplitter = rightZoneSplitter;
         _left2ZoneSplitter = left2ZoneSplitter;
         _right2ZoneSplitter = right2ZoneSplitter;
+        _left3ZoneSplitter = left3ZoneSplitter;
+        _right3ZoneSplitter = right3ZoneSplitter;
+        _left4ZoneSplitter = left4ZoneSplitter;
+        _right4ZoneSplitter = right4ZoneSplitter;
+        _left5ZoneSplitter = left5ZoneSplitter;
+        _right5ZoneSplitter = right5ZoneSplitter;
+        _left6ZoneSplitter = left6ZoneSplitter;
+        _right6ZoneSplitter = right6ZoneSplitter;
     }
 
     /// <summary>The live panel layout for the current session.</summary>
@@ -157,9 +289,23 @@ internal sealed class PanelDockingService
     /// WPF context is present) the actual UI elements.  When <paramref name="targetOrder"/>
     /// is negative the panel is appended at the end of the zone.
     /// Same-zone reordering is supported.
+    /// <para>
+    /// When <paramref name="insertKind"/> is <see cref="SyntheticInsertKind.InsertBefore"/>
+    /// and the target zone has adjacent occupied outer zones that can be shifted outward
+    /// to make room for a new standalone column, the shift is performed automatically
+    /// and the target zone is redirected accordingly.
+    /// </para>
     /// </summary>
-    public void MovePanel(string panelId, DockZone targetZone, int targetOrder = -1)
+    public void MovePanel(string panelId, DockZone targetZone, int targetOrder = -1,
+        SyntheticInsertKind insertKind = SyntheticInsertKind.None)
     {
+        bool isTopLevel = !_isMovingPanel;
+        _isMovingPanel = true;
+        // Capture source zone before try so the finally block can check it.
+        DockZone? sourceZoneCapture = CurrentLayout.Slots
+            .FirstOrDefault(s => string.Equals(s.PanelId, panelId, StringComparison.OrdinalIgnoreCase))?.Zone;
+        try
+        {
         var existing = CurrentLayout.Slots.FirstOrDefault(s =>
             string.Equals(s.PanelId, panelId, StringComparison.OrdinalIgnoreCase));
 
@@ -214,6 +360,12 @@ internal sealed class PanelDockingService
             return;
         }
 
+        // Cross-zone move — check if a thin-slot drop warrants a column shift.
+        if (insertKind == SyntheticInsertKind.InsertBefore)
+            (targetZone, targetOrder) = ResolveInsertBeforeColumnShift(panelId, targetZone, targetOrder);
+        else if (insertKind == SyntheticInsertKind.InsertAfter)
+            (targetZone, targetOrder) = ResolveInsertAfterColumnShift(panelId, targetZone, targetOrder);
+
         // Cross-zone move — update data model.
         SquadDashTrace.Write(TraceCategory.Docking,
             $"MovePanel: {panelId} {sourceZone} → {targetZone} (requestedOrder={targetOrder})");
@@ -254,6 +406,22 @@ internal sealed class PanelDockingService
             RemoveFromZone(_left2ZonePanel!, _left2ZonePanels, element, _left2ZoneScrollViewer as FrameworkElement);
         else if (sourceZone == DockZone.Right2)
             RemoveFromZone(_right2ZonePanel!, _right2ZonePanels, element, _right2ZoneScrollViewer as FrameworkElement);
+        else if (sourceZone == DockZone.Left3)
+            RemoveFromZone(_left3ZonePanel!, _left3ZonePanels, element, _left3ZoneScrollViewer as FrameworkElement);
+        else if (sourceZone == DockZone.Right3)
+            RemoveFromZone(_right3ZonePanel!, _right3ZonePanels, element, _right3ZoneScrollViewer as FrameworkElement);
+        else if (sourceZone == DockZone.Left4)
+            RemoveFromZone(_left4ZonePanel!, _left4ZonePanels, element, _left4ZoneScrollViewer as FrameworkElement);
+        else if (sourceZone == DockZone.Right4)
+            RemoveFromZone(_right4ZonePanel!, _right4ZonePanels, element, _right4ZoneScrollViewer as FrameworkElement);
+        else if (sourceZone == DockZone.Left5)
+            RemoveFromZone(_left5ZonePanel!, _left5ZonePanels, element, _left5ZoneScrollViewer as FrameworkElement);
+        else if (sourceZone == DockZone.Right5)
+            RemoveFromZone(_right5ZonePanel!, _right5ZonePanels, element, _right5ZoneScrollViewer as FrameworkElement);
+        else if (sourceZone == DockZone.Left6)
+            RemoveFromZone(_left6ZonePanel!, _left6ZonePanels, element, _left6ZoneScrollViewer as FrameworkElement);
+        else if (sourceZone == DockZone.Right6)
+            RemoveFromZone(_right6ZonePanel!, _right6ZonePanels, element, _right6ZoneScrollViewer as FrameworkElement);
         else
             RemoveFromTopZone(element);
 
@@ -295,6 +463,78 @@ internal sealed class PanelDockingService
                 }
                 break;
 
+            case DockZone.Left3:
+                AddToZone(_left3ZonePanel!, _left3ZonePanels, element, panelId, _left3ZoneScrollViewer as FrameworkElement, insertAt);
+                if (element.Visibility != Visibility.Collapsed)
+                {
+                    if (ExpandZone(_left3ZoneColumn!, _left3SplitterColumn!, _left3ZoneScrollViewer!, _left3ZoneSplitter!, element))
+                        ScheduleZoneHeightRefresh(_left3ZonePanel!, _left3ZoneScrollViewer as FrameworkElement);
+                }
+                break;
+
+            case DockZone.Right3:
+                AddToZone(_right3ZonePanel!, _right3ZonePanels, element, panelId, _right3ZoneScrollViewer as FrameworkElement, insertAt);
+                if (element.Visibility != Visibility.Collapsed)
+                {
+                    if (ExpandZone(_right3ZoneColumn!, _right3SplitterColumn!, _right3ZoneScrollViewer!, _right3ZoneSplitter!, element))
+                        ScheduleZoneHeightRefresh(_right3ZonePanel!, _right3ZoneScrollViewer as FrameworkElement);
+                }
+                break;
+
+            case DockZone.Left4:
+                AddToZone(_left4ZonePanel!, _left4ZonePanels, element, panelId, _left4ZoneScrollViewer as FrameworkElement, insertAt);
+                if (element.Visibility != Visibility.Collapsed)
+                {
+                    if (ExpandZone(_left4ZoneColumn!, _left4SplitterColumn!, _left4ZoneScrollViewer!, _left4ZoneSplitter!, element))
+                        ScheduleZoneHeightRefresh(_left4ZonePanel!, _left4ZoneScrollViewer as FrameworkElement);
+                }
+                break;
+
+            case DockZone.Right4:
+                AddToZone(_right4ZonePanel!, _right4ZonePanels, element, panelId, _right4ZoneScrollViewer as FrameworkElement, insertAt);
+                if (element.Visibility != Visibility.Collapsed)
+                {
+                    if (ExpandZone(_right4ZoneColumn!, _right4SplitterColumn!, _right4ZoneScrollViewer!, _right4ZoneSplitter!, element))
+                        ScheduleZoneHeightRefresh(_right4ZonePanel!, _right4ZoneScrollViewer as FrameworkElement);
+                }
+                break;
+
+            case DockZone.Left5:
+                AddToZone(_left5ZonePanel!, _left5ZonePanels, element, panelId, _left5ZoneScrollViewer as FrameworkElement, insertAt);
+                if (element.Visibility != Visibility.Collapsed)
+                {
+                    if (ExpandZone(_left5ZoneColumn!, _left5SplitterColumn!, _left5ZoneScrollViewer!, _left5ZoneSplitter!, element))
+                        ScheduleZoneHeightRefresh(_left5ZonePanel!, _left5ZoneScrollViewer as FrameworkElement);
+                }
+                break;
+
+            case DockZone.Right5:
+                AddToZone(_right5ZonePanel!, _right5ZonePanels, element, panelId, _right5ZoneScrollViewer as FrameworkElement, insertAt);
+                if (element.Visibility != Visibility.Collapsed)
+                {
+                    if (ExpandZone(_right5ZoneColumn!, _right5SplitterColumn!, _right5ZoneScrollViewer!, _right5ZoneSplitter!, element))
+                        ScheduleZoneHeightRefresh(_right5ZonePanel!, _right5ZoneScrollViewer as FrameworkElement);
+                }
+                break;
+
+            case DockZone.Left6:
+                AddToZone(_left6ZonePanel!, _left6ZonePanels, element, panelId, _left6ZoneScrollViewer as FrameworkElement, insertAt);
+                if (element.Visibility != Visibility.Collapsed)
+                {
+                    if (ExpandZone(_left6ZoneColumn!, _left6SplitterColumn!, _left6ZoneScrollViewer!, _left6ZoneSplitter!, element))
+                        ScheduleZoneHeightRefresh(_left6ZonePanel!, _left6ZoneScrollViewer as FrameworkElement);
+                }
+                break;
+
+            case DockZone.Right6:
+                AddToZone(_right6ZonePanel!, _right6ZonePanels, element, panelId, _right6ZoneScrollViewer as FrameworkElement, insertAt);
+                if (element.Visibility != Visibility.Collapsed)
+                {
+                    if (ExpandZone(_right6ZoneColumn!, _right6SplitterColumn!, _right6ZoneScrollViewer!, _right6ZoneSplitter!, element))
+                        ScheduleZoneHeightRefresh(_right6ZonePanel!, _right6ZoneScrollViewer as FrameworkElement);
+                }
+                break;
+
             case DockZone.Top:
                 AddToTopZone(panelId, element);
                 break;
@@ -321,11 +561,66 @@ internal sealed class PanelDockingService
             SquadDashTrace.Write(TraceCategory.Docking, $"MovePanel: Right2 zone now empty after moving {panelId} out — collapsing");
             CollapseZone(_right2ZoneColumn!, _right2SplitterColumn!, _right2ZoneScrollViewer!, _right2ZoneSplitter!);
         }
-        else if (sourceZone is DockZone.Left or DockZone.Right or DockZone.Left2 or DockZone.Right2)
+        else if (sourceZone == DockZone.Left3 && !ZoneHasPanels(DockZone.Left3))
+        {
+            SquadDashTrace.Write(TraceCategory.Docking, $"MovePanel: Left3 zone now empty after moving {panelId} out — collapsing");
+            CollapseZone(_left3ZoneColumn!, _left3SplitterColumn!, _left3ZoneScrollViewer!, _left3ZoneSplitter!);
+        }
+        else if (sourceZone == DockZone.Right3 && !ZoneHasPanels(DockZone.Right3))
+        {
+            SquadDashTrace.Write(TraceCategory.Docking, $"MovePanel: Right3 zone now empty after moving {panelId} out — collapsing");
+            CollapseZone(_right3ZoneColumn!, _right3SplitterColumn!, _right3ZoneScrollViewer!, _right3ZoneSplitter!);
+        }
+        else if (sourceZone == DockZone.Left4 && !ZoneHasPanels(DockZone.Left4))
+        {
+            SquadDashTrace.Write(TraceCategory.Docking, $"MovePanel: Left4 zone now empty after moving {panelId} out — collapsing");
+            CollapseZone(_left4ZoneColumn!, _left4SplitterColumn!, _left4ZoneScrollViewer!, _left4ZoneSplitter!);
+        }
+        else if (sourceZone == DockZone.Right4 && !ZoneHasPanels(DockZone.Right4))
+        {
+            SquadDashTrace.Write(TraceCategory.Docking, $"MovePanel: Right4 zone now empty after moving {panelId} out — collapsing");
+            CollapseZone(_right4ZoneColumn!, _right4SplitterColumn!, _right4ZoneScrollViewer!, _right4ZoneSplitter!);
+        }
+        else if (sourceZone == DockZone.Left5 && !ZoneHasPanels(DockZone.Left5))
+        {
+            SquadDashTrace.Write(TraceCategory.Docking, $"MovePanel: Left5 zone now empty after moving {panelId} out — collapsing");
+            CollapseZone(_left5ZoneColumn!, _left5SplitterColumn!, _left5ZoneScrollViewer!, _left5ZoneSplitter!);
+        }
+        else if (sourceZone == DockZone.Right5 && !ZoneHasPanels(DockZone.Right5))
+        {
+            SquadDashTrace.Write(TraceCategory.Docking, $"MovePanel: Right5 zone now empty after moving {panelId} out — collapsing");
+            CollapseZone(_right5ZoneColumn!, _right5SplitterColumn!, _right5ZoneScrollViewer!, _right5ZoneSplitter!);
+        }
+        else if (sourceZone == DockZone.Left6 && !ZoneHasPanels(DockZone.Left6))
+        {
+            SquadDashTrace.Write(TraceCategory.Docking, $"MovePanel: Left6 zone now empty after moving {panelId} out — collapsing");
+            CollapseZone(_left6ZoneColumn!, _left6SplitterColumn!, _left6ZoneScrollViewer!, _left6ZoneSplitter!);
+        }
+        else if (sourceZone == DockZone.Right6 && !ZoneHasPanels(DockZone.Right6))
+        {
+            SquadDashTrace.Write(TraceCategory.Docking, $"MovePanel: Right6 zone now empty after moving {panelId} out — collapsing");
+            CollapseZone(_right6ZoneColumn!, _right6SplitterColumn!, _right6ZoneScrollViewer!, _right6ZoneSplitter!);
+        }
+        else if (sourceZone is DockZone.Left or DockZone.Right or DockZone.Left2 or DockZone.Right2 or DockZone.Left3 or DockZone.Right3 or DockZone.Left4 or DockZone.Right4 or DockZone.Left5 or DockZone.Right5 or DockZone.Left6 or DockZone.Right6)
         {
             int remaining = CurrentLayout.Slots.Count(s => s.Zone == sourceZone);
             SquadDashTrace.Write(TraceCategory.Docking,
                 $"MovePanel: {sourceZone} still has {remaining} panel(s) after moving {panelId} — not collapsing");
+        }
+
+        } // end try
+        finally
+        {
+            if (isTopLevel)
+            {
+                // Only normalize when a side zone was vacated — that's the only way gaps can arise.
+                // Skip when source is Top/null (fresh placement), which can't create zone gaps.
+                bool sourceIsSideZone = sourceZoneCapture is
+                    DockZone.Left or DockZone.Left2 or DockZone.Left3 or DockZone.Left4 or DockZone.Left5 or DockZone.Left6 or
+                    DockZone.Right or DockZone.Right2 or DockZone.Right3 or DockZone.Right4 or DockZone.Right5 or DockZone.Right6;
+                if (sourceIsSideZone) NormalizeZoneOrder();
+                _isMovingPanel = false;
+            }
         }
     }
 
@@ -456,6 +751,14 @@ internal sealed class PanelDockingService
             DockZone.Right  => (_rightZoneColumn,  _rightSplitterColumn,  _rightZoneScrollViewer,  _rightZoneSplitter),
             DockZone.Left2  => (_left2ZoneColumn,  _left2SplitterColumn,  _left2ZoneScrollViewer,  _left2ZoneSplitter),
             DockZone.Right2 => (_right2ZoneColumn, _right2SplitterColumn, _right2ZoneScrollViewer, _right2ZoneSplitter),
+            DockZone.Left3  => (_left3ZoneColumn,  _left3SplitterColumn,  _left3ZoneScrollViewer,  _left3ZoneSplitter),
+            DockZone.Right3 => (_right3ZoneColumn, _right3SplitterColumn, _right3ZoneScrollViewer, _right3ZoneSplitter),
+            DockZone.Left4  => (_left4ZoneColumn,  _left4SplitterColumn,  _left4ZoneScrollViewer,  _left4ZoneSplitter),
+            DockZone.Right4 => (_right4ZoneColumn, _right4SplitterColumn, _right4ZoneScrollViewer, _right4ZoneSplitter),
+            DockZone.Left5  => (_left5ZoneColumn,  _left5SplitterColumn,  _left5ZoneScrollViewer,  _left5ZoneSplitter),
+            DockZone.Right5 => (_right5ZoneColumn, _right5SplitterColumn, _right5ZoneScrollViewer, _right5ZoneSplitter),
+            DockZone.Left6  => (_left6ZoneColumn,  _left6SplitterColumn,  _left6ZoneScrollViewer,  _left6ZoneSplitter),
+            DockZone.Right6 => (_right6ZoneColumn, _right6SplitterColumn, _right6ZoneScrollViewer, _right6ZoneSplitter),
             _               => (null, null, null, null),
         };
 
@@ -526,6 +829,14 @@ internal sealed class PanelDockingService
             DockZone.Right  => (_rightZonePanels,  _rightZonePanel,  _rightZoneScrollViewer),
             DockZone.Left2  => (_left2ZonePanels,  _left2ZonePanel,  _left2ZoneScrollViewer),
             DockZone.Right2 => (_right2ZonePanels, _right2ZonePanel, _right2ZoneScrollViewer),
+            DockZone.Left3  => (_left3ZonePanels,  _left3ZonePanel,  _left3ZoneScrollViewer),
+            DockZone.Right3 => (_right3ZonePanels, _right3ZonePanel, _right3ZoneScrollViewer),
+            DockZone.Left4  => (_left4ZonePanels,  _left4ZonePanel,  _left4ZoneScrollViewer),
+            DockZone.Right4 => (_right4ZonePanels, _right4ZonePanel, _right4ZoneScrollViewer),
+            DockZone.Left5  => (_left5ZonePanels,  _left5ZonePanel,  _left5ZoneScrollViewer),
+            DockZone.Right5 => (_right5ZonePanels, _right5ZonePanel, _right5ZoneScrollViewer),
+            DockZone.Left6  => (_left6ZonePanels,  _left6ZonePanel,  _left6ZoneScrollViewer),
+            DockZone.Right6 => (_right6ZonePanels, _right6ZonePanel, _right6ZoneScrollViewer),
             _               => (null, null, null),
         };
 
@@ -541,7 +852,13 @@ internal sealed class PanelDockingService
         zone.Children.Clear();
         zone.RowDefinitions.Clear();
 
-        for (int i = 0; i < panels.Count; i++)
+        // Collapsed panels are still tracked in the zone list (so their order is preserved for
+        // when they are shown again) but must not receive a star row — a Collapsed element in a
+        // Height="*" row still occupies its proportional share of the grid height, leaving a
+        // visible empty gap between the panels that are actually rendered.
+        var visible = panels.Where(p => p.Visibility != Visibility.Collapsed).ToList();
+
+        for (int i = 0; i < visible.Count; i++)
         {
             if (i > 0)
             {
@@ -561,22 +878,22 @@ internal sealed class PanelDockingService
                 zone.Children.Add(splitter);
             }
 
-            double starValue = weights is not null && weights.TryGetValue(panels[i], out double w) ? w : 1.0;
+            double starValue = weights is not null && weights.TryGetValue(visible[i], out double w) ? w : 1.0;
             // MinHeight is only meaningful when a GridSplitter is present (2+ panels) so the user
             // cannot drag a panel to zero.  A solo panel has no splitter and must be allowed to
             // start at zero height (NaN zone) without creating a spurious visible stub.
             zone.RowDefinitions.Add(new RowDefinition
             {
                 Height    = new GridLength(starValue, GridUnitType.Star),
-                MinHeight = panels.Count > 1 ? 100 : 0,
+                MinHeight = visible.Count > 1 ? 100 : 0,
             });
-            Grid.SetRow(panels[i], zone.RowDefinitions.Count - 1);
-            zone.Children.Add(panels[i]);
+            Grid.SetRow(visible[i], zone.RowDefinitions.Count - 1);
+            zone.Children.Add(visible[i]);
         }
 
         // Bind the zone Grid height to the scroll viewer so star rows fill the column.
         BindingOperations.ClearBinding(zone, FrameworkElement.HeightProperty);
-        if (scrollViewer is not null && panels.Count > 0)
+        if (scrollViewer is not null && visible.Count > 0)
             zone.SetBinding(FrameworkElement.HeightProperty,
                 new Binding(nameof(FrameworkElement.ActualHeight)) { Source = scrollViewer });
     }
@@ -592,6 +909,7 @@ internal sealed class PanelDockingService
             BindingOperations.SetBinding(element, FrameworkElement.HeightProperty, saved);
 
         element.VerticalAlignment = VerticalAlignment.Top;
+        element.MaxWidth = TopZonePanelMaxWidth;
         element.Margin = new Thickness(14, 0, 0, 0);
         DetachFromCurrentPanelParent(element);
         _topZoneGrid.Children.Add(element);
@@ -614,11 +932,15 @@ internal sealed class PanelDockingService
             .OrderBy(s => s.Order)
             .ToList();
 
+        var assignments = new System.Text.StringBuilder();
         for (int rank = 0; rank < topSlots.Count && rank < TopZonePhysicalColumns.Length; rank++)
         {
+            var col = TopZonePhysicalColumns[rank];
+            assignments.Append($" {topSlots[rank].PanelId}→col{col}");
             if (_panelRegistry.TryGetValue(topSlots[rank].PanelId, out var element))
-                Grid.SetColumn(element, TopZonePhysicalColumns[rank]);
+                Grid.SetColumn(element, col);
         }
+        SquadDashTrace.Write(TraceCategory.Docking, $"RebuildTopZoneLayout:{assignments}");
     }
 
     private static void DetachFromCurrentPanelParent(FrameworkElement element)
@@ -659,6 +981,522 @@ internal sealed class PanelDockingService
                 $"ExpandZone: already expanded (w={zoneCol.Width.Value:F0}) — no change");
         }
         return wasCollapsed;
+    }
+
+    /// <summary>
+    /// When a synthetic <see cref="SyntheticInsertKind.InsertBefore"/> thin-slot drop targets a
+    /// zone whose adjacent outer zone is occupied and an even-more-outer zone is empty, shift
+    /// the adjacent outer zone's panels one step further out to make room for a new standalone
+    /// column.  Returns the (possibly redirected) zone and order to use for the main move.
+    /// </summary>
+    /// <remarks>
+    /// Examples:
+    /// <list type="bullet">
+    /// <item>InsertBefore Left@0, Left2 occupied, Left3 empty → shift Left2→Left3, target Left2.</item>
+    /// <item>InsertBefore Right2@0, Right2 occupied, Right3 empty → shift Right2→Right3, target Right2.</item>
+    /// <item>InsertBefore Right@0, Right occupied, Right2 empty → shift Right→Right2, target Right.</item>
+    /// </list>
+    /// Falls back to the original zone/order when the shift is not possible (outer zone already occupied).
+    /// </remarks>
+    private (DockZone zone, int order) ResolveInsertBeforeColumnShift(
+        string movingPanelId, DockZone requestedZone, int requestedOrder)
+    {
+        // InsertBefore Left@0: "new column between Left2 and Left"
+        // Case A: Left2 occupied, Left3 empty → shift Left2→Left3, redirect target to Left2.
+        // Case B: Left2 empty,    Left occupied → shift Left→Left2, target Left.
+        // Case C: Left2+Left3 occupied, Left4 empty → Left3→Left4, Left2→Left3, target Left2.
+        if (requestedZone == DockZone.Left && requestedOrder == 0)
+        {
+            var left2 = GetZoneSlotsExcluding(DockZone.Left2, movingPanelId);
+            var left3 = GetZoneSlotsExcluding(DockZone.Left3, movingPanelId);
+            var left4 = GetZoneSlotsExcluding(DockZone.Left4, movingPanelId);
+            var left5 = GetZoneSlotsExcluding(DockZone.Left5, movingPanelId);
+            var left6 = GetZoneSlotsExcluding(DockZone.Left6, movingPanelId);
+            if (left2.Count > 0 && left3.Count > 0 && left4.Count > 0 && left5.Count > 0 && left6.Count == 0)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"MovePanel: InsertBefore Left@0 — cascade5: Left5→Left6, Left4→Left5, Left3→Left4, Left2→Left3, targeting Left2");
+                foreach (var s in left5) MovePanel(s.PanelId, DockZone.Left6, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left4, movingPanelId)) MovePanel(s.PanelId, DockZone.Left5, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left3, movingPanelId)) MovePanel(s.PanelId, DockZone.Left4, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left2, movingPanelId)) MovePanel(s.PanelId, DockZone.Left3, s.Order);
+                return (DockZone.Left2, 0);
+            }
+            if (left2.Count > 0 && left3.Count > 0 && left4.Count > 0 && left5.Count == 0)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"MovePanel: InsertBefore Left@0 — cascade4: Left4→Left5, Left3→Left4, Left2→Left3, targeting Left2");
+                foreach (var s in left4) MovePanel(s.PanelId, DockZone.Left5, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left3, movingPanelId)) MovePanel(s.PanelId, DockZone.Left4, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left2, movingPanelId)) MovePanel(s.PanelId, DockZone.Left3, s.Order);
+                return (DockZone.Left2, 0);
+            }
+            if (left2.Count > 0 && left3.Count > 0 && left4.Count == 0)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"MovePanel: InsertBefore Left@0 — cascade: Left3({left3.Count})→Left4, Left2({left2.Count})→Left3, targeting Left2");
+                foreach (var s in left3)
+                    MovePanel(s.PanelId, DockZone.Left4, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left2, movingPanelId))
+                    MovePanel(s.PanelId, DockZone.Left3, s.Order);
+                return (DockZone.Left2, 0);
+            }
+            if (left2.Count > 0 && left3.Count == 0)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"MovePanel: InsertBefore Left@0 — shifting Left2({left2.Count}) → Left3, redirecting target to Left2");
+                foreach (var s in left2)
+                    MovePanel(s.PanelId, DockZone.Left3, s.Order);
+                return (DockZone.Left2, 0);
+            }
+            var left = GetZoneSlotsExcluding(DockZone.Left, movingPanelId);
+            if (left.Count > 0 && left2.Count == 0)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"MovePanel: InsertBefore Left@0 — shifting Left({left.Count}) → Left2, targeting Left");
+                foreach (var s in left)
+                    MovePanel(s.PanelId, DockZone.Left2, s.Order);
+                return (DockZone.Left, 0);
+            }
+        }
+
+        // InsertBefore Left2@0: "new column between Left and Left2"
+        if (requestedZone == DockZone.Left2 && requestedOrder == 0)
+        {
+            var left2 = GetZoneSlotsExcluding(DockZone.Left2, movingPanelId);
+            var left3 = GetZoneSlotsExcluding(DockZone.Left3, movingPanelId);
+            var left4 = GetZoneSlotsExcluding(DockZone.Left4, movingPanelId);
+            var left5 = GetZoneSlotsExcluding(DockZone.Left5, movingPanelId);
+            var left6 = GetZoneSlotsExcluding(DockZone.Left6, movingPanelId);
+            if (left2.Count > 0 && left3.Count > 0 && left4.Count > 0 && left5.Count > 0 && left6.Count == 0)
+            {
+                foreach (var s in left5) MovePanel(s.PanelId, DockZone.Left6, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left4, movingPanelId)) MovePanel(s.PanelId, DockZone.Left5, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left3, movingPanelId)) MovePanel(s.PanelId, DockZone.Left4, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left2, movingPanelId)) MovePanel(s.PanelId, DockZone.Left3, s.Order);
+                return (DockZone.Left2, 0);
+            }
+            if (left2.Count > 0 && left3.Count > 0 && left4.Count > 0 && left5.Count == 0)
+            {
+                foreach (var s in left4) MovePanel(s.PanelId, DockZone.Left5, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left3, movingPanelId)) MovePanel(s.PanelId, DockZone.Left4, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left2, movingPanelId)) MovePanel(s.PanelId, DockZone.Left3, s.Order);
+                return (DockZone.Left2, 0);
+            }
+            if (left2.Count > 0 && left3.Count > 0 && left4.Count == 0)
+            {
+                foreach (var s in left3) MovePanel(s.PanelId, DockZone.Left4, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left2, movingPanelId)) MovePanel(s.PanelId, DockZone.Left3, s.Order);
+                return (DockZone.Left2, 0);
+            }
+            if (left2.Count > 0 && left3.Count == 0)
+            {
+                foreach (var s in left2) MovePanel(s.PanelId, DockZone.Left3, s.Order);
+                return (DockZone.Left2, 0);
+            }
+        }
+
+        // InsertBefore Left3@0
+        if (requestedZone == DockZone.Left3 && requestedOrder == 0)
+        {
+            var left3 = GetZoneSlotsExcluding(DockZone.Left3, movingPanelId);
+            var left4 = GetZoneSlotsExcluding(DockZone.Left4, movingPanelId);
+            var left5 = GetZoneSlotsExcluding(DockZone.Left5, movingPanelId);
+            var left6 = GetZoneSlotsExcluding(DockZone.Left6, movingPanelId);
+            if (left3.Count > 0 && left4.Count > 0 && left5.Count > 0 && left6.Count == 0)
+            {
+                foreach (var s in left5) MovePanel(s.PanelId, DockZone.Left6, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left4, movingPanelId)) MovePanel(s.PanelId, DockZone.Left5, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left3, movingPanelId)) MovePanel(s.PanelId, DockZone.Left4, s.Order);
+                return (DockZone.Left3, 0);
+            }
+            if (left3.Count > 0 && left4.Count > 0 && left5.Count == 0)
+            {
+                foreach (var s in left4) MovePanel(s.PanelId, DockZone.Left5, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left3, movingPanelId)) MovePanel(s.PanelId, DockZone.Left4, s.Order);
+                return (DockZone.Left3, 0);
+            }
+            if (left3.Count > 0 && left4.Count == 0)
+            {
+                foreach (var s in left3) MovePanel(s.PanelId, DockZone.Left4, s.Order);
+                return (DockZone.Left3, 0);
+            }
+        }
+
+        // InsertBefore Left4@0
+        if (requestedZone == DockZone.Left4 && requestedOrder == 0)
+        {
+            var left4 = GetZoneSlotsExcluding(DockZone.Left4, movingPanelId);
+            var left5 = GetZoneSlotsExcluding(DockZone.Left5, movingPanelId);
+            var left6 = GetZoneSlotsExcluding(DockZone.Left6, movingPanelId);
+            if (left4.Count > 0 && left5.Count > 0 && left6.Count == 0)
+            {
+                foreach (var s in left5) MovePanel(s.PanelId, DockZone.Left6, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left4, movingPanelId)) MovePanel(s.PanelId, DockZone.Left5, s.Order);
+                return (DockZone.Left4, 0);
+            }
+            if (left4.Count > 0 && left5.Count == 0)
+            {
+                foreach (var s in left4) MovePanel(s.PanelId, DockZone.Left5, s.Order);
+                return (DockZone.Left4, 0);
+            }
+        }
+
+        // InsertBefore Left5@0
+        if (requestedZone == DockZone.Left5 && requestedOrder == 0)
+        {
+            var left5 = GetZoneSlotsExcluding(DockZone.Left5, movingPanelId);
+            if (left5.Count > 0)
+            {
+                foreach (var s in left5) MovePanel(s.PanelId, DockZone.Left6, s.Order);
+                return (DockZone.Left5, 0);
+            }
+        }
+
+        // InsertBefore Right2@0: "new column between Right and Right2"
+        // Single: Right2 occupied, Right3 empty → shift Right2→Right3, target Right2.
+        // Cascade: Right2+Right3 occupied, Right4 empty → Right3→Right4, Right2→Right3, target Right2.
+        if (requestedZone == DockZone.Right2 && requestedOrder == 0)
+        {
+            var right2 = GetZoneSlotsExcluding(DockZone.Right2, movingPanelId);
+            var right3 = GetZoneSlotsExcluding(DockZone.Right3, movingPanelId);
+            var right4 = GetZoneSlotsExcluding(DockZone.Right4, movingPanelId);
+            var right5 = GetZoneSlotsExcluding(DockZone.Right5, movingPanelId);
+            var right6 = GetZoneSlotsExcluding(DockZone.Right6, movingPanelId);
+            if (right2.Count > 0 && right3.Count > 0 && right4.Count > 0 && right5.Count > 0 && right6.Count == 0)
+            {
+                foreach (var s in right5) MovePanel(s.PanelId, DockZone.Right6, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right4, movingPanelId)) MovePanel(s.PanelId, DockZone.Right5, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right3, movingPanelId)) MovePanel(s.PanelId, DockZone.Right4, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right2, movingPanelId)) MovePanel(s.PanelId, DockZone.Right3, s.Order);
+                return (DockZone.Right2, 0);
+            }
+            if (right2.Count > 0 && right3.Count > 0 && right4.Count > 0 && right5.Count == 0)
+            {
+                foreach (var s in right4) MovePanel(s.PanelId, DockZone.Right5, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right3, movingPanelId)) MovePanel(s.PanelId, DockZone.Right4, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right2, movingPanelId)) MovePanel(s.PanelId, DockZone.Right3, s.Order);
+                return (DockZone.Right2, 0);
+            }
+            if (right2.Count > 0 && right3.Count > 0 && right4.Count == 0)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"MovePanel: InsertBefore Right2@0 — cascade: Right3({right3.Count})→Right4, Right2({right2.Count})→Right3, targeting Right2");
+                foreach (var s in right3)
+                    MovePanel(s.PanelId, DockZone.Right4, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right2, movingPanelId))
+                    MovePanel(s.PanelId, DockZone.Right3, s.Order);
+                return (DockZone.Right2, 0);
+            }
+            if (right2.Count > 0 && right3.Count == 0)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"MovePanel: InsertBefore Right2@0 — shifting Right2({right2.Count}) → Right3, targeting Right2");
+                foreach (var s in right2)
+                    MovePanel(s.PanelId, DockZone.Right3, s.Order);
+                return (DockZone.Right2, 0);
+            }
+        }
+
+        // InsertBefore Right3@0
+        if (requestedZone == DockZone.Right3 && requestedOrder == 0)
+        {
+            var right3 = GetZoneSlotsExcluding(DockZone.Right3, movingPanelId);
+            var right4 = GetZoneSlotsExcluding(DockZone.Right4, movingPanelId);
+            var right5 = GetZoneSlotsExcluding(DockZone.Right5, movingPanelId);
+            var right6 = GetZoneSlotsExcluding(DockZone.Right6, movingPanelId);
+            if (right3.Count > 0 && right4.Count > 0 && right5.Count > 0 && right6.Count == 0)
+            {
+                foreach (var s in right5) MovePanel(s.PanelId, DockZone.Right6, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right4, movingPanelId)) MovePanel(s.PanelId, DockZone.Right5, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right3, movingPanelId)) MovePanel(s.PanelId, DockZone.Right4, s.Order);
+                return (DockZone.Right3, 0);
+            }
+            if (right3.Count > 0 && right4.Count > 0 && right5.Count == 0)
+            {
+                foreach (var s in right4) MovePanel(s.PanelId, DockZone.Right5, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right3, movingPanelId)) MovePanel(s.PanelId, DockZone.Right4, s.Order);
+                return (DockZone.Right3, 0);
+            }
+            if (right3.Count > 0 && right4.Count == 0)
+            {
+                foreach (var s in right3) MovePanel(s.PanelId, DockZone.Right4, s.Order);
+                return (DockZone.Right3, 0);
+            }
+        }
+
+        // InsertBefore Right4@0
+        if (requestedZone == DockZone.Right4 && requestedOrder == 0)
+        {
+            var right4 = GetZoneSlotsExcluding(DockZone.Right4, movingPanelId);
+            var right5 = GetZoneSlotsExcluding(DockZone.Right5, movingPanelId);
+            var right6 = GetZoneSlotsExcluding(DockZone.Right6, movingPanelId);
+            if (right4.Count > 0 && right5.Count > 0 && right6.Count == 0)
+            {
+                foreach (var s in right5) MovePanel(s.PanelId, DockZone.Right6, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right4, movingPanelId)) MovePanel(s.PanelId, DockZone.Right5, s.Order);
+                return (DockZone.Right4, 0);
+            }
+            if (right4.Count > 0 && right5.Count == 0)
+            {
+                foreach (var s in right4) MovePanel(s.PanelId, DockZone.Right5, s.Order);
+                return (DockZone.Right4, 0);
+            }
+        }
+
+        // InsertBefore Right5@0
+        if (requestedZone == DockZone.Right5 && requestedOrder == 0)
+        {
+            var right5 = GetZoneSlotsExcluding(DockZone.Right5, movingPanelId);
+            if (right5.Count > 0)
+            {
+                foreach (var s in right5) MovePanel(s.PanelId, DockZone.Right6, s.Order);
+                return (DockZone.Right5, 0);
+            }
+        }
+
+        // InsertBefore Right@0: "new column between center and Right"
+        // Single-step:    Right→Right2 (if Right2 empty)
+        // Cascade 2-step: Right2→Right3, Right→Right2 (if Right2+Right occupied, Right3 empty)
+        // Cascade 3-step: Right3→Right4, Right2→Right3, Right→Right2 (all three occupied, Right4 empty)
+        if (requestedZone == DockZone.Right && requestedOrder == 0)
+        {
+            var right  = GetZoneSlotsExcluding(DockZone.Right,  movingPanelId);
+            var right2 = GetZoneSlotsExcluding(DockZone.Right2, movingPanelId);
+            var right3 = GetZoneSlotsExcluding(DockZone.Right3, movingPanelId);
+            var right4 = GetZoneSlotsExcluding(DockZone.Right4, movingPanelId);
+            var right5 = GetZoneSlotsExcluding(DockZone.Right5, movingPanelId);
+            var right6 = GetZoneSlotsExcluding(DockZone.Right6, movingPanelId);
+            if (right.Count > 0 && right2.Count > 0 && right3.Count > 0 && right4.Count > 0 && right5.Count > 0 && right6.Count == 0)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"MovePanel: InsertBefore Right@0 — cascade5: Right5→Right6, Right4→Right5, Right3→Right4, Right2→Right3, Right→Right2, targeting Right");
+                foreach (var s in right5) MovePanel(s.PanelId, DockZone.Right6, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right4, movingPanelId)) MovePanel(s.PanelId, DockZone.Right5, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right3, movingPanelId)) MovePanel(s.PanelId, DockZone.Right4, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right2, movingPanelId)) MovePanel(s.PanelId, DockZone.Right3, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right, movingPanelId)) MovePanel(s.PanelId, DockZone.Right2, s.Order);
+                return (DockZone.Right, 0);
+            }
+            if (right.Count > 0 && right2.Count > 0 && right3.Count > 0 && right4.Count > 0 && right5.Count == 0)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"MovePanel: InsertBefore Right@0 — cascade4: Right4→Right5, Right3→Right4, Right2→Right3, Right→Right2, targeting Right");
+                foreach (var s in right4) MovePanel(s.PanelId, DockZone.Right5, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right3, movingPanelId)) MovePanel(s.PanelId, DockZone.Right4, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right2, movingPanelId)) MovePanel(s.PanelId, DockZone.Right3, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right, movingPanelId)) MovePanel(s.PanelId, DockZone.Right2, s.Order);
+                return (DockZone.Right, 0);
+            }
+            if (right.Count > 0 && right2.Count > 0 && right3.Count > 0 && right4.Count == 0)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"MovePanel: InsertBefore Right@0 — cascade3: Right3({right3.Count})→Right4, Right2({right2.Count})→Right3, Right({right.Count})→Right2, targeting Right");
+                foreach (var s in right3)
+                    MovePanel(s.PanelId, DockZone.Right4, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right2, movingPanelId))
+                    MovePanel(s.PanelId, DockZone.Right3, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right, movingPanelId))
+                    MovePanel(s.PanelId, DockZone.Right2, s.Order);
+                return (DockZone.Right, 0);
+            }
+            if (right.Count > 0 && right2.Count == 0)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"MovePanel: InsertBefore Right@0 — shifting Right({right.Count}) → Right2, targeting Right");
+                foreach (var s in right)
+                    MovePanel(s.PanelId, DockZone.Right2, s.Order);
+                return (DockZone.Right, 0);
+            }
+            if (right.Count > 0 && right2.Count > 0 && right3.Count == 0)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"MovePanel: InsertBefore Right@0 — cascade: Right2({right2.Count})→Right3, Right({right.Count})→Right2, targeting Right");
+                foreach (var s in right2)
+                    MovePanel(s.PanelId, DockZone.Right3, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Right, movingPanelId))
+                    MovePanel(s.PanelId, DockZone.Right2, s.Order);
+                return (DockZone.Right, 0);
+            }
+        }
+
+        return (requestedZone, requestedOrder); // fallback: stack in zone as usual
+    }
+
+    /// <summary>
+    /// Resolves an <c>InsertAfter</c> thin-slot drop on a left-side zone into a column-shift operation.
+    /// "InsertAfter Left@N" means the user dropped on the inner-edge thin (right side of the Left column),
+    /// intending to create a new innermost column.  The existing Left occupants shift outward.
+    /// </summary>
+    private (DockZone zone, int order) ResolveInsertAfterColumnShift(
+        string movingPanelId, DockZone requestedZone, int requestedOrder)
+    {
+        // InsertAfter Left@N: inner-edge thin on the left side.
+        // New panel should land at Left (innermost); existing Left shifts to Left2, Left2 shifts to Left3, Left3 shifts to Left4.
+        if (requestedZone == DockZone.Left)
+        {
+            var left  = GetZoneSlotsExcluding(DockZone.Left,  movingPanelId);
+            var left2 = GetZoneSlotsExcluding(DockZone.Left2, movingPanelId);
+            var left3 = GetZoneSlotsExcluding(DockZone.Left3, movingPanelId);
+            var left4 = GetZoneSlotsExcluding(DockZone.Left4, movingPanelId);
+            var left5 = GetZoneSlotsExcluding(DockZone.Left5, movingPanelId);
+            var left6 = GetZoneSlotsExcluding(DockZone.Left6, movingPanelId);
+
+            if (left.Count > 0 && left2.Count > 0 && left3.Count > 0 && left4.Count > 0 && left5.Count > 0 && left6.Count == 0)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"MovePanel: InsertAfter Left — cascade5: Left5→Left6, Left4→Left5, Left3→Left4, Left2→Left3, Left→Left2, targeting Left");
+                foreach (var s in left5) MovePanel(s.PanelId, DockZone.Left6, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left4, movingPanelId)) MovePanel(s.PanelId, DockZone.Left5, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left3, movingPanelId)) MovePanel(s.PanelId, DockZone.Left4, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left2, movingPanelId)) MovePanel(s.PanelId, DockZone.Left3, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left, movingPanelId)) MovePanel(s.PanelId, DockZone.Left2, s.Order);
+                return (DockZone.Left, 0);
+            }
+            if (left.Count > 0 && left2.Count > 0 && left3.Count > 0 && left4.Count > 0 && left5.Count == 0)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"MovePanel: InsertAfter Left — cascade4: Left4→Left5, Left3→Left4, Left2→Left3, Left→Left2, targeting Left");
+                foreach (var s in left4) MovePanel(s.PanelId, DockZone.Left5, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left3, movingPanelId)) MovePanel(s.PanelId, DockZone.Left4, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left2, movingPanelId)) MovePanel(s.PanelId, DockZone.Left3, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left, movingPanelId)) MovePanel(s.PanelId, DockZone.Left2, s.Order);
+                return (DockZone.Left, 0);
+            }
+            if (left.Count > 0 && left2.Count > 0 && left3.Count > 0 && left4.Count == 0)
+            {
+                // Cascade 3-step: L3→L4, L2→L3, L→L2, new panel→L@0
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"MovePanel: InsertAfter Left — cascade3: Left3({left3.Count})→Left4, Left2({left2.Count})→Left3, Left({left.Count})→Left2, targeting Left");
+                foreach (var s in left3)
+                    MovePanel(s.PanelId, DockZone.Left4, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left2, movingPanelId))
+                    MovePanel(s.PanelId, DockZone.Left3, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left, movingPanelId))
+                    MovePanel(s.PanelId, DockZone.Left2, s.Order);
+                return (DockZone.Left, 0);
+            }
+            if (left.Count > 0 && left2.Count > 0 && left3.Count == 0)
+            {
+                // Cascade: L2→L3, L→L2, new panel→L@0
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"MovePanel: InsertAfter Left — cascade: Left2({left2.Count})→Left3, Left({left.Count})→Left2, targeting Left");
+                foreach (var s in left2)
+                    MovePanel(s.PanelId, DockZone.Left3, s.Order);
+                foreach (var s in GetZoneSlotsExcluding(DockZone.Left, movingPanelId))
+                    MovePanel(s.PanelId, DockZone.Left2, s.Order);
+                return (DockZone.Left, 0);
+            }
+            if (left.Count > 0 && left2.Count == 0)
+            {
+                // Single step: L→L2, new panel→L@0
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"MovePanel: InsertAfter Left — shifting Left({left.Count}) → Left2, targeting Left");
+                foreach (var s in left)
+                    MovePanel(s.PanelId, DockZone.Left2, s.Order);
+                return (DockZone.Left, 0);
+            }
+        }
+
+        return (requestedZone, requestedOrder); // fallback: stack in zone as usual
+    }
+
+    /// <summary>Returns all slots in <paramref name="zone"/>, ordered by <c>Order</c>, excluding the specified panel.</summary>
+    private List<PanelSlot> GetZoneSlotsExcluding(DockZone zone, string excludePanelId) =>
+        CurrentLayout.Slots
+            .Where(s => s.Zone == zone && !string.Equals(s.PanelId, excludePanelId, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(s => s.Order)
+            .ToList();
+
+    /// <summary>Returns all slots in <paramref name="zone"/>, ordered by <c>Order</c>.</summary>
+    private List<PanelSlot> GetZoneSlots(DockZone zone) =>
+        CurrentLayout.Slots.Where(s => s.Zone == zone).OrderBy(s => s.Order).ToList();
+
+    private bool _isNormalizingZones = false;
+    private bool _isMovingPanel      = false;
+
+    /// <summary>
+    /// Eliminates zone gaps by cascading panels inward.  A gap exists when an inner zone is
+    /// empty but an outer zone is occupied (e.g. Left3=Tasks, Left2=empty, Left=Approvals).
+    /// Guards against re-entry so recursive <see cref="MovePanel"/> calls triggered during
+    /// normalization do not start another normalization pass.
+    /// </summary>
+    private void NormalizeZoneOrder()
+    {
+        if (_isNormalizingZones) return;
+        _isNormalizingZones = true;
+        try
+        {
+            NormalizeSide(DockZone.Left, DockZone.Left2, DockZone.Left3, DockZone.Left4, DockZone.Left5, DockZone.Left6);
+            NormalizeSide(DockZone.Right, DockZone.Right2, DockZone.Right3, DockZone.Right4, DockZone.Right5, DockZone.Right6);
+        }
+        finally
+        {
+            _isNormalizingZones = false;
+        }
+    }
+
+    /// <summary>
+    /// Slides panels inward until no gaps remain for the six-zone column family.
+    /// Repeats until stable because filling mid may expose a gap between inner and mid.
+    /// </summary>
+    private void NormalizeSide(DockZone inner, DockZone mid, DockZone outer, DockZone outermost, DockZone outer5, DockZone outer6)
+    {
+        bool changed;
+        do
+        {
+            changed = false;
+            // If outer5 is empty but outer6 is occupied → slide outer6 → outer5.
+            if (!GetZoneSlots(outer5).Any() && GetZoneSlots(outer6).Any())
+            {
+                var outer6Slots = GetZoneSlots(outer6);
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"NormalizeZoneOrder: {outer5} empty — sliding {outer6}({outer6Slots.Count}) → {outer5}");
+                foreach (var s in outer6Slots)
+                    MovePanel(s.PanelId, outer5, s.Order);
+                changed = true;
+            }
+            // If outermost is empty but outer5 is occupied → slide outer5 → outermost.
+            if (!GetZoneSlots(outermost).Any() && GetZoneSlots(outer5).Any())
+            {
+                var outer5Slots = GetZoneSlots(outer5);
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"NormalizeZoneOrder: {outermost} empty — sliding {outer5}({outer5Slots.Count}) → {outermost}");
+                foreach (var s in outer5Slots)
+                    MovePanel(s.PanelId, outermost, s.Order);
+                changed = true;
+            }
+            // If outer is empty but outermost is occupied → slide outermost → outer.
+            if (!GetZoneSlots(outer).Any() && GetZoneSlots(outermost).Any())
+            {
+                var outermostSlots = GetZoneSlots(outermost);
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"NormalizeZoneOrder: {outer} empty — sliding {outermost}({outermostSlots.Count}) → {outer}");
+                foreach (var s in outermostSlots)
+                    MovePanel(s.PanelId, outer, s.Order);
+                changed = true;
+            }
+            // If mid is empty but outer is occupied → slide outer → mid.
+            if (!GetZoneSlots(mid).Any() && GetZoneSlots(outer).Any())
+            {
+                var outerSlots = GetZoneSlots(outer);
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"NormalizeZoneOrder: {mid} empty — sliding {outer}({outerSlots.Count}) → {mid}");
+                foreach (var s in outerSlots)
+                    MovePanel(s.PanelId, mid, s.Order);
+                changed = true;
+            }
+            // If inner is empty but mid is occupied → slide mid → inner.
+            if (!GetZoneSlots(inner).Any() && GetZoneSlots(mid).Any())
+            {
+                var midSlots = GetZoneSlots(mid);
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"NormalizeZoneOrder: {inner} empty — sliding {mid}({midSlots.Count}) → {inner}");
+                foreach (var s in midSlots)
+                    MovePanel(s.PanelId, inner, s.Order);
+                changed = true;
+            }
+        } while (changed);
     }
 
     /// <summary>
@@ -732,6 +1570,14 @@ internal sealed class PanelDockingService
             RightZoneWidth  = (_rightZoneColumn  is { } rc  && rc.Width.IsAbsolute  && rc.Width.Value  > 0) ? rc.Width.Value  : (double?)null,
             Left2ZoneWidth  = (_left2ZoneColumn  is { } l2c && l2c.Width.IsAbsolute && l2c.Width.Value > 0) ? l2c.Width.Value : (double?)null,
             Right2ZoneWidth = (_right2ZoneColumn is { } r2c && r2c.Width.IsAbsolute && r2c.Width.Value > 0) ? r2c.Width.Value : (double?)null,
+            Left3ZoneWidth  = (_left3ZoneColumn  is { } l3c && l3c.Width.IsAbsolute && l3c.Width.Value > 0) ? l3c.Width.Value : (double?)null,
+            Right3ZoneWidth = (_right3ZoneColumn is { } r3c && r3c.Width.IsAbsolute && r3c.Width.Value > 0) ? r3c.Width.Value : (double?)null,
+            Left4ZoneWidth  = (_left4ZoneColumn  is { } l4c && l4c.Width.IsAbsolute && l4c.Width.Value > 0) ? l4c.Width.Value : (double?)null,
+            Right4ZoneWidth = (_right4ZoneColumn is { } r4c && r4c.Width.IsAbsolute && r4c.Width.Value > 0) ? r4c.Width.Value : (double?)null,
+            Left5ZoneWidth  = (_left5ZoneColumn  is { } l5c && l5c.Width.IsAbsolute && l5c.Width.Value > 0) ? l5c.Width.Value : (double?)null,
+            Right5ZoneWidth = (_right5ZoneColumn is { } r5c && r5c.Width.IsAbsolute && r5c.Width.Value > 0) ? r5c.Width.Value : (double?)null,
+            Left6ZoneWidth  = (_left6ZoneColumn  is { } l6c && l6c.Width.IsAbsolute && l6c.Width.Value > 0) ? l6c.Width.Value : (double?)null,
+            Right6ZoneWidth = (_right6ZoneColumn is { } r6c && r6c.Width.IsAbsolute && r6c.Width.Value > 0) ? r6c.Width.Value : (double?)null,
         };
 
         if (idx >= 0)
@@ -767,6 +1613,65 @@ internal sealed class PanelDockingService
         return CurrentLayout;
     }
 
+    /// <summary>
+    /// Applies a layout described by the zone-name → panel-ids map from a recorded test case.
+    /// Zone widths are preserved from the current layout.
+    /// </summary>
+    public void ApplyTestLayout(Dictionary<string, List<string>> zoneMap)
+    {
+        var layoutData = DockingLayoutEngine.ParseLayoutFromJson(zoneMap);
+        var testPanelIds = new HashSet<string>(
+            layoutData.Slots.Select(s => s.PanelId), StringComparer.OrdinalIgnoreCase);
+
+        // Build a set of all panels we're supplementing so we don't double-add.
+        var accounted = new HashSet<string>(testPanelIds, StringComparer.OrdinalIgnoreCase);
+        var supplementary = new List<PanelSlot>();
+        int extraOrder = layoutData.Slots.Count(t => t.Zone == DockZone.Top);
+
+        // Pass 1 — panels tracked in CurrentLayout.Slots but absent from the test JSON.
+        // These may be in a side zone; they need to be sent to Top so the layout is
+        // self-consistent and RebuildTopZoneLayout can assign them a real column.
+        foreach (var slot in CurrentLayout.Slots)
+        {
+            if (accounted.Contains(slot.PanelId)) continue;
+            supplementary.Add(new PanelSlot(slot.PanelId, DockZone.Top, extraOrder++));
+            accounted.Add(slot.PanelId);
+        }
+
+        // Pass 2 — panels that exist in the registry but are NOT in CurrentLayout.Slots.
+        // This catches panels whose slots were wiped by a subsequent LoadAndApplyLayout call
+        // (they are still physically present in _topZoneGrid at their natural column, so they
+        // will overlap whichever test panel is assigned that same column by RebuildTopZoneLayout).
+        if (_panelRegistry is not null)
+        {
+            foreach (var panelId in _panelRegistry.Keys)
+            {
+                if (accounted.Contains(panelId)) continue;
+                supplementary.Add(new PanelSlot(panelId, DockZone.Top, extraOrder++));
+                accounted.Add(panelId);
+            }
+        }
+
+        var target = new DockLayout
+        {
+            Name            = CurrentLayout.Name,
+            Slots           = layoutData.Slots.Concat(supplementary).ToList(),
+            LeftZoneWidth   = CurrentLayout.LeftZoneWidth,
+            RightZoneWidth  = CurrentLayout.RightZoneWidth,
+            Left2ZoneWidth  = CurrentLayout.Left2ZoneWidth,
+            Right2ZoneWidth = CurrentLayout.Right2ZoneWidth,
+            Left3ZoneWidth  = CurrentLayout.Left3ZoneWidth,
+            Right3ZoneWidth = CurrentLayout.Right3ZoneWidth,
+            Left4ZoneWidth  = CurrentLayout.Left4ZoneWidth,
+            Right4ZoneWidth = CurrentLayout.Right4ZoneWidth,
+            Left5ZoneWidth  = CurrentLayout.Left5ZoneWidth,
+            Right5ZoneWidth = CurrentLayout.Right5ZoneWidth,
+            Left6ZoneWidth  = CurrentLayout.Left6ZoneWidth,
+            Right6ZoneWidth = CurrentLayout.Right6ZoneWidth,
+        };
+        ApplyLayout(target);
+    }
+
     private void ApplyLayout(DockLayout targetLayout)
     {
         var targetSnapshot = CloneLayout(targetLayout);
@@ -792,6 +1697,14 @@ internal sealed class PanelDockingService
         RightZoneWidth  = layout.RightZoneWidth,
         Left2ZoneWidth  = layout.Left2ZoneWidth,
         Right2ZoneWidth = layout.Right2ZoneWidth,
+        Left3ZoneWidth  = layout.Left3ZoneWidth,
+        Right3ZoneWidth = layout.Right3ZoneWidth,
+        Left4ZoneWidth  = layout.Left4ZoneWidth,
+        Right4ZoneWidth = layout.Right4ZoneWidth,
+        Left5ZoneWidth  = layout.Left5ZoneWidth,
+        Right5ZoneWidth = layout.Right5ZoneWidth,
+        Left6ZoneWidth  = layout.Left6ZoneWidth,
+        Right6ZoneWidth = layout.Right6ZoneWidth,
     };
 
     private static DockLayout ReadActiveLayout(string workspacePath)
@@ -854,6 +1767,28 @@ internal sealed class PanelDockingService
     /// </para>
     /// Returns <see cref="Rect.Empty"/> when the location cannot be determined.
     /// </summary>
+    /// <summary>
+    /// Returns the screen rect that would be highlighted as the drop preview for
+    /// <paramref name="targetZone"/>/<paramref name="targetOrder"/> when the given
+    /// <paramref name="sourcePanelId"/> is being dragged. Used by the docking test
+    /// playback window to show the preview without requiring a live docking-map hover.
+    /// </summary>
+    public Rect GetDropPreviewRect(string sourcePanelId, DockZone targetZone, int targetOrder)
+    {
+        var slot = new SlotButtonViewModel(
+            Label:            string.Empty,
+            IsSourcePanel:    false,
+            IsExpansionButton: false,
+            X:                0,
+            Y:                0,
+            Width:            0,
+            Height:           0,
+            TargetZone:       targetZone,
+            TargetOrder:      targetOrder,
+            SourcePanelId:    sourcePanelId);
+        return GetSlotScreenRect(slot);
+    }
+
     public Rect GetSlotScreenRect(SlotButtonViewModel slot)
     {
         if (_panelRegistry is null)
@@ -906,6 +1841,16 @@ internal sealed class PanelDockingService
                 : GetTopInsertionRect(slot.TargetOrder, panelsInZone);
         }
 
+        // Synthetic thin slots ("insert before" targets between occupied zone-columns) use the
+        // same band-division preview as regular column slots: show band 0 of the target zone's
+        // existing column so the user sees exactly where the dropped panel would land.
+        if (slot.IsSyntheticInsert)
+        {
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"GetSlotScreenRect: [synthetic-insert] kind={slot.InsertKind} zone={slot.TargetZone} order={slot.TargetOrder} inZone=[{string.Join(",", panelsInZone)}]");
+            return GetSyntheticInsertScreenRect(slot.TargetZone, slot.InsertKind, panelsInZone);
+        }
+
         return GetColumnSlotRect(slot.TargetZone, slot.TargetOrder, panelsInZone);
     }
 
@@ -924,28 +1869,46 @@ internal sealed class PanelDockingService
         return Rect.Empty;
     }
 
+    private UIElement? GetZoneScrollViewer(DockZone zone) => zone switch
+    {
+        DockZone.Left   => _leftZoneScrollViewer,
+        DockZone.Right  => _rightZoneScrollViewer,
+        DockZone.Left2  => _left2ZoneScrollViewer,
+        DockZone.Right2 => _right2ZoneScrollViewer,
+        DockZone.Left3  => _left3ZoneScrollViewer,
+        DockZone.Right3 => _right3ZoneScrollViewer,
+        DockZone.Left4  => _left4ZoneScrollViewer,
+        DockZone.Right4 => _right4ZoneScrollViewer,
+        DockZone.Left5  => _left5ZoneScrollViewer,
+        DockZone.Right5 => _right5ZoneScrollViewer,
+        DockZone.Left6  => _left6ZoneScrollViewer,
+        DockZone.Right6 => _right6ZoneScrollViewer,
+        _               => null,
+    };
+
+    private Grid? GetZoneGrid(DockZone zone) => zone switch
+    {
+        DockZone.Left   => _leftZonePanel,
+        DockZone.Right  => _rightZonePanel,
+        DockZone.Left2  => _left2ZonePanel,
+        DockZone.Right2 => _right2ZonePanel,
+        DockZone.Left3  => _left3ZonePanel,
+        DockZone.Right3 => _right3ZonePanel,
+        DockZone.Left4  => _left4ZonePanel,
+        DockZone.Right4 => _right4ZonePanel,
+        DockZone.Left5  => _left5ZonePanel,
+        DockZone.Right5 => _right5ZonePanel,
+        DockZone.Left6  => _left6ZonePanel,
+        DockZone.Right6 => _right6ZonePanel,
+        _               => null,
+    };
+
     private Rect GetColumnSlotRect(DockZone zone, int targetOrder, List<string> panelsInZone)
     {
-        UIElement? container = zone switch
-        {
-            DockZone.Left   => _leftZoneScrollViewer,
-            DockZone.Right  => _rightZoneScrollViewer,
-            DockZone.Left2  => _left2ZoneScrollViewer,
-            DockZone.Right2 => _right2ZoneScrollViewer,
-            _               => null,
-        };
+        UIElement? container = GetZoneScrollViewer(zone);
+        Grid? zoneGrid = GetZoneGrid(zone);
 
-        // When the scroll-viewer is collapsed (empty column), fall back to the zone's Grid panel.
-        Grid? zoneGrid = zone switch
-        {
-            DockZone.Left   => _leftZonePanel,
-            DockZone.Right  => _rightZonePanel,
-            DockZone.Left2  => _left2ZonePanel,
-            DockZone.Right2 => _right2ZonePanel,
-            _               => null,
-        };
-
-        bool isRightSide = zone == DockZone.Right || zone == DockZone.Right2;
+        bool isRightSide = zone == DockZone.Right || zone == DockZone.Right2 || zone == DockZone.Right3 || zone == DockZone.Right4 || zone == DockZone.Right5 || zone == DockZone.Right6;
 
         if (panelsInZone.Count == 0)
         {
@@ -975,8 +1938,12 @@ internal sealed class PanelDockingService
                 {
                     DockZone.Left   => neighborRect.Left,
                     DockZone.Left2  => neighborRect.Left,
+                    DockZone.Left3  => neighborRect.Left,
+                    DockZone.Left4  => neighborRect.Left,
                     DockZone.Right  => neighborRect.Right - StripWidth,
                     DockZone.Right2 => neighborRect.Right - StripWidth,
+                    DockZone.Right3 => neighborRect.Right - StripWidth,
+                    DockZone.Right4 => neighborRect.Right - StripWidth,
                     _               => isRightSide ? neighborRect.Right : neighborRect.Left - StripWidth,
                 };
 
@@ -1031,25 +1998,83 @@ internal sealed class PanelDockingService
         return new Rect(colRect.Left, top, colRect.Width, bandH);
     }
 
+    private Rect GetSyntheticInsertScreenRect(DockZone zone, SyntheticInsertKind kind, List<string> panelsInZone)
+    {
+        UIElement? container = GetZoneScrollViewer(zone);
+        Grid? zoneGrid = GetZoneGrid(zone);
+
+        Rect columnRect = Rect.Empty;
+        if (container is FrameworkElement fe && fe.IsVisible)
+            columnRect = GetScreenRect(fe);
+        else if (zoneGrid is FrameworkElement gfe && gfe.IsVisible)
+            columnRect = GetScreenRect(gfe);
+
+        if (columnRect.IsEmpty)
+        {
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"GetSyntheticInsertScreenRect: zone={zone} kind={kind} — column rect empty, falling back");
+            return GetColumnSlotRect(zone, 0, panelsInZone);
+        }
+
+        const double StripWidth = 64;
+
+        // InsertBefore = left edge of the zone column (toward center for right-side zones,
+        // toward outer for left-side zones).  InsertAfter = right edge.
+        // This is symmetric: InsertBefore always lands at columnRect.Left regardless of side.
+        double stripX = kind == SyntheticInsertKind.InsertBefore
+            ? columnRect.Left
+            : columnRect.Right - StripWidth;
+
+        double stripTop = columnRect.Top;
+        double stripHeight = columnRect.Height;
+        if (_topZoneGrid is DependencyObject tgDep)
+        {
+            var win = System.Windows.Window.GetWindow(tgDep);
+            if (win is FrameworkElement winFe)
+            {
+                var winRect = GetScreenRect(winFe);
+                if (!winRect.IsEmpty) { stripTop = winRect.Top; stripHeight = winRect.Height; }
+            }
+        }
+
+        var result = new Rect(stripX, stripTop, StripWidth, stripHeight);
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"GetSyntheticInsertScreenRect: zone={zone} kind={kind} columnRect={columnRect} → strip={result}");
+        return result;
+    }
+
     /// <summary>
     /// Returns the screen rect of the element immediately "inside" (toward center) of the
     /// given zone — used to anchor the 64px empty-zone strip at the correct outer edge.
     /// </summary>
     private Rect GetInnerNeighborRect(DockZone zone)
     {
-        // For Left2/Right2 try the adjacent Left/Right scroll-viewer first (non-empty check).
-        UIElement? adjacent = zone switch
+        // Try a chain of adjacent scroll-viewers from nearest to the top zone outward.
+        // This handles cases where an intermediate zone is empty/invisible.
+        UIElement?[] candidates = zone switch
         {
-            DockZone.Left2  => _leftZoneScrollViewer,
-            DockZone.Right2 => _rightZoneScrollViewer,
-            _               => null,
+            DockZone.Left2  => new UIElement?[] { _leftZoneScrollViewer },
+            DockZone.Left3  => new UIElement?[] { _left2ZoneScrollViewer, _leftZoneScrollViewer },
+            DockZone.Left4  => new UIElement?[] { _left3ZoneScrollViewer, _left2ZoneScrollViewer, _leftZoneScrollViewer },
+            DockZone.Left5  => new UIElement?[] { _left4ZoneScrollViewer, _left3ZoneScrollViewer, _left2ZoneScrollViewer, _leftZoneScrollViewer },
+            DockZone.Left6  => new UIElement?[] { _left5ZoneScrollViewer, _left4ZoneScrollViewer, _left3ZoneScrollViewer, _left2ZoneScrollViewer, _leftZoneScrollViewer },
+            DockZone.Right2 => new UIElement?[] { _rightZoneScrollViewer },
+            DockZone.Right3 => new UIElement?[] { _right2ZoneScrollViewer, _rightZoneScrollViewer },
+            DockZone.Right4 => new UIElement?[] { _right3ZoneScrollViewer, _right2ZoneScrollViewer, _rightZoneScrollViewer },
+            DockZone.Right5 => new UIElement?[] { _right4ZoneScrollViewer, _right3ZoneScrollViewer, _right2ZoneScrollViewer, _rightZoneScrollViewer },
+            DockZone.Right6 => new UIElement?[] { _right5ZoneScrollViewer, _right4ZoneScrollViewer, _right3ZoneScrollViewer, _right2ZoneScrollViewer, _rightZoneScrollViewer },
+            _               => Array.Empty<UIElement?>(),
         };
-        if (adjacent is FrameworkElement adjFe && adjFe.IsVisible && adjFe.ActualWidth > 0)
+
+        foreach (var candidate in candidates)
         {
-            var r = GetScreenRect(adjFe);
-            SquadDashTrace.Write(TraceCategory.Docking,
-                $"GetInnerNeighborRect: zone={zone} using adjacent SV IsVisible={adjFe.IsVisible} w={adjFe.ActualWidth:F0} → {r}");
-            if (!r.IsEmpty) return r;
+            if (candidate is FrameworkElement fe && fe.IsVisible && fe.ActualWidth > 0)
+            {
+                var r = GetScreenRect(fe);
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"GetInnerNeighborRect: zone={zone} using adjacent SV IsVisible={fe.IsVisible} w={fe.ActualWidth:F0} → {r}");
+                if (!r.IsEmpty) return r;
+            }
         }
 
         // Fall back to the always-visible center top-zone grid.

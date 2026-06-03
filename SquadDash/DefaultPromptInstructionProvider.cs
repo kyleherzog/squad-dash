@@ -49,9 +49,9 @@ internal sealed class DefaultPromptInstructionProvider : IPromptInstructionProvi
             "e.g. `\"Here are my answers:\\n\\n1. (Q: Priority?) \\n2. (Q: Target branch?) \"`. " +
             "This is ideal when you need the user to answer questions — they fill in the blanks and send.\n" +
             "\n" +
-            "Do NOT include a bare 'Dismiss' button with routeMode `\"done\"` — it performs no action and adds no value. " +
-            "Only include a `\"done\"` action if the label is meaningful (e.g. 'Mark resolved', 'Already fixed') and the user " +
-            "genuinely needs a way to record a decision without launching an agent. In most cases, omit it entirely.\n"+
+            "Do NOT include any 'done' action whose label is purely acknowledgement-only (closing or acknowledging the message without recording a decision). " +
+            "Only include a `\"done\"` action when its label records a meaningful user decision (e.g. 'Mark resolved', 'Already fixed') " +
+            "and the user genuinely needs a way to record that decision without launching an agent. In most cases, omit the 'done' action entirely.\n"+
             "\n" +
             "The `from` field must be `\"coordinator\"` for Coordinator responses or `\"argus-weld\"` for maintenance agent responses.\n" +
             "\n" +

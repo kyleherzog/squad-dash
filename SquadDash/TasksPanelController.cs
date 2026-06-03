@@ -255,7 +255,7 @@ internal sealed class TasksPanelController {
         var label = new TextBlock {
             Text         = item.Text,
             TextWrapping = TextWrapping.Wrap,
-            MaxWidth     = 220,
+            MinWidth     = 150,
         };
         label.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBody");
         label.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
@@ -321,6 +321,7 @@ internal sealed class TasksPanelController {
             Text              = item.Text,
             TextWrapping      = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
+            MinWidth          = 150,
         };
         label.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBody");
         label.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
