@@ -569,6 +569,12 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
             SquadDashTrace.Write("Bridge", "BYOK not configured — using default GitHub Copilot provider.");
         }
 
+        var applicationRoot = _workspacePaths?.ApplicationRoot
+            ?? throw new InvalidOperationException("WorkspacePaths not configured");
+        psi.EnvironmentVariables["SQUADDASH_APP_ROOT"] = applicationRoot;
+        psi.EnvironmentVariables["SQUADDASH_RESTART_REQUEST_PATH"] =
+            new RestartCoordinatorStateStore().GetRequestPathForWatcher(applicationRoot);
+
         return psi;
     }
 
@@ -1119,6 +1125,16 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
                 .Append(evt.Args.ValueKind is not JsonValueKind.Undefined and not JsonValueKind.Null)
                 .Append(" outputChars=")
                 .Append(evt.OutputText?.Length ?? 0);
+        }
+
+        if (string.Equals(evt.Type, "tool_args_rewritten", StringComparison.Ordinal)) {
+            builder
+                .Append(" reason=")
+                .Append(evt.Reason ?? "(none)")
+                .Append(" originalCommand=")
+                .Append(BuildTracePreview(evt.OriginalCommand))
+                .Append(" command=")
+                .Append(BuildTracePreview(evt.Command));
         }
 
         if (!string.IsNullOrWhiteSpace(evt.ParentToolCallId) ||

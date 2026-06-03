@@ -271,6 +271,21 @@ internal sealed class ByokAndDocsPanelTests {
             "Empty ProviderUrl should not activate BYOK");
     }
 
+    [Test]
+    public void BuildDefaultStartInfo_InjectsSquadDashRestartGuardEnvVars() {
+        var workspacePaths = new FakeWorkspacePaths();
+        var sut = new SquadSdkProcess(workspacePaths);
+
+        var psi = InvokeBuildDefaultStartInfo(sut);
+
+        Assert.Multiple(() => {
+            Assert.That(psi.EnvironmentVariables["SQUADDASH_APP_ROOT"], Is.EqualTo(workspacePaths.ApplicationRoot));
+            Assert.That(psi.EnvironmentVariables["SQUADDASH_RESTART_REQUEST_PATH"], Is.Not.Empty);
+            Assert.That(psi.EnvironmentVariables["SQUADDASH_RESTART_REQUEST_PATH"], Does.Contain("restart-"));
+            Assert.That(psi.EnvironmentVariables["SQUADDASH_RESTART_REQUEST_PATH"], Does.EndWith(".json"));
+        });
+    }
+
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------

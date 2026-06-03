@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
     approvePermissionRequest,
     buildNamedAgentExecutionPrompt,
+    maybeRewritePendingRestartSelfBuildToolArgs,
     resolvePermissionApprovalKind,
     resolvePermissionApprovalKindFromSchema,
     SquadBridgeService
@@ -65,6 +66,76 @@ test("permission approval detects current Copilot schema", () => {
 
 test("permission approval returns a supported response shape", () => {
     assert.match(approvePermissionRequest().kind, /^(approved|approve-once)$/);
+});
+
+test("pending restart self-build hook disables run-slot deployment", () => {
+    const rewrite = maybeRewritePendingRestartSelfBuildToolArgs(
+        "powershell",
+        JSON.stringify({
+            command: "dotnet build .\\SquadDash\\SquadDash.csproj -c Debug",
+            description: "Verify build"
+        }),
+        "D:\\Drive\\Source\\SquadDash-public",
+        {
+            SQUADDASH_APP_ROOT: "D:\\Drive\\Source\\SquadDash-public",
+            SQUADDASH_RESTART_REQUEST_PATH: "D:\\restart-request.json"
+        },
+        filePath => filePath === "D:\\restart-request.json");
+
+    assert.ok(rewrite);
+    assert.equal(rewrite.reason, "restart-request-pending");
+    assert.equal(rewrite.modifiedArgs.description, "Verify build");
+    assert.match(rewrite.modifiedArgs.command, /EnableRunSlotDeployment='false'/);
+    assert.match(rewrite.modifiedArgs.command, /restart request is already pending/);
+    assert.match(rewrite.modifiedArgs.command, /dotnet build .\\SquadDash\\SquadDash.csproj -c Debug/);
+});
+
+test("pending restart self-build hook preserves explicit run-slot deployment choice", () => {
+    const rewrite = maybeRewritePendingRestartSelfBuildToolArgs(
+        "powershell",
+        {
+            command: "dotnet build .\\SquadDash\\SquadDash.csproj -p:EnableRunSlotDeployment=true"
+        },
+        "D:\\Drive\\Source\\SquadDash-public",
+        {
+            SQUADDASH_APP_ROOT: "D:\\Drive\\Source\\SquadDash-public",
+            SQUADDASH_RESTART_REQUEST_PATH: "D:\\restart-request.json"
+        },
+        () => true);
+
+    assert.equal(rewrite, undefined);
+});
+
+test("pending restart self-build hook ignores work outside the app root", () => {
+    const rewrite = maybeRewritePendingRestartSelfBuildToolArgs(
+        "powershell",
+        {
+            command: "dotnet build .\\SquadDash\\SquadDash.csproj -c Debug"
+        },
+        "D:\\Drive\\Source\\SomeOtherRepo",
+        {
+            SQUADDASH_APP_ROOT: "D:\\Drive\\Source\\SquadDash-public",
+            SQUADDASH_RESTART_REQUEST_PATH: "D:\\restart-request.json"
+        },
+        () => true);
+
+    assert.equal(rewrite, undefined);
+});
+
+test("pending restart self-build hook requires an existing restart request", () => {
+    const rewrite = maybeRewritePendingRestartSelfBuildToolArgs(
+        "powershell",
+        {
+            command: "dotnet build .\\SquadDash\\SquadDash.csproj -c Debug"
+        },
+        "D:\\Drive\\Source\\SquadDash-public",
+        {
+            SQUADDASH_APP_ROOT: "D:\\Drive\\Source\\SquadDash-public",
+            SQUADDASH_RESTART_REQUEST_PATH: "D:\\restart-request.json"
+        },
+        () => false);
+
+    assert.equal(rewrite, undefined);
 });
 
 test("named-agent quick-reply prompt includes handoff in the submitted prompt", () => {

@@ -51,6 +51,8 @@ public sealed class SquadSdkEvent {
     public string? FinishedAt { get; set; }
     public string? Description { get; set; }
     public string? Command { get; set; }
+    public string? OriginalCommand { get; set; }
+    public string? Reason { get; set; }
     public string? Path { get; set; }
     public string? Intent { get; set; }
     public string? Skill { get; set; }

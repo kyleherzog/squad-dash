@@ -733,6 +733,16 @@ function buildRunHandlers(requestId: string | undefined, remoteBridge?: RemoteBr
             });
             remoteBridge?.sendToolCall("copilot", tool.toolName, (tool.args as Record<string, unknown>) ?? {}, tool.success ? "completed" : "error");
         },
+        onToolArgsRewritten(rewrite) {
+            emit({
+                type: "tool_args_rewritten",
+                requestId,
+                toolName: rewrite.toolName,
+                reason: rewrite.reason,
+                command: rewrite.modifiedCommand,
+                originalCommand: rewrite.originalCommand
+            });
+        },
         onDelta(chunk) {
             emit({
                 type: "response_delta",

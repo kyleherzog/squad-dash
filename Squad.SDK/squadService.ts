@@ -69,6 +69,13 @@ export type ToolLifecycleEvent = {
     success?: boolean;
 };
 
+export type ToolArgsRewriteEvent = {
+    toolName: string;
+    reason: string;
+    originalCommand: string;
+    modifiedCommand: string;
+};
+
 export type BackgroundAgentInfo = {
     agentId: string;
     toolCallId?: string;
@@ -172,6 +179,7 @@ export type SquadRunHandlers = {
     onToolStart?: (tool: ToolLifecycleEvent) => void;
     onToolProgress?: (tool: ToolLifecycleEvent) => void;
     onToolComplete?: (tool: ToolLifecycleEvent) => void;
+    onToolArgsRewritten?: (rewrite: ToolArgsRewriteEvent) => void;
     onDelta?: (markdownChunk: string) => void;
     onDone?: (finalMessage: unknown) => void;
     onAborted?: () => void;
@@ -236,6 +244,126 @@ const GenericIdentityKeys = new Set([
     "task",
     "worker"
 ]);
+
+const PendingRestartDeploymentEnv = {
+    appRoot: "SQUADDASH_APP_ROOT",
+    restartRequestPath: "SQUADDASH_RESTART_REQUEST_PATH"
+} as const;
+
+const RunSlotDeploymentSuppressedMessage =
+    "[SquadDash] Run-slot deployment disabled for this self-build because a restart request is already pending.";
+
+type ToolArgsRewriteResult = {
+    modifiedArgs: Record<string, unknown>;
+    reason: string;
+    originalCommand: string;
+    modifiedCommand: string;
+};
+
+function parseToolArgs(toolArgs: unknown): Record<string, unknown> | undefined {
+    if (!toolArgs)
+        return undefined;
+
+    if (typeof toolArgs === "string") {
+        try {
+            const parsed = JSON.parse(toolArgs);
+            return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+                ? parsed as Record<string, unknown>
+                : undefined;
+        }
+        catch {
+            return undefined;
+        }
+    }
+
+    return typeof toolArgs === "object" && !Array.isArray(toolArgs)
+        ? toolArgs as Record<string, unknown>
+        : undefined;
+}
+
+function normalizePathForCompare(value: string): string {
+    return path.resolve(value)
+        .trim()
+        .toLowerCase();
+}
+
+function isPathInsideOrEqual(candidate: string, root: string): boolean {
+    const normalizedCandidate = normalizePathForCompare(candidate);
+    const normalizedRoot = normalizePathForCompare(root);
+    const relative = path.relative(normalizedRoot, normalizedCandidate);
+    return relative.length === 0 ||
+        (!!relative && !relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function commandMentionsPath(command: string, targetPath: string): boolean {
+    const normalizedCommand = command.replace(/\\/g, "/").toLowerCase();
+    const normalizedPath = path.resolve(targetPath).replace(/\\/g, "/").toLowerCase();
+    return normalizedCommand.includes(normalizedPath);
+}
+
+function commandInvokesDotNetBuildOrTest(command: string): boolean {
+    return /\bdotnet(?:\.exe)?\s+(?:build|test)\b/i.test(command);
+}
+
+function commandTargetsSquadDashProject(command: string): boolean {
+    return /(?:^|[\\/\s"'`])squaddash\.csproj(?:$|[\s"'`;&|)])/i.test(command);
+}
+
+function commandExplicitlyControlsRunSlotDeployment(command: string): boolean {
+    return command.toLowerCase().includes("enablerunslotdeployment");
+}
+
+function buildPowerShellDeploymentSuppressionCommand(command: string): string {
+    const escapedMessage = RunSlotDeploymentSuppressedMessage.replace(/'/g, "''");
+    return `$env:EnableRunSlotDeployment='false'; Write-Output '${escapedMessage}'; ${command}`;
+}
+
+export function maybeRewritePendingRestartSelfBuildToolArgs(
+    toolName: string,
+    toolArgs: unknown,
+    cwd: string | undefined,
+    env: NodeJS.ProcessEnv = process.env,
+    fileExists: (filePath: string) => boolean = existsSync
+): ToolArgsRewriteResult | undefined {
+    if (toolName.toLowerCase() !== "powershell")
+        return undefined;
+
+    const restartRequestPath = env[PendingRestartDeploymentEnv.restartRequestPath]?.trim();
+    if (!restartRequestPath || !fileExists(restartRequestPath))
+        return undefined;
+
+    const appRoot = env[PendingRestartDeploymentEnv.appRoot]?.trim();
+    if (!appRoot)
+        return undefined;
+
+    const args = parseToolArgs(toolArgs);
+    const command = typeof args?.command === "string"
+        ? args.command.trim()
+        : "";
+    if (!command)
+        return undefined;
+
+    if (commandExplicitlyControlsRunSlotDeployment(command))
+        return undefined;
+
+    if (!commandInvokesDotNetBuildOrTest(command) || !commandTargetsSquadDashProject(command))
+        return undefined;
+
+    const inAppWorkspace = cwd ? isPathInsideOrEqual(cwd, appRoot) : false;
+    if (!inAppWorkspace && !commandMentionsPath(command, appRoot))
+        return undefined;
+
+    const modifiedCommand = buildPowerShellDeploymentSuppressionCommand(command);
+    return {
+        modifiedArgs: {
+            ...args,
+            command: modifiedCommand
+        },
+        reason: "restart-request-pending",
+        originalCommand: command,
+        modifiedCommand
+    };
+}
 
 type SessionAcquireTelemetry = {
     resumed: boolean;
@@ -1399,6 +1527,30 @@ export class SquadBridgeService {
             workingDirectory: options.cwd,
             configDir: options.configDir,
             hooks: {
+                onPreToolUse: (input: { toolName: string; toolArgs: unknown; cwd?: string }) => {
+                    const rewrite = maybeRewritePendingRestartSelfBuildToolArgs(
+                        input.toolName,
+                        input.toolArgs,
+                        input.cwd,
+                        process.env,
+                        existsSync);
+                    if (!rewrite)
+                        return undefined;
+
+                    stateRef?.currentRequest?.handlers.onToolArgsRewritten?.({
+                        toolName: input.toolName,
+                        reason: rewrite.reason,
+                        originalCommand: rewrite.originalCommand,
+                        modifiedCommand: rewrite.modifiedCommand
+                    });
+
+                    return {
+                        permissionDecision: "allow" as const,
+                        modifiedArgs: rewrite.modifiedArgs,
+                        additionalContext:
+                            "SquadDash suppressed run-slot deployment for this self-build because a restart request is already pending."
+                    };
+                },
                 onUserPromptSubmitted: () => {
                     const additionalContext = stateRef?.currentRequest?.hiddenAdditionalContext;
                     return additionalContext
