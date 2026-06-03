@@ -207,7 +207,7 @@ internal sealed class MaintenanceRunner {
         "  ]\n" +
         "}\n" +
         "Each action may include an optional \"hint\" field — a short tooltip string shown when the user hovers over the button.\n" +
-        "Do NOT include a bare 'Dismiss' button — it performs no action and adds no value to the user.\n\n";
+        "Do NOT include any 'done' action whose label is purely acknowledgement-only — it records nothing and adds no value.\n\n";
 
     /// <summary>
     /// Appended to report-only prompts as a final reminder checklist so the model cannot
@@ -238,9 +238,9 @@ internal sealed class MaintenanceRunner {
         "   Each action may also include an optional `\"hint\"` field — a short tooltip string shown when the user hovers\n" +
         "   over the button.\n" +
         "\n" +
-        "   Do NOT include a bare 'Dismiss' button with routeMode `\"done\"` — it performs no action and adds no value.\n" +
-        "   Only include a `\"done\"` action if the label is meaningful (e.g. 'Mark resolved', 'Already fixed') and the\n" +
-        "   user genuinely needs to record a decision without launching an agent. In most cases, omit it entirely.\n"+
+        "   Do NOT include any 'done' action whose label is purely acknowledgement-only (closing the message without recording a decision).\n" +
+        "   Only include a `\"done\"` action when its label is genuinely meaningful (e.g. 'Mark resolved', 'Already fixed') and the\n" +
+        "   user needs to record a decision without launching an agent. In most cases, omit the 'done' action entirely.\n"+
         "\n" +
         "4. For report-only tasks: send findings as an inbox message with `\"from\": \"argus-weld\"`.\n" +
         "   Subject = short descriptive title (no 'Maintenance Report:' prefix, no date). Body = full Markdown report. Actions = any follow-up choices.\n" +
@@ -323,7 +323,7 @@ internal sealed class MaintenanceRunner {
         "  ]\n" +
         "}\n" +
         "Each action may include an optional \"hint\" field — a short tooltip shown when the user hovers over the button.\n" +
-        "Do NOT include a bare 'Dismiss' button — it performs no action and adds no value to the user.";
+        "Do NOT include any 'done' action whose label is purely acknowledgement-only — it records nothing and adds no value.";
 
     /// <summary>
     /// Evaluates <c>{{#if}}</c>/<c>{{#unless}}</c> conditional blocks and replaces

@@ -13,6 +13,7 @@ internal sealed class DockingMapWindow : Window
     private readonly PanelDockingService _dockingService;
     private readonly string _workspacePath;
     private readonly Brush? _hoverBrush;
+    private readonly (DockZone Zone, int Order, bool IsInsert)? _targetSlot;
 
     private Window? _previewOverlay;
 
@@ -21,12 +22,14 @@ internal sealed class DockingMapWindow : Window
         PanelDockingService dockingService,
         string workspacePath,
         ResourceDictionary appResources,
-        Brush? hoverBrush = null)
+        Brush? hoverBrush = null,
+        (DockZone Zone, int Order, bool IsInsert)? targetSlot = null)
     {
         _viewModel      = viewModel;
         _dockingService = dockingService;
         _workspacePath  = workspacePath;
         _hoverBrush     = hoverBrush;
+        _targetSlot     = targetSlot;
 
         WindowStyle      = WindowStyle.None;
         AllowsTransparency = true;
@@ -145,8 +148,17 @@ internal sealed class DockingMapWindow : Window
         }
 
         // ── Target button (interactive drop target) ─────────────────────────
-        var normalBg     = MakeBrush(groundingColor, 0.70);
-        var normalBorder = MakeBrush(polarColor,     0.10);
+        bool isPlaybackTarget = _targetSlot.HasValue
+            && slot.IsSyntheticInsert   == _targetSlot.Value.IsInsert
+            && slot.TargetZone  == _targetSlot.Value.Zone
+            && slot.TargetOrder == _targetSlot.Value.Order;
+
+        var normalBg     = isPlaybackTarget
+            ? MakeBrush(Colors.Orange, 0.25)
+            : MakeBrush(groundingColor, 0.70);
+        var normalBorder = isPlaybackTarget
+            ? MakeBrush(Colors.Orange, 0.85)
+            : MakeBrush(polarColor, 0.10);
         var hoverBg      = MakeBrush(groundingColor, 0.90);
         var hoverBorder  = MakeBrush(polarColor,     0.50);
 
@@ -173,6 +185,8 @@ internal sealed class DockingMapWindow : Window
             border.BorderBrush = normalBorder;
             HidePreview();
         };
+        if (isPlaybackTarget)
+            border.ToolTip = $"Playback target: {DockingLayoutEngine.GetZoneDisplayName(slot.TargetZone)} @ {slot.TargetOrder}";
         border.MouseLeftButtonUp += (_, _) =>
         {
             try

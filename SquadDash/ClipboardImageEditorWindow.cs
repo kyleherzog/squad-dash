@@ -1736,6 +1736,29 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             if (_selectedText != ann)
                 SelectText(ann);
 
+            // Ctrl+drag — duplicate annotation and drag the clone
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) {
+                PushUndo();
+                var clone = new AnnotationText {
+                    Bounds = ann.Bounds,
+                    Text = ann.Text,
+                    FontSize = ann.FontSize,
+                    TextColor = ann.TextColor,
+                    BackgroundColor = ann.BackgroundColor
+                };
+                _texts.Add(clone);
+                UpdateTextDisplay(clone);
+                SelectText(clone);
+                _preDragSnapshot = null;
+                _canvasTextDragActive = true;
+                _canvasTextDragAnnotation = clone;
+                _canvasTextDragStart = pt;
+                _canvasTextDragOrigBounds = clone.Bounds;
+                _canvas.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
+
             _preDragSnapshot = CaptureSnapshot();
             _canvasTextDragActive = true;
             _canvasTextDragAnnotation = ann;
@@ -2643,6 +2666,11 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             PerformRedo();
             e.Handled = true;
         }
+        else if (e.Key == Key.Z && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift)) {
+            if (Keyboard.FocusedElement is TextBox) return;
+            PerformRedo();
+            e.Handled = true;
+        }
         else if (e.Key is Key.Return or Key.Enter && Keyboard.Modifiers == ModifierKeys.None) {
             if (!_sel.IsEmpty)
                 DoCropInPlace();
@@ -3087,6 +3115,22 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
 
         // Body drag — select + translate the whole line
         hitLine.MouseLeftButtonDown += (_, e2) => {
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) {
+                // Ctrl+drag: duplicate the measure line; original stays, clone is dragged.
+                PushUndo();
+                _suppressUndo = true;
+                var clone = CreateMeasureLine(ml.StartPt, ml.EndPt, ml.IsHorizontal, ml.LineColor);
+                _suppressUndo = false;
+                SelectMeasureLine(clone);
+                _draggingMeasureLine = clone;
+                _measureLineDragStart = e2.GetPosition(_canvas);
+                _measureLineDragOrigStart = clone.StartPt;
+                _measureLineDragOrigEnd = clone.EndPt;
+                _preDragSnapshot = null;
+                clone.HitLine.CaptureMouse();
+                e2.Handled = true;
+                return;
+            }
             SelectMeasureLine(ml);
             _preDragSnapshot = CaptureSnapshot();
             _draggingMeasureLine = ml;
@@ -3628,6 +3672,31 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
     private void AttachBodyDrag(Shape shape, AnnotationArrow arrow) {
         shape.MouseLeftButtonDown += (_, e) => {
             if (_draggingArrow != null) return;
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) {
+                // Ctrl+drag: duplicate the arrow; original stays, clone is dragged.
+                PushUndo();
+                _suppressUndo = true;
+                var clone = CreateArrow(arrow.TargetElementBounds);
+                _suppressUndo = false;
+                clone.ArrowheadAngleDeg = arrow.ArrowheadAngleDeg;
+                clone.ArrowLength = arrow.ArrowLength;
+                clone.TailLength = arrow.TailLength;
+                clone.UserTailLength = arrow.UserTailLength;
+                clone.ArrowColor = arrow.ArrowColor;
+                clone.OffsetX = arrow.OffsetX;
+                clone.OffsetY = arrow.OffsetY;
+                UpdateArrowGeometry(clone);
+                HideColorPicker();
+                _draggingArrow = clone;
+                _bodyDragging = true;
+                _bodyDragStartMouse = e.GetPosition(_canvas);
+                _bodyDragStartOffsetX = clone.OffsetX;
+                _bodyDragStartOffsetY = clone.OffsetY;
+                _preDragSnapshot = null;
+                clone.HitLine.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
             SelectArrow(arrow);
             HideColorPicker();
             _preDragSnapshot = CaptureSnapshot();
@@ -4107,6 +4176,22 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
 
         hitZone.MouseLeftButtonDown += (_, e) => {
             if (_draggingAnnotX != null || _inArrowMode || _inXMode) return;
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) {
+                // Ctrl+drag: duplicate the X shape; original stays, clone is dragged.
+                PushUndo();
+                _suppressUndo = true;
+                var clone = CreateAnnotationX(annotX.Bounds, annotX.XColor);
+                _suppressUndo = false;
+                _draggingAnnotX = clone;
+                _annotXBodyDragging = true;
+                _draggingAnnotXHandleIdx = -1;
+                _annotXDragStart = e.GetPosition(_canvas);
+                _annotXDragOriginal = clone.Bounds;
+                _preDragSnapshot = null;
+                clone.HitZoneRect.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
             SelectAnnotationX(annotX);
             _preDragSnapshot = CaptureSnapshot();
             _draggingAnnotX = annotX;
@@ -4405,6 +4490,22 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             if (_draggingAnnotRect != null || _inArrowMode || _inRectMode) return;
             // Only initiate drag when clicking on or near the border edge — not the interior.
             if (!IsOnRectBorder(annotRect.Bounds, e.GetPosition(_canvas), 6.0)) return;
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) {
+                // Ctrl+drag: duplicate the rect; original stays, clone is dragged.
+                PushUndo();
+                _suppressUndo = true;
+                var clone = CreateAnnotationRect(annotRect.Bounds, annotRect.RectColor);
+                _suppressUndo = false;
+                _draggingAnnotRect = clone;
+                _annotRectBodyDragging = true;
+                _draggingAnnotRectHandleIdx = -1;
+                _annotRectDragStart = e.GetPosition(_canvas);
+                _annotRectDragOriginal = clone.Bounds;
+                _preDragSnapshot = null;
+                clone.Border.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
             SelectAnnotationRect(annotRect);
             _preDragSnapshot = CaptureSnapshot();
             _draggingAnnotRect = annotRect;
@@ -4451,6 +4552,22 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             if (_draggingAnnotRect != null || _inArrowMode || _inRectMode) return;
             // Only initiate drag when clicking on or near the border edge — not the interior.
             if (!IsOnRectBorder(annotRect.Bounds, e.GetPosition(_canvas), 6.0)) return;
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) {
+                // Ctrl+drag: duplicate the rect; original stays, clone is dragged.
+                PushUndo();
+                _suppressUndo = true;
+                var clone = CreateAnnotationRect(annotRect.Bounds, annotRect.RectColor);
+                _suppressUndo = false;
+                _draggingAnnotRect = clone;
+                _annotRectBodyDragging = true;
+                _draggingAnnotRectHandleIdx = -1;
+                _annotRectDragStart = e.GetPosition(_canvas);
+                _annotRectDragOriginal = clone.Bounds;
+                _preDragSnapshot = null;
+                clone.HitZoneRect.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
             SelectAnnotationRect(annotRect);
             _preDragSnapshot = CaptureSnapshot();
             _draggingAnnotRect = annotRect;
@@ -5412,6 +5529,30 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                     e.Handled = true;
                     return;
                 }
+
+                // Ctrl+drag — duplicate annotation and drag the clone
+                if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) {
+                    PushUndo();
+                    var clone = new AnnotationText {
+                        Bounds = annotation.Bounds,
+                        Text = annotation.Text,
+                        FontSize = annotation.FontSize,
+                        TextColor = annotation.TextColor,
+                        BackgroundColor = annotation.BackgroundColor
+                    };
+                    _texts.Add(clone);
+                    UpdateTextDisplay(clone);
+                    SelectText(clone);
+                    _preDragSnapshot = null;
+                    _canvasTextDragActive = true;
+                    _canvasTextDragAnnotation = clone;
+                    _canvasTextDragStart = e.GetPosition(_canvas);
+                    _canvasTextDragOrigBounds = clone.Bounds;
+                    _canvas.CaptureMouse();
+                    e.Handled = true;
+                    return;
+                }
+
                 if (!_inTextMode && _selectedText != annotation)
                     SelectText(annotation);
                 _preDragSnapshot = CaptureSnapshot();

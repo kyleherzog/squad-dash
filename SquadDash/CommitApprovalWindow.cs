@@ -241,6 +241,8 @@ internal sealed class CommitApprovalPanel {
             Cursor            = Cursors.Hand,
             ToolTip           = BuildDescriptionTooltip(item),
         };
+        if (item.TouchesDecisionsFile)
+            descBlock.FontWeight = FontWeights.Bold;
         ToolTipService.SetShowDuration(descBlock, 30000);
         descBlock.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBody");
         descBlock.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
@@ -294,6 +296,8 @@ internal sealed class CommitApprovalPanel {
             Opacity           = 0.6,
             ToolTip           = BuildDescriptionTooltip(item),
         };
+        if (item.TouchesDecisionsFile)
+            descBlock.FontWeight = FontWeights.Bold;
         ToolTipService.SetShowDuration(descBlock, 30000);
         descBlock.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBody");
         descBlock.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");

@@ -99,11 +99,11 @@ internal sealed class TraceWindow : ChromedWindow, ILiveTraceTarget
         var titleBlock = new TextBlock
         {
             Text              = "Trace",
-            FontSize          = (double)Application.Current.Resources["FontSizeSubtitle"],
             FontWeight        = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(0, 0, 8, 0),
         };
+        titleBlock.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSubtitle");
         titleBlock.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
         DockPanel.SetDock(titleBlock, Dock.Left);
         header.Children.Add(titleBlock);
@@ -175,8 +175,8 @@ internal sealed class TraceWindow : ChromedWindow, ILiveTraceTarget
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             BorderThickness = new Thickness(0),
             FontFamily = new FontFamily("Consolas"),
-            FontSize = (double)Application.Current.Resources["FontSizeBody"],
         };
+        _logTextBox.SetResourceReference(TextBox.FontSizeProperty, "FontSizeBody");
         _logTextBox.SetResourceReference(TextBox.BackgroundProperty, "CardSurface");
         _logTextBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
         // Remove the white dead-corner square where the two scrollbars meet by overriding

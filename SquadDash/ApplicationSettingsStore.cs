@@ -417,13 +417,14 @@ internal sealed class ApplicationSettingsStore {
         return updated;
     }
 
-    public ApplicationSettingsSnapshot SaveUtilityWindowState(bool tasksWindowOpen, bool traceWindowOpen, bool approvalWindowOpen = false) {
+    public ApplicationSettingsSnapshot SaveUtilityWindowState(bool tasksWindowOpen, bool traceWindowOpen, bool approvalWindowOpen = false, bool dockingTestPlaybackWindowOpen = false) {
         using var mutex = AcquireMutex();
         var current = LoadCore();
         var updated = current with {
-            TasksWindowOpen    = tasksWindowOpen,
-            TraceWindowOpen    = traceWindowOpen,
-            ApprovalWindowOpen = approvalWindowOpen
+            TasksWindowOpen                  = tasksWindowOpen,
+            TraceWindowOpen                  = traceWindowOpen,
+            ApprovalWindowOpen               = approvalWindowOpen,
+            DockingTestPlaybackWindowOpen    = dockingTestPlaybackWindowOpen,
         };
         SaveCore(updated);
         return updated;
@@ -1013,6 +1014,7 @@ internal sealed record ApplicationSettingsSnapshot(
     public bool TasksWindowOpen { get; init; }
     public bool TraceWindowOpen { get; init; }
     public bool ApprovalWindowOpen { get; init; }
+    public bool DockingTestPlaybackWindowOpen { get; init; }
 
     /// <summary>
     /// Whether the documentation panel was open. <c>null</c> (absent) or <c>true</c> = open (default).
@@ -1470,6 +1472,7 @@ internal sealed record ApplicationSettingsSnapshot(
             TasksWindowOpen = TasksWindowOpen,
             TraceWindowOpen = TraceWindowOpen,
             ApprovalWindowOpen = ApprovalWindowOpen,
+            DockingTestPlaybackWindowOpen = DockingTestPlaybackWindowOpen,
             DisabledTraceCategories = (DisabledTraceCategories ?? Enum.GetNames<TraceCategory>())
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .Distinct(StringComparer.OrdinalIgnoreCase)

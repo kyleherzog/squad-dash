@@ -9,7 +9,8 @@ internal sealed record CommitApprovalItem(
     string?        TurnPromptHint,  // First ~60 chars of prompt for display only
     bool           IsApproved,      // false = Needs Approval, true = Approved
     string?        OriginalPrompt = null,  // Full prompt text; null for entries from older versions
-    bool           IsRejected      = false // true = rejected; mutually exclusive with IsApproved
+    bool           IsRejected        = false, // true = rejected; mutually exclusive with IsApproved
+    bool           TouchesDecisionsFile = false // true = commit modifies .squad/decisions.md
 ) {
     public static CommitApprovalItem Create(
         string         sha,
@@ -17,7 +18,9 @@ internal sealed record CommitApprovalItem(
         string         description,
         DateTimeOffset turnStartedAt,
         string?        turnPromptHint,
-        string?        originalPrompt)
+        string?        originalPrompt,
+        bool           touchesDecisionsFile = false)
         => new(Guid.NewGuid().ToString("N"), sha, url, description,
-               turnStartedAt, turnPromptHint, IsApproved: false, originalPrompt);
+               turnStartedAt, turnPromptHint, IsApproved: false, originalPrompt,
+               TouchesDecisionsFile: touchesDecisionsFile);
 }

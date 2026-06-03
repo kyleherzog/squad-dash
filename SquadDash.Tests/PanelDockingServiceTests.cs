@@ -213,6 +213,8 @@ internal sealed class PanelDockingServiceTests
             new Grid(),              // right2ZonePanel
             new Grid(),              // left3ZonePanel
             new Grid(),              // right3ZonePanel
+            new Grid(),              // left4ZonePanel
+            new Grid(),              // right4ZonePanel
             topZone,
             new ColumnDefinition { Width = new GridLength(280) }, // leftZoneColumn
             new ColumnDefinition(),  // rightZoneColumn
@@ -220,24 +222,32 @@ internal sealed class PanelDockingServiceTests
             new ColumnDefinition(),  // right2ZoneColumn
             new ColumnDefinition(),  // left3ZoneColumn
             new ColumnDefinition(),  // right3ZoneColumn
+            new ColumnDefinition(),  // left4ZoneColumn
+            new ColumnDefinition(),  // right4ZoneColumn
             new ColumnDefinition { Width = new GridLength(5) },   // leftSplitterColumn
             new ColumnDefinition(),  // rightSplitterColumn
             new ColumnDefinition(),  // left2SplitterColumn
             new ColumnDefinition(),  // right2SplitterColumn
             new ColumnDefinition(),  // left3SplitterColumn
             new ColumnDefinition(),  // right3SplitterColumn
+            new ColumnDefinition(),  // left4SplitterColumn
+            new ColumnDefinition(),  // right4SplitterColumn
             new ScrollViewer(),      // leftZoneScrollViewer
             new ScrollViewer(),      // rightZoneScrollViewer
             new ScrollViewer(),      // left2ZoneScrollViewer
             new ScrollViewer(),      // right2ZoneScrollViewer
             new ScrollViewer(),      // left3ZoneScrollViewer
             new ScrollViewer(),      // right3ZoneScrollViewer
+            new ScrollViewer(),      // left4ZoneScrollViewer
+            new ScrollViewer(),      // right4ZoneScrollViewer
             new GridSplitter(),      // leftZoneSplitter
             new GridSplitter(),      // rightZoneSplitter
             new GridSplitter(),      // left2ZoneSplitter
             new GridSplitter(),      // right2ZoneSplitter
             new GridSplitter(),      // left3ZoneSplitter
-            new GridSplitter());     // right3ZoneSplitter
+            new GridSplitter(),      // right3ZoneSplitter
+            new GridSplitter(),      // left4ZoneSplitter
+            new GridSplitter());     // right4ZoneSplitter
 
         // Step 1 – dock tasks and approvals into the left zone.
         svc.MovePanel("tasks",     DockZone.Left);
@@ -287,11 +297,35 @@ internal sealed class PanelDockingServiceTests
     }
 
     [Test]
-    public void MovePanel_InsertBeforeLeft_WithLeft3OccupiedFallsBackToStacking()
+    public void MovePanel_InsertBeforeLeft_WithLeft3OccupiedCascadesIntoLeft4()
     {
         // Layout: notes→Left3, tasks→Left2, approvals→Left, loop→Top
-        // Left3 already occupied → no shift possible → loop stacks in Left@0 (fallback).
+        // Left4 is empty → cascade: Left3→Left4, Left2→Left3, loop lands at Left2@0.
         var svc = new PanelDockingService();
+        svc.MovePanel("notes",     DockZone.Left3);
+        svc.MovePanel("tasks",     DockZone.Left2);
+        svc.MovePanel("approvals", DockZone.Left);
+        svc.MovePanel("loop",      DockZone.Left, targetOrder: 0, insertKind: SyntheticInsertKind.InsertBefore);
+
+        var notesSlot = svc.CurrentLayout.Slots.Single(s => s.PanelId == "notes");
+        var tasksSlot = svc.CurrentLayout.Slots.Single(s => s.PanelId == "tasks");
+        var aprvSlot  = svc.CurrentLayout.Slots.Single(s => s.PanelId == "approvals");
+        var loopSlot  = svc.CurrentLayout.Slots.Single(s => s.PanelId == "loop");
+
+        Assert.That(notesSlot.Zone, Is.EqualTo(DockZone.Left4), "notes should cascade from Left3 to Left4");
+        Assert.That(tasksSlot.Zone, Is.EqualTo(DockZone.Left3), "tasks should cascade from Left2 to Left3");
+        Assert.That(aprvSlot.Zone,  Is.EqualTo(DockZone.Left),  "approvals should remain in Left");
+        Assert.That(loopSlot.Zone,  Is.EqualTo(DockZone.Left2), "loop should land in Left2 (freed slot)");
+        Assert.That(loopSlot.Order, Is.EqualTo(0),              "loop should be at order 0");
+    }
+
+    [Test]
+    public void MovePanel_InsertBeforeLeft_WithLeft3AndLeft4OccupiedFallsBackToStacking()
+    {
+        // Layout: health→Left4, notes→Left3, tasks→Left2, approvals→Left, loop→Top
+        // All left zones occupied → no shift possible → loop stacks in Left@0 (fallback).
+        var svc = new PanelDockingService();
+        svc.MovePanel("health",    DockZone.Left4);
         svc.MovePanel("notes",     DockZone.Left3);
         svc.MovePanel("tasks",     DockZone.Left2);
         svc.MovePanel("approvals", DockZone.Left);
@@ -439,6 +473,8 @@ internal sealed class PanelDockingServiceTests
             new Grid(),              // right2ZonePanel
             new Grid(),              // left3ZonePanel
             new Grid(),              // right3ZonePanel
+            new Grid(),              // left4ZonePanel
+            new Grid(),              // right4ZonePanel
             topZone,
             new ColumnDefinition(),  // leftZoneColumn
             new ColumnDefinition(),  // rightZoneColumn
@@ -446,23 +482,31 @@ internal sealed class PanelDockingServiceTests
             new ColumnDefinition(),  // right2ZoneColumn
             new ColumnDefinition(),  // left3ZoneColumn
             new ColumnDefinition(),  // right3ZoneColumn
+            new ColumnDefinition(),  // left4ZoneColumn
+            new ColumnDefinition(),  // right4ZoneColumn
             new ColumnDefinition(),  // leftSplitterColumn
             new ColumnDefinition(),  // rightSplitterColumn
             new ColumnDefinition(),  // left2SplitterColumn
             new ColumnDefinition(),  // right2SplitterColumn
             new ColumnDefinition(),  // left3SplitterColumn
             new ColumnDefinition(),  // right3SplitterColumn
+            new ColumnDefinition(),  // left4SplitterColumn
+            new ColumnDefinition(),  // right4SplitterColumn
             new ScrollViewer(),      // leftZoneScrollViewer
             new ScrollViewer(),      // rightZoneScrollViewer
             new ScrollViewer(),      // left2ZoneScrollViewer
             new ScrollViewer(),      // right2ZoneScrollViewer
             new ScrollViewer(),      // left3ZoneScrollViewer
             new ScrollViewer(),      // right3ZoneScrollViewer
+            new ScrollViewer(),      // left4ZoneScrollViewer
+            new ScrollViewer(),      // right4ZoneScrollViewer
             new GridSplitter(),      // leftZoneSplitter
             new GridSplitter(),      // rightZoneSplitter
             new GridSplitter(),      // left2ZoneSplitter
             new GridSplitter(),      // right2ZoneSplitter
             new GridSplitter(),      // left3ZoneSplitter
-            new GridSplitter());     // right3ZoneSplitter
+            new GridSplitter(),      // right3ZoneSplitter
+            new GridSplitter(),      // left4ZoneSplitter
+            new GridSplitter());     // right4ZoneSplitter
     }
 }
