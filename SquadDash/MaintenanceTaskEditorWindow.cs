@@ -899,7 +899,7 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
 
         if (opts is null || opts.Count == 0) {
             var empty = new TextBlock { Text = "(no options)", FontStyle = FontStyles.Italic };
-            empty.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+            empty.SetResourceReference(TextBlock.ForegroundProperty, "ImportantText");
             empty.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
             _optionsPreviewPanel.Children.Add(empty);
             return;
@@ -912,7 +912,7 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
                     TextWrapping = TextWrapping.Wrap,
                     Margin       = new Thickness(0, 4, 0, 2),
                 };
-                label.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
+                label.SetResourceReference(TextBlock.ForegroundProperty, "ImportantText");
                 label.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
                 _optionsPreviewPanel.Children.Add(label);
             }
@@ -929,7 +929,7 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
                         Margin    = new Thickness(8, 1, 0, 1),
                     };
                     rb.SetResourceReference(RadioButton.StyleProperty,    "ThemedRadioButtonStyle");
-                    rb.SetResourceReference(RadioButton.ForegroundProperty, "BodyText");
+                    rb.SetResourceReference(RadioButton.ForegroundProperty, "ImportantText");
                     rb.SetResourceReference(RadioButton.FontSizeProperty,   "FontSizeSmall");
                     rb.Checked += (_, _) => {
                         _optionValues[optKey] = choiceValue;
@@ -947,7 +947,7 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
                     IsChecked = isChecked,
                     Margin    = new Thickness(0, 2, 0, 2),
                 };
-                cb.SetResourceReference(CheckBox.ForegroundProperty, "BodyText");
+                cb.SetResourceReference(CheckBox.ForegroundProperty, "ImportantText");
                 cb.SetResourceReference(CheckBox.FontSizeProperty,   "FontSizeSmall");
                 if (!string.IsNullOrEmpty(opt.Tooltip))
                     cb.ToolTip = opt.Tooltip;
