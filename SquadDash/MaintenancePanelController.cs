@@ -1,4 +1,4 @@
-namespace SquadDash;
+﻿namespace SquadDash;
 
 using System;
 using System.Collections.Generic;
@@ -625,6 +625,73 @@ internal sealed class MaintenancePanelController {
             getButtonLabel: freq => GetFrequencyDisplayText(freq));
         chipRow.Children.Add(frequencyPicker.Control);
         rightPanel.Children.Add(chipRow);
+
+        // Day selector for weekly maintenance
+        var dayPickerRow = new StackPanel {
+            Orientation = Orientation.Horizontal,
+            Margin      = new Thickness(0, 4, 0, 0),
+        };
+
+        var dayPickerPanel = new StackPanel {
+            Orientation = Orientation.Horizontal,
+            Margin      = new Thickness(0, 0, 0, 0),
+        };
+
+        var days = new[] { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" };
+
+        foreach (var day in days) {
+            var dayBtn = new Button {
+                Content           = day.Substring(0, 3),
+                Padding           = new Thickness(6, 2, 6, 2),
+                Margin            = new Thickness(2, 0, 2, 0),
+                MinWidth          = 36,
+                Cursor            = Cursors.Hand,
+            };
+
+            dayBtn.SetResourceReference(Button.StyleProperty,    "FlatButtonStyle");
+            dayBtn.SetResourceReference(Button.FontSizeProperty, "FontSizeSmall");
+            dayBtn.SetResourceReference(Button.ForegroundProperty, "LabelText");
+
+            // Highlight currently selected day
+            var freq = task.Frequency ?? "";
+            if (freq.StartsWith("weekly-", StringComparison.OrdinalIgnoreCase)) {
+                var selectedDay = freq.Substring("weekly-".Length);
+                if (string.Equals(day, selectedDay, StringComparison.OrdinalIgnoreCase)) {
+                    dayBtn.SetResourceReference(Button.BackgroundProperty, "InputSurface");
+                    dayBtn.SetResourceReference(Button.BorderBrushProperty, "InputBorder");
+                    dayBtn.BorderThickness = new Thickness(1);
+                }
+            }
+
+            // Click handler captures day in closure
+            string capturedDay = day;
+            dayBtn.Click += (_, _) => {
+                ChangeTaskFrequency(taskIdForFreq, $"weekly-{capturedDay}");
+
+                // Update UI to highlight selected day
+                foreach (UIElement child in dayPickerPanel.Children) {
+                    if (child is Button btn) {
+                        btn.BorderThickness = new Thickness(0);
+                        btn.Background = System.Windows.Media.Brushes.Transparent;
+                    }
+                }
+                dayBtn.BorderThickness = new Thickness(1);
+                dayBtn.SetResourceReference(Button.BackgroundProperty, "InputSurface");
+                dayBtn.SetResourceReference(Button.BorderBrushProperty, "InputBorder");
+            };
+
+            dayPickerPanel.Children.Add(dayBtn);
+        }
+
+        dayPickerRow.Children.Add(dayPickerPanel);
+
+        // Set visibility based on current frequency
+        var dayPickerFreq = task.Frequency ?? "";
+        dayPickerRow.Visibility = (dayPickerFreq == "weekly" || dayPickerFreq.StartsWith("weekly-")) 
+            ? Visibility.Visible 
+            : Visibility.Collapsed;
+
+        rightPanel.Children.Add(dayPickerRow);
 
         // Last-run status
         var lastRun = _viewModel.StateStore?.GetLastRunAt(task.Id);
