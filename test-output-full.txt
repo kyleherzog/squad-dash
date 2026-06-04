@@ -1,0 +1,92 @@
+Test run for D:\Drive\Source\SquadDash-public\SquadDash.Tests\bin\Debug\net10.0-windows\SquadDash.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+  Failed BuildDockingMap_WithAllSixLeftZonesOccupied_StillEmitsNPlusOneThinTargets [48 ms]
+  Error Message:
+     Assert.That(thins.Count, Is.EqualTo(7))
+  Expected: 7
+  But was:  13
+
+  Stack Trace:
+     at SquadDash.Tests.DockingMapBuilderTests.BuildDockingMap_WithAllSixLeftZonesOccupied_StillEmitsNPlusOneThinTargets() in D:\Drive\Source\SquadDash-public\SquadDash.Tests\DockingMapBuilderTests.cs:line 78
+
+1)    at SquadDash.Tests.DockingMapBuilderTests.BuildDockingMap_WithAllSixLeftZonesOccupied_StillEmitsNPlusOneThinTargets() in D:\Drive\Source\SquadDash-public\SquadDash.Tests\DockingMapBuilderTests.cs:line 78
+
+
+  Failed BuildDockingMap_WithAllSixRightZonesOccupied_StillEmitsNPlusOneThinTargets [13 ms]
+  Error Message:
+     Assert.That(thins.Count, Is.EqualTo(7))
+  Expected: 7
+  But was:  13
+
+  Stack Trace:
+     at SquadDash.Tests.DockingMapBuilderTests.BuildDockingMap_WithAllSixRightZonesOccupied_StillEmitsNPlusOneThinTargets() in D:\Drive\Source\SquadDash-public\SquadDash.Tests\DockingMapBuilderTests.cs:line 101
+
+1)    at SquadDash.Tests.DockingMapBuilderTests.BuildDockingMap_WithAllSixRightZonesOccupied_StillEmitsNPlusOneThinTargets() in D:\Drive\Source\SquadDash-public\SquadDash.Tests\DockingMapBuilderTests.cs:line 101
+
+
+  Failed BuildDockingMap_WithSingleOccupiedRightZone_EmitsInnerAndOuterThinTargets [6 ms]
+  Error Message:
+     Assert.That(thins.Count, Is.EqualTo(2))
+  Expected: 2
+  But was:  3
+
+  Stack Trace:
+     at SquadDash.Tests.DockingMapBuilderTests.BuildDockingMap_WithSingleOccupiedRightZone_EmitsInnerAndOuterThinTargets() in D:\Drive\Source\SquadDash-public\SquadDash.Tests\DockingMapBuilderTests.cs:line 54
+
+1)    at SquadDash.Tests.DockingMapBuilderTests.BuildDockingMap_WithSingleOccupiedRightZone_EmitsInnerAndOuterThinTargets() in D:\Drive\Source\SquadDash-public\SquadDash.Tests\DockingMapBuilderTests.cs:line 54
+
+
+  Failed BuildDockingMap_WithSourceAloneInLeftOuterZone_WithExcessThins_ShouldNotOfferAdjacentThins [12 ms]
+  Error Message:
+     Should not show thin slot for Left2 when it's immediately adjacent to sole-panel zone Left3 (excess thins to filter)
+Assert.That(left2Thin, Is.Null)
+  Expected: null
+  But was:  <SlotButtonViewModel { Label = ΓÇö, IsSourcePanel = False, IsExpansionButton = False, X = 0, Y = 16, Width = 16, Height = 128, TargetZone = Left2, TargetOrder = 0, SourcePanelId = maintenance, IsSeparator = False, InsertKind = InsertBefore, IsSyntheticInsert = True }>
+
+  Stack Trace:
+     at SquadDash.Tests.DockingMapBuilderTests.BuildDockingMap_WithSourceAloneInLeftOuterZone_WithExcessThins_ShouldNotOfferAdjacentThins() in D:\Drive\Source\SquadDash-public\SquadDash.Tests\DockingMapBuilderTests.cs:line 212
+
+1)    at SquadDash.Tests.DockingMapBuilderTests.BuildDockingMap_WithSourceAloneInLeftOuterZone_WithExcessThins_ShouldNotOfferAdjacentThins() in D:\Drive\Source\SquadDash-public\SquadDash.Tests\DockingMapBuilderTests.cs:line 212
+
+
+  Failed BuildDockingMap_WithSourceAsOnlySidePanel_DoesNotOfferNoopLateralThin [4 ms]
+  Error Message:
+     Assert.That(ThinSlots(map, LeftZones), Is.Empty)
+  Expected: <empty>
+  But was:  < <SlotButtonViewModel { Label = ΓÇö, IsSourcePanel = False, IsExpansionButton = False, X = 0, Y = 16, Width = 16, Height = 128, TargetZone = Left2, TargetOrder = 0, SourcePanelId = tasks, IsSeparator = False, InsertKind = InsertBefore, IsSyntheticInsert = True }> >
+
+  Stack Trace:
+     at SquadDash.Tests.DockingMapBuilderTests.BuildDockingMap_WithSourceAsOnlySidePanel_DoesNotOfferNoopLateralThin() in D:\Drive\Source\SquadDash-public\SquadDash.Tests\DockingMapBuilderTests.cs:line 116
+
+1)    at SquadDash.Tests.DockingMapBuilderTests.BuildDockingMap_WithSourceAsOnlySidePanel_DoesNotOfferNoopLateralThin() in D:\Drive\Source\SquadDash-public\SquadDash.Tests\DockingMapBuilderTests.cs:line 116
+
+
+  Failed BuildDockingMap_WithSourceAsSoleOccupantOfSideZone_WithExcessThins_ShouldNotOfferAdjacentThins [11 ms]
+  Error Message:
+     Should not show thin slot for Right2 when it's immediately adjacent to sole-panel zone Right (excess thins to filter)
+Assert.That(right2Thin, Is.Null)
+  Expected: null
+  But was:  <SlotButtonViewModel { Label = ΓÇö, IsSourcePanel = False, IsExpansionButton = False, X = 0, Y = 16, Width = 16, Height = 128, TargetZone = Right2, TargetOrder = 0, SourcePanelId = loop, IsSeparator = False, InsertKind = InsertBefore, IsSyntheticInsert = True }>
+
+  Stack Trace:
+     at SquadDash.Tests.DockingMapBuilderTests.BuildDockingMap_WithSourceAsSoleOccupantOfSideZone_WithExcessThins_ShouldNotOfferAdjacentThins() in D:\Drive\Source\SquadDash-public\SquadDash.Tests\DockingMapBuilderTests.cs:line 185
+
+1)    at SquadDash.Tests.DockingMapBuilderTests.BuildDockingMap_WithSourceAsSoleOccupantOfSideZone_WithExcessThins_ShouldNotOfferAdjacentThins() in D:\Drive\Source\SquadDash-public\SquadDash.Tests\DockingMapBuilderTests.cs:line 185
+
+
+  Failed BuildDockingMap_WithTwoOccupiedLeftZones_EmitsOuterMiddleAndInnerThinTargets [9 ms]
+  Error Message:
+     Assert.That(thins.Count, Is.EqualTo(3))
+  Expected: 3
+  But was:  5
+
+  Stack Trace:
+     at SquadDash.Tests.DockingMapBuilderTests.BuildDockingMap_WithTwoOccupiedLeftZones_EmitsOuterMiddleAndInnerThinTargets() in D:\Drive\Source\SquadDash-public\SquadDash.Tests\DockingMapBuilderTests.cs:line 34
+
+1)    at SquadDash.Tests.DockingMapBuilderTests.BuildDockingMap_WithTwoOccupiedLeftZones_EmitsOuterMiddleAndInnerThinTargets() in D:\Drive\Source\SquadDash-public\SquadDash.Tests\DockingMapBuilderTests.cs:line 34
+
+
+  Skipped IsEligible_Weekly_RunTodayAtStartOfWeek_ReturnsFalse [1 ms]
+  Skipped EnsureSquadDashUniverseFiles_WritesSquadDashMdToBothUniversesAndTemplatesUniverses [8 ms]
+
+Failed!  - Failed:     7, Passed:  2217, Skipped:     0, Total:  2224, Duration: 18 s - SquadDash.Tests.dll (net10.0)

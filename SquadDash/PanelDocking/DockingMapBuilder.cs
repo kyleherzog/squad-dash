@@ -857,52 +857,59 @@ internal static class DockingMapBuilder
         }
 
         // Source is alone in its zone and there are other occupied zones.
+        // Check N+1 rule FIRST: we need at least expectedThins drop targets available.
+        // If we can't meet N+1 after filtering, don't attempt to filter at all.
+        
         // Identify the zones to filter: source zone itself, and adjacent zones.
         DockZone? leftAdjacentZone = sourceZoneIdx > 0 ? sideZones[sourceZoneIdx - 1] : null;
         DockZone? rightAdjacentZone = sourceZoneIdx < sideZones.Count - 1 ? sideZones[sourceZoneIdx + 1] : null;
 
-        // Filter out thins for the source zone itself and adjacent zones
+        // Count how many thins would survive filtering (before actually filtering)
+        int thinsAfterFilter = thins.Count(thin => 
+            thin.TargetZone != sourceZone && 
+            thin.TargetZone != leftAdjacentZone && 
+            thin.TargetZone != rightAdjacentZone);
+
+        // Check N+1 rule BEFORE filtering: do we have enough thins to work with?
+        if (thinsAfterFilter < expectedThins)
+        {
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"  [adjacent-thin-filter] {sideName}: N+1 rule check BEFORE filter: {thinsAfterFilter} would remain, but need {expectedThins}. Cannot safely filter.");
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"  [adjacent-thin-filter] {sideName}: Keeping all {thins.Count} thins (all are necessary for N+1 compliance)");
+            return new List<SyntheticThin>(thins);
+        }
+
+        // N+1 rule ALLOWS filtering. Now apply the filter to remove no-ops.
         var filtered = thins
             .Where(thin => thin.TargetZone != sourceZone && 
                           thin.TargetZone != leftAdjacentZone && 
                           thin.TargetZone != rightAdjacentZone)
             .ToList();
 
-        // Check N+1 rule on the filtered result
-        if (filtered.Count >= expectedThins)
+        if (filtered.Count < thins.Count)
         {
-            // Filtering still maintains N+1 requirement, so we can use the filtered result
-            if (filtered.Count < thins.Count)
-            {
-                var removed = thins.Where(t => !filtered.Contains(t)).ToList();
-                var zonesToFilter = new List<string> { srcZoneName };
-                if (leftAdjacentZone.HasValue)
-                    zonesToFilter.Add($"{DockingLayoutEngine.GetZoneDisplayName(leftAdjacentZone.Value)} (left)");
-                if (rightAdjacentZone.HasValue)
-                    zonesToFilter.Add($"{DockingLayoutEngine.GetZoneDisplayName(rightAdjacentZone.Value)} (right)");
+            var removed = thins.Where(t => !filtered.Contains(t)).ToList();
+            var zonesToFilter = new List<string> { srcZoneName };
+            if (leftAdjacentZone.HasValue)
+                zonesToFilter.Add($"{DockingLayoutEngine.GetZoneDisplayName(leftAdjacentZone.Value)} (left)");
+            if (rightAdjacentZone.HasValue)
+                zonesToFilter.Add($"{DockingLayoutEngine.GetZoneDisplayName(rightAdjacentZone.Value)} (right)");
 
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"  [adjacent-thin-filter] {sideName}: N+1 rule satisfied after filter. Removing {removed.Count} no-op thin(s) for solo-panel zone {srcZoneName} " +
+                $"(zones: {string.Join(", ", zonesToFilter)})");
+            foreach (var thin in removed)
                 SquadDashTrace.Write(TraceCategory.Docking,
-                    $"  [adjacent-thin-filter] {sideName}: Filtered {removed.Count} no-op thin(s) for solo-panel zone {srcZoneName} " +
-                    $"(zones: {string.Join(", ", zonesToFilter)})");
-                foreach (var thin in removed)
-                    SquadDashTrace.Write(TraceCategory.Docking,
-                        $"    Removed: {thin.Kind} {DockingLayoutEngine.GetZoneDisplayName(thin.TargetZone)}@{thin.TargetOrder}");
-            }
-            else
-            {
-                SquadDashTrace.Write(TraceCategory.Docking,
-                    $"  [adjacent-thin-filter] {sideName}: No thins matched filter zones");
-            }
-
-            return filtered;
+                    $"    Removed: {thin.Kind} {DockingLayoutEngine.GetZoneDisplayName(thin.TargetZone)}@{thin.TargetOrder}");
         }
         else
         {
-            // Filtering would violate N+1 rule, so return unfiltered
             SquadDashTrace.Write(TraceCategory.Docking,
-                $"  [adjacent-thin-filter] {sideName}: Filtering would violate N+1 rule ({filtered.Count} < {expectedThins}), keeping all {thins.Count} thins");
-            return new List<SyntheticThin>(thins);
+                $"  [adjacent-thin-filter] {sideName}: No thins matched filter zones");
         }
+
+        return filtered;
     }
 
     // Total height needed for a column zone (Rule B has N slots, Rule C has N+1, Rule D has 1)
