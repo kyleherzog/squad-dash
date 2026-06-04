@@ -1,0 +1,110 @@
+Build started 6/4/2026 3:20:11 PM.
+     1>Project "D:\Drive\Source\SquadDash-public\SquadDash.Tests\SquadDash.Tests.csproj" on node 1 (Restore target(s)).
+     1>_GetAllRestoreProjectPathItems:
+         Determining projects to restore...
+     1>Project "D:\Drive\Source\SquadDash-public\SquadDash.Tests\SquadDash.Tests.csproj" (1) is building "D:\Drive\Source\SquadDash-public\VoiceHeuristics\VoiceHeuristics.csproj" (2:4) on node 1 (_GenerateProjectRestoreGraph target(s)).
+     2>AddPrunePackageReferences:
+         Loading prune package data from PrunePackageData folder
+         Failed to load prune package data from PrunePackageData folder, loading from targeting packs instead
+         Looking for targeting packs in C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref
+         Pack directories found: C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.5
+         Found package overrides file C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.5\data\PackageOverrides.txt
+     2>Done Building Project "D:\Drive\Source\SquadDash-public\VoiceHeuristics\VoiceHeuristics.csproj" (_GenerateProjectRestoreGraph target(s)).
+     1>Project "D:\Drive\Source\SquadDash-public\SquadDash.Tests\SquadDash.Tests.csproj" (1) is building "D:\Drive\Source\SquadDash-public\SquadDash.Tests\SquadDash.Tests.csproj" (1:6) on node 1 (_GenerateProjectRestoreGraph target(s)).
+     1>AddPrunePackageReferences:
+         Loading prune package data from PrunePackageData folder
+         Failed to load prune package data from PrunePackageData folder, loading from targeting packs instead
+         Looking for targeting packs in C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref
+         Pack directories found: C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.5
+         Found package overrides file C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.5\data\PackageOverrides.txt
+         Loading prune package data from PrunePackageData folder
+         Failed to load prune package data from PrunePackageData folder, loading from targeting packs instead
+         Looking for targeting packs in C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref
+         Pack directories found: C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.5
+         Found package overrides file C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.5\data\PackageOverrides.txt
+     1>Done Building Project "D:\Drive\Source\SquadDash-public\SquadDash.Tests\SquadDash.Tests.csproj" (_GenerateProjectRestoreGraph target(s)).
+     1>Restore:
+         X.509 certificate chain validation will use the default trust store selected by .NET for code signing.
+         X.509 certificate chain validation will use the default trust store selected by .NET for timestamping.
+         Assets file has not changed. Skipping assets file writing. Path: D:\Drive\Source\SquadDash-public\VoiceHeuristics\obj\project.assets.json
+         Assets file has not changed. Skipping assets file writing. Path: D:\Drive\Source\SquadDash-public\SquadDash.Tests\obj\project.assets.json
+         Restored D:\Drive\Source\SquadDash-public\VoiceHeuristics\VoiceHeuristics.csproj (in 28 ms).
+         Restored D:\Drive\Source\SquadDash-public\SquadDash.Tests\SquadDash.Tests.csproj (in 28 ms).
+         
+         NuGet Config files used:
+             C:\Users\Mark\AppData\Roaming\NuGet\NuGet.Config
+             C:\Program Files (x86)\NuGet\Config\DevExpress 22.2.config
+             C:\Program Files (x86)\NuGet\Config\DevExpress 24.2.config
+             C:\Program Files (x86)\NuGet\Config\DevExpress 25.1.config
+             C:\Program Files (x86)\NuGet\Config\Microsoft.VisualStudio.FallbackLocation.config
+             C:\Program Files (x86)\NuGet\Config\Microsoft.VisualStudio.Offline.config
+             C:\Program Files (x86)\NuGet\Config\Xamarin.Offline.config
+         
+         Feeds used:
+             https://api.nuget.org/v3/index.json
+             C:\Program Files\DevExpress 22.2\Components\System\Components\Packages
+             C:\Program Files (x86)\Microsoft SDKs\NuGetPackages\
+             C:\Program Files\DevExpress 24.2\Components\System\Components\Packages
+             C:\Program Files\DevExpress 25.1\Components\System\Components\Packages
+             C:\Program Files\dotnet\library-packs
+         All projects are up-to-date for restore.
+     1>Done Building Project "D:\Drive\Source\SquadDash-public\SquadDash.Tests\SquadDash.Tests.csproj" (Restore target(s)).
+   1:7>Project "D:\Drive\Source\SquadDash-public\SquadDash.Tests\SquadDash.Tests.csproj" on node 1 (VSTest target(s)).
+     1>BuildProject:
+         Build started, please wait...
+   1:7>Project "D:\Drive\Source\SquadDash-public\SquadDash.Tests\SquadDash.Tests.csproj" (1:7) is building "D:\Drive\Source\SquadDash-public\SquadDash.Tests\SquadDash.Tests.csproj" (1:8) on node 1 (default targets).
+     1>_CheckForNETCoreSdkIsPreview:
+       C:\Program Files\dotnet\sdk\10.0.300-preview.0.26177.108\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.RuntimeIdentifierInference.targets(383,5): message NETSDK1057: You are using a preview version of .NET. See: https://aka.ms/dotnet-support-policy [D:\Drive\Source\SquadDash-public\SquadDash.Tests\SquadDash.Tests.csproj]
+   1:8>Project "D:\Drive\Source\SquadDash-public\SquadDash.Tests\SquadDash.Tests.csproj" (1:8) is building "D:\Drive\Source\SquadDash-public\VoiceHeuristics\VoiceHeuristics.csproj" (2:6) on node 1 (default targets).
+     2>GenerateTargetFrameworkMonikerAttribute:
+       Skipping target "GenerateTargetFrameworkMonikerAttribute" because all output files are up-to-date with respect to the input files.
+       CoreGenerateAssemblyInfo:
+       Skipping target "CoreGenerateAssemblyInfo" because all output files are up-to-date with respect to the input files.
+       _GenerateSourceLinkFile:
+         Source Link file 'obj\Debug\net10.0\VoiceHeuristics.sourcelink.json' is up-to-date.
+       CoreCompile:
+       Skipping target "CoreCompile" because all output files are up-to-date with respect to the input files.
+       GenerateBuildDependencyFile:
+       Skipping target "GenerateBuildDependencyFile" because all output files are up-to-date with respect to the input files.
+       CopyFilesToOutputDirectory:
+         VoiceHeuristics -> D:\Drive\Source\SquadDash-public\VoiceHeuristics\bin\Debug\net10.0\VoiceHeuristics.dll
+     2>Done Building Project "D:\Drive\Source\SquadDash-public\VoiceHeuristics\VoiceHeuristics.csproj" (default targets).
+     1>GenerateTargetFrameworkMonikerAttribute:
+       Skipping target "GenerateTargetFrameworkMonikerAttribute" because all output files are up-to-date with respect to the input files.
+       CoreGenerateAssemblyInfo:
+       Skipping target "CoreGenerateAssemblyInfo" because all output files are up-to-date with respect to the input files.
+       _GenerateSourceLinkFile:
+         Source Link file 'obj\Debug\net10.0-windows\SquadDash.Tests.sourcelink.json' is up-to-date.
+       CoreCompile:
+       Skipping target "CoreCompile" because all output files are up-to-date with respect to the input files.
+       _CopyOutOfDateSourceItemsToOutputDirectory:
+       Skipping target "_CopyOutOfDateSourceItemsToOutputDirectory" because all output files are up-to-date with respect to the input files.
+       GenerateBuildDependencyFile:
+       Skipping target "GenerateBuildDependencyFile" because all output files are up-to-date with respect to the input files.
+       GenerateBuildRuntimeConfigurationFiles:
+       Skipping target "GenerateBuildRuntimeConfigurationFiles" because all output files are up-to-date with respect to the input files.
+       CopyFilesToOutputDirectory:
+         SquadDash.Tests -> D:\Drive\Source\SquadDash-public\SquadDash.Tests\bin\Debug\net10.0-windows\SquadDash.Tests.dll
+     1>Done Building Project "D:\Drive\Source\SquadDash-public\SquadDash.Tests\SquadDash.Tests.csproj" (default targets).
+     1>BuildProject:
+         Build completed.
+         
+Test run for D:\Drive\Source\SquadDash-public\SquadDash.Tests\bin\Debug\net10.0-windows\SquadDash.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+NUnit Adapter 5.2.0.0: Test execution started
+Running selected tests in D:\Drive\Source\SquadDash-public\SquadDash.Tests\bin\Debug\net10.0-windows\SquadDash.Tests.dll
+   NUnit3TestExecutor discovered 1 of 1 NUnit test cases using Current Discovery mode, Non-Explicit run
+NUnit Adapter 5.2.0.0: Test execution complete
+  Passed BuildDockingMap_WithAllSixLeftZonesOccupied_StillEmitsNPlusOneThinTargets [62 ms]
+
+Test Run Successful.
+Total tests: 1
+     Passed: 1
+ Total time: 0.6743 Seconds
+     1>Done Building Project "D:\Drive\Source\SquadDash-public\SquadDash.Tests\SquadDash.Tests.csproj" (VSTest target(s)).
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:01.97

@@ -114,13 +114,43 @@ internal static class DockingMapBuilder
         var rightThinPositions = LayoutSide(rightStates, isLeft: false, ref curX, currentLayout, topPanels, leftStates);
 
         // Filter out adjacent thins for solo-panel source zones
+        // Only filter on the side where the source actually is
         var sourceZone = DockLayout_FindSourceZone(currentLayout, sourcePanelId);
         if (sourceZone.HasValue)
         {
-            leftThinPositions = FilterAdjacentThinsForSoloPanelZone(
-                leftThinPositions, currentLayout, sourceZone.Value, sourcePanelId, LeftSideZones);
-            rightThinPositions = FilterAdjacentThinsForSoloPanelZone(
-                rightThinPositions, currentLayout, sourceZone.Value, sourcePanelId, RightSideZones);
+            // Only filter Left thins if source is on a Left zone
+            if (LeftSideZones.Contains(sourceZone.Value))
+            {
+                leftThinPositions = FilterAdjacentThinsForSoloPanelZone(
+                    leftThinPositions, currentLayout, sourceZone.Value, sourcePanelId, LeftSideZones);
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"[docking-trace] Filter returned {leftThinPositions.Count} thins for Left side");
+                var leftThinsDesc = string.Join(", ", leftThinPositions.Select(t => $"{t.TargetZone}@{t.TargetOrder}({t.X:F0})"));
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"[docking-trace] Thins after filter (Left): {leftThinsDesc}");
+            }
+            else
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"[docking-trace] Skipping filter for Left side (source not on Left)");
+            }
+            
+            // Only filter Right thins if source is on a Right zone
+            if (RightSideZones.Contains(sourceZone.Value))
+            {
+                rightThinPositions = FilterAdjacentThinsForSoloPanelZone(
+                    rightThinPositions, currentLayout, sourceZone.Value, sourcePanelId, RightSideZones);
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"[docking-trace] Filter returned {rightThinPositions.Count} thins for Right side");
+                var rightThinsDesc = string.Join(", ", rightThinPositions.Select(t => $"{t.TargetZone}@{t.TargetOrder}({t.X:F0})"));
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"[docking-trace] Thins after filter (Right): {rightThinsDesc}");
+            }
+            else
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"[docking-trace] Skipping filter for Right side (source not on Right)");
+            }
         }
 
         double innerWidth = curX;
@@ -203,6 +233,26 @@ internal static class DockingMapBuilder
         double rightSectionCenterX = hasRightSection
             ? (rightZoneSlots.Min(s => s.X) + rightZoneSlots.Max(s => s.X + s.Width)) / 2
             : 0;
+
+        // Count final thin slots before returning
+        int finalLeftThins = allSlots.Count(s => s.Width < ColSlotWidth && IsLeftSideZone(s.TargetZone) && !s.IsSeparator);
+        int finalRightThins = allSlots.Count(s => s.Width < ColSlotWidth && IsRightSideZone(s.TargetZone) && !s.IsSeparator);
+        
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[docking-trace] Final thin count for Left: {finalLeftThins} thins");
+        var finalLeftDesc = string.Join(", ", allSlots
+            .Where(s => s.Width < ColSlotWidth && IsLeftSideZone(s.TargetZone) && !s.IsSeparator)
+            .Select(s => $"{s.TargetZone}@{s.TargetOrder}({s.X:F0})"));
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[docking-trace] Final Left thins: {finalLeftDesc}");
+        
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[docking-trace] Final thin count for Right: {finalRightThins} thins");
+        var finalRightDesc = string.Join(", ", allSlots
+            .Where(s => s.Width < ColSlotWidth && IsRightSideZone(s.TargetZone) && !s.IsSeparator)
+            .Select(s => $"{s.TargetZone}@{s.TargetOrder}({s.X:F0})"));
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[docking-trace] Final Right thins: {finalRightDesc}");
 
         TraceMap(sourcePanelId, allSlots, popupWidth, popupHeight, leftThinPositions, rightThinPositions);
 
@@ -335,6 +385,12 @@ internal static class DockingMapBuilder
             item.Zone!.X = curX;
             curX += item.Width;
         }
+
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[docking-trace] LayoutSide {sideName}: Generated {thins.Count} synthetic thins from layout sequence");
+        var thinsDesc = string.Join(", ", thins.Select(t => $"{t.TargetZone}@{t.TargetOrder}({t.X:F0})"));
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[docking-trace] LayoutSide {sideName}: Generated thins: {thinsDesc}");
 
         // Generate cross-side thins only if this side has no occupied zones (except possibly within-side thins)
         var occupiedOnThisSide = states.Where(s => s.Occupied).ToList();
@@ -670,9 +726,15 @@ internal static class DockingMapBuilder
             if (occupiedZoneCount >= 1 && !sourceIsOnlySidePanel)
             {
                 int expectedThins = occupiedZoneCount + 1;
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"[docking-trace] N+1 check {sideName}: occupiedZones={occupiedZoneCount}, expected={expectedThins}, actual={thinSlots.Count}");
                 if (thinSlots.Count != expectedThins)
+                {
+                    SquadDashTrace.Write(TraceCategory.Docking,
+                        $"[docking-trace] Thin generation blocked — extra thins were added AFTER filter. Investigate source.");
                     violations.Add(
                         $"{sideName}: N+1 rule violated — {occupiedZoneCount} occupied zone(s) require {expectedThins} thin slot(s), got {thinSlots.Count}");
+                }
             }
 
             // Adjacent-thin check: no two thin slots should be side by side

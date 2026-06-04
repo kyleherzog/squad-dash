@@ -46,46 +46,85 @@ internal sealed class MaintenanceStateStore {
 
     /// <summary>Returns true if this task is eligible to run based on its frequency.</summary>
     public bool IsEligible(string taskId, string frequency, string? commitSha) {
-        switch (frequency.ToLowerInvariant()) {
-            case "always":
+        var freqLower = frequency.ToLowerInvariant();
+        
+        // Handle "always"
+        if (freqLower == "always")
+            return true;
+
+        // Handle "after-commits" / "per-commit"
+        if (freqLower == "after-commits" || freqLower == "per-commit") {
+            if (commitSha is null) {
+                SquadDashTrace.Write(TraceCategory.General,
+                    $"MaintenanceStateStore: after-commits git fallback — commit SHA unavailable, treating task '{taskId}' as daily");
+                goto HandleDaily;
+            }
+            if (!_tasks.TryGetValue(taskId, out var commitState))
                 return true;
-
-            case "after-commits":
-            case "per-commit":   // backward-compat alias
-                if (commitSha is null) {
-                    SquadDashTrace.Write(TraceCategory.General,
-                        $"MaintenanceStateStore: after-commits git fallback — commit SHA unavailable, treating task '{taskId}' as daily");
-                    goto case "daily";
-                }
-                if (!_tasks.TryGetValue(taskId, out var commitState))
-                    return true;
-                return !string.Equals(commitState.LastCommitSha, commitSha,
-                    StringComparison.OrdinalIgnoreCase);
-
-            case "weekly":
-                if (!_tasks.TryGetValue(taskId, out var weeklyState))
-                    return true;
-                if (weeklyState.LastRunAt is null)
-                    return true;
-                return weeklyState.LastRunAt.Value < StartOfCurrentWeekUtc();
-
-            case "monthly":
-                if (!_tasks.TryGetValue(taskId, out var monthlyState))
-                    return true;
-                if (monthlyState.LastRunAt is null)
-                    return true;
-                var now = DateTime.UtcNow;
-                var last = monthlyState.LastRunAt.Value;
-                return last.Year < now.Year || (last.Year == now.Year && last.Month < now.Month);
-
-            case "daily":
-            default:
-                if (!_tasks.TryGetValue(taskId, out var dailyState))
-                    return true;
-                if (dailyState.LastRunAt is null)
-                    return true;
-                return dailyState.LastRunAt.Value.Date < DateTime.UtcNow.Date;
+            return !string.Equals(commitState.LastCommitSha, commitSha,
+                StringComparison.OrdinalIgnoreCase);
         }
+
+        // Handle "weekly" (legacy format)
+        if (freqLower == "weekly") {
+            if (!_tasks.TryGetValue(taskId, out var weeklyState))
+                return true;
+            if (weeklyState.LastRunAt is null)
+                return true;
+            return weeklyState.LastRunAt.Value < StartOfCurrentWeekUtc();
+        }
+
+        // Handle "weekly-Monday", "weekly-Tuesday", etc.
+        if (freqLower.StartsWith("weekly-")) {
+            var dayStr = freqLower.Substring(7); // Remove "weekly-" prefix
+            if (TryParseDayOfWeek(dayStr, out var targetDay)) {
+                if (!_tasks.TryGetValue(taskId, out var weeklyDayState))
+                    return true;
+                if (weeklyDayState.LastRunAt is null)
+                    return true;
+                
+                var lastRun = weeklyDayState.LastRunAt.Value;
+                var today = DateTime.UtcNow.Date;
+                var todayDow = today.DayOfWeek;
+                
+                // Check if today is the target day and last run was before today
+                if (todayDow == targetDay && lastRun.Date < today)
+                    return true;
+                
+                // Also check if we're past the target day this week and haven't run yet this week
+                var startOfWeek = today.AddDays(-(int)todayDow);
+                if (todayDow > targetDay && lastRun < startOfWeek)
+                    return true;
+                
+                return false;
+            }
+            // If day parsing fails, treat as daily
+            goto HandleDaily;
+        }
+
+        // Handle "monthly"
+        if (freqLower == "monthly") {
+            if (!_tasks.TryGetValue(taskId, out var monthlyState))
+                return true;
+            if (monthlyState.LastRunAt is null)
+                return true;
+            var now = DateTime.UtcNow;
+            var last = monthlyState.LastRunAt.Value;
+            return last.Year < now.Year || (last.Year == now.Year && last.Month < now.Month);
+        }
+
+        // Handle "daily" and unknown frequencies
+        HandleDaily:
+        if (!_tasks.TryGetValue(taskId, out var dailyState))
+            return true;
+        if (dailyState.LastRunAt is null)
+            return true;
+        return dailyState.LastRunAt.Value.Date < DateTime.UtcNow.Date;
+    }
+
+    /// <summary>Attempts to parse a day-of-week string (e.g., "Monday", "tuesday").</summary>
+    private static bool TryParseDayOfWeek(string dayStr, out DayOfWeek result) {
+        return Enum.TryParse<DayOfWeek>(dayStr, ignoreCase: true, out result);
     }
 
     /// <summary>Returns the UTC timestamp of the last recorded run for the task, or null if never run.</summary>

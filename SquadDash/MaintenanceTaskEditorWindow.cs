@@ -31,6 +31,9 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
     // Track if there are unsaved changes
     private bool _hasUnsavedChanges;
 
+    // Track the selected day for weekly frequency
+    private string _selectedWeeklyDay = "Monday";
+
     // ── Controls ──────────────────────────────────────────────────────────────
 
     private readonly TextBox     _titleBox;
@@ -41,6 +44,7 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
     private readonly StackPanel  _optionsPreviewPanel;
     private readonly FlowDocumentScrollViewer _markdownPreview;
     private readonly RichTextBox _instructionsBox;
+    private StackPanel? _weeklyDayPickerPanel;  // Day picker UI for weekly frequency
 
     // ── Voice ─────────────────────────────────────────────────────────────────
 
@@ -118,6 +122,14 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         _markdownPreview     = BuildMarkdownPreview();
         _instructionsBox     = BuildInstructionsBox();
 
+        // Initialize the weekly day selection based on the task's current frequency
+        if (_task.Frequency.StartsWith("weekly-", StringComparison.OrdinalIgnoreCase)) {
+            var dayPart = _task.Frequency.Substring(7); // Remove "weekly-" prefix
+            if (!string.IsNullOrWhiteSpace(dayPart)) {
+                _selectedWeeklyDay = dayPart;
+            }
+        }
+
         // Build error indicator for YAML section
         _yamlErrorText = new TextBlock {
             Visibility   = Visibility.Collapsed,
@@ -144,7 +156,7 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         _enabledCheck.Checked += (_, _) => _hasUnsavedChanges = true;
         _enabledCheck.Unchecked += (_, _) => _hasUnsavedChanges = true;
         // Track changes to frequency
-        _frequencyCombo.SelectionChanged += (_, _) => _hasUnsavedChanges = true;
+        _frequencyCombo.SelectionChanged += OnFrequencyComboChanged;
         // Track changes to options YAML
         _optionsYamlBox.TextChanged += (_, _) => _hasUnsavedChanges = true;
         // Track changes to instructions
@@ -279,6 +291,14 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         propsRow.Children.Add(_enabledCheck);
         propsRow.Children.Add(BuildLabel("Frequency:"));
         propsRow.Children.Add(_frequencyCombo);
+        
+        // Build the day picker panel for weekly frequency
+        _weeklyDayPickerPanel = BuildWeeklyDayPicker();
+        _weeklyDayPickerPanel.Visibility = (_frequencyCombo.SelectedItem as string) == "weekly" 
+            ? Visibility.Visible 
+            : Visibility.Collapsed;
+        propsRow.Children.Add(_weeklyDayPickerPanel);
+        
         DockPanel.SetDock(propsRow, Dock.Top);
         root.Children.Add(propsRow);
 
@@ -465,13 +485,25 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
 
     private ComboBox BuildFrequencyCombo() {
         var cb = new ComboBox { Margin = new Thickness(0, 0, 12, 0) };
+        
+        // Add base frequency options
         foreach (var item in new[] { "always", "daily", "weekly", "monthly", "after-commits" })
             cb.Items.Add(item);
-        cb.SelectedItem = cb.Items.Contains(_task.Frequency) ? _task.Frequency : "daily";
+        
+        // Determine initial selection: extract base frequency from task's frequency
+        // (e.g., "weekly-Monday" → select "weekly", "daily" → select "daily")
+        string initialSelection = _task.Frequency;
+        if (_task.Frequency.StartsWith("weekly-", StringComparison.OrdinalIgnoreCase)) {
+            initialSelection = "weekly";
+        }
+        
+        cb.SelectedItem = cb.Items.Contains(initialSelection) ? initialSelection : "daily";
+        
         cb.SetResourceReference(ComboBox.ForegroundProperty,    "LabelText");
         cb.SetResourceReference(ComboBox.BackgroundProperty,    "RosterPanelSurface");
         cb.SetResourceReference(ComboBox.FontSizeProperty,      "FontSizeBody");
         cb.SetResourceReference(ComboBox.StyleProperty, "ThemedComboBoxStyle");
+        
         return cb;
     }
 
@@ -485,6 +517,72 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         cb.SetResourceReference(ComboBox.FontSizeProperty,   "FontSizeBody");
         cb.SetResourceReference(ComboBox.StyleProperty, "ThemedComboBoxStyle");
         return cb;
+    }
+
+    /// <summary>Builds a horizontal panel with 7 day-of-week buttons for weekly frequency selection.</summary>
+    private StackPanel BuildWeeklyDayPicker() {
+        var panel = new StackPanel {
+            Orientation = Orientation.Horizontal,
+            Margin      = new Thickness(0, 0, 0, 0),
+        };
+
+        var days = new[] { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" };
+        
+        foreach (var day in days) {
+            var btn = new Button {
+                Content           = day.Substring(0, 3),  // Mon, Tue, Wed, etc.
+                Padding           = new Thickness(6, 2, 6, 2),
+                Margin            = new Thickness(2, 0, 2, 0),
+                MinWidth          = 36,
+                Cursor            = Cursors.Hand,
+            };
+            
+            // Apply consistent styling
+            btn.SetResourceReference(Button.StyleProperty,    "FlatButtonStyle");
+            btn.SetResourceReference(Button.FontSizeProperty, "FontSizeSmall");
+            btn.SetResourceReference(Button.ForegroundProperty, "LabelText");
+            
+            // Highlight the currently selected day
+            if (string.Equals(day, _selectedWeeklyDay, StringComparison.OrdinalIgnoreCase)) {
+                btn.SetResourceReference(Button.BackgroundProperty, "InputSurface");
+                btn.SetResourceReference(Button.BorderBrushProperty, "InputBorder");
+                btn.BorderThickness = new Thickness(1);
+            }
+            
+            // Capture day in closure
+            string capturedDay = day;
+            btn.Click += (_, _) => {
+                _selectedWeeklyDay = capturedDay;
+                _hasUnsavedChanges = true;
+                
+                // Update UI to highlight the selected day
+                foreach (UIElement child in panel.Children) {
+                    if (child is Button dayBtn) {
+                        dayBtn.BorderThickness = new Thickness(0);
+                        dayBtn.Background = System.Windows.Media.Brushes.Transparent;
+                    }
+                }
+                btn.BorderThickness = new Thickness(1);
+                btn.SetResourceReference(Button.BackgroundProperty, "InputSurface");
+                btn.SetResourceReference(Button.BorderBrushProperty, "InputBorder");
+            };
+            
+            panel.Children.Add(btn);
+        }
+        
+        return panel;
+    }
+
+    /// <summary>Handles frequency combo selection changes to show/hide the day picker.</summary>
+    private void OnFrequencyComboChanged(object sender, SelectionChangedEventArgs e) {
+        _hasUnsavedChanges = true;
+        
+        if (_weeklyDayPickerPanel != null) {
+            var selectedFreq = _frequencyCombo.SelectedItem as string;
+            _weeklyDayPickerPanel.Visibility = (selectedFreq == "weekly") 
+                ? Visibility.Visible 
+                : Visibility.Collapsed;
+        }
     }
 
     private TextBox BuildOptionsYamlBox() {
@@ -557,10 +655,18 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
             _instructionsBox.Document.ContentStart,
             _instructionsBox.Document.ContentEnd).Text.TrimEnd('\r', '\n');
 
+        // Build the frequency value: if "weekly" is selected, append the day of week
+        var baseFrequency = (_frequencyCombo.SelectedItem as string) ?? _task.Frequency;
+        var finalFrequency = baseFrequency;
+        
+        if (string.Equals(baseFrequency, "weekly", StringComparison.OrdinalIgnoreCase)) {
+            finalFrequency = $"weekly-{_selectedWeeklyDay}";
+        }
+
         var updatedTask = _task with {
             Title        = _titleBox.Text,
             Enabled      = _enabledCheck.IsChecked == true,
-            Frequency    = (_frequencyCombo.SelectedItem as string) ?? _task.Frequency,
+            Frequency    = finalFrequency,
             Safety       = (_safetyCombo.SelectedItem as string) ?? _task.Safety,
             Instructions = instructionsText,
             Options      = ParseOptionsFromYaml(_optionsYamlBox.Text) ?? _task.Options,

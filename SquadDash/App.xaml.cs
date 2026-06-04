@@ -13,6 +13,8 @@ using SquadDash.Screenshots;
 
 namespace SquadDash {
     public partial class App : Application {
+        private bool _startupFailureReported;
+
         protected override void OnStartup(StartupEventArgs e) {
             DispatcherUnhandledException += App_DispatcherUnhandledException;
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
@@ -76,20 +78,29 @@ namespace SquadDash {
                 TryHandleStartupWorkspaceRouting(startupFolder, workspacePaths, serviceProvider, startupArguments.RestartRelaunch, out startupWorkspaceLease, out noWorkspaceOnStart))
                 return;
 
-            var window = new MainWindow(startupFolder, startupWorkspaceLease, workspacePaths, refreshOptions, noWorkspaceOnStart, serviceProvider);
-            MainWindow = window;
+            try {
+                var window = new MainWindow(startupFolder, startupWorkspaceLease, workspacePaths, refreshOptions, noWorkspaceOnStart, serviceProvider);
+                startupWorkspaceLease = null;
+                MainWindow = window;
 
-            var recentFolders = serviceProvider.GetRequiredService<ApplicationSettingsStore>().Load().RecentFolders;
-            RefreshJumpList(recentFolders);
+                var recentFolders = serviceProvider.GetRequiredService<ApplicationSettingsStore>().Load().RecentFolders;
+                RefreshJumpList(recentFolders);
 
-            window.Show();
+                window.Show();
 
-            if (!string.IsNullOrWhiteSpace(startupFolder) && !Directory.Exists(startupFolder)) {
-                MessageBox.Show(
-                    $"Startup folder not found:\n{startupFolder}",
-                    "Invalid Startup Folder",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                if (!string.IsNullOrWhiteSpace(startupFolder) && !Directory.Exists(startupFolder)) {
+                    MessageBox.Show(
+                        $"Startup folder not found:\n{startupFolder}",
+                        "Invalid Startup Folder",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+            }
+            catch (Exception ex) {
+                startupWorkspaceLease?.Dispose();
+                SquadDashTrace.Write("Startup", $"MainWindow startup failed; releasing workspace lease and shutting down: {ex}");
+                ShowStartupFailureDialog(ex);
+                Shutdown();
             }
         }
 
@@ -140,6 +151,13 @@ namespace SquadDash {
             try {
                 SquadDashTrace.Write("Unhandled", $"Dispatcher exception: {e.Exception}");
 
+                if (MainWindow is null) {
+                    ShowStartupFailureDialog(e.Exception);
+                    e.Handled = true;
+                    Shutdown();
+                    return;
+                }
+
                 TryEmergencySave();
 
                 if (MainWindow is MainWindow window)
@@ -157,6 +175,22 @@ namespace SquadDash {
             catch (Exception handlerEx) {
                 SquadDashTrace.Write("Unhandled", $"App_DispatcherUnhandledException handler failed: {handlerEx.Message}");
                 e.Handled = true;
+            }
+        }
+
+        private void ShowStartupFailureDialog(Exception exception) {
+            if (_startupFailureReported)
+                return;
+
+            _startupFailureReported = true;
+            try {
+                MessageBox.Show(
+                    $"SquadDash could not finish starting.\n\n{exception.Message}\n\nSee the trace log for details.",
+                    "SquadDash Startup Failed",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            catch {
             }
         }
 

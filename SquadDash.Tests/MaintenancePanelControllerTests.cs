@@ -158,10 +158,11 @@ internal sealed class MaintenancePanelControllerTests {
             var checkBoxes = FindCheckBoxes(listPanel).ToList();
             Assert.That(checkBoxes, Has.Count.EqualTo(2),
                 "Each configured task must produce exactly one checkbox");
-            Assert.That(checkBoxes[0].IsChecked, Is.True,
-                "Checkbox for an enabled task must be checked");
-            Assert.That(checkBoxes[1].IsChecked, Is.False,
-                "Checkbox for a disabled task must be unchecked");
+            // Tasks are sorted alphabetically by title: "Disabled Task" (false), "Enabled Task" (true)
+            Assert.That(checkBoxes[0].IsChecked, Is.False,
+                "Checkbox for 'Disabled Task' (first alphabetically) must be unchecked");
+            Assert.That(checkBoxes[1].IsChecked, Is.True,
+                "Checkbox for 'Enabled Task' (second alphabetically) must be checked");
         });
     }
 
@@ -568,6 +569,56 @@ internal sealed class MaintenancePanelControllerTests {
                 "Callback must receive the correct task ID");
             Assert.That(toggleCalls[0].enabled, Is.True,
                 "Task was disabled; toggle must enable it and report enabled=true");
+        });
+    }
+
+    // ── Task sorting ──────────────────────────────────────────────────────────
+
+    [Test]
+    public void Refresh_MultipleTasks_DisplayedAlphabeticallyByTitle() {
+        WpfTestContext.Run(() => {
+            var (controller, listPanel, _) = CreateController();
+            var config = MakeConfig([
+                MakeTask("zebra",  "Zebra Task"),
+                MakeTask("apple",  "Apple Task"),
+                MakeTask("middle", "Middle Task"),
+            ]);
+
+            controller.Refresh(config, stateStore: null);
+
+            var borders = CollectBorders(listPanel);
+            var taskBorders = borders.Where(b => b.Tag is MaintenanceTask).ToList();
+            var titles = taskBorders.Select(b => ((MaintenanceTask)b.Tag).Title).ToList();
+
+            Assert.Multiple(() => {
+                Assert.That(titles[0], Is.EqualTo("Apple Task"),  "First task should be Apple (alphabetically first)");
+                Assert.That(titles[1], Is.EqualTo("Middle Task"),  "Second task should be Middle");
+                Assert.That(titles[2], Is.EqualTo("Zebra Task"),   "Third task should be Zebra (alphabetically last)");
+            });
+        });
+    }
+
+    [Test]
+    public void Refresh_MultipleTasks_SortingIsCaseInsensitive() {
+        WpfTestContext.Run(() => {
+            var (controller, listPanel, _) = CreateController();
+            var config = MakeConfig([
+                MakeTask("lowercase", "zebra task"),
+                MakeTask("uppercase", "Apple Task"),
+                MakeTask("mixed",     "mIddle Task"),
+            ]);
+
+            controller.Refresh(config, stateStore: null);
+
+            var borders = CollectBorders(listPanel);
+            var taskBorders = borders.Where(b => b.Tag is MaintenanceTask).ToList();
+            var titles = taskBorders.Select(b => ((MaintenanceTask)b.Tag).Title).ToList();
+
+            Assert.Multiple(() => {
+                Assert.That(titles[0], Is.EqualTo("Apple Task"),   "First should be Apple (case-insensitive)");
+                Assert.That(titles[1], Is.EqualTo("mIddle Task"),   "Second should be Middle (case-insensitive)");
+                Assert.That(titles[2], Is.EqualTo("zebra task"),    "Third should be zebra (case-insensitive)");
+            });
         });
     }
 }

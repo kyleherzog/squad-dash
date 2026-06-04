@@ -31,7 +31,6 @@ internal sealed class MaintenancePanelController {
     internal MaintenancePanelViewModel ViewModel => _viewModel;
     private DispatcherTimer?       _countdownTimer;
     private DispatcherTimer?       _transientStatusTimer;
-    private readonly List<Button>  _runNowButtons = new();
 
     // ── Construction ─────────────────────────────────────────────────────────
 
@@ -250,13 +249,6 @@ internal sealed class MaintenancePanelController {
         var mdPath = GetMaintenanceMdPath();
         if (mdPath is null) return;
         MaintenanceMdParser.UpdateEnabledOnIdle(mdPath, value);
-        SyncRunNowButtonVisibility(isManual: !value);
-    }
-
-    private void SyncRunNowButtonVisibility(bool isManual) {
-        var vis = isManual ? Visibility.Visible : Visibility.Collapsed;
-        foreach (var btn in _runNowButtons)
-            btn.Visibility = vis;
     }
 
     /// <summary>
@@ -360,6 +352,25 @@ internal sealed class MaintenancePanelController {
     private void ChangeTaskFrequency(string taskId, string newFrequency) {
         var mdPath = GetMaintenanceMdPath();
         if (mdPath is null) return;
+        
+        // If switching to "weekly", extract the current day from existing frequency if available
+        if (newFrequency == "weekly") {
+            // Find the task to see its current frequency
+            var config = _viewModel.Config;
+            if (config?.Tasks != null) {
+                var task = config.Tasks.FirstOrDefault(t => t.Id == taskId);
+                if (task != null && task.Frequency.StartsWith("weekly-")) {
+                    // Preserve the existing day
+                    newFrequency = task.Frequency;
+                } else {
+                    // Default to Monday if no existing day is set
+                    newFrequency = "weekly-Monday";
+                }
+            } else {
+                newFrequency = "weekly-Monday";
+            }
+        }
+        
         MaintenanceMdParser.UpdateFrequency(mdPath, taskId, newFrequency);
         _reloadPanel();
     }
@@ -369,7 +380,6 @@ internal sealed class MaintenancePanelController {
     private void RebuildList() {
         _listPanel.Children.Clear();
         _viewModel.TaskOptionsPanels.Clear();
-        _runNowButtons.Clear();
 
         if (_viewModel.Config is null || _viewModel.Config.Tasks is null || _viewModel.Config.Tasks.Count == 0) {
             var empty = new TextBlock {
@@ -382,7 +392,10 @@ internal sealed class MaintenancePanelController {
             empty.SetResourceReference(TextBlock.ForegroundProperty, "SubtleText");
             _listPanel.Children.Add(empty);
         } else {
-            foreach (var task in _viewModel.Config.Tasks)
+            var sortedTasks = _viewModel.Config.Tasks
+                .OrderBy(t => t.Title, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            foreach (var task in sortedTasks)
                 _listPanel.Children.Add(BuildTaskRow(task));
         }
 
@@ -608,29 +621,10 @@ internal sealed class MaintenancePanelController {
                 ("After Commits",  "after-commits"),
             ],
             selectedValue:  task.Frequency,
-            onValueChanged: newFreq => ChangeTaskFrequency(taskIdForFreq, newFreq));
+            onValueChanged: newFreq => ChangeTaskFrequency(taskIdForFreq, newFreq),
+            getButtonLabel: freq => GetFrequencyDisplayText(freq));
         chipRow.Children.Add(frequencyPicker.Control);
         rightPanel.Children.Add(chipRow);
-
-        // Run Now button — only shown for enabled tasks when in manual mode
-        if (task.Enabled) {
-            var runNowBtn = new Button {
-                Content             = "▶ Run Now",
-                Margin              = new Thickness(0, 3, 0, 0),
-                Padding             = new Thickness(6, 2, 6, 2),
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Cursor              = Cursors.Hand,
-                Visibility          = _enabledOnIdlePicker.SelectedValue == "on-idle"
-                                        ? Visibility.Collapsed
-                                        : Visibility.Visible,
-            };
-            runNowBtn.SetResourceReference(Button.StyleProperty,    "FlatButtonStyle");
-            runNowBtn.SetResourceReference(Button.FontSizeProperty, "FontSizeSmall");
-            var capturedIdForBtn = task.Id;
-            runNowBtn.Click += (_, _) => _runTask(capturedIdForBtn);
-            rightPanel.Children.Add(runNowBtn);
-            _runNowButtons.Add(runNowBtn);
-        }
 
         // Last-run status
         var lastRun = _viewModel.StateStore?.GetLastRunAt(task.Id);
@@ -768,15 +762,42 @@ internal sealed class MaintenancePanelController {
         return row;
     }
 
-    private static string FrequencyTooltip(string frequency) => frequency.ToLowerInvariant() switch {
-        "daily"          => "Runs at most once per calendar day.",
-        "weekly"         => "Runs at most once per calendar week (Monday–Sunday UTC).",
-        "monthly"        => "Runs at most once per calendar month.",
-        "after-commits"  => "Runs once per new commit since the last run.",
-        "per-commit"     => "Runs once per new commit since the last run.",
-        "always"         => "Runs every idle cycle with no cooldown.",
-        _                => $"Frequency: {frequency}",
-    };
+    private static string FrequencyTooltip(string frequency) {
+        var freqLower = frequency.ToLowerInvariant();
+        
+        if (freqLower.StartsWith("weekly-")) {
+            var dayPart = frequency.Substring(7);
+            return $"Runs at most once per calendar week on {dayPart}s.";
+        }
+        
+        return freqLower switch {
+            "daily"          => "Runs at most once per calendar day.",
+            "weekly"         => "Runs at most once per calendar week (Monday–Sunday UTC). Legacy format, treating as Monday.",
+            "monthly"        => "Runs at most once per calendar month.",
+            "after-commits"  => "Runs once per new commit since the last run.",
+            "per-commit"     => "Runs once per new commit since the last run.",
+            "always"         => "Runs every idle cycle with no cooldown.",
+            _                => $"Frequency: {frequency}",
+        };
+    }
+
+    private static string GetFrequencyDisplayText(string frequency) {
+        var freqLower = frequency.ToLowerInvariant();
+        
+        if (freqLower.StartsWith("weekly-")) {
+            var dayPart = frequency.Substring(7);
+            return $"every {dayPart}";
+        }
+        
+        return freqLower switch {
+            "daily"    => "Daily",
+            "weekly"   => "Weekly",
+            "monthly"  => "Monthly",
+            "always"   => "Always",
+            "after-commits" => "After Commits",
+            _          => frequency,
+        };
+    }
 
     private static ToolTip MakeThemedToolTip(string text) {
         var tb = new TextBlock { Text = text };
