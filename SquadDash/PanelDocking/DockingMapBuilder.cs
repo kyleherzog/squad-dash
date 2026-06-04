@@ -297,7 +297,20 @@ internal static class DockingMapBuilder
         bool isLeft,
         ref double curX)
     {
+        var sideName = isLeft ? "Left" : "Right";
         var visible = SideVisualOrder(states, isLeft).Where(s => !s.Suppressed).ToList();
+        
+        // Log all zones before filtering
+        var allZonesDesc = string.Join(", ", states.Select((s, i) => 
+            $"{s.Zone}(Tier={s.Tier},Occ={s.Occupied},Supp={s.Suppressed},Panels={s.Panels.Count})"));
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[build-side-seq] Available zones on {sideName}: [{allZonesDesc}]");
+        
+        var visibleZonesDesc = string.Join(", ", visible.Select((s, i) => 
+            $"{s.Zone}(Tier={s.Tier},Occ={s.Occupied})"));
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[build-side-seq] Visible (non-suppressed) zones on {sideName}: [{visibleZonesDesc}] (count={visible.Count})");
+        
         var thins = new List<SyntheticThin>();
         if (visible.Count == 0)
             return thins;
@@ -330,17 +343,22 @@ internal static class DockingMapBuilder
     {
         var sequence = new List<SideSequenceItem>();
         var occupied = states.Where(s => s.Occupied).ToList();
+        var sideName = isLeft ? "Left" : "Right";
+        
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[build-side-seq] === Starting BuildSideSequence for {sideName} side ===");
         
         var occupiedZonesList = string.Join(", ", occupied.Select(s => $"{s.Zone}(Tier={s.Tier},Panels={s.Panels.Count})"));
-        var sideName = isLeft ? "Left" : "Right";
         SquadDashTrace.Write(TraceCategory.Docking,
-            $"[build-side-seq] Starting BuildSideSequence: side={sideName}, occupiedZones=[{occupiedZonesList}], visibleCount={visible.Count}");
+            $"[build-side-seq] Occupied zones on {sideName}: [{occupiedZonesList}] (count={occupied.Count})");
         
         if (occupied.Count == 0)
         {
             sequence.AddRange(visible.Select(SideSequenceItem.ForZone));
             SquadDashTrace.Write(TraceCategory.Docking,
                 $"[build-side-seq] No occupied zones - adding all {visible.Count} visible zones as regular items");
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"[build-side-seq] === BuildSideSequence complete for {sideName}: {sequence.Count} items ===");
             return sequence;
         }
 
@@ -348,6 +366,19 @@ internal static class DockingMapBuilder
         int maxOccupiedTier = occupied.Max(s => s.Tier);
         var innermostOccupied = states[minOccupiedTier];
         var outermostOccupied = states[maxOccupiedTier];
+        
+        // Detailed tier range logging
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[build-side-seq] Tier range calculation:");
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[build-side-seq]   First occupied tier: {minOccupiedTier} ({innermostOccupied.Zone})");
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[build-side-seq]   Last occupied tier: {maxOccupiedTier} ({outermostOccupied.Zone})");
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[build-side-seq]   Range for iteration: [tiers {minOccupiedTier} to {maxOccupiedTier}]");
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[build-side-seq]   Total zones on {sideName}: {states.Count}, zones in visible/iterable: {visible.Count}");
+        
         bool sourceIsOnlySidePanel =
             occupied.Count == 1 &&
             occupied[0].SourceInZone &&
@@ -361,9 +392,13 @@ internal static class DockingMapBuilder
             !states.Any(s => s.Tier > maxOccupiedTier && !s.Suppressed && !s.Occupied);
 
         SquadDashTrace.Write(TraceCategory.Docking,
-            $"[build-side-seq] Occupied range: Tier {minOccupiedTier} ({innermostOccupied.Zone}) to {maxOccupiedTier} ({outermostOccupied.Zone})");
+            $"[build-side-seq] Synthetic injection logic:");
         SquadDashTrace.Write(TraceCategory.Docking,
-            $"[build-side-seq] Synthetic logic: sourceIsOnlySidePanel={sourceIsOnlySidePanel}, needsInnerSynthetic={needsInnerSynthetic}, needsOuterSynthetic={needsOuterSynthetic}");
+            $"[build-side-seq]   sourceIsOnlySidePanel={sourceIsOnlySidePanel}");
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[build-side-seq]   needsInnerSynthetic={needsInnerSynthetic} (no empty {(isLeft ? "inner" : "inner")} zones between min occupied and edge)");
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[build-side-seq]   needsOuterSynthetic={needsOuterSynthetic} (no empty {(isLeft ? "outer" : "outer")} zones after max occupied)");
 
         for (int i = 0; i < visible.Count; i++)
         {
@@ -371,10 +406,14 @@ internal static class DockingMapBuilder
             var nextState = i + 1 < visible.Count ? visible[i + 1] : null;
 
             SquadDashTrace.Write(TraceCategory.Docking,
-                $"[build-side-seq] Zone [{i}]: {state.Zone} (Tier={state.Tier}, Occupied={state.Occupied}, Panels={state.Panels.Count})");
+                $"[build-side-seq] Zone iteration: checking zone {i} of {visible.Count}");
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"[build-side-seq]   Zone: {state.Zone} (Tier={state.Tier}, Occupied={state.Occupied}, Panels={state.Panels.Count})");
 
             if (isLeft && needsOuterSynthetic && state == outermostOccupied)
             {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"[build-side-seq]   Included in loop? YES (outermost occupied on Left side, needs outer synthetic)");
                 SquadDashTrace.Write(TraceCategory.Docking,
                     $"[build-side-seq]   Adding synthetic InsertBefore {state.Zone}@0 (left outer synthetic)");
                 sequence.Add(SideSequenceItem.ForSynthetic(
@@ -383,9 +422,16 @@ internal static class DockingMapBuilder
             else if (!isLeft && needsInnerSynthetic && state == innermostOccupied)
             {
                 SquadDashTrace.Write(TraceCategory.Docking,
+                    $"[build-side-seq]   Included in loop? YES (innermost occupied on Right side, needs inner synthetic)");
+                SquadDashTrace.Write(TraceCategory.Docking,
                     $"[build-side-seq]   Adding synthetic InsertBefore {state.Zone}@0 (right inner synthetic)");
                 sequence.Add(SideSequenceItem.ForSynthetic(
                     state.Zone, 0, SyntheticInsertKind.InsertBefore));
+            }
+            else
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"[build-side-seq]   Included in loop? YES");
             }
 
             SquadDashTrace.Write(TraceCategory.Docking,
@@ -395,15 +441,22 @@ internal static class DockingMapBuilder
             if (nextState is not null)
             {
                 int tierDiff = Math.Abs(state.Tier - nextState.Tier);
+                bool bothOccupied = state.Occupied && nextState.Occupied;
+                bool nextEmpty = !nextState.Occupied;
+                
                 SquadDashTrace.Write(TraceCategory.Docking,
-                    $"[build-side-seq] Adjacency check: {state.Zone}(Tier={state.Tier}, Occupied={state.Occupied}) -> {nextState.Zone}(Tier={nextState.Tier}, Occupied={nextState.Occupied}), tierDiff={tierDiff}");
+                    $"[build-side-seq] Adjacency between {state.Zone}@Tier{state.Tier} and {nextState.Zone}@Tier{nextState.Tier}:");
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"[build-side-seq]   tierDiff = {tierDiff}, occupied: both={bothOccupied}, next={!nextEmpty}");
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"[build-side-seq]   Condition check: tierDiff==1? {tierDiff == 1}, both occupied? {bothOccupied}, next empty? {nextEmpty}");
                 
                 // For adjacent zones (Tier difference = 1), use the existing adjacent logic
                 // For non-adjacent zones (Tier difference > 1), still generate a thin for N+1 rule compliance
                 if (state.Occupied && nextState.Occupied && tierDiff == 1)
                 {
                     SquadDashTrace.Write(TraceCategory.Docking,
-                        $"[build-side-seq]   Decision: INCLUDE synthetic thin (both occupied, adjacent zones)");
+                        $"[build-side-seq]   Final decision: INCLUDE thin (both occupied + adjacent)");
                     SquadDashTrace.Write(TraceCategory.Docking,
                         $"[build-side-seq]   Adding synthetic InsertBefore {nextState.Zone}@0");
                     sequence.Add(SideSequenceItem.ForSynthetic(
@@ -413,7 +466,7 @@ internal static class DockingMapBuilder
                 {
                     // Non-adjacent zones: generate synthetic thin for drop targets
                     SquadDashTrace.Write(TraceCategory.Docking,
-                        $"[build-side-seq]   Decision: INCLUDE synthetic thin (non-adjacent zones, tierDiff={tierDiff}>1)");
+                        $"[build-side-seq]   Final decision: INCLUDE thin (non-adjacent zones, tierDiff={tierDiff}>1)");
                     SquadDashTrace.Write(TraceCategory.Docking,
                         $"[build-side-seq]   Adding synthetic InsertBefore {nextState.Zone}@0 (non-adjacent bridge)");
                     sequence.Add(SideSequenceItem.ForSynthetic(
@@ -428,7 +481,7 @@ internal static class DockingMapBuilder
                     else reason = "both occupied but tierDiff!=1";
                     
                     SquadDashTrace.Write(TraceCategory.Docking,
-                        $"[build-side-seq]   Decision: SKIP synthetic thin ({reason})");
+                        $"[build-side-seq]   Final decision: SKIP thin (reason: {reason})");
                 }
             }
 
@@ -451,7 +504,7 @@ internal static class DockingMapBuilder
         var synthCount = sequence.Count(s => s.IsSynthetic);
         var thinDesc = string.Join(", ", sequence.Where(s => s.IsSynthetic).Select(s => $"{s.InsertKind} {s.TargetZone}@{s.TargetOrder}"));
         SquadDashTrace.Write(TraceCategory.Docking,
-            $"[build-side-seq] BuildSideSequence complete: generated {sequence.Count} total items ({synthCount} synthetic)");
+            $"[build-side-seq] === BuildSideSequence complete for {sideName}: {sequence.Count} total items ({synthCount} synthetic) ===");
         SquadDashTrace.Write(TraceCategory.Docking,
             $"[build-side-seq]   Synthetic thins: [{thinDesc}]");
 
