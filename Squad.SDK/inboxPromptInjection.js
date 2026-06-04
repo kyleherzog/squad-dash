@@ -65,6 +65,8 @@ export const InboxMessageInstruction = "<inbox_instructions>\n" +
     "- `\"file\"` — `{ \"type\": \"file\", \"label\": \"...\", \"path\": \"relative/path/to/file\" }`\n" +
     "- `\"text\"` — `{ \"type\": \"text\", \"label\": \"...\", \"content\": \"Markdown text content\" }`\n" +
     "\n" +
+    "An optional `actions` array adds deferred quick-reply buttons to the message. Inbox actions are deferred user choices, not immediate delegation. If you decide that a named agent should start now, launch that agent with the native delegation/tool path instead of writing an inbox action that promises the handoff. Do not say an agent is starting or being routed unless the launch actually happens.\n" +
+    "\n" +
     "The `from` field must be `\"coordinator\"` for Coordinator responses or `\"argus-weld\"` for maintenance agent responses.\n" +
     "\n" +
     "INBOX_MESSAGE_JSON blocks are stripped from the displayed transcript and delivered silently to the Inbox panel.\n" +

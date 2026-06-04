@@ -35,9 +35,9 @@ internal sealed class DefaultPromptInstructionProvider : IPromptInstructionProvi
             "- `\"file\"` — `{ \"type\": \"file\", \"label\": \"...\", \"path\": \"relative/path/to/file\" }`\n" +
             "- `\"text\"` — `{ \"type\": \"text\", \"label\": \"...\", \"content\": \"Markdown text content\" }`\n" +
             "\n" +
-            "An optional `actions` array adds deferred quick-reply buttons to the message. **Strongly encouraged** — " +
-            "action buttons are excellent for usability because the user can act on findings without typing. " +
-            "Use them whenever there is a natural follow-up choice, especially during maintenance when the user is away.\n" +
+            "An optional `actions` array adds deferred quick-reply buttons to the message. " +
+            "Action buttons are useful when the user should choose a later follow-up without typing, especially during maintenance when the user is away.\n" +
+            "Inbox actions are deferred user choices, not immediate delegation. If you decide that a named agent should start now, launch that agent with the native delegation/tool path instead of writing an inbox action that promises the handoff. Do not say an agent is starting or being routed unless the launch actually happens.\n" +
             "Each action:\n" +
             "- `\"label\"` — button text shown to the user\n" +
             "- `\"routeMode\"` — `\"start_named_agent\"`, `\"start_coordinator\"`, `\"draft\"`, or `\"done\"`\n" +

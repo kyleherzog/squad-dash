@@ -29986,28 +29986,108 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             t.Text.Contains(taskId, StringComparison.OrdinalIgnoreCase));
     }
 
-    private void DispatchInboxAction(InboxAction action, InboxMessage message)
+    private async void DispatchInboxAction(InboxAction action, InboxMessage message)
     {
-        _inboxStore?.MarkActionUsed(message.Id, action.Label);
-
-        if (action.RouteMode == "done" || string.IsNullOrWhiteSpace(action.Prompt))
-            return;
-
-        if (action.RouteMode == "draft")
+        try
         {
-            HandleDraftQuickReply(action.Prompt, entry: null);
-            this.Activate();
-            return;
+            _inboxStore?.MarkActionUsed(message.Id, action.Label);
+
+            if (action.RouteMode == "done" || string.IsNullOrWhiteSpace(action.Prompt))
+                return;
+
+            if (action.RouteMode == "draft")
+            {
+                HandleDraftQuickReply(action.Prompt, entry: null);
+                this.Activate();
+                return;
+            }
+
+            string prompt = action.Prompt;
+
+            if (action.RouteMode == "start_named_agent" && !string.IsNullOrWhiteSpace(action.TargetAgent))
+            {
+                if (!_isPromptRunning && !IsNativeLoopRunning && !_queueManuallyPaused && !HasPendingDirectQuickReplyAgentFollowUp())
+                {
+                    var targetAgent = action.TargetAgent.Trim().TrimStart('@');
+                    var selectedOption = string.IsNullOrWhiteSpace(action.Label)
+                        ? prompt
+                        : action.Label.Trim();
+                    SquadDashTrace.Write(
+                        TraceCategory.Inbox,
+                        $"DispatchInboxAction: direct named-agent launch target={targetAgent} label='{selectedOption}' msgId={message.Id}");
+                    ResetQueuePausedState();
+                    await _pec.ExecuteNamedAgentDirectAsync(
+                        targetAgent,
+                        selectedOption,
+                        BuildInboxActionHandoffContext(action, message),
+                        addToHistory: true,
+                        clearPromptBox: false);
+                    return;
+                }
+
+                prompt = $"[Deferred inbox action — route to @{action.TargetAgent}]\n\n{prompt}";
+            }
+
+            var item = EnqueuePrompt(prompt, isSystemInjected: true);
+            if (item is not null)
+                AttachInboxMessageFollowUp(message, item.Id);
+        }
+        catch (Exception ex)
+        {
+            HandleUiCallbackException(nameof(DispatchInboxAction), ex);
+        }
+    }
+
+    private static string BuildInboxActionHandoffContext(InboxAction action, InboxMessage message)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("SquadDash deferred inbox action context.");
+        builder.AppendLine();
+        builder.AppendLine($"Inbox subject: {message.Subject}");
+        builder.AppendLine($"Inbox from: {message.From}");
+        builder.AppendLine($"Inbox timestamp: {message.Timestamp:u}");
+        builder.AppendLine($"Clicked action: {action.Label}");
+        if (!string.IsNullOrWhiteSpace(action.TargetAgent))
+            builder.AppendLine($"Target handle: @{action.TargetAgent.Trim().TrimStart('@')}");
+        builder.AppendLine();
+        builder.AppendLine("Action prompt:");
+        builder.AppendLine(action.Prompt?.Trim() ?? string.Empty);
+
+        if (!string.IsNullOrWhiteSpace(message.Body))
+        {
+            builder.AppendLine();
+            builder.AppendLine("Inbox message body:");
+            builder.AppendLine(message.Body.Trim());
         }
 
-        string prompt = action.Prompt;
+        var attachments = message.Attachments
+            .Where(attachment =>
+                !string.IsNullOrWhiteSpace(attachment.Label) ||
+                !string.IsNullOrWhiteSpace(attachment.Path) ||
+                !string.IsNullOrWhiteSpace(attachment.Href) ||
+                !string.IsNullOrWhiteSpace(attachment.TaskId) ||
+                !string.IsNullOrWhiteSpace(attachment.Content))
+            .ToArray();
+        if (attachments.Length > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine("Inbox attachments:");
+            foreach (var attachment in attachments)
+            {
+                var detail = attachment.Path ?? attachment.Href ?? attachment.TaskId ?? attachment.Content;
+                builder.Append("- ");
+                builder.Append(string.IsNullOrWhiteSpace(attachment.Type) ? "attachment" : attachment.Type.Trim());
+                if (!string.IsNullOrWhiteSpace(attachment.Label))
+                    builder.Append(": ").Append(attachment.Label.Trim());
+                if (!string.IsNullOrWhiteSpace(detail))
+                    builder.Append(" (").Append(detail.Trim()).Append(')');
+                builder.AppendLine();
+            }
+        }
 
-        if (action.RouteMode == "start_named_agent" && !string.IsNullOrWhiteSpace(action.TargetAgent))
-            prompt = $"[Deferred inbox action — route to @{action.TargetAgent}]\n\n{prompt}";
-
-        var item = EnqueuePrompt(prompt, isSystemInjected: true);
-        if (item is not null)
-            AttachInboxMessageFollowUp(message, item.Id);
+        builder.AppendLine();
+        builder.AppendLine("The action prompt is the authoritative task brief. Use the inbox body and attachments only to resolve context.");
+        return builder.ToString().TrimEnd();
     }
 
     /// <summary>
