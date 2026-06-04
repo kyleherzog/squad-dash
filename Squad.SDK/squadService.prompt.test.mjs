@@ -4,6 +4,7 @@ import {
     approvePermissionRequest,
     buildNamedAgentExecutionPrompt,
     maybeRewritePendingRestartSelfBuildToolArgs,
+    maybeRewritePowerShellToolArgs,
     resolvePermissionApprovalKind,
     resolvePermissionApprovalKindFromSchema,
     SquadBridgeService
@@ -88,6 +89,81 @@ test("pending restart self-build hook disables run-slot deployment", () => {
     assert.match(rewrite.modifiedArgs.command, /EnableRunSlotDeployment='false'/);
     assert.match(rewrite.modifiedArgs.command, /restart request is already pending/);
     assert.match(rewrite.modifiedArgs.command, /dotnet build .\\SquadDash\\SquadDash.csproj -c Debug/);
+});
+
+test("powershell hook enables run-slot deployment for implicit release self-build", () => {
+    const rewrite = maybeRewritePowerShellToolArgs(
+        "powershell",
+        {
+            command: "cd 'D:\\Drive\\Source\\SquadDash-public' && dotnet build -c Release 2>&1 | Select-Object -First 100",
+            description: "Build Release"
+        },
+        "D:\\Drive\\Source\\SquadDash-public",
+        {
+            SQUADDASH_APP_ROOT: "D:\\Drive\\Source\\SquadDash-public",
+            SQUADDASH_RESTART_REQUEST_PATH: "D:\\restart-request.json"
+        },
+        () => false);
+
+    assert.ok(rewrite);
+    assert.equal(rewrite.reason, "self-build-deployment-enabled,native-exit-code-preserved");
+    assert.match(rewrite.modifiedArgs.command, /EnableRunSlotDeployment='true'/);
+    assert.match(rewrite.modifiedArgs.command, /Run-slot deployment enabled/);
+    assert.match(rewrite.modifiedArgs.command, /\$LASTEXITCODE/);
+});
+
+test("powershell hook suppresses implicit self-build when restart is already pending", () => {
+    const rewrite = maybeRewritePowerShellToolArgs(
+        "powershell",
+        {
+            command: "dotnet build -c Release"
+        },
+        "D:\\Drive\\Source\\SquadDash-public",
+        {
+            SQUADDASH_APP_ROOT: "D:\\Drive\\Source\\SquadDash-public",
+            SQUADDASH_RESTART_REQUEST_PATH: "D:\\restart-request.json"
+        },
+        filePath => filePath === "D:\\restart-request.json");
+
+    assert.ok(rewrite);
+    assert.equal(rewrite.reason, "restart-request-pending");
+    assert.match(rewrite.modifiedArgs.command, /EnableRunSlotDeployment='false'/);
+});
+
+test("powershell hook preserves dotnet pipeline exit codes without enabling deployment for tests", () => {
+    const rewrite = maybeRewritePowerShellToolArgs(
+        "powershell",
+        {
+            command: "dotnet test --no-build -c Release 2>&1 | Select-Object -Last 100"
+        },
+        "D:\\Drive\\Source\\SquadDash-public",
+        {
+            SQUADDASH_APP_ROOT: "D:\\Drive\\Source\\SquadDash-public",
+            SQUADDASH_RESTART_REQUEST_PATH: "D:\\restart-request.json"
+        },
+        () => false);
+
+    assert.ok(rewrite);
+    assert.equal(rewrite.reason, "native-exit-code-preserved");
+    assert.doesNotMatch(rewrite.modifiedArgs.command, /EnableRunSlotDeployment='true'/);
+    assert.match(rewrite.modifiedArgs.command, /\$LASTEXITCODE/);
+    assert.match(rewrite.modifiedArgs.command, /exit \$LASTEXITCODE/);
+});
+
+test("powershell hook does not enable deployment for other explicit project builds", () => {
+    const rewrite = maybeRewritePowerShellToolArgs(
+        "powershell",
+        {
+            command: "dotnet build SquadConsole\\SquadConsole.csproj -c Release"
+        },
+        "D:\\Drive\\Source\\SquadDash-public",
+        {
+            SQUADDASH_APP_ROOT: "D:\\Drive\\Source\\SquadDash-public",
+            SQUADDASH_RESTART_REQUEST_PATH: "D:\\restart-request.json"
+        },
+        () => false);
+
+    assert.equal(rewrite, undefined);
 });
 
 test("pending restart self-build hook preserves explicit run-slot deployment choice", () => {

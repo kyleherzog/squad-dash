@@ -253,6 +253,9 @@ const PendingRestartDeploymentEnv = {
 const RunSlotDeploymentSuppressedMessage =
     "[SquadDash] Run-slot deployment disabled for this self-build because a restart request is already pending.";
 
+const RunSlotDeploymentEnabledMessage =
+    "[SquadDash] Run-slot deployment enabled for this self-build.";
+
 type ToolArgsRewriteResult = {
     modifiedArgs: Record<string, unknown>;
     reason: string;
@@ -305,17 +308,283 @@ function commandInvokesDotNetBuildOrTest(command: string): boolean {
     return /\bdotnet(?:\.exe)?\s+(?:build|test)\b/i.test(command);
 }
 
+function commandInvokesDotNetBuild(command: string): boolean {
+    return /\bdotnet(?:\.exe)?\s+build\b/i.test(command);
+}
+
 function commandTargetsSquadDashProject(command: string): boolean {
     return /(?:^|[\\/\s"'`])squaddash\.csproj(?:$|[\s"'`;&|)])/i.test(command);
+}
+
+function commandTargetsSquadDashSolution(command: string): boolean {
+    return /(?:^|[\\/\s"'`])(?:squad-dash|squaddash)\.slnx?(?:$|[\s"'`;&|)])/i.test(command);
 }
 
 function commandExplicitlyControlsRunSlotDeployment(command: string): boolean {
     return command.toLowerCase().includes("enablerunslotdeployment");
 }
 
+function toPowerShellSingleQuotedLiteral(value: string): string {
+    return `'${value.replace(/'/g, "''")}'`;
+}
+
+function buildPowerShellRunSlotDeploymentCommand(command: string, enabled: boolean): string {
+    const value = enabled ? "true" : "false";
+    const message = enabled
+        ? RunSlotDeploymentEnabledMessage
+        : RunSlotDeploymentSuppressedMessage;
+
+    return `$env:EnableRunSlotDeployment='${value}'; Write-Output ${toPowerShellSingleQuotedLiteral(message)}; ${command}`;
+}
+
 function buildPowerShellDeploymentSuppressionCommand(command: string): string {
-    const escapedMessage = RunSlotDeploymentSuppressedMessage.replace(/'/g, "''");
-    return `$env:EnableRunSlotDeployment='false'; Write-Output '${escapedMessage}'; ${command}`;
+    return buildPowerShellRunSlotDeploymentCommand(command, false);
+}
+
+function buildPowerShellDeploymentEnabledCommand(command: string): string {
+    return buildPowerShellRunSlotDeploymentCommand(command, true);
+}
+
+function tokenizeCommand(command: string): string[] {
+    const tokens: string[] = [];
+    let current = "";
+    let quote: "'" | "\"" | undefined;
+
+    const pushCurrent = () => {
+        if (current.length > 0) {
+            tokens.push(current);
+            current = "";
+        }
+    };
+
+    for (let i = 0; i < command.length; i++) {
+        const ch = command[i];
+
+        if (quote) {
+            if (ch === quote) {
+                quote = undefined;
+                continue;
+            }
+
+            current += ch;
+            continue;
+        }
+
+        if (ch === "'" || ch === "\"") {
+            quote = ch;
+            continue;
+        }
+
+        if (/\s/.test(ch)) {
+            pushCurrent();
+            continue;
+        }
+
+        if (ch === "|" || ch === ";" || ch === "&") {
+            pushCurrent();
+            if (ch === "&" && command[i + 1] === "&") {
+                tokens.push("&&");
+                i++;
+            }
+            else if (ch === "|" && command[i + 1] === "|") {
+                tokens.push("||");
+                i++;
+            }
+            else {
+                tokens.push(ch);
+            }
+            continue;
+        }
+
+        current += ch;
+    }
+
+    pushCurrent();
+    return tokens;
+}
+
+function isCommandSeparatorToken(token: string): boolean {
+    return token === "|" || token === ";" || token === "&" || token === "&&" || token === "||";
+}
+
+const DotNetOptionsWithValues = new Set([
+    "-a",
+    "--arch",
+    "-c",
+    "--configuration",
+    "-f",
+    "--framework",
+    "-o",
+    "--output",
+    "-r",
+    "--runtime",
+    "-v",
+    "--verbosity",
+    "--artifacts-path",
+    "--os",
+    "--tl",
+    "--logger",
+    "--filter",
+    "--settings",
+    "--test-adapter-path",
+    "--blame-crash-dump-type",
+    "--blame-hang-dump-type",
+    "--blame-hang-timeout",
+    "--collect",
+    "--diag",
+    "--environment",
+    "--results-directory"
+]);
+
+function isDotNetOptionToken(token: string): boolean {
+    return token.startsWith("-") || token.startsWith("/");
+}
+
+function optionConsumesNextToken(token: string): boolean {
+    if (token.includes(":") || token.includes("="))
+        return false;
+
+    return DotNetOptionsWithValues.has(token.toLowerCase());
+}
+
+function isRedirectionToken(token: string): boolean {
+    return /^\d?>/.test(token) || /^<\d?/.test(token);
+}
+
+function getDotNetInvocationTargets(command: string, verb: "build" | "test"): Array<string | undefined> {
+    const tokens = tokenizeCommand(command);
+    const targets: Array<string | undefined> = [];
+
+    for (let i = 0; i < tokens.length - 1; i++) {
+        if (!/^dotnet(?:\.exe)?$/i.test(tokens[i]) || tokens[i + 1].toLowerCase() !== verb)
+            continue;
+
+        let target: string | undefined;
+        let skipNext = false;
+        for (let j = i + 2; j < tokens.length; j++) {
+            const token = tokens[j];
+            if (isCommandSeparatorToken(token))
+                break;
+
+            if (skipNext) {
+                skipNext = false;
+                continue;
+            }
+
+            if (isRedirectionToken(token))
+                continue;
+
+            if (isDotNetOptionToken(token)) {
+                skipNext = optionConsumesNextToken(token);
+                continue;
+            }
+
+            target = token;
+            break;
+        }
+
+        targets.push(target);
+    }
+
+    return targets;
+}
+
+function commandTargetsImplicitAppBuild(command: string, cwd: string | undefined, appRoot: string): boolean {
+    const inAppWorkspace = cwd ? isPathInsideOrEqual(cwd, appRoot) : false;
+    if (!inAppWorkspace && !commandMentionsPath(command, appRoot))
+        return false;
+
+    return getDotNetInvocationTargets(command, "build").some(target => {
+        if (!target || target === ".")
+            return true;
+
+        const resolvedTarget = path.resolve(cwd ?? appRoot, target);
+        return isPathInsideOrEqual(resolvedTarget, appRoot) &&
+            path.basename(resolvedTarget).toLowerCase() === path.basename(appRoot).toLowerCase();
+    });
+}
+
+function commandTargetsSquadDashSelfBuild(command: string, cwd: string | undefined, appRoot: string): boolean {
+    if (!commandInvokesDotNetBuild(command))
+        return false;
+
+    if (commandTargetsSquadDashProject(command) || commandTargetsSquadDashSolution(command))
+        return true;
+
+    return commandTargetsImplicitAppBuild(command, cwd, appRoot);
+}
+
+function commandShouldPreserveNativeExitCode(command: string): boolean {
+    if (!command.includes("|") || !commandInvokesDotNetBuildOrTest(command))
+        return false;
+
+    if (/\$LASTEXITCODE/i.test(command))
+        return false;
+
+    return true;
+}
+
+function appendPowerShellNativeExitCodeCheck(command: string): string {
+    const message = "[SquadDash] Native command failed with exit code ";
+    return `${command}; if ($LASTEXITCODE -is [int] -and $LASTEXITCODE -ne 0) { Write-Output (${toPowerShellSingleQuotedLiteral(message)} + $LASTEXITCODE + '.'); exit $LASTEXITCODE }`;
+}
+
+export function maybeRewritePowerShellToolArgs(
+    toolName: string,
+    toolArgs: unknown,
+    cwd: string | undefined,
+    env: NodeJS.ProcessEnv = process.env,
+    fileExists: (filePath: string) => boolean = existsSync
+): ToolArgsRewriteResult | undefined {
+    if (toolName.toLowerCase() !== "powershell")
+        return undefined;
+
+    const args = parseToolArgs(toolArgs);
+    const command = typeof args?.command === "string"
+        ? args.command.trim()
+        : "";
+    if (!args || !command)
+        return undefined;
+
+    const appRoot = env[PendingRestartDeploymentEnv.appRoot]?.trim();
+    const restartRequestPath = env[PendingRestartDeploymentEnv.restartRequestPath]?.trim();
+    const restartRequestPending = !!restartRequestPath && fileExists(restartRequestPath);
+
+    let modifiedCommand = command;
+    const reasons: string[] = [];
+
+    const inAppWorkspace = appRoot && cwd ? isPathInsideOrEqual(cwd, appRoot) : false;
+    const commandInAppContext = !!appRoot && (inAppWorkspace || commandMentionsPath(command, appRoot));
+
+    if (appRoot &&
+        commandInAppContext &&
+        commandTargetsSquadDashSelfBuild(command, cwd, appRoot) &&
+        !commandExplicitlyControlsRunSlotDeployment(command)) {
+        modifiedCommand = restartRequestPending
+            ? buildPowerShellDeploymentSuppressionCommand(modifiedCommand)
+            : buildPowerShellDeploymentEnabledCommand(modifiedCommand);
+        reasons.push(restartRequestPending
+            ? "restart-request-pending"
+            : "self-build-deployment-enabled");
+    }
+
+    if (commandShouldPreserveNativeExitCode(command)) {
+        modifiedCommand = appendPowerShellNativeExitCodeCheck(modifiedCommand);
+        reasons.push("native-exit-code-preserved");
+    }
+
+    if (reasons.length === 0)
+        return undefined;
+
+    return {
+        modifiedArgs: {
+            ...args,
+            command: modifiedCommand
+        },
+        reason: reasons.join(","),
+        originalCommand: command,
+        modifiedCommand
+    };
 }
 
 export function maybeRewritePendingRestartSelfBuildToolArgs(
@@ -346,7 +615,7 @@ export function maybeRewritePendingRestartSelfBuildToolArgs(
     if (commandExplicitlyControlsRunSlotDeployment(command))
         return undefined;
 
-    if (!commandInvokesDotNetBuildOrTest(command) || !commandTargetsSquadDashProject(command))
+    if (!commandTargetsSquadDashSelfBuild(command, cwd, appRoot))
         return undefined;
 
     const inAppWorkspace = cwd ? isPathInsideOrEqual(cwd, appRoot) : false;
@@ -1528,7 +1797,7 @@ export class SquadBridgeService {
             configDir: options.configDir,
             hooks: {
                 onPreToolUse: (input: { toolName: string; toolArgs: unknown; cwd?: string }) => {
-                    const rewrite = maybeRewritePendingRestartSelfBuildToolArgs(
+                    const rewrite = maybeRewritePowerShellToolArgs(
                         input.toolName,
                         input.toolArgs,
                         input.cwd,
@@ -1547,8 +1816,7 @@ export class SquadBridgeService {
                     return {
                         permissionDecision: "allow" as const,
                         modifiedArgs: rewrite.modifiedArgs,
-                        additionalContext:
-                            "SquadDash suppressed run-slot deployment for this self-build because a restart request is already pending."
+                        additionalContext: `SquadDash rewrote this PowerShell tool call before execution (${rewrite.reason}).`
                     };
                 },
                 onUserPromptSubmitted: () => {
