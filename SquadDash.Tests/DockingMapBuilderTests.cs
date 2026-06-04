@@ -236,6 +236,84 @@ public class DockingMapBuilderTests
         Assert.That(violations, Is.Empty, "Should not have layout violations in complex layout");
     }
 
+    [Test]
+    public void BuildDockingMap_WithSourceAloneInRight2_AndTopOccupied_ShouldOfferCrossSideThinsToTop()
+    {
+        // This is the main cross-side thin scenario: source is alone in Right2,
+        // and Top zone is occupied. Should generate cross-side thins to Top.
+        var map = Build(
+            sourcePanelId: "tasks",
+            ("loop", DockZone.Top),
+            ("tasks", DockZone.Right2));
+
+        var allThins = map.Slots
+            .Where(s => !s.IsSeparator && s.Width < 48)
+            .OrderBy(s => s.X)
+            .ToList();
+
+        // Should have thins for Top (cross-side)
+        var topThins = allThins.Where(t => t.TargetZone == DockZone.Top).ToList();
+        Assert.That(topThins, Is.Not.Empty, "Should generate cross-side thins to Top zone");
+        Assert.That(topThins.First().InsertKind, Is.EqualTo(SyntheticInsertKind.InsertBefore),
+            "Cross-side thin to Top should be InsertBefore");
+
+        // Should not have violations
+        var violations = DockingMapBuilder.FindAdjacentThinViolations(map.Slots);
+        Assert.That(violations, Is.Empty, "Should not have layout violations");
+    }
+
+    [Test]
+    public void BuildDockingMap_WithSourceAloneInRight2_AndLeftOccupied_ShouldOfferCrossSideThinsToLeft()
+    {
+        // Source is alone in Right2, Left zone is occupied.
+        // Should generate cross-side thins to Left zone.
+        var map = Build(
+            sourcePanelId: "tasks",
+            ("approvals", DockZone.Left),
+            ("tasks", DockZone.Right2));
+
+        var allThins = map.Slots
+            .Where(s => !s.IsSeparator && s.Width < 48)
+            .OrderBy(s => s.X)
+            .ToList();
+
+        // Should have thins for Left (cross-side)
+        var leftThins = allThins.Where(t => t.TargetZone == DockZone.Left).ToList();
+        Assert.That(leftThins, Is.Not.Empty, "Should generate cross-side thins to Left zone");
+
+        // Should not have violations
+        var violations = DockingMapBuilder.FindAdjacentThinViolations(map.Slots);
+        Assert.That(violations, Is.Empty, "Should not have layout violations");
+    }
+
+    [Test]
+    public void BuildDockingMap_WithSourceAloneInRight2_AndBothTopAndLeftOccupied_ShouldOfferCrossSideThinsToAll()
+    {
+        // Source is alone in Right2, both Top and Left zones are occupied.
+        // Should generate cross-side thins to both Top and Left zones.
+        var map = Build(
+            sourcePanelId: "tasks",
+            ("loop", DockZone.Top),
+            ("approvals", DockZone.Left),
+            ("tasks", DockZone.Right2));
+
+        var allThins = map.Slots
+            .Where(s => !s.IsSeparator && s.Width < 48)
+            .OrderBy(s => s.X)
+            .ToList();
+
+        // Should have thins for both Top and Left (cross-side)
+        var topThins = allThins.Where(t => t.TargetZone == DockZone.Top).ToList();
+        var leftThins = allThins.Where(t => t.TargetZone == DockZone.Left).ToList();
+        
+        Assert.That(topThins, Is.Not.Empty, "Should generate cross-side thins to Top zone");
+        Assert.That(leftThins, Is.Not.Empty, "Should generate cross-side thins to Left zone");
+
+        // Should not have violations
+        var violations = DockingMapBuilder.FindAdjacentThinViolations(map.Slots);
+        Assert.That(violations, Is.Empty, "Should not have layout violations");
+    }
+
     private static DockingMapViewModel Build(
         string sourcePanelId,
         params (string PanelId, DockZone Zone)[] placements)
