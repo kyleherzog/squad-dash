@@ -4,14 +4,14 @@
       "Name": "Preset 1",
       "Slots": [
         {
+          "PanelId": "loop",
+          "Zone": "Top",
+          "Order": 0
+        },
+        {
           "PanelId": "approvals",
           "Zone": "Top",
           "Order": 1
-        },
-        {
-          "PanelId": "loop",
-          "Zone": "Left",
-          "Order": 0
         },
         {
           "PanelId": "notes",
@@ -34,9 +34,10 @@
           "Order": 0
         }
       ],
-      "LeftZoneWidth": 280,
       "RightZoneWidth": 280,
-      "Right2ZoneWidth": 280
+      "Right2ZoneWidth": 252.14666666666665,
+      "Right3ZoneWidth": 280,
+      "Right4ZoneWidth": 280
     }
   ]
 }

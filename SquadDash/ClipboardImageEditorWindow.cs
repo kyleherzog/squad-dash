@@ -60,7 +60,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
 
     private const double HandleSize = 9.0;
     private const double HitPad = 5.0;
-    private const double MinSize = 24.0;
+    private const double MinSize = 4.0;
 
     // ── Source image ──────────────────────────────────────────────────────────
 
@@ -3755,10 +3755,14 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         var tailX = center.X + ux * (arrow.ArrowLength + arrow.TailLength);
         var tailY = center.Y + uy * (arrow.ArrowLength + arrow.TailLength);
 
-        // Cap arrowhead to half the distance between the two control-point handles so it
-        // never swallows the shaft when the arrow is dragged very small.
-        double HeadLen = Math.Min(16.0, arrow.TailLength * 0.5);
-        double HeadHalf = 6.0 * HeadLen / 16.0;
+        // Scale arrowhead proportionally to arrow length.
+        // Normal arrowhead is 16px long, 12px wide. For small arrows, scale down proportionally.
+        // Reference: 16px arrow length maps to 16px head length. Shorter arrows get proportionally smaller heads.
+        const double ReferenceArrowLen = 16.0;
+        const double ReferenceHeadLen = 16.0;
+        double scaledHeadLen = Math.Max(1.0, (arrow.ArrowLength / ReferenceArrowLen) * ReferenceHeadLen);
+        double HeadLen = Math.Min(scaledHeadLen, arrow.TailLength * 0.5);
+        double HeadHalf = 6.0 * HeadLen / ReferenceHeadLen;
         var baseX = ahX + ux * HeadLen;
         var baseY = ahY + uy * HeadLen;
 
