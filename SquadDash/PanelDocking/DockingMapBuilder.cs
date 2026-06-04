@@ -611,8 +611,11 @@ internal static class DockingMapBuilder
     }
 
     /// <summary>
-    /// Filters out synthetic thin slots that represent no-op moves within a solo-panel source zone.
-    /// Only filters if it won't violate the N+1 rule which requires N occupied zones to have N+1 drop-targets.
+    /// Filters out synthetic thin slots that are immediately adjacent to a solo-panel source zone,
+    /// but only if it won't violate the N+1 rule.
+    /// If the source panel is the only occupant of its zone, we don't want to show thin slots for
+    /// immediately adjacent zones, because moving there would be a no-op (visually identical to staying in place).
+    /// However, we must maintain the N+1 rule: N occupied zones require N+1 drop-target thins.
     /// </summary>
     private static List<SyntheticThin> FilterAdjacentThinsForSoloPanelZone(
         IReadOnlyList<SyntheticThin> thins,
@@ -643,47 +646,46 @@ internal static class DockingMapBuilder
 
         // Count occupied zones on this side to check N+1 rule
         int occupiedZoneCount = sideZones.Count(z => PanelsInZone(layout, z).Count > 0);
-        
-        // Check if source is the only panel on the side
-        bool sourceIsOnlySidePanel = occupiedZoneCount == 1;
-        
-        // If source is the only panel on the side, don't filter anything (no synthetic thins were generated anyway)
-        // If there are multiple occupied zones, we need to be careful about N+1 compliance
-        if (sourceIsOnlySidePanel)
+        int expectedThins = occupiedZoneCount + 1;
+
+        // Check if source is the only panel on the side (no thins should exist anyway)
+        if (occupiedZoneCount == 1)
             return new List<SyntheticThin>(thins);
 
-        // Multiple occupied zones on this side. Filter out thins that represent no-op moves within the source zone,
-        // but only if we have more than N+1 thins (so filtering won't violate the N+1 rule).
-        // A no-op move is one where the target zone and order match the current position (order 0 for sole occupant).
-        int expectedThins = occupiedZoneCount + 1;
-        var candidatesToFilter = thins
-            .Where(thin => thin.TargetZone == sourceZone && thin.TargetOrder == 0)
+        // Source is alone in its zone and there are other occupied zones.
+        // Only filter adjacent thins if we have more than the N+1 requirement
+        // (so we can afford to remove some without violating the rule).
+        if (thins.Count <= expectedThins)
+            return new List<SyntheticThin>(thins);
+
+        // We have more thins than required. Filter out thins for immediately adjacent zones.
+        DockZone? leftAdjacentZone = sourceZoneIdx > 0 ? sideZones[sourceZoneIdx - 1] : null;
+        DockZone? rightAdjacentZone = sourceZoneIdx < sideZones.Count - 1 ? sideZones[sourceZoneIdx + 1] : null;
+
+        var filtered = thins
+            .Where(thin => thin.TargetZone != leftAdjacentZone && thin.TargetZone != rightAdjacentZone)
             .ToList();
 
-        // Only filter if we have more thins than the N+1 rule requires
-        if (thins.Count > expectedThins)
+        if (filtered.Count < thins.Count)
         {
-            var filtered = thins
-                .Where(thin => !(thin.TargetZone == sourceZone && thin.TargetOrder == 0))
-                .ToList();
+            var removed = thins.Where(t => !filtered.Contains(t)).ToList();
+            var sideName = sideZones == LeftSideZones ? "Left" : "Right";
+            var srcZoneName = DockingLayoutEngine.GetZoneDisplayName(sourceZone);
+            var adjacentZones = new List<string>();
+            if (leftAdjacentZone.HasValue)
+                adjacentZones.Add(DockingLayoutEngine.GetZoneDisplayName(leftAdjacentZone.Value));
+            if (rightAdjacentZone.HasValue)
+                adjacentZones.Add(DockingLayoutEngine.GetZoneDisplayName(rightAdjacentZone.Value));
 
-            if (filtered.Count < thins.Count)
-            {
-                var removed = thins.Where(t => !filtered.Contains(t)).ToList();
-                var sideName = sideZones == LeftSideZones ? "Left" : "Right";
-                var srcZoneName = DockingLayoutEngine.GetZoneDisplayName(sourceZone);
-
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"  [adjacent-thin-filter] {sideName}: Filtered {removed.Count} adjacent thin(s) for solo-panel zone {srcZoneName} " +
+                $"(adjacent: {string.Join(", ", adjacentZones)})");
+            foreach (var thin in removed)
                 SquadDashTrace.Write(TraceCategory.Docking,
-                    $"  [adjacent-thin-filter] {sideName}: Filtered {removed.Count} no-op thin(s) for solo-panel zone {srcZoneName}");
-                foreach (var thin in removed)
-                    SquadDashTrace.Write(TraceCategory.Docking,
-                        $"    Removed: {thin.Kind} {DockingLayoutEngine.GetZoneDisplayName(thin.TargetZone)}@{thin.TargetOrder}");
-            }
-
-            return filtered;
+                    $"    Removed: {thin.Kind} {DockingLayoutEngine.GetZoneDisplayName(thin.TargetZone)}@{thin.TargetOrder}");
         }
 
-        return new List<SyntheticThin>(thins);
+        return filtered;
     }
 
     // Total height needed for a column zone (Rule B has N slots, Rule C has N+1, Rule D has 1)
