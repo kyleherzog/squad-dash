@@ -55,6 +55,12 @@ Each agent appears as a card showing:
 - Live streaming thoughts and tool calls as agents work
 - Tool call history with labeled icons and built-in diff viewer
 
+### Panel Layout Presets
+- Save 3 custom panel configurations and switch between them instantly
+- **F7/F8/F9** restore layouts; **Shift+F7/F8/F9** save layouts
+- Perfect for switching between coding, debugging, and documentation modes
+- Layouts persist per workspace
+
 ### Documentation Panel
 - Reads from `docs/` folder in your workspace
 - Tree view on the left, rendered markdown on the right

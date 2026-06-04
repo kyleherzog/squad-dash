@@ -14,6 +14,7 @@ In-depth guides for SquadDash's view modes and UI features.
 
 - **[Fullscreen Transcript](fullscreen-transcript.md)** — F11 fullscreen mode: hide everything except the transcript
 - **[Hiring Agents](hiring-agents.md)** — Step-by-step guide to the `/hire` workflow
+- **[Layout Presets](layout-presets.md)** — Save and restore 3 panel layout configurations with keyboard shortcuts
 - **[Loop Panel](../panels/Loop.md)** — Run agents on a repeating schedule with configurable interval and timeout
 - **[Paste Image](paste-image.md)** — Ctrl+V to attach a clipboard screenshot to a prompt; agent analyses it via `view`
 - **[Tasks Panel](../panels/Tasks.md)** — Surface your `.squad/tasks.md` backlog grouped by priority

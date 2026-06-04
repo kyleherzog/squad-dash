@@ -69,7 +69,20 @@ See **[Tinting and Themes](../customization/Tinting and Themes.md)** for full de
 
 ---
 
-## Push-to-Talk (PTT)
+## Panel Layout Presets
+
+| Shortcut | Action |
+|---|---|
+| **F7** | Restore layout from Slot 1 |
+| **F8** | Restore layout from Slot 2 |
+| **F9** | Restore layout from Slot 3 |
+| **Shift+F7** | Save current layout to Slot 1 |
+| **Shift+F8** | Save current layout to Slot 2 |
+| **Shift+F9** | Save current layout to Slot 3 |
+
+Layouts persist per workspace in `.squad/panel-layout-presets.json`. See **[Layout Presets](../features/layout-presets.md)** for full details.
+
+---
 
 **Double-tap Ctrl** to activate voice input:
 1. Tap **Ctrl** twice quickly
