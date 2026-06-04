@@ -34,6 +34,16 @@ internal static class DockingMapBuilder
     private const double LabelRowHeight    = 16;    // reserved space above slots for section labels
 
     /// <summary>
+    /// Checks if a zone has exactly one panel and is not suppressed.
+    /// Solo-panel zones should not generate thin slots on both sides, as moving the sole
+    /// panel to an immediately adjacent zone would be a no-op.
+    /// </summary>
+    private static bool IsSoloPanelZone(int panelCount, bool isOccupied, bool isSuppressed)
+    {
+        return !isSuppressed && isOccupied && panelCount == 1;
+    }
+
+    /// <summary>
     /// Builds the full DockingMapViewModel for the given source panel and current layout.
     /// Implements Rules A, B, C, D from the spec.
     /// </summary>
@@ -239,11 +249,20 @@ internal static class DockingMapBuilder
             curX += left6ZoneWidth;
 
             // Thin between Left6 and Left5 if both occupied
-            if (left6Occupied && left5Occupied)
+            bool left6IsSolo = IsSoloPanelZone(left6Panels.Count, left6Occupied, suppressLeft6);
+            bool left5IsSolo = IsSoloPanelZone(left5Panels.Count, left5Occupied, suppressLeft5);
+            if (left6Occupied && left5Occupied && !(left6IsSolo && left5IsSolo))
             {
                 curX += InnerZoneGap;
                 leftThinPositions.Add((curX, DockZone.Left5, 0, SyntheticInsertKind.InsertBefore));
                 curX += ColSlotWidthEmpty + InnerZoneGap;
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Left6 (solo={left6IsSolo}) and Left5 (solo={left5IsSolo}): created");
+            }
+            else if (left6Occupied && left5Occupied)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Left6 (solo={left6IsSolo}) and Left5 (solo={left5IsSolo}): FILTERED (both solo-panel zones)");
             }
             else if (!suppressLeft5)
             {
@@ -263,11 +282,20 @@ internal static class DockingMapBuilder
             curX += left5ZoneWidth;
 
             // Thin between Left5 and Left4 if both occupied
-            if (left5Occupied && left4Occupied)
+            bool left5IsSolo = IsSoloPanelZone(left5Panels.Count, left5Occupied, suppressLeft5);
+            bool left4IsSolo = IsSoloPanelZone(left4Panels.Count, left4Occupied, suppressLeft4);
+            if (left5Occupied && left4Occupied && !(left5IsSolo && left4IsSolo))
             {
                 curX += InnerZoneGap;
                 leftThinPositions.Add((curX, DockZone.Left4, 0, SyntheticInsertKind.InsertBefore));
                 curX += ColSlotWidthEmpty + InnerZoneGap;
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Left5 (solo={left5IsSolo}) and Left4 (solo={left4IsSolo}): created");
+            }
+            else if (left5Occupied && left4Occupied)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Left5 (solo={left5IsSolo}) and Left4 (solo={left4IsSolo}): FILTERED (both solo-panel zones)");
             }
             else if (!suppressLeft4)
             {
@@ -287,11 +315,20 @@ internal static class DockingMapBuilder
             curX += left4ZoneWidth;
             
             // Thin between Left4 and Left3 if both occupied
-            if (left4Occupied && left3Occupied)
+            bool left4IsSolo = IsSoloPanelZone(left4Panels.Count, left4Occupied, suppressLeft4);
+            bool left3IsSolo = IsSoloPanelZone(left3Panels.Count, left3Occupied, suppressLeft3);
+            if (left4Occupied && left3Occupied && !(left4IsSolo && left3IsSolo))
             {
                 curX += InnerZoneGap;
                 leftThinPositions.Add((curX, DockZone.Left3, 0, SyntheticInsertKind.InsertBefore));
                 curX += ColSlotWidthEmpty + InnerZoneGap;
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Left4 (solo={left4IsSolo}) and Left3 (solo={left3IsSolo}): created");
+            }
+            else if (left4Occupied && left3Occupied)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Left4 (solo={left4IsSolo}) and Left3 (solo={left3IsSolo}): FILTERED (both solo-panel zones)");
             }
             else if (!suppressLeft3)
             {
@@ -311,11 +348,20 @@ internal static class DockingMapBuilder
             curX += left3ZoneWidth;
             
             // Thin between Left3 and Left2 if both occupied
-            if (left3Occupied && left2Occupied)
+            bool left3IsSolo = IsSoloPanelZone(left3Panels.Count, left3Occupied, suppressLeft3);
+            bool left2IsSolo = IsSoloPanelZone(left2Panels.Count, left2Occupied, suppressLeft2);
+            if (left3Occupied && left2Occupied && !(left3IsSolo && left2IsSolo))
             {
                 curX += InnerZoneGap;
                 leftThinPositions.Add((curX, DockZone.Left2, 0, SyntheticInsertKind.InsertBefore));
                 curX += ColSlotWidthEmpty + InnerZoneGap;
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Left3 (solo={left3IsSolo}) and Left2 (solo={left2IsSolo}): created");
+            }
+            else if (left3Occupied && left2Occupied)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Left3 (solo={left3IsSolo}) and Left2 (solo={left2IsSolo}): FILTERED (both solo-panel zones)");
             }
             else if (!suppressLeft2)
             {
@@ -334,11 +380,22 @@ internal static class DockingMapBuilder
             curX += left2ZoneWidth;
             
             // Thin between Left2 and Left if both occupied.
-            if (left2Occupied && leftOccupied)
+            // SOLO-PANEL FIX: Skip this thin if both zones are solo-panel zones (1 panel each).
+            // This prevents meaningless drop targets between zones with only single panels.
+            bool left2IsSolo = IsSoloPanelZone(left2Panels.Count, left2Occupied, suppressLeft2);
+            bool leftIsSolo = IsSoloPanelZone(leftPanels.Count, leftOccupied, suppressLeft);
+            if (left2Occupied && leftOccupied && !(left2IsSolo && leftIsSolo))
             {
                 curX += InnerZoneGap;
                 leftThinPositions.Add((curX, DockZone.Left, 0, SyntheticInsertKind.InsertBefore));
                 curX += ColSlotWidthEmpty + InnerZoneGap;
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Left2 (solo={left2IsSolo}) and Left (solo={leftIsSolo}): created");
+            }
+            else if (left2Occupied && leftOccupied)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Left2 (solo={left2IsSolo}) and Left (solo={leftIsSolo}): FILTERED (both solo-panel zones)");
             }
             else if (!suppressLeft)
             {
@@ -454,11 +511,20 @@ internal static class DockingMapBuilder
             curX += rightZoneWidth;
             
             // Thin between Right and Right2 if both occupied
-            if (rightOccupied && right2Occupied)
+            bool rightIsSolo = IsSoloPanelZone(rightPanels.Count, rightOccupied, suppressRight);
+            bool right2IsSolo = IsSoloPanelZone(right2Panels.Count, right2Occupied, suppressRight2);
+            if (rightOccupied && right2Occupied && !(rightIsSolo && right2IsSolo))
             {
                 curX += InnerZoneGap;
                 rightThinPositions.Add((curX, DockZone.Right2, 0, SyntheticInsertKind.InsertBefore));
                 curX += ColSlotWidthEmpty + InnerZoneGap;
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Right (solo={rightIsSolo}) and Right2 (solo={right2IsSolo}): created");
+            }
+            else if (rightOccupied && right2Occupied)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Right (solo={rightIsSolo}) and Right2 (solo={right2IsSolo}): FILTERED (both solo-panel zones)");
             }
             else if (!suppressRight2)
             {
@@ -475,11 +541,20 @@ internal static class DockingMapBuilder
             curX += right2ZoneWidth;
             
             // Thin between Right2 and Right3 if both occupied
-            if (right2Occupied && right3Occupied)
+            bool right2IsSolo = IsSoloPanelZone(right2Panels.Count, right2Occupied, suppressRight2);
+            bool right3IsSolo = IsSoloPanelZone(right3Panels.Count, right3Occupied, suppressRight3);
+            if (right2Occupied && right3Occupied && !(right2IsSolo && right3IsSolo))
             {
                 curX += InnerZoneGap;
                 rightThinPositions.Add((curX, DockZone.Right3, 0, SyntheticInsertKind.InsertBefore));
                 curX += ColSlotWidthEmpty + InnerZoneGap;
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Right2 (solo={right2IsSolo}) and Right3 (solo={right3IsSolo}): created");
+            }
+            else if (right2Occupied && right3Occupied)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Right2 (solo={right2IsSolo}) and Right3 (solo={right3IsSolo}): FILTERED (both solo-panel zones)");
             }
             else if (!suppressRight3)
             {
@@ -494,11 +569,20 @@ internal static class DockingMapBuilder
 
             // Thin between Right3 and Right4 if both occupied.
             // InsertBefore Right4@0: user wants to insert between R3 and R4; preview shows left edge of R4.
-            if (right3Occupied && right4Occupied)
+            bool right3IsSolo = IsSoloPanelZone(right3Panels.Count, right3Occupied, suppressRight3);
+            bool right4IsSolo = IsSoloPanelZone(right4Panels.Count, right4Occupied, suppressRight4);
+            if (right3Occupied && right4Occupied && !(right3IsSolo && right4IsSolo))
             {
                 curX += InnerZoneGap;
                 rightThinPositions.Add((curX, DockZone.Right4, 0, SyntheticInsertKind.InsertBefore));
                 curX += ColSlotWidthEmpty + InnerZoneGap;
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Right3 (solo={right3IsSolo}) and Right4 (solo={right4IsSolo}): created");
+            }
+            else if (right3Occupied && right4Occupied)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Right3 (solo={right3IsSolo}) and Right4 (solo={right4IsSolo}): FILTERED (both solo-panel zones)");
             }
             else if (!suppressRight4)
             {
@@ -519,11 +603,20 @@ internal static class DockingMapBuilder
             right4X = curX;
             curX += right4ZoneWidth;
             // Thin between Right4 and Right5 if both occupied.
-            if (right4Occupied && right5Occupied)
+            bool right4IsSolo = IsSoloPanelZone(right4Panels.Count, right4Occupied, suppressRight4);
+            bool right5IsSolo = IsSoloPanelZone(right5Panels.Count, right5Occupied, suppressRight5);
+            if (right4Occupied && right5Occupied && !(right4IsSolo && right5IsSolo))
             {
                 curX += InnerZoneGap;
                 rightThinPositions.Add((curX, DockZone.Right5, 0, SyntheticInsertKind.InsertBefore));
                 curX += ColSlotWidthEmpty + InnerZoneGap;
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Right4 (solo={right4IsSolo}) and Right5 (solo={right5IsSolo}): created");
+            }
+            else if (right4Occupied && right5Occupied)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Right4 (solo={right4IsSolo}) and Right5 (solo={right5IsSolo}): FILTERED (both solo-panel zones)");
             }
             else if (!suppressRight5)
             {
@@ -544,11 +637,20 @@ internal static class DockingMapBuilder
             right5X = curX;
             curX += right5ZoneWidth;
             // Thin between Right5 and Right6 if both occupied.
-            if (right5Occupied && right6Occupied)
+            bool right5IsSolo = IsSoloPanelZone(right5Panels.Count, right5Occupied, suppressRight5);
+            bool right6IsSolo = IsSoloPanelZone(right6Panels.Count, right6Occupied, suppressRight6);
+            if (right5Occupied && right6Occupied && !(right5IsSolo && right6IsSolo))
             {
                 curX += InnerZoneGap;
                 rightThinPositions.Add((curX, DockZone.Right6, 0, SyntheticInsertKind.InsertBefore));
                 curX += ColSlotWidthEmpty + InnerZoneGap;
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Right5 (solo={right5IsSolo}) and Right6 (solo={right6IsSolo}): created");
+            }
+            else if (right5Occupied && right6Occupied)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [solo-panel-check] Thin between Right5 (solo={right5IsSolo}) and Right6 (solo={right6IsSolo}): FILTERED (both solo-panel zones)");
             }
             else if (!suppressRight6)
             {
