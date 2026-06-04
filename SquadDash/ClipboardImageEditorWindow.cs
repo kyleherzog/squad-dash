@@ -271,6 +271,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
     private bool _cursorEnabled;
     private bool _inCursorPlacementMode;
     private bool _draggingCursor;
+    private bool _selectedCursor;
 
     // ── Eyedropper ────────────────────────────────────────────────────────────
 
@@ -1830,6 +1831,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         SelectAnnotationRect(null);
         SelectMeasureLine(null);
         SelectAnnotationX(null);
+        _selectedCursor = false;
 
         var pt = e.GetPosition(_canvas);
 
@@ -2650,6 +2652,15 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             RemoveTextAnnotation(toDelete);
             e.Handled = true;
         }
+        else if (e.Key == Key.Delete && _selectedCursor) {
+            PushUndo();
+            _cursorEnabled = false;
+            if (_cursorImage != null) {
+                _cursorImage.Visibility = Visibility.Collapsed;
+            }
+            _selectedCursor = false;
+            e.Handled = true;
+        }
         else if (e.Key == Key.Delete && !_sel.IsEmpty) {
             PushUndo();
             _sel = Rect.Empty;
@@ -3363,7 +3374,9 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         if (ml != null) {
             if (_selectedArrow != null) SelectArrow(null);
             if (_selectedAnnotRect != null) SelectAnnotationRect(null);
+            if (_selectedAnnotX != null) SelectAnnotationX(null);
             if (_selectedText != null) SelectText(null);
+            _selectedCursor = false;
             ml.Handle1.Visibility = Visibility.Visible;
             ml.Handle2.Visibility = Visibility.Visible;
             ShowColorPickerForMeasureLine(ml);
@@ -3890,6 +3903,8 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 _selectedMeasureLine.Handle2.Visibility = Visibility.Hidden;
                 _selectedMeasureLine = null;
             }
+            if (_selectedAnnotX != null) SelectAnnotationX(null);
+            _selectedCursor = false;
             arrow.TipHandle.Visibility = Visibility.Visible;
             arrow.TailHandle.Visibility = Visibility.Visible;
             ShowColorPicker(arrow);
@@ -4127,7 +4142,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         if (!_suppressUndo) PushUndo();
 
         var xColor = color ?? _defaultXColor;
-        var brush = new SolidColorBrush(xColor);
+        var brush = new SolidColorBrush(xColor) { Opacity = 0.8 };
         var shadowBrush = new SolidColorBrush(Color.FromArgb(102, 0, 0, 0));
 
         var shadow1 = new Line { Stroke = shadowBrush, StrokeThickness = 7.0, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, IsHitTestVisible = false };
@@ -4282,7 +4297,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
 
     private void UpdateXGeometry(AnnotationX x) {
         var b = x.Bounds;
-        var brush = new SolidColorBrush(x.XColor);
+        var brush = new SolidColorBrush(x.XColor) { Opacity = 0.8 };
         var shadowBrush = new SolidColorBrush(Color.FromArgb(102, 0, 0, 0));
         double so = 2.0;
 
@@ -4343,6 +4358,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 _selectedMeasureLine.Handle2.Visibility = Visibility.Hidden;
                 _selectedMeasureLine = null;
             }
+            _selectedCursor = false;
             foreach (var h in x.Handles) h.Visibility = Visibility.Visible;
             ShowColorPickerForX(x);
         }
@@ -4424,7 +4440,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         if (!_suppressUndo) PushUndo();
 
         var rectColor = color ?? _defaultRectColor;
-        var brush = new SolidColorBrush(rectColor);
+        var brush = new SolidColorBrush(rectColor) { Opacity = 0.8 };
 
         var shadow = new Rectangle {
             Fill = Brushes.Transparent,
@@ -4677,7 +4693,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
 
     private static void UpdateRectGeometry(AnnotationRect rect) {
         var b = rect.Bounds;
-        var brush = new SolidColorBrush(rect.RectColor);
+        var brush = new SolidColorBrush(rect.RectColor) { Opacity = 0.8 };
         rect.Border.Stroke = brush;
 
         Canvas.SetLeft(rect.Shadow, b.Left + 2);
@@ -4853,6 +4869,8 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 _selectedMeasureLine.Handle2.Visibility = Visibility.Hidden;
                 _selectedMeasureLine = null;
             }
+            if (_selectedAnnotX != null) SelectAnnotationX(null);
+            _selectedCursor = false;
             foreach (var h in rect.Handles) h.Visibility = Visibility.Visible;
             ShowColorPickerForRect(rect);
         }
@@ -4914,6 +4932,12 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         Panel.SetZIndex(_cursorImage, 100);
 
         _cursorImage.MouseLeftButtonDown += (_, e) => {
+            SelectArrow(null);
+            SelectAnnotationRect(null);
+            SelectMeasureLine(null);
+            SelectAnnotationX(null);
+            SelectText(null);
+            _selectedCursor = true;
             _preDragSnapshot = CaptureSnapshot();
             _draggingCursor = true;
             _cursorImage!.CaptureMouse();
@@ -6466,6 +6490,9 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         if (annotation != null) {
             SelectArrow(null);
             SelectAnnotationRect(null);
+            if (_selectedMeasureLine != null) SelectMeasureLine(null);
+            if (_selectedAnnotX != null) SelectAnnotationX(null);
+            _selectedCursor = false;
             ShowColorPickerForText(annotation);
             _selectedText = annotation;
 
