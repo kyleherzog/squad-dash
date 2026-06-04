@@ -330,9 +330,17 @@ internal static class DockingMapBuilder
     {
         var sequence = new List<SideSequenceItem>();
         var occupied = states.Where(s => s.Occupied).ToList();
+        
+        var occupiedZonesList = string.Join(", ", occupied.Select(s => $"{s.Zone}(Tier={s.Tier},Panels={s.Panels.Count})"));
+        var sideName = isLeft ? "Left" : "Right";
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[build-side-seq] Starting BuildSideSequence: side={sideName}, occupiedZones=[{occupiedZonesList}], visibleCount={visible.Count}");
+        
         if (occupied.Count == 0)
         {
             sequence.AddRange(visible.Select(SideSequenceItem.ForZone));
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"[build-side-seq] No occupied zones - adding all {visible.Count} visible zones as regular items");
             return sequence;
         }
 
@@ -352,52 +360,100 @@ internal static class DockingMapBuilder
             !sourceIsOnlySidePanel &&
             !states.Any(s => s.Tier > maxOccupiedTier && !s.Suppressed && !s.Occupied);
 
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[build-side-seq] Occupied range: Tier {minOccupiedTier} ({innermostOccupied.Zone}) to {maxOccupiedTier} ({outermostOccupied.Zone})");
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[build-side-seq] Synthetic logic: sourceIsOnlySidePanel={sourceIsOnlySidePanel}, needsInnerSynthetic={needsInnerSynthetic}, needsOuterSynthetic={needsOuterSynthetic}");
+
         for (int i = 0; i < visible.Count; i++)
         {
             var state = visible[i];
+            var nextState = i + 1 < visible.Count ? visible[i + 1] : null;
+
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"[build-side-seq] Zone [{i}]: {state.Zone} (Tier={state.Tier}, Occupied={state.Occupied}, Panels={state.Panels.Count})");
 
             if (isLeft && needsOuterSynthetic && state == outermostOccupied)
             {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"[build-side-seq]   Adding synthetic InsertBefore {state.Zone}@0 (left outer synthetic)");
                 sequence.Add(SideSequenceItem.ForSynthetic(
                     state.Zone, 0, SyntheticInsertKind.InsertBefore));
             }
             else if (!isLeft && needsInnerSynthetic && state == innermostOccupied)
             {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"[build-side-seq]   Adding synthetic InsertBefore {state.Zone}@0 (right inner synthetic)");
                 sequence.Add(SideSequenceItem.ForSynthetic(
                     state.Zone, 0, SyntheticInsertKind.InsertBefore));
             }
 
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"[build-side-seq]   Adding regular zone item: {state.Zone}");
             sequence.Add(SideSequenceItem.ForZone(state));
 
-            var next = i + 1 < visible.Count ? visible[i + 1] : null;
-            if (next is not null)
+            if (nextState is not null)
             {
+                int tierDiff = Math.Abs(state.Tier - nextState.Tier);
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"[build-side-seq] Adjacency check: {state.Zone}(Tier={state.Tier}, Occupied={state.Occupied}) -> {nextState.Zone}(Tier={nextState.Tier}, Occupied={nextState.Occupied}), tierDiff={tierDiff}");
+                
                 // For adjacent zones (Tier difference = 1), use the existing adjacent logic
                 // For non-adjacent zones (Tier difference > 1), still generate a thin for N+1 rule compliance
-                if (state.Occupied && next.Occupied && Math.Abs(state.Tier - next.Tier) == 1)
+                if (state.Occupied && nextState.Occupied && tierDiff == 1)
                 {
+                    SquadDashTrace.Write(TraceCategory.Docking,
+                        $"[build-side-seq]   Decision: INCLUDE synthetic thin (both occupied, adjacent zones)");
+                    SquadDashTrace.Write(TraceCategory.Docking,
+                        $"[build-side-seq]   Adding synthetic InsertBefore {nextState.Zone}@0");
                     sequence.Add(SideSequenceItem.ForSynthetic(
-                        next.Zone, 0, SyntheticInsertKind.InsertBefore));
+                        nextState.Zone, 0, SyntheticInsertKind.InsertBefore));
                 }
-                else if (Math.Abs(state.Tier - next.Tier) > 1)
+                else if (tierDiff > 1)
                 {
                     // Non-adjacent zones: generate synthetic thin for drop targets
+                    SquadDashTrace.Write(TraceCategory.Docking,
+                        $"[build-side-seq]   Decision: INCLUDE synthetic thin (non-adjacent zones, tierDiff={tierDiff}>1)");
+                    SquadDashTrace.Write(TraceCategory.Docking,
+                        $"[build-side-seq]   Adding synthetic InsertBefore {nextState.Zone}@0 (non-adjacent bridge)");
                     sequence.Add(SideSequenceItem.ForSynthetic(
-                        next.Zone, 0, SyntheticInsertKind.InsertBefore));
+                        nextState.Zone, 0, SyntheticInsertKind.InsertBefore));
+                }
+                else
+                {
+                    var reason = "";
+                    if (!state.Occupied && !nextState.Occupied) reason = "both empty";
+                    else if (!state.Occupied) reason = "current empty";
+                    else if (!nextState.Occupied) reason = "next empty";
+                    else reason = "both occupied but tierDiff!=1";
+                    
+                    SquadDashTrace.Write(TraceCategory.Docking,
+                        $"[build-side-seq]   Decision: SKIP synthetic thin ({reason})");
                 }
             }
 
             if (isLeft && needsInnerSynthetic && state == innermostOccupied)
             {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"[build-side-seq]   Adding synthetic InsertAfter {state.Zone}@{state.Panels.Count} (left inner synthetic)");
                 sequence.Add(SideSequenceItem.ForSynthetic(
                     state.Zone, state.Panels.Count, SyntheticInsertKind.InsertAfter));
             }
             else if (!isLeft && needsOuterSynthetic && state == outermostOccupied)
             {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"[build-side-seq]   Adding synthetic InsertAfter {state.Zone}@{state.Panels.Count} (right outer synthetic)");
                 sequence.Add(SideSequenceItem.ForSynthetic(
                     state.Zone, state.Panels.Count, SyntheticInsertKind.InsertAfter));
             }
         }
+
+        var synthCount = sequence.Count(s => s.IsSynthetic);
+        var thinDesc = string.Join(", ", sequence.Where(s => s.IsSynthetic).Select(s => $"{s.InsertKind} {s.TargetZone}@{s.TargetOrder}"));
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[build-side-seq] BuildSideSequence complete: generated {sequence.Count} total items ({synthCount} synthetic)");
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[build-side-seq]   Synthetic thins: [{thinDesc}]");
 
         return sequence;
     }
