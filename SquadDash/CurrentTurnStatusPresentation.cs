@@ -4,6 +4,7 @@ internal sealed record CurrentTurnStatusSnapshot(
     bool IsRunning,
     bool NoActivityWarningShown,
     bool StallWarningShown,
+    bool DeadWarningShown = false,
     DateTimeOffset? StartedAt = null,
     DateTimeOffset? LastActivityAt = null,
     string? LastActivityName = null,
@@ -36,9 +37,11 @@ internal static class CurrentTurnStatusPresentation {
             return null;
 
         var effectiveNow = now ?? DateTimeOffset.Now;
-        var status = snapshot.StallWarningShown || snapshot.NoActivityWarningShown
-            ? "Waiting"
-            : "Working";
+        var status = snapshot.DeadWarningShown || snapshot.StallWarningShown
+            ? "Stalled"
+            : snapshot.NoActivityWarningShown
+                ? "Waiting"
+                : "Working";
         var decoratedStatus = snapshot.StartedAt is { } startedAt
             ? StatusTimingPresentation.BuildStatus(status, startedAt, completedAt: null, effectiveNow)
             : status;
@@ -59,6 +62,7 @@ internal static class CurrentTurnStatusPresentation {
                 : $"{prefix} {metrics}";
         }
 
+        var silencePrefix = BuildBridgeSilencePrefix(snapshot, now);
         if (snapshot.SessionReadyAt is { } sessionReadyAt &&
             snapshot.StartedAt is { } startedAt) {
             var detail = $"Session ready in {StatusTimingPresentation.FormatDuration(sessionReadyAt - startedAt)}, but no response text has arrived yet.";
@@ -66,17 +70,21 @@ internal static class CurrentTurnStatusPresentation {
                 detail += $" First tool activity started {StatusTimingPresentation.FormatDuration(firstToolAt - startedAt)} after launch.";
             detail += BuildPreResponseLoopSummary(snapshot);
             detail += BuildThinkingMetricsSuffix(snapshot);
-            return detail;
+            return string.IsNullOrWhiteSpace(silencePrefix) ? detail : $"{silencePrefix} {detail}";
         }
 
         if (snapshot.FirstToolAt is { } toolAt &&
             snapshot.StartedAt is { } promptStartedAt) {
-            return $"Tool work started {StatusTimingPresentation.FormatDuration(toolAt - promptStartedAt)} after launch, but no response text has arrived yet.{BuildPreResponseLoopSummary(snapshot)}{BuildThinkingMetricsSuffix(snapshot)}";
+            var detail = $"Tool work started {StatusTimingPresentation.FormatDuration(toolAt - promptStartedAt)} after launch, but no response text has arrived yet.{BuildPreResponseLoopSummary(snapshot)}{BuildThinkingMetricsSuffix(snapshot)}";
+            return string.IsNullOrWhiteSpace(silencePrefix) ? detail : $"{silencePrefix} {detail}";
         }
 
-        return snapshot.StallWarningShown
-            ? "Still responding, but no new output has arrived for a while."
-            : "Still responding to the current prompt." + BuildPreResponseLoopSummary(snapshot) + BuildThinkingMetricsSuffix(snapshot);
+        if (!string.IsNullOrWhiteSpace(silencePrefix)) {
+            var details = (BuildPreResponseLoopSummary(snapshot) + BuildThinkingMetricsSuffix(snapshot)).Trim();
+            return string.IsNullOrWhiteSpace(details) ? silencePrefix : $"{silencePrefix} {details}";
+        }
+
+        return "Still responding to the current prompt." + BuildPreResponseLoopSummary(snapshot) + BuildThinkingMetricsSuffix(snapshot);
     }
 
     private static string BuildStreamingMetrics(CurrentTurnStatusSnapshot snapshot) {
@@ -103,6 +111,9 @@ internal static class CurrentTurnStatusPresentation {
     }
 
     private static string BuildStreamingPrefix(CurrentTurnStatusSnapshot snapshot, DateTimeOffset now, DateTimeOffset lastResponseAt) {
+        if (BuildBridgeSilencePrefix(snapshot, now) is { Length: > 0 } silencePrefix)
+            return silencePrefix;
+
         if (snapshot.StallWarningShown)
             return $"Last response chunk {StatusTimingPresentation.FormatAgo(now - lastResponseAt)}.";
 
@@ -113,6 +124,25 @@ internal static class CurrentTurnStatusPresentation {
             return "Upstream response text is arriving slowly.";
 
         return "Still responding to the current prompt.";
+    }
+
+    private static string BuildBridgeSilencePrefix(CurrentTurnStatusSnapshot snapshot, DateTimeOffset now) {
+        if (!snapshot.DeadWarningShown && !snapshot.StallWarningShown && !snapshot.NoActivityWarningShown)
+            return string.Empty;
+
+        if (snapshot.LastActivityAt is not { } lastActivityAt)
+            return snapshot.DeadWarningShown || snapshot.StallWarningShown
+                ? "Bridge appears stalled; no new activity has arrived."
+                : "No new bridge activity has arrived.";
+
+        var quietFor = StatusTimingPresentation.FormatDuration(now - lastActivityAt);
+        if (snapshot.DeadWarningShown)
+            return $"Bridge appears dead; no activity for {quietFor}.";
+
+        if (snapshot.StallWarningShown)
+            return $"Bridge appears stalled; no activity for {quietFor}.";
+
+        return $"No bridge activity for {quietFor}.";
     }
 
     private static bool LooksLikeSlowUpstreamTokenArrival(CurrentTurnStatusSnapshot snapshot) {

@@ -48,7 +48,7 @@ internal sealed class CurrentTurnStatusPresentationTests {
                 NoActivityWarningShown: true,
                 StallWarningShown: false));
 
-        Assert.That(line, Is.EqualTo("Coordinator [Waiting] - Still responding to the current prompt."));
+        Assert.That(line, Is.EqualTo("Coordinator [Waiting] - No new bridge activity has arrived."));
     }
 
     [Test]
@@ -59,7 +59,7 @@ internal sealed class CurrentTurnStatusPresentationTests {
                 NoActivityWarningShown: true,
                 StallWarningShown: true));
 
-        Assert.That(line, Is.EqualTo("Coordinator [Waiting] - Still responding, but no new output has arrived for a while."));
+        Assert.That(line, Is.EqualTo("Coordinator [Stalled] - Bridge appears stalled; no new activity has arrived."));
     }
 
     [Test]
@@ -84,7 +84,7 @@ internal sealed class CurrentTurnStatusPresentationTests {
 
         Assert.That(
             line,
-            Is.EqualTo("Coordinator [Waiting (20s)] - Last response chunk 4s ago. First text in 4s; 12 chunks / 840 chars so far. Longest chunk gap 6s. Throughput 70.0 chars/s (~17.5 tok/s est.)."));
+            Is.EqualTo("Coordinator [Stalled (20s)] - Bridge appears stalled; no new activity has arrived. First text in 4s; 12 chunks / 840 chars so far. Longest chunk gap 6s. Throughput 70.0 chars/s (~17.5 tok/s est.)."));
     }
 
     [Test]
@@ -106,7 +106,7 @@ internal sealed class CurrentTurnStatusPresentationTests {
 
         Assert.That(
             line,
-            Is.EqualTo("Coordinator [Waiting (12s)] - Session ready in 2s, but no response text has arrived yet. First tool activity started 5s after launch."));
+            Is.EqualTo("Coordinator [Waiting (12s)] - No new bridge activity has arrived. Session ready in 2s, but no response text has arrived yet. First tool activity started 5s after launch."));
     }
 
     [Test]
@@ -160,7 +160,7 @@ internal sealed class CurrentTurnStatusPresentationTests {
 
         Assert.That(
             line,
-            Is.EqualTo("Coordinator [Waiting (3m 00s)] - Session ready in 2s, but no response text has arrived yet. First tool activity started 6s after launch. Model is still in a thinking/tool loop: 42 thinking updates, 5 completed tools so far."));
+            Is.EqualTo("Coordinator [Waiting (3m 00s)] - No new bridge activity has arrived. Session ready in 2s, but no response text has arrived yet. First tool activity started 6s after launch. Model is still in a thinking/tool loop: 42 thinking updates, 5 completed tools so far."));
     }
 
     [Test]
@@ -191,7 +191,7 @@ internal sealed class CurrentTurnStatusPresentationTests {
 
         Assert.That(
             line,
-            Is.EqualTo("Coordinator [Waiting (30s)] - Session ready in 2s, but no response text has arrived yet. First tool activity started 4s after launch. Model is still thinking internally: 20 thinking updates so far. Thought stream 120 chars / 10 chunks. Thinking throughput 12.0 chars/s (~3.0 tok/s est.). Average thought gap 1s. Longest thought gap 4s."));
+            Is.EqualTo("Coordinator [Waiting (30s)] - No new bridge activity has arrived. Session ready in 2s, but no response text has arrived yet. First tool activity started 4s after launch. Model is still thinking internally: 20 thinking updates so far. Thought stream 120 chars / 10 chunks. Thinking throughput 12.0 chars/s (~3.0 tok/s est.). Average thought gap 1s. Longest thought gap 4s."));
     }
 
     [Test]
@@ -224,6 +224,53 @@ internal sealed class CurrentTurnStatusPresentationTests {
 
         Assert.That(
             line,
-            Is.EqualTo("Coordinator [Waiting (30s)] - Response has gone quiet for 18s. First text in 4s; 8 chunks / 160 chars so far. Throughput 20.0 chars/s (~5.0 tok/s est.). Thought stream 96 chars / 12 chunks. Thinking throughput 9.6 chars/s (~2.4 tok/s est.). Average thought gap 900ms."));
+            Is.EqualTo("Coordinator [Waiting (30s)] - No new bridge activity has arrived. First text in 4s; 8 chunks / 160 chars so far. Throughput 20.0 chars/s (~5.0 tok/s est.). Thought stream 96 chars / 12 chunks. Thinking throughput 9.6 chars/s (~2.4 tok/s est.). Average thought gap 900ms."));
+    }
+
+    [Test]
+    public void BuildReportLine_IncludesBridgeSilenceDuration_WhenLastActivityIsKnown() {
+        var startedAt = new DateTimeOffset(2026, 4, 21, 12, 0, 0, TimeSpan.FromHours(-4));
+        var lastActivityAt = startedAt.AddSeconds(10);
+        var now = startedAt.AddMinutes(2).AddSeconds(15);
+
+        var line = CurrentTurnStatusPresentation.BuildReportLine(
+            new CurrentTurnStatusSnapshot(
+                IsRunning: true,
+                NoActivityWarningShown: true,
+                StallWarningShown: true,
+                StartedAt: startedAt,
+                LastActivityAt: lastActivityAt,
+                SessionReadyAt: startedAt.AddSeconds(2),
+                FirstThinkingTextAt: startedAt.AddSeconds(5),
+                LastThinkingTextAt: lastActivityAt,
+                ThinkingDeltaCount: 50,
+                ThinkingTextDeltaCount: 50,
+                ThinkingCharacterCount: 311),
+            now);
+
+        Assert.That(
+            line,
+            Is.EqualTo("Coordinator [Stalled (2m 15s)] - Bridge appears stalled; no activity for 2m 05s. Session ready in 2s, but no response text has arrived yet. Model is still thinking internally: 50 thinking updates so far. Thought stream 311 chars / 50 chunks. Thinking throughput 62.2 chars/s (~15.6 tok/s est.)."));
+    }
+
+    [Test]
+    public void BuildReportLine_UsesDeadStatus_WhenPromptAppearsDead() {
+        var startedAt = new DateTimeOffset(2026, 4, 21, 12, 0, 0, TimeSpan.FromHours(-4));
+        var lastActivityAt = startedAt.AddSeconds(13);
+        var now = startedAt.AddMinutes(5).AddSeconds(15);
+
+        var line = CurrentTurnStatusPresentation.BuildReportLine(
+            new CurrentTurnStatusSnapshot(
+                IsRunning: true,
+                NoActivityWarningShown: true,
+                StallWarningShown: true,
+                DeadWarningShown: true,
+                StartedAt: startedAt,
+                LastActivityAt: lastActivityAt),
+            now);
+
+        Assert.That(
+            line,
+            Is.EqualTo("Coordinator [Stalled (5m 15s)] - Bridge appears dead; no activity for 5m 02s."));
     }
 }

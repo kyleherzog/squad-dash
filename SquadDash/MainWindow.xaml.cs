@@ -788,6 +788,7 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                                                   _isPromptRunning,
                                                   _pec.PromptNoActivityWarningShown,
                                                   _pec.PromptStallWarningShown,
+                                                  _pec.PromptAppearsDeadShown,
                                                   _pec.CurrentPromptStartedAt,
                                                   _pec.LastPromptActivityAt,
                                                   _pec.LastPromptActivityName,
@@ -27567,18 +27568,17 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             var msg = $"⚠ Bridge not responding ({idleFor.TotalSeconds:0}s)";
 
             _bridgeStallShowing = true;
+            if (QueueTabBorder.Visibility != Visibility.Visible)
+                QueueTabBorder.Visibility = Visibility.Visible;
 
-            if (QueueTabBorder.Visibility == Visibility.Visible)
-            {
-                QueueStatusLabel.Text = msg;
-                QueueStatusLabel.Background = Brushes.DarkRed;
-                QueueStatusLabel.Foreground = Brushes.White;
+            QueueStatusLabel.Text = msg;
+            QueueStatusLabel.Background = Brushes.DarkRed;
+            QueueStatusLabel.Foreground = Brushes.White;
 
-                // After 5 min silence show the "Cancel stalled agent" recovery button.
-                ForceAbortStalledAgentButton.Visibility = _pec.PromptAppearsDeadShown
-                    ? Visibility.Visible
-                    : Visibility.Collapsed;
-            }
+            // After 5 min silence show the "Cancel stalled agent" recovery button.
+            ForceAbortStalledAgentButton.Visibility = _pec.PromptAppearsDeadShown
+                ? Visibility.Visible
+                : Visibility.Collapsed;
 
             // When the prompt is assumed dead and a build-restart is waiting, let it through.
             // RestartDeferralPolicy already ignores PromptRunning at this point, so calling
@@ -27593,11 +27593,11 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
         {
             _bridgeStallShowing = false;
 
-            if (QueueTabBorder.Visibility == Visibility.Visible)
-            {
-                ForceAbortStalledAgentButton.Visibility = Visibility.Collapsed;
+            ForceAbortStalledAgentButton.Visibility = Visibility.Collapsed;
+            if (_promptQueue.Items.Count == 0)
+                QueueTabBorder.Visibility = Visibility.Collapsed;
+            else
                 SetQueuePaused(_queueManuallyPaused);
-            }
         }
     }
 

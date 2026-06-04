@@ -145,7 +145,7 @@ tasks:
 
   - id: docs-review
     enabled: true
-    frequency: weekly
+    frequency: weekly-Monday
     safety: report-only
     title: Documentation Review
     instructions: |
