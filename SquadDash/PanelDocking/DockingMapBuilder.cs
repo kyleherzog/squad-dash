@@ -951,9 +951,21 @@ internal static class DockingMapBuilder
 
         foreach (var thin in thins)
         {
-            bool isNoOp = (thin.TargetZone == sourceZone || 
-                          thin.TargetZone == leftAdjacentZone || 
-                          thin.TargetZone == rightAdjacentZone);
+            // For solo-panel source, filter thins that are no-ops:
+            // 1. InsertAfter in the source zone (inserting within same zone)
+            // 2. Thins targeting empty adjacent zones (visually identical to source zone)
+            // But KEEP thins on occupied adjacent zones—they're inter-zone separators
+            
+            bool isInsertWithinSourceZone = (thin.TargetZone == sourceZone && thin.Kind == SyntheticInsertKind.InsertAfter);
+            
+            // Only filter adjacent thins if the adjacent zone is EMPTY
+            bool isEmptyAdjacentZone = false;
+            if ((thin.TargetZone == leftAdjacentZone || thin.TargetZone == rightAdjacentZone) && thin.TargetZone != null)
+            {
+                isEmptyAdjacentZone = PanelsInZone(layout, thin.TargetZone).Count == 0;
+            }
+            
+            bool isNoOp = isInsertWithinSourceZone || isEmptyAdjacentZone;
 
             if (isNoOp)
             {
@@ -964,8 +976,6 @@ internal static class DockingMapBuilder
             else
             {
                 sameSideFiltered.Add(thin);
-                SquadDashTrace.Write(TraceCategory.Docking,
-                    $"    [solo-panel-same-side] Keeping meaningful thin: {thin.Kind} {DockingLayoutEngine.GetZoneDisplayName(thin.TargetZone)}@{thin.TargetOrder}");
             }
         }
 
