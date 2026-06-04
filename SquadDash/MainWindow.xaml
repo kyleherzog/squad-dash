@@ -2477,7 +2477,7 @@
         </Grid>
 
         <Border x:Name="PromptBorder"
-                Grid.Row="4"
+                Grid.Row="5"
                 Grid.Column="0"
                 Padding="14"
                 Background="{DynamicResource InputSurface}"
