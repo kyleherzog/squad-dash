@@ -10,12 +10,14 @@ using System.Windows.Input;
 /// <summary>
 /// A compact inline value-picker: displays the selected value as a chip-like button and
 /// opens a themed context menu (disabled header + separator + options) on click.
+/// Supports both simple menu items and submenu items.
 /// </summary>
 internal sealed class CompactPickerButton {
 
-    private readonly string                                            _headerText;
-    private readonly IReadOnlyList<(string DisplayName, string Value)> _options;
-    private readonly Action<string>?                                   _onValueChanged;
+    private readonly string                                                                _headerText;
+    private readonly IReadOnlyList<(string DisplayName, string Value)>                     _options;
+    private readonly IReadOnlyList<(string DisplayName, string Value, (string, string)[]?)>? _optionsWithSubmenus;
+    private readonly Action<string>?                                                       _onValueChanged;
 
     private string _selectedValue;
 
@@ -52,11 +54,12 @@ internal sealed class CompactPickerButton {
         Action<string>?                                   onValueChanged = null,
         Func<string, string>?                             getButtonLabel = null) {
 
-        _headerText     = headerText;
-        _options        = options;
-        _selectedValue  = selectedValue;
-        _onValueChanged = onValueChanged;
-        _getButtonLabel = getButtonLabel;
+        _headerText             = headerText;
+        _options                = options;
+        _optionsWithSubmenus    = null;
+        _selectedValue          = selectedValue;
+        _onValueChanged         = onValueChanged;
+        _getButtonLabel         = getButtonLabel;
 
         Control = new Button {
             Content         = GetButtonLabel(selectedValue),
@@ -84,7 +87,50 @@ internal sealed class CompactPickerButton {
         Control.Click += OnButtonClick;
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
+    /// <summary>
+    /// Overload that supports submenu items. Items can have optional subitems:
+    /// when subitems is non-null, clicking the item opens a submenu; otherwise it selects the value.
+    /// </summary>
+    public CompactPickerButton(
+        string                                                                        headerText,
+        IReadOnlyList<(string DisplayName, string Value, (string DisplayName, string Value)[]? Subitems)> optionsWithSubmenus,
+        string                                                                        selectedValue,
+        Action<string>?                                                              onValueChanged = null,
+        Func<string, string>?                                                        getButtonLabel = null) {
+
+        _headerText             = headerText;
+        _options                = [];
+        _optionsWithSubmenus    = optionsWithSubmenus;
+        _selectedValue          = selectedValue;
+        _onValueChanged         = onValueChanged;
+        _getButtonLabel         = getButtonLabel;
+
+        Control = new Button {
+            Content         = GetButtonLabel(selectedValue),
+            Padding         = new Thickness(5, 1, 5, 1),
+            Margin          = new Thickness(0, 0, 4, 2),
+            BorderThickness = new Thickness(0),
+            Background      = System.Windows.Media.Brushes.Transparent,
+            ToolTip         = "Click to change",
+        };
+        Control.SetResourceReference(Button.StyleProperty,      "FlatButtonStyle");
+        Control.SetResourceReference(Button.FontSizeProperty,   "FontSizeXSmall");
+        Control.SetResourceReference(Button.ForegroundProperty, "SubtleText");
+
+        // Show button chrome only on hover so it reads as plain text at rest.
+        Control.MouseEnter += (_, _) => {
+            Control.BorderThickness = new Thickness(1);
+            Control.SetResourceReference(Button.BackgroundProperty,  "InputSurface");
+            Control.SetResourceReference(Button.BorderBrushProperty, "InputBorder");
+        };
+        Control.MouseLeave += (_, _) => {
+            Control.BorderThickness = new Thickness(0);
+            Control.Background      = System.Windows.Media.Brushes.Transparent;
+        };
+
+        Control.Click += OnButtonClick;
+    }
+
 
     private string GetMenuDisplayName(string value) {
         foreach (var (displayName, v) in _options)
@@ -112,21 +158,71 @@ internal sealed class CompactPickerButton {
         sep.SetResourceReference(Separator.StyleProperty, "ThemedMenuSeparatorStyle");
         menu.Items.Add(sep);
 
-        foreach (var (displayName, value) in _options) {
-            var capturedValue = value;
-            var item = new MenuItem {
-                Header    = displayName,
-                IsChecked = string.Equals(value, _selectedValue, StringComparison.OrdinalIgnoreCase),
-            };
-            item.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
-            item.Click += (_, _) => {
+        // Handle simple options (no submenus)
+        if (_optionsWithSubmenus == null) {
+            foreach (var (displayName, value) in _options) {
+                var capturedValue = value;
+                var item = new MenuItem {
+                    Header    = displayName,
+                    IsChecked = string.Equals(value, _selectedValue, StringComparison.OrdinalIgnoreCase),
+                };
+                item.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+                item.Click += (_, _) => {
+                    SquadDashTrace.Write(TraceCategory.UI,
+                        $"[compact-picker] Menu item clicked: {displayName} ({capturedValue})");
+                    SelectValue(capturedValue);
+                };
+                menu.Items.Add(item);
                 SquadDashTrace.Write(TraceCategory.UI,
-                    $"[compact-picker] Menu item clicked: {displayName} ({capturedValue})");
-                SelectValue(capturedValue);
-            };
-            menu.Items.Add(item);
-            SquadDashTrace.Write(TraceCategory.UI,
-                $"[compact-picker] Added menu item: {displayName} ({value}), IsChecked={item.IsChecked}");
+                    $"[compact-picker] Added menu item: {displayName} ({value}), IsChecked={item.IsChecked}");
+            }
+        } else {
+            // Handle options with optional submenus
+            foreach (var (displayName, value, subitems) in _optionsWithSubmenus) {
+                var capturedValue = value;
+                var capturedDisplayName = displayName;
+
+                if (subitems == null || subitems.Length == 0) {
+                    // Simple item without submenu
+                    var item = new MenuItem {
+                        Header    = displayName,
+                        IsChecked = string.Equals(value, _selectedValue, StringComparison.OrdinalIgnoreCase),
+                    };
+                    item.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+                    item.Click += (_, _) => {
+                        SquadDashTrace.Write(TraceCategory.UI,
+                            $"[compact-picker] Menu item clicked: {capturedDisplayName} ({capturedValue})");
+                        SelectValue(capturedValue);
+                    };
+                    menu.Items.Add(item);
+                    SquadDashTrace.Write(TraceCategory.UI,
+                        $"[compact-picker] Added menu item: {displayName} ({value}), IsChecked={item.IsChecked}");
+                } else {
+                    // Item with submenu
+                    var parentItem = new MenuItem { Header = displayName };
+                    parentItem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+
+                    foreach (var (subitemDisplayName, subitemValue) in subitems) {
+                        var capturedSubitemValue = subitemValue;
+                        var capturedSubitemDisplayName = subitemDisplayName;
+                        var subitem = new MenuItem {
+                            Header    = subitemDisplayName,
+                            IsChecked = string.Equals(subitemValue, _selectedValue, StringComparison.OrdinalIgnoreCase),
+                        };
+                        subitem.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+                        subitem.Click += (_, _) => {
+                            SquadDashTrace.Write(TraceCategory.UI,
+                                $"[compact-picker] Submenu item clicked: {capturedDisplayName} > {capturedSubitemDisplayName} ({capturedSubitemValue})");
+                            SelectValue(capturedSubitemValue);
+                        };
+                        parentItem.Items.Add(subitem);
+                        SquadDashTrace.Write(TraceCategory.UI,
+                            $"[compact-picker] Added submenu item: {capturedDisplayName} > {subitemDisplayName} ({subitemValue}), IsChecked={subitem.IsChecked}");
+                    }
+
+                    menu.Items.Add(parentItem);
+                }
+            }
         }
 
         menu.PlacementTarget = Control;
