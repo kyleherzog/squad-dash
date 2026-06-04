@@ -3652,10 +3652,10 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             var newAngle = Math.Atan2(dx, -dy) * 180.0 / Math.PI;
             if (newAngle < 0) newAngle += 360;
             arrow.ArrowheadAngleDeg = newAngle;
-            arrow.ArrowLength = Math.Max(5.0, Math.Min(dist, ComputeMaxArrowheadOffset(pivot, newAngle)));
+            arrow.ArrowLength = Math.Max(1.0, Math.Min(dist, ComputeMaxArrowheadOffset(pivot, newAngle)));
             double maxFromTip = ComputeMaxArrowheadOffset(pivot, newAngle) - arrow.ArrowLength;
             arrow.TailLength = arrow.UserTailLength > 0
-                ? Math.Max(64, Math.Min(arrow.UserTailLength, maxFromTip))
+                ? Math.Max(1.0, Math.Min(arrow.UserTailLength, maxFromTip))
                 : ComputeInitialTailLength(pivot, newAngle, arrow.ArrowLength);
             UpdateArrowGeometry(arrow);
             ShowCrosshair(pivot.X, pivot.Y);
@@ -3697,7 +3697,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             var newAngle = Math.Atan2(dx, -dy) * 180.0 / Math.PI;
             if (newAngle < 0) newAngle += 360;
             arrow.ArrowheadAngleDeg = newAngle;
-            const double MinTail = 64.0;
+            const double MinTail = 1.0;
             var total = Math.Max(arrow.ArrowLength + MinTail, dist);
             arrow.TailLength = Math.Max(MinTail, total - arrow.ArrowLength);
             UpdateArrowGeometry(arrow);
