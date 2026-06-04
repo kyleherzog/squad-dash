@@ -20,6 +20,9 @@ internal static class Program {
             if (TryGetDeployBuildOutput(args, out var buildOutputDirectory))
                 return DeployAndRestart(buildOutputDirectory!);
 
+            if (TryGetCompleteDeployRestartRequest(args, out var deployRestartRequestId, out var stagedBuildOutputDirectory))
+                return CompleteDeferredDeployRestart(deployRestartRequestId!, stagedBuildOutputDirectory!);
+
             if (TryGetCompleteRestartRequest(args, out var requestId))
                 return CompleteRestart(requestId!);
 
@@ -56,11 +59,12 @@ internal static class Program {
                 nextSlot = PrepareNextSlot(slotStore, activeState.ActiveSlot);
             }
             catch when (instances.Count > 0) {
+                var stagedBuildOutput = StageBuildOutputForDeferredDeployment(restartRequestId!, buildOutputDirectory);
                 SaveRestartRequest(restartStateStore, appRoot, restartRequestId!, instances);
                 restartRequestSaved = true;
                 RequestCloseRegisteredInstances(instances);
-                WaitForRegisteredInstancesToExit(instances);
-                nextSlot = PrepareNextSlot(slotStore, activeState.ActiveSlot);
+                StartDetachedDeferredDeployCoordinator(restartRequestId!, stagedBuildOutput);
+                return 0;
             }
 
             var nextSlotDirectory = slotStore.GetSlotDirectory(nextSlot);
@@ -86,6 +90,53 @@ internal static class Program {
             }
 
             throw;
+        }
+
+        return 0;
+    }
+
+    private static int CompleteDeferredDeployRestart(string requestId, string stagedBuildOutputDirectory) {
+        var appRoot = _workspacePaths.ApplicationRoot;
+        var slotStore = new RuntimeSlotStateStore(_workspacePaths.RunRootDirectory);
+        var restartStateStore = new RestartCoordinatorStateStore();
+        var plan = restartStateStore.LoadPlan(appRoot, requestId);
+        if (plan is null)
+            return 0;
+
+        var relaunched = false;
+        try {
+            WaitForRegisteredInstancesToExit(plan.Instances);
+
+            var activeState = slotStore.Load();
+            var nextSlot = PrepareNextSlot(slotStore, activeState.ActiveSlot);
+            var nextSlotDirectory = slotStore.GetSlotDirectory(nextSlot);
+
+            CopyDirectory(stagedBuildOutputDirectory, nextSlotDirectory);
+            EnsurePayloadSupportFiles(stagedBuildOutputDirectory, nextSlotDirectory);
+
+            var nextSlotPayloadPath = slotStore.GetPayloadPath(nextSlot);
+            if (!IsPayloadDeploymentComplete(nextSlotPayloadPath))
+                throw new InvalidOperationException("Deferred deployment did not produce a complete SquadDash payload.");
+
+            slotStore.Save(new RuntimeSlotState(nextSlot, DateTimeOffset.UtcNow));
+            WaitAndRelaunchInstances(plan.Instances);
+            relaunched = true;
+        }
+        catch {
+            if (!relaunched) {
+                try {
+                    WaitAndRelaunchInstances(plan.Instances);
+                }
+                catch {
+                }
+            }
+
+            throw;
+        }
+        finally {
+            restartStateStore.ClearRequest(appRoot);
+            restartStateStore.ClearPlan(appRoot, requestId);
+            TryDeleteDirectory(GetDeferredDeploymentRoot(requestId));
         }
 
         return 0;
@@ -221,13 +272,22 @@ internal static class Program {
     }
 
     private static void StartDetachedRestartCoordinator(string requestId) {
-        var launcherPath = Environment.ProcessPath;
-        if (string.IsNullOrWhiteSpace(launcherPath) || !File.Exists(launcherPath))
-            throw new FileNotFoundException("Could not resolve the SquadDash launcher path.", launcherPath);
+        var launcherPath = CreateDetachedRestartCoordinatorLauncher(requestId);
 
         Process.Start(new ProcessStartInfo {
             FileName = launcherPath,
             Arguments = $"--complete-restart {QuoteArgument(requestId)}",
+            WorkingDirectory = _workspacePaths.ApplicationRoot,
+            UseShellExecute = true
+        });
+    }
+
+    private static void StartDetachedDeferredDeployCoordinator(string requestId, string stagedBuildOutputDirectory) {
+        var launcherPath = CreateDetachedRestartCoordinatorLauncher(requestId);
+
+        Process.Start(new ProcessStartInfo {
+            FileName = launcherPath,
+            Arguments = $"--complete-deploy-restart {QuoteArgument(requestId)} {QuoteArgument(stagedBuildOutputDirectory)}",
             WorkingDirectory = _workspacePaths.ApplicationRoot,
             UseShellExecute = true
         });
@@ -352,6 +412,115 @@ internal static class Program {
         }
 
         return false;
+    }
+
+    private static bool TryGetCompleteDeployRestartRequest(
+        string[] args,
+        out string? requestId,
+        out string? stagedBuildOutputDirectory) {
+        requestId = null;
+        stagedBuildOutputDirectory = null;
+
+        for (var index = 0; index < args.Length; index++) {
+            if (!string.Equals(args[index], "--complete-deploy-restart", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (index + 2 < args.Length) {
+                var normalizedRequestId = StartupFolderParser.Normalize(args[index + 1]);
+                var normalizedBuildOutput = StartupFolderParser.Normalize(args[index + 2]);
+
+                if (!string.IsNullOrWhiteSpace(normalizedRequestId))
+                    requestId = normalizedRequestId;
+                if (!string.IsNullOrWhiteSpace(normalizedBuildOutput))
+                    stagedBuildOutputDirectory = Path.GetFullPath(normalizedBuildOutput);
+            }
+
+            return !string.IsNullOrWhiteSpace(requestId) &&
+                   !string.IsNullOrWhiteSpace(stagedBuildOutputDirectory);
+        }
+
+        return false;
+    }
+
+    private static string StageBuildOutputForDeferredDeployment(string requestId, string buildOutputDirectory) {
+        var stagedPayloadDirectory = GetDeferredDeploymentPayloadDirectory(requestId);
+        ResetDirectory(stagedPayloadDirectory, GetDeferredDeploymentRoot(requestId));
+        CopyDirectory(buildOutputDirectory, stagedPayloadDirectory);
+        EnsurePayloadSupportFiles(buildOutputDirectory, stagedPayloadDirectory);
+        return stagedPayloadDirectory;
+    }
+
+    private static string GetDeferredDeploymentRoot(string requestId) {
+        return Path.Combine(_workspacePaths.RunRootDirectory, "pending-deployments", requestId);
+    }
+
+    private static string GetDeferredDeploymentPayloadDirectory(string requestId) {
+        return Path.Combine(GetDeferredDeploymentRoot(requestId), "payload");
+    }
+
+    private static string CreateDetachedRestartCoordinatorLauncher(string requestId) {
+        var launcherPath = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(launcherPath) || !File.Exists(launcherPath))
+            throw new FileNotFoundException("Could not resolve the SquadDash launcher path.", launcherPath);
+
+        PruneStaleDetachedCoordinatorDirectories();
+
+        var sourceDirectory = AppContext.BaseDirectory;
+        var coordinatorDirectory = Path.Combine(_workspacePaths.RunRootDirectory, "restart-coordinators", requestId);
+        Directory.CreateDirectory(coordinatorDirectory);
+
+        var launcherFileName = Path.GetFileName(launcherPath);
+        var destinationLauncherPath = Path.Combine(coordinatorDirectory, launcherFileName);
+
+        foreach (var fileName in new[] {
+            launcherFileName,
+            "SquadDash.dll",
+            "SquadDash.deps.json",
+            "SquadDash.runtimeconfig.json",
+            "SquadDash.pdb"
+        }) {
+            var sourcePath = Path.Combine(sourceDirectory, fileName);
+            if (!File.Exists(sourcePath))
+                continue;
+
+            File.Copy(sourcePath, Path.Combine(coordinatorDirectory, fileName), overwrite: true);
+        }
+
+        if (!File.Exists(destinationLauncherPath))
+            throw new FileNotFoundException("Could not create detached restart coordinator launcher.", destinationLauncherPath);
+
+        return destinationLauncherPath;
+    }
+
+    private static void PruneStaleDetachedCoordinatorDirectories() {
+        var coordinatorRoot = Path.Combine(_workspacePaths.RunRootDirectory, "restart-coordinators");
+        if (!Directory.Exists(coordinatorRoot))
+            return;
+
+        var cutoff = DateTime.UtcNow - TimeSpan.FromDays(2);
+        foreach (var directory in Directory.GetDirectories(coordinatorRoot)) {
+            try {
+                if (Directory.GetLastWriteTimeUtc(directory) >= cutoff)
+                    continue;
+
+                NormalizeAttributes(directory);
+                Directory.Delete(directory, recursive: true);
+            }
+            catch {
+            }
+        }
+    }
+
+    private static void TryDeleteDirectory(string targetDirectory) {
+        try {
+            if (!Directory.Exists(targetDirectory))
+                return;
+
+            NormalizeAttributes(targetDirectory);
+            Directory.Delete(targetDirectory, recursive: true);
+        }
+        catch {
+        }
     }
 
     private static void ResetDirectory(string targetDirectory, string allowedRootDirectory) {
