@@ -136,27 +136,38 @@ public class DockingMapBuilderTests
             "Should not show thin slots adjacent to solo-panel zone (Right2)");
     }
 
-    [Test]
-    public void BuildDockingMap_WithSourceAloneInMiddleRightZone_WithOtherOccupiedRightZones_ShouldNotOfferAdjacentThinsForSourceZone()
+[Test]
+    public void BuildDockingMap_WithSourceAsSoleOccupantOfSideZone_ShouldNotOfferInsertBeforeInSameZone()
     {
-        // This test case reproduces the bug scenario - source is alone in Right2,
-        // and there are other occupied zones on the same side.
-        // The fix should filter out thins for immediately adjacent zones.
+        // Bug reproduction: when source (loop) is the sole occupant of zone Right,
+        // we should NOT offer an InsertBefore Right@0 slot, because moving loop
+        // "before itself" in the same zone is a no-op.
         var map = Build(
-            sourcePanelId: "inbox",
-            ("approvals", DockZone.Right),
-            ("inbox", DockZone.Right2),
-            ("notes", DockZone.Right4));
+            sourcePanelId: "loop",
+            ("loop", DockZone.Right));
 
         var rightThins = ThinSlots(map, RightZones);
 
-        // Right2 has only the source (inbox). Immediately adjacent zones:
-        // - Right (tier 0) is occupied by approvals - valid target
-        // - Right3 (tier 2) is empty - this is immediately adjacent to the source zone
-        // We should NOT show a thin for Right3 because moving source there is a no-op
-        var right3Thin = rightThins.FirstOrDefault(t => t.TargetZone == DockZone.Right3);
-        Assert.That(right3Thin, Is.Null,
-            "Should not show thin slot for Right3 when it's immediately adjacent to source zone Right2");
+        // Should NOT show any InsertBefore slot in Right when loop is already sole occupant there
+        var rightInsertBeforeThin = rightThins.FirstOrDefault(t => 
+            t.TargetZone == DockZone.Right && t.InsertKind == SyntheticInsertKind.InsertBefore);
+        Assert.That(rightInsertBeforeThin, Is.Null,
+            "Should not show InsertBefore Right@0 when source is already sole occupant of Right");
+    }
+
+    [Test]
+    public void BuildDockingMap_WithComplexRightLayout_ShouldNotHaveLayoutViolations()
+    {
+        // Test scenario: source (loop) is sole occupant of Right, other occupied zones on same side
+        var map = Build(
+            sourcePanelId: "loop",
+            ("loop", DockZone.Right),
+            ("inbox", DockZone.Right2),
+            ("tasks", DockZone.Right4));
+
+        // Verify no violations (the key requirement from the bug report)
+        var violations = DockingMapBuilder.FindAdjacentThinViolations(map.Slots);
+        Assert.That(violations, Is.Empty, "Should not have layout violations");
     }
 
     private static DockingMapViewModel Build(
