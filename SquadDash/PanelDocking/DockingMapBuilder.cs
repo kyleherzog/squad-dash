@@ -680,44 +680,35 @@ internal static class DockingMapBuilder
             return new List<SyntheticThin>(thins);
         }
 
-        // We have more thins than required. Filter out thins for immediately adjacent zones,
-        // but ONLY if those adjacent zones are empty (no panels).
-        // Moving to an empty adjacent zone is a no-op visually.
-        // Moving to an occupied adjacent zone is valid and should NOT be filtered.
+        // We have more thins than required. Filter out thins for immediately adjacent zones.
         DockZone? leftAdjacentZone = sourceZoneIdx > 0 ? sideZones[sourceZoneIdx - 1] : null;
         DockZone? rightAdjacentZone = sourceZoneIdx < sideZones.Count - 1 ? sideZones[sourceZoneIdx + 1] : null;
 
-        // Check if adjacent zones are empty
-        bool leftAdjacentIsEmpty = leftAdjacentZone.HasValue && PanelsInZone(layout, leftAdjacentZone.Value).Count == 0;
-        bool rightAdjacentIsEmpty = rightAdjacentZone.HasValue && PanelsInZone(layout, rightAdjacentZone.Value).Count == 0;
-
         var adjacentZonesList = new List<string>();
         if (leftAdjacentZone.HasValue)
-            adjacentZonesList.Add($"{DockingLayoutEngine.GetZoneDisplayName(leftAdjacentZone.Value)} (left, {(leftAdjacentIsEmpty ? "empty" : "occupied")})");
+            adjacentZonesList.Add($"{DockingLayoutEngine.GetZoneDisplayName(leftAdjacentZone.Value)} (left)");
         if (rightAdjacentZone.HasValue)
-            adjacentZonesList.Add($"{DockingLayoutEngine.GetZoneDisplayName(rightAdjacentZone.Value)} (right, {(rightAdjacentIsEmpty ? "empty" : "occupied")})");
+            adjacentZonesList.Add($"{DockingLayoutEngine.GetZoneDisplayName(rightAdjacentZone.Value)} (right)");
 
         SquadDashTrace.Write(TraceCategory.Docking,
             $"  [adjacent-thin-filter] {sideName}: Filtering excess thins. Adjacent zones: {string.Join(", ", adjacentZonesList)}");
 
         var filtered = thins
-            .Where(thin => 
-                !(thin.TargetZone == leftAdjacentZone && leftAdjacentIsEmpty) &&
-                !(thin.TargetZone == rightAdjacentZone && rightAdjacentIsEmpty))
+            .Where(thin => thin.TargetZone != leftAdjacentZone && thin.TargetZone != rightAdjacentZone)
             .ToList();
 
         if (filtered.Count < thins.Count)
         {
             var removed = thins.Where(t => !filtered.Contains(t)).ToList();
             var adjacentZones = new List<string>();
-            if (leftAdjacentZone.HasValue && leftAdjacentIsEmpty)
-                adjacentZones.Add($"{DockingLayoutEngine.GetZoneDisplayName(leftAdjacentZone.Value)} (empty)");
-            if (rightAdjacentZone.HasValue && rightAdjacentIsEmpty)
-                adjacentZones.Add($"{DockingLayoutEngine.GetZoneDisplayName(rightAdjacentZone.Value)} (empty)");
+            if (leftAdjacentZone.HasValue)
+                adjacentZones.Add(DockingLayoutEngine.GetZoneDisplayName(leftAdjacentZone.Value));
+            if (rightAdjacentZone.HasValue)
+                adjacentZones.Add(DockingLayoutEngine.GetZoneDisplayName(rightAdjacentZone.Value));
 
             SquadDashTrace.Write(TraceCategory.Docking,
                 $"  [adjacent-thin-filter] {sideName}: Filtered {removed.Count} adjacent thin(s) for solo-panel zone {srcZoneName} " +
-                $"(empty adjacent zones: {string.Join(", ", adjacentZones)})");
+                $"(adjacent: {string.Join(", ", adjacentZones)})");
             foreach (var thin in removed)
                 SquadDashTrace.Write(TraceCategory.Docking,
                     $"    Removed: {thin.Kind} {DockingLayoutEngine.GetZoneDisplayName(thin.TargetZone)}@{thin.TargetOrder}");
@@ -725,7 +716,7 @@ internal static class DockingMapBuilder
         else
         {
             SquadDashTrace.Write(TraceCategory.Docking,
-                $"  [adjacent-thin-filter] {sideName}: No empty adjacent zones to filter, or no excess thins");
+                $"  [adjacent-thin-filter] {sideName}: No thins matched adjacent zones for filtering");
         }
 
         return filtered;
