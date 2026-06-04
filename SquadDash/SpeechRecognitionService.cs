@@ -125,7 +125,13 @@ internal sealed class AzureSpeechRecognitionService : ISpeechRecognitionService 
 
     public void Dispose() {
         _stopping = true;
-        try { _waveIn?.Dispose(); } catch { }
+        try { _waveIn?.Dispose(); } 
+        catch (Exception ex) 
+        { 
+            // NAudio.WinMM may fail to load during app shutdown; suppress these
+            // benign exceptions that occur during finalizer cleanup.
+            System.Diagnostics.Debug.WriteLine($"WaveInEvent disposal error (harmless): {ex.GetType().Name}");
+        }
         try { _recognizer?.Dispose(); } catch { }
         try { _pushStream?.Dispose(); } catch { }
         _waveIn = null;
