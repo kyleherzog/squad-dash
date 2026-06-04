@@ -611,11 +611,14 @@ internal static class DockingMapBuilder
     }
 
     /// <summary>
-    /// Filters out synthetic thin slots that are immediately adjacent to a solo-panel source zone,
-    /// but only if it won't violate the N+1 rule.
-    /// If the source panel is the only occupant of its zone, we don't want to show thin slots for
-    /// immediately adjacent zones, because moving there would be a no-op (visually identical to staying in place).
-    /// However, we must maintain the N+1 rule: N occupied zones require N+1 drop-target thins.
+    /// Filters out synthetic thin slots that are in the same zone as a solo-panel source,
+    /// or immediately adjacent to it, but only if the N+1 rule is still satisfied after filtering.
+    /// 
+    /// When a panel is the only occupant of its zone:
+    /// - Thins for that same zone are no-ops (inserting another panel in the same zone doesn't change docking)
+    /// - Thins for immediately adjacent zones are also typically no-ops (visually identical layout)
+    /// 
+    /// We filter these no-ops, but only if we can still maintain N+1 drop targets after filtering.
     /// </summary>
     private static List<SyntheticThin> FilterAdjacentThinsForSoloPanelZone(
         IReadOnlyList<SyntheticThin> thins,
@@ -671,55 +674,52 @@ internal static class DockingMapBuilder
         }
 
         // Source is alone in its zone and there are other occupied zones.
-        // Only filter adjacent thins if we have more than the N+1 requirement
-        // (so we can afford to remove some without violating the rule).
-        if (thins.Count <= expectedThins)
-        {
-            SquadDashTrace.Write(TraceCategory.Docking,
-                $"  [adjacent-thin-filter] {sideName}: thins count ({thins.Count}) <= expected ({expectedThins}), no excess to filter");
-            return new List<SyntheticThin>(thins);
-        }
-
-        // We have more thins than required. Filter out thins for immediately adjacent zones.
+        // Identify the zones to filter: source zone itself, and adjacent zones.
         DockZone? leftAdjacentZone = sourceZoneIdx > 0 ? sideZones[sourceZoneIdx - 1] : null;
         DockZone? rightAdjacentZone = sourceZoneIdx < sideZones.Count - 1 ? sideZones[sourceZoneIdx + 1] : null;
 
-        var adjacentZonesList = new List<string>();
-        if (leftAdjacentZone.HasValue)
-            adjacentZonesList.Add($"{DockingLayoutEngine.GetZoneDisplayName(leftAdjacentZone.Value)} (left)");
-        if (rightAdjacentZone.HasValue)
-            adjacentZonesList.Add($"{DockingLayoutEngine.GetZoneDisplayName(rightAdjacentZone.Value)} (right)");
-
-        SquadDashTrace.Write(TraceCategory.Docking,
-            $"  [adjacent-thin-filter] {sideName}: Filtering excess thins. Adjacent zones: {string.Join(", ", adjacentZonesList)}");
-
+        // Filter out thins for the source zone itself and adjacent zones
         var filtered = thins
-            .Where(thin => thin.TargetZone != leftAdjacentZone && thin.TargetZone != rightAdjacentZone)
+            .Where(thin => thin.TargetZone != sourceZone && 
+                          thin.TargetZone != leftAdjacentZone && 
+                          thin.TargetZone != rightAdjacentZone)
             .ToList();
 
-        if (filtered.Count < thins.Count)
+        // Check N+1 rule on the filtered result
+        if (filtered.Count >= expectedThins)
         {
-            var removed = thins.Where(t => !filtered.Contains(t)).ToList();
-            var adjacentZones = new List<string>();
-            if (leftAdjacentZone.HasValue)
-                adjacentZones.Add(DockingLayoutEngine.GetZoneDisplayName(leftAdjacentZone.Value));
-            if (rightAdjacentZone.HasValue)
-                adjacentZones.Add(DockingLayoutEngine.GetZoneDisplayName(rightAdjacentZone.Value));
+            // Filtering still maintains N+1 requirement, so we can use the filtered result
+            if (filtered.Count < thins.Count)
+            {
+                var removed = thins.Where(t => !filtered.Contains(t)).ToList();
+                var zonesToFilter = new List<string> { srcZoneName };
+                if (leftAdjacentZone.HasValue)
+                    zonesToFilter.Add($"{DockingLayoutEngine.GetZoneDisplayName(leftAdjacentZone.Value)} (left)");
+                if (rightAdjacentZone.HasValue)
+                    zonesToFilter.Add($"{DockingLayoutEngine.GetZoneDisplayName(rightAdjacentZone.Value)} (right)");
 
-            SquadDashTrace.Write(TraceCategory.Docking,
-                $"  [adjacent-thin-filter] {sideName}: Filtered {removed.Count} adjacent thin(s) for solo-panel zone {srcZoneName} " +
-                $"(adjacent: {string.Join(", ", adjacentZones)})");
-            foreach (var thin in removed)
                 SquadDashTrace.Write(TraceCategory.Docking,
-                    $"    Removed: {thin.Kind} {DockingLayoutEngine.GetZoneDisplayName(thin.TargetZone)}@{thin.TargetOrder}");
+                    $"  [adjacent-thin-filter] {sideName}: Filtered {removed.Count} no-op thin(s) for solo-panel zone {srcZoneName} " +
+                    $"(zones: {string.Join(", ", zonesToFilter)})");
+                foreach (var thin in removed)
+                    SquadDashTrace.Write(TraceCategory.Docking,
+                        $"    Removed: {thin.Kind} {DockingLayoutEngine.GetZoneDisplayName(thin.TargetZone)}@{thin.TargetOrder}");
+            }
+            else
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"  [adjacent-thin-filter] {sideName}: No thins matched filter zones");
+            }
+
+            return filtered;
         }
         else
         {
+            // Filtering would violate N+1 rule, so return unfiltered
             SquadDashTrace.Write(TraceCategory.Docking,
-                $"  [adjacent-thin-filter] {sideName}: No thins matched adjacent zones for filtering");
+                $"  [adjacent-thin-filter] {sideName}: Filtering would violate N+1 rule ({filtered.Count} < {expectedThins}), keeping all {thins.Count} thins");
+            return new List<SyntheticThin>(thins);
         }
-
-        return filtered;
     }
 
     // Total height needed for a column zone (Rule B has N slots, Rule C has N+1, Rule D has 1)
