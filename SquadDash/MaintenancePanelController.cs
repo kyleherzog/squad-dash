@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -346,30 +347,64 @@ internal sealed class MaintenancePanelController {
     }
 
     /// <summary>
+    /// Handles frequency changes. If "weekly" is selected, shows a submenu to pick a day.
+    /// Otherwise, updates the frequency directly.
+    /// </summary>
+    private void HandleFrequencyChange(string taskId, string newFreq, CompactPickerButton picker) {
+        if (newFreq == "weekly") {
+            // Show submenu with day options
+            ShowWeeklyDayMenu(taskId, picker);
+        } else {
+            ChangeTaskFrequency(taskId, newFreq);
+        }
+    }
+
+    /// <summary>
+    /// Shows a context menu with the 7 days of the week for selection.
+    /// When a day is selected, updates the frequency to "weekly-{Day}" and updates the picker.
+    /// </summary>
+    private void ShowWeeklyDayMenu(string taskId, CompactPickerButton picker) {
+        var menu = new ContextMenu();
+        menu.SetResourceReference(ContextMenu.StyleProperty, "ThemedContextMenuStyle");
+
+        var header = new MenuItem { Header = "Select Day:", IsEnabled = false };
+        header.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+        menu.Items.Add(header);
+
+        var sep = new Separator();
+        sep.SetResourceReference(Separator.StyleProperty, "ThemedMenuSeparatorStyle");
+        menu.Items.Add(sep);
+
+        var days = new[] { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" };
+        var currentFreq = _viewModel.Config?.Tasks?.FirstOrDefault(t => t.Id == taskId)?.Frequency ?? "";
+        var currentDay = currentFreq.StartsWith("weekly-") ? currentFreq.Substring(7) : "";
+
+        foreach (var day in days) {
+            var capturedDay = day;
+            var item = new MenuItem {
+                Header    = day,
+                IsChecked = string.Equals(day, currentDay, StringComparison.OrdinalIgnoreCase),
+            };
+            item.SetResourceReference(MenuItem.StyleProperty, "ThemedMenuItemStyle");
+            item.Click += (_, _) => {
+                ChangeTaskFrequency(taskId, $"weekly-{capturedDay}");
+                picker.SelectedValue = $"weekly-{capturedDay}";
+            };
+            menu.Items.Add(item);
+        }
+
+        menu.PlacementTarget = picker.Control;
+        menu.Placement       = PlacementMode.Bottom;
+        menu.IsOpen          = true;
+    }
+
+    /// <summary>
     /// Updates the <c>frequency:</c> field for <paramref name="taskId"/> in maintenance.md
     /// and reloads the panel so the change is reflected immediately.
     /// </summary>
     private void ChangeTaskFrequency(string taskId, string newFrequency) {
         var mdPath = GetMaintenanceMdPath();
         if (mdPath is null) return;
-        
-        // If switching to "weekly", extract the current day from existing frequency if available
-        if (newFrequency == "weekly") {
-            // Find the task to see its current frequency
-            var config = _viewModel.Config;
-            if (config?.Tasks != null) {
-                var task = config.Tasks.FirstOrDefault(t => t.Id == taskId);
-                if (task != null && task.Frequency.StartsWith("weekly-")) {
-                    // Preserve the existing day
-                    newFrequency = task.Frequency;
-                } else {
-                    // Default to Monday if no existing day is set
-                    newFrequency = "weekly-Monday";
-                }
-            } else {
-                newFrequency = "weekly-Monday";
-            }
-        }
         
         MaintenanceMdParser.UpdateFrequency(mdPath, taskId, newFrequency);
         _reloadPanel();
@@ -611,7 +646,9 @@ internal sealed class MaintenancePanelController {
         var chipRow = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0),
             Visibility = task.Enabled ? Visibility.Visible : Visibility.Collapsed };
         var taskIdForFreq   = task.Id;
-        var frequencyPicker = new CompactPickerButton(
+        
+        CompactPickerButton? frequencyPicker = null;
+        frequencyPicker = new CompactPickerButton(
             headerText:     "Run Frequency:",
             options: [
                 ("Always",         "always"),
@@ -621,77 +658,10 @@ internal sealed class MaintenancePanelController {
                 ("After Commits",  "after-commits"),
             ],
             selectedValue:  task.Frequency,
-            onValueChanged: newFreq => ChangeTaskFrequency(taskIdForFreq, newFreq),
+            onValueChanged: newFreq => HandleFrequencyChange(taskIdForFreq, newFreq, frequencyPicker!),
             getButtonLabel: freq => GetFrequencyDisplayText(freq));
         chipRow.Children.Add(frequencyPicker.Control);
         rightPanel.Children.Add(chipRow);
-
-        // Day selector for weekly maintenance
-        var dayPickerRow = new StackPanel {
-            Orientation = Orientation.Horizontal,
-            Margin      = new Thickness(0, 4, 0, 0),
-        };
-
-        var dayPickerPanel = new StackPanel {
-            Orientation = Orientation.Horizontal,
-            Margin      = new Thickness(0, 0, 0, 0),
-        };
-
-        var days = new[] { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" };
-
-        foreach (var day in days) {
-            var dayBtn = new Button {
-                Content           = day.Substring(0, 3),
-                Padding           = new Thickness(6, 2, 6, 2),
-                Margin            = new Thickness(2, 0, 2, 0),
-                MinWidth          = 36,
-                Cursor            = Cursors.Hand,
-            };
-
-            dayBtn.SetResourceReference(Button.StyleProperty,    "FlatButtonStyle");
-            dayBtn.SetResourceReference(Button.FontSizeProperty, "FontSizeSmall");
-            dayBtn.SetResourceReference(Button.ForegroundProperty, "LabelText");
-
-            // Highlight currently selected day
-            var freq = task.Frequency ?? "";
-            if (freq.StartsWith("weekly-", StringComparison.OrdinalIgnoreCase)) {
-                var selectedDay = freq.Substring("weekly-".Length);
-                if (string.Equals(day, selectedDay, StringComparison.OrdinalIgnoreCase)) {
-                    dayBtn.SetResourceReference(Button.BackgroundProperty, "InputSurface");
-                    dayBtn.SetResourceReference(Button.BorderBrushProperty, "InputBorder");
-                    dayBtn.BorderThickness = new Thickness(1);
-                }
-            }
-
-            // Click handler captures day in closure
-            string capturedDay = day;
-            dayBtn.Click += (_, _) => {
-                ChangeTaskFrequency(taskIdForFreq, $"weekly-{capturedDay}");
-
-                // Update UI to highlight selected day
-                foreach (UIElement child in dayPickerPanel.Children) {
-                    if (child is Button btn) {
-                        btn.BorderThickness = new Thickness(0);
-                        btn.Background = System.Windows.Media.Brushes.Transparent;
-                    }
-                }
-                dayBtn.BorderThickness = new Thickness(1);
-                dayBtn.SetResourceReference(Button.BackgroundProperty, "InputSurface");
-                dayBtn.SetResourceReference(Button.BorderBrushProperty, "InputBorder");
-            };
-
-            dayPickerPanel.Children.Add(dayBtn);
-        }
-
-        dayPickerRow.Children.Add(dayPickerPanel);
-
-        // Set visibility based on current frequency
-        var dayPickerFreq = task.Frequency ?? "";
-        dayPickerRow.Visibility = (dayPickerFreq == "weekly" || dayPickerFreq.StartsWith("weekly-")) 
-            ? Visibility.Visible 
-            : Visibility.Collapsed;
-
-        rightPanel.Children.Add(dayPickerRow);
 
         // Last-run status
         var lastRun = _viewModel.StateStore?.GetLastRunAt(task.Id);
