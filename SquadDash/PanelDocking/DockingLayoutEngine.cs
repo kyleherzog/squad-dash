@@ -171,30 +171,41 @@ internal static class DockingLayoutEngine
         bool suppressRight  = sourceInRight2 && right2Panels.Count == 1 && rightPanels.Count == 0;
 
         // For the outermost tier, tie suppression to whether the middle tier is suppressed.
+        // Also suppress an empty outer zone when source is the sole occupant of the adjacent
+        // inner zone — dragging there is a no-op (panel moves out, normalization slides it back).
         bool suppressLeft3  = (left3Panels.Count == 0 && !sourceInLeft3 && suppressLeft2)
                            || (left3Panels.Count == 0 && !sourceInLeft3
                                && left2Panels.Count == 0 && !sourceInLeft2
-                               && leftPanels.Count > 0);
+                               && leftPanels.Count > 0)
+                           || (sourceInLeft2  && left2Panels.Count  == 1 && left3Panels.Count  == 0);
         bool suppressRight3 = (right3Panels.Count == 0 && !sourceInRight3 && suppressRight2)
                            || (right3Panels.Count == 0 && !sourceInRight3
                                && right2Panels.Count == 0 && !sourceInRight2
-                               && rightPanels.Count > 0);
+                               && rightPanels.Count > 0)
+                           || (sourceInRight2 && right2Panels.Count == 1 && right3Panels.Count == 0);
 
-        // Suppress Left4/Right4 when empty AND Left3/Right3 is also empty.
-        bool suppressLeft4  = left4Panels.Count == 0 && !sourceInLeft4
-                           && (suppressLeft3 || (left3Panels.Count == 0 && !sourceInLeft3));
-        bool suppressRight4 = right4Panels.Count == 0 && !sourceInRight4
-                           && (suppressRight3 || (right3Panels.Count == 0 && !sourceInRight3));
+        // Suppress Left4/Right4 when empty AND Left3/Right3 is also empty,
+        // or when source is the sole occupant of the adjacent inner zone (no-op move).
+        bool suppressLeft4  = (left4Panels.Count == 0 && !sourceInLeft4
+                           && (suppressLeft3 || (left3Panels.Count == 0 && !sourceInLeft3)))
+                           || (sourceInLeft3  && left3Panels.Count  == 1 && left4Panels.Count  == 0);
+        bool suppressRight4 = (right4Panels.Count == 0 && !sourceInRight4
+                           && (suppressRight3 || (right3Panels.Count == 0 && !sourceInRight3)))
+                           || (sourceInRight3 && right3Panels.Count == 1 && right4Panels.Count == 0);
 
-        bool suppressLeft5  = left5Panels.Count == 0 && !sourceInLeft5
-                           && (suppressLeft4 || (left4Panels.Count == 0 && !sourceInLeft4));
-        bool suppressRight5 = right5Panels.Count == 0 && !sourceInRight5
-                           && (suppressRight4 || (right4Panels.Count == 0 && !sourceInRight4));
+        bool suppressLeft5  = (left5Panels.Count == 0 && !sourceInLeft5
+                           && (suppressLeft4 || (left4Panels.Count == 0 && !sourceInLeft4)))
+                           || (sourceInLeft4  && left4Panels.Count  == 1 && left5Panels.Count  == 0);
+        bool suppressRight5 = (right5Panels.Count == 0 && !sourceInRight5
+                           && (suppressRight4 || (right4Panels.Count == 0 && !sourceInRight4)))
+                           || (sourceInRight4 && right4Panels.Count == 1 && right5Panels.Count == 0);
 
-        bool suppressLeft6  = left6Panels.Count == 0 && !sourceInLeft6
-                           && (suppressLeft5 || (left5Panels.Count == 0 && !sourceInLeft5));
-        bool suppressRight6 = right6Panels.Count == 0 && !sourceInRight6
-                           && (suppressRight5 || (right5Panels.Count == 0 && !sourceInRight5));
+        bool suppressLeft6  = (left6Panels.Count == 0 && !sourceInLeft6
+                           && (suppressLeft5 || (left5Panels.Count == 0 && !sourceInLeft5)))
+                           || (sourceInLeft5  && left5Panels.Count  == 1 && left6Panels.Count  == 0);
+        bool suppressRight6 = (right6Panels.Count == 0 && !sourceInRight6
+                           && (suppressRight5 || (right5Panels.Count == 0 && !sourceInRight5)))
+                           || (sourceInRight5 && right5Panels.Count == 1 && right6Panels.Count == 0);
 
         // When source is outside a side, use column-position slots; otherwise use panel-position slots
         if (!suppressLeft6)

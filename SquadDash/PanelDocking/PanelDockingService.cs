@@ -391,8 +391,6 @@ internal sealed class PanelDockingService
         slots.AddRange(targetIds.Select((id, i) => new PanelSlot(id, targetZone, i)));
         CurrentLayout.Slots = slots;
 
-        TestRecorder?.OnMoveCompleted(panelId, targetZone, targetOrder, GetCurrentLayoutData());
-
         // WPF reparenting (only when context is wired).
         if (_panelRegistry is null) return;
         if (!_panelRegistry.TryGetValue(panelId, out var element)) return;
@@ -620,6 +618,11 @@ internal sealed class PanelDockingService
                     DockZone.Right or DockZone.Right2 or DockZone.Right3 or DockZone.Right4 or DockZone.Right5 or DockZone.Right6;
                 if (sourceIsSideZone) NormalizeZoneOrder();
                 _isMovingPanel = false;
+                // Notify recorder after normalization so it captures the true final layout,
+                // not an intermediate state that normalization will immediately undo.
+                // Same-zone reorders already fired at the call site above; skip them here.
+                if (sourceZoneCapture != targetZone)
+                    TestRecorder?.OnMoveCompleted(panelId, targetZone, targetOrder, GetCurrentLayoutData());
             }
         }
     }
