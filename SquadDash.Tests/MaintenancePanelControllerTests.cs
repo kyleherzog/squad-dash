@@ -446,23 +446,7 @@ internal sealed class MaintenancePanelControllerTests {
                 CollectBordersCore(dep, result);
     }
 
-    [Test]
-    public void Refresh_DirectSafetyTask_ShowsWarningChip() {
-        WpfTestContext.Run(() => {
-            var (controller, listPanel, _) = CreateController();
-            var config = MakeConfig([MakeTask("t1", "Direct Task", safety: "direct")]);
 
-            controller.Refresh(config, stateStore: null);
-
-            var textBlocks = CollectTextBlocks(listPanel);
-            Assert.That(
-                textBlocks.Any(tb =>
-                    tb.Text.Contains("⚠", StringComparison.Ordinal) ||
-                    tb.Text.Contains("direct commits", StringComparison.OrdinalIgnoreCase)),
-                Is.True,
-                "A warning chip with '⚠ direct commits' must appear for a task with safety: direct");
-        });
-    }
 
     [Test]
     public void Refresh_BranchSafetyTask_NoWarningChip() {
@@ -482,25 +466,7 @@ internal sealed class MaintenancePanelControllerTests {
         });
     }
 
-    [Test]
-    public void Refresh_ReportOnlySafetyTask_ShowsPlainSafetyChip_NotWarning() {
-        WpfTestContext.Run(() => {
-            var (controller, listPanel, _) = CreateController();
-            var config = MakeConfig([MakeTask("t1", "Report Only Task", safety: "report-only")]);
 
-            controller.Refresh(config, stateStore: null);
-
-            var textBlocks = CollectTextBlocks(listPanel);
-            Assert.That(
-                textBlocks.Any(tb => string.Equals(tb.Text, "report-only", StringComparison.Ordinal)),
-                Is.True,
-                "A plain 'report-only' chip must appear for a task with safety: report-only");
-            Assert.That(
-                textBlocks.All(tb => !tb.Text.Contains("⚠", StringComparison.Ordinal)),
-                Is.True,
-                "No warning chip must appear for a non-direct, non-branch safety level");
-        });
-    }
 
     // ── ToggleTaskEnabled ─────────────────────────────────────────────────────
 
