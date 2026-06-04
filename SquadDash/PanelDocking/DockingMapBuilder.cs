@@ -928,7 +928,7 @@ internal static class DockingMapBuilder
         int expectedThins = occupiedZoneCount + 1;
 
         SquadDashTrace.Write(TraceCategory.Docking,
-            $"  [adjacent-thin-filter] {sideName}: solo-panel source zone {srcZoneName} detected. occupiedZones={occupiedZoneCount}, expectedThins={expectedThins}, actualThins={thins.Count}");
+            $"  [=== FILTER-V2-NEW ===] {sideName}: solo-panel source zone {srcZoneName} detected. occupiedZones={occupiedZoneCount}, expectedThins={expectedThins}, actualThins={thins.Count}");
 
         // Check if source is the only panel on the side
         if (occupiedZoneCount == 1)
