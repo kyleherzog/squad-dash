@@ -154,6 +154,8 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
     private Point _bodyDragStartMouse;
     private double _bodyDragStartOffsetX;
     private double _bodyDragStartOffsetY;
+    private bool _arrowCloneDragInProgress;  // true when dragging a cloned arrow
+    private Point _arrowCloneDragOriginalCenter; // center of original arrow for constraint
 
     // Arrow drag-to-draw state
     private bool _creatingArrowByDrag;
@@ -191,6 +193,8 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
     private Point _annotRectDragStart;
     private Rect _annotRectDragOriginal;
     private bool _annotRectBodyDragging;
+    private bool _rectCloneDragInProgress;   // true when dragging a cloned rect
+    private Point _rectCloneDragOriginalCenter; // center of original rect for constraint
 
     // Rubber-band state for drawing a new annotation rect
     private bool _creatingAnnotRect;
@@ -214,6 +218,8 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
     private Point _measureLineDragStart;
     private Point _measureLineDragOrigStart;
     private Point _measureLineDragOrigEnd;
+    private bool _mlCloneDragInProgress;   // true when dragging a cloned measure line
+    private Point _mlCloneDragOriginalCenter; // center of original measure line for constraint
 
     // Measure-line handle-drag sub-state
     private bool _mlDraggingHandle;   // true when an endpoint handle is being dragged
@@ -245,6 +251,8 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
     private Rect _annotXDragOriginal;
     private bool _annotXBodyDragging;
     private int _draggingAnnotXHandleIdx = -1;
+    private bool _xCloneDragInProgress;    // true when dragging a cloned X
+    private Point _xCloneDragOriginalCenter; // center of original X for constraint
 
     // Rubber-band state for drawing a new X
     private bool _creatingAnnotX;
@@ -377,6 +385,8 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
     private AnnotationText? _canvasTextDragAnnotation;
     private Point _canvasTextDragStart;
     private Rect _canvasTextDragOrigBounds;
+    private bool _textCloneDragInProgress;   // true when dragging a cloned text annotation
+    private Point _textCloneDragOriginalCenter; // center of original text bounds for constraint
     private Color _defaultTextFgColor = Colors.White;
     private Color _defaultTextBgColor = Colors.Black;
     private bool _textDragCreating;
@@ -1755,6 +1765,9 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 _canvasTextDragAnnotation = clone;
                 _canvasTextDragStart = pt;
                 _canvasTextDragOrigBounds = clone.Bounds;
+                // Track clone drag for Shift-constraint
+                _textCloneDragInProgress = true;
+                _textCloneDragOriginalCenter = new Point(clone.Bounds.X + clone.Bounds.Width / 2, clone.Bounds.Y + clone.Bounds.Height / 2);
                 _canvas.CaptureMouse();
                 e.Handled = true;
                 return;
@@ -2145,6 +2158,15 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             var ann = _canvasTextDragAnnotation;
             var newX = Math.Max(0, Math.Min(_canvasTextDragOrigBounds.X + (movePt.X - _canvasTextDragStart.X), _canvas.Width - 20));
             var newY = Math.Max(0, Math.Min(_canvasTextDragOrigBounds.Y + (movePt.Y - _canvasTextDragStart.Y), _canvas.Height - 16));
+            
+            // Apply Shift-key alignment constraint if dragging a cloned text annotation
+            if (_textCloneDragInProgress && (Keyboard.Modifiers & ModifierKeys.Shift) != 0) {
+                var currentPos = new Point(newX, newY);
+                var constrainedPos = ConstrainPositionToAxis(_textCloneDragOriginalCenter, currentPos);
+                newX = constrainedPos.X;
+                newY = constrainedPos.Y;
+            }
+            
             ann.Bounds = new Rect(newX, newY, ann.Bounds.Width, ann.Bounds.Height);
             if (ann.Display != null) {
                 Canvas.SetLeft(ann.Display, newX);
@@ -2310,6 +2332,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             CommitDragUndo();
             _canvasTextDragActive = false;
             _canvasTextDragAnnotation = null;
+            _textCloneDragInProgress = false;
             _canvas.ReleaseMouseCapture();
             if (_selectedText != null) SelectText(_selectedText);  // refresh handles position
             e.Handled = true;
@@ -3138,6 +3161,11 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 _measureLineDragOrigStart = clone.StartPt;
                 _measureLineDragOrigEnd = clone.EndPt;
                 _preDragSnapshot = null;
+                // Track clone drag for Shift-constraint
+                _mlCloneDragInProgress = true;
+                _mlCloneDragOriginalCenter = new Point(
+                    (clone.StartPt.X + clone.EndPt.X) / 2,
+                    (clone.StartPt.Y + clone.EndPt.Y) / 2);
                 clone.HitLine.CaptureMouse();
                 e2.Handled = true;
                 return;
@@ -3156,8 +3184,19 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             var pt = e2.GetPosition(_canvas);
             var dx = pt.X - _measureLineDragStart.X;
             var dy = pt.Y - _measureLineDragStart.Y;
-            ml.StartPt = new Point(_measureLineDragOrigStart.X + dx, _measureLineDragOrigStart.Y + dy);
-            ml.EndPt   = new Point(_measureLineDragOrigEnd.X   + dx, _measureLineDragOrigEnd.Y   + dy);
+            
+            // Apply Shift-key alignment constraint if dragging a cloned measure line
+            if (_mlCloneDragInProgress && (Keyboard.Modifiers & ModifierKeys.Shift) != 0) {
+                var newStartPt = new Point(_measureLineDragOrigStart.X + dx, _measureLineDragOrigStart.Y + dy);
+                var constrainedStart = ConstrainPositionToAxis(_mlCloneDragOriginalCenter, newStartPt);
+                var deltaX = constrainedStart.X - _measureLineDragOrigStart.X;
+                var deltaY = constrainedStart.Y - _measureLineDragOrigStart.Y;
+                ml.StartPt = new Point(_measureLineDragOrigStart.X + deltaX, _measureLineDragOrigStart.Y + deltaY);
+                ml.EndPt   = new Point(_measureLineDragOrigEnd.X   + deltaX, _measureLineDragOrigEnd.Y   + deltaY);
+            } else {
+                ml.StartPt = new Point(_measureLineDragOrigStart.X + dx, _measureLineDragOrigStart.Y + dy);
+                ml.EndPt   = new Point(_measureLineDragOrigEnd.X   + dx, _measureLineDragOrigEnd.Y   + dy);
+            }
             UpdateMeasureLineGeometry(ml);
             e2.Handled = true;
         };
@@ -3165,6 +3204,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             if (_draggingMeasureLine != ml || _mlDraggingHandle) return;
             CommitDragUndo();
             _draggingMeasureLine = null;
+            _mlCloneDragInProgress = false;
             hitLine.ReleaseMouseCapture();
             e2.Handled = true;
         };
@@ -3426,6 +3466,25 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         return dx >= dy
             ? new Point(head.X, tail.Y)   // horizontal
             : new Point(tail.X, head.Y);  // vertical
+    }
+
+    /// <summary>
+    /// When dragging a clone with Shift held, constrains the position to either horizontal
+    /// (Y-position matches source) or vertical (X-position matches source) alignment,
+    /// whichever provides better alignment (smaller distance to source).
+    /// </summary>
+    private static Point ConstrainPositionToAxis(Point sourcePos, Point currentPos)
+    {
+        var dx = Math.Abs(currentPos.X - sourcePos.X);
+        var dy = Math.Abs(currentPos.Y - sourcePos.Y);
+        
+        // Snap to the axis that's closer (smaller distance): constrain the larger axis
+        if (dx <= dy)
+            // Horizontal alignment is better: Y = source.Y, X = current.X
+            return new Point(currentPos.X, sourcePos.Y);
+        else
+            // Vertical alignment is better: X = source.X, Y = current.Y
+            return new Point(sourcePos.X, currentPos.Y);
     }
 
     private void PlaceArrowFromDrag(Point tailPt, Point headPt, double dist) {
@@ -3706,6 +3765,11 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 _bodyDragStartOffsetX = clone.OffsetX;
                 _bodyDragStartOffsetY = clone.OffsetY;
                 _preDragSnapshot = null;
+                // Track clone drag for Shift-constraint
+                _arrowCloneDragInProgress = true;
+                _arrowCloneDragOriginalCenter = new Point(
+                    clone.TargetCenterOnCanvas.X + clone.OffsetX,
+                    clone.TargetCenterOnCanvas.Y + clone.OffsetY);
                 clone.HitLine.CaptureMouse();
                 e.Handled = true;
                 return;
@@ -3724,8 +3788,20 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         shape.MouseMove += (_, e) => {
             if (_draggingArrow != arrow || !_bodyDragging) return;
             var pt = e.GetPosition(_canvas);
-            arrow.OffsetX = _bodyDragStartOffsetX + (pt.X - _bodyDragStartMouse.X);
-            arrow.OffsetY = _bodyDragStartOffsetY + (pt.Y - _bodyDragStartMouse.Y);
+            
+            // Apply Shift-key alignment constraint if dragging a cloned arrow
+            if (_arrowCloneDragInProgress && (Keyboard.Modifiers & ModifierKeys.Shift) != 0) {
+                var currentCenter = new Point(
+                    arrow.TargetCenterOnCanvas.X + _bodyDragStartOffsetX + (pt.X - _bodyDragStartMouse.X),
+                    arrow.TargetCenterOnCanvas.Y + _bodyDragStartOffsetY + (pt.Y - _bodyDragStartMouse.Y));
+                var constrainedCenter = ConstrainPositionToAxis(_arrowCloneDragOriginalCenter, currentCenter);
+                arrow.OffsetX = constrainedCenter.X - arrow.TargetCenterOnCanvas.X;
+                arrow.OffsetY = constrainedCenter.Y - arrow.TargetCenterOnCanvas.Y;
+            } else {
+                arrow.OffsetX = _bodyDragStartOffsetX + (pt.X - _bodyDragStartMouse.X);
+                arrow.OffsetY = _bodyDragStartOffsetY + (pt.Y - _bodyDragStartMouse.Y);
+            }
+            
             UpdateArrowGeometry(arrow);
             ShowCrosshair(
                 arrow.TargetCenterOnCanvas.X + arrow.OffsetX,
@@ -3738,6 +3814,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             CommitDragUndo();
             _draggingArrow = null;
             _bodyDragging = false;
+            _arrowCloneDragInProgress = false;
             ShowColorPicker(arrow);
             shape.ReleaseMouseCapture();
             e.Handled = true;
@@ -4207,6 +4284,11 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 _annotXDragStart = e.GetPosition(_canvas);
                 _annotXDragOriginal = clone.Bounds;
                 _preDragSnapshot = null;
+                // Track clone drag for Shift-constraint
+                _xCloneDragInProgress = true;
+                _xCloneDragOriginalCenter = new Point(
+                    clone.Bounds.X + clone.Bounds.Width / 2,
+                    clone.Bounds.Y + clone.Bounds.Height / 2);
                 clone.HitZoneRect.CaptureMouse();
                 e.Handled = true;
                 return;
@@ -4227,6 +4309,15 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             var dx = pt.X - _annotXDragStart.X;
             var dy = pt.Y - _annotXDragStart.Y;
             var cw = _canvas.Width; var ch = _canvas.Height;
+            
+            // Apply Shift-key alignment constraint if dragging a cloned X
+            if (_xCloneDragInProgress && (Keyboard.Modifiers & ModifierKeys.Shift) != 0) {
+                var currentPos = new Point(_annotXDragOriginal.X + dx, _annotXDragOriginal.Y + dy);
+                var constrainedPos = ConstrainPositionToAxis(_xCloneDragOriginalCenter, currentPos);
+                dx = constrainedPos.X - _annotXDragOriginal.X;
+                dy = constrainedPos.Y - _annotXDragOriginal.Y;
+            }
+            
             var nb = new Rect(
                 Math.Max(0, Math.Min(_annotXDragOriginal.X + dx, cw - _annotXDragOriginal.Width)),
                 Math.Max(0, Math.Min(_annotXDragOriginal.Y + dy, ch - _annotXDragOriginal.Height)),
@@ -4239,6 +4330,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             if (_draggingAnnotX != annotX || !_annotXBodyDragging) return;
             _annotXBodyDragging = false;
             _draggingAnnotX = null;
+            _xCloneDragInProgress = false;
             hitZone.ReleaseMouseCapture();
             CommitDragUndo();
             e.Handled = true;
@@ -4522,6 +4614,11 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 _annotRectDragStart = e.GetPosition(_canvas);
                 _annotRectDragOriginal = clone.Bounds;
                 _preDragSnapshot = null;
+                // Track clone drag for Shift-constraint
+                _rectCloneDragInProgress = true;
+                _rectCloneDragOriginalCenter = new Point(
+                    clone.Bounds.X + clone.Bounds.Width / 2,
+                    clone.Bounds.Y + clone.Bounds.Height / 2);
                 clone.Border.CaptureMouse();
                 e.Handled = true;
                 return;
@@ -4543,6 +4640,15 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             var dy = pt.Y - _annotRectDragStart.Y;
             var cw = _canvas.Width;
             var ch = _canvas.Height;
+            
+            // Apply Shift-key alignment constraint if dragging a cloned rect
+            if (_rectCloneDragInProgress && (Keyboard.Modifiers & ModifierKeys.Shift) != 0) {
+                var currentPos = new Point(_annotRectDragOriginal.X + dx, _annotRectDragOriginal.Y + dy);
+                var constrainedPos = ConstrainPositionToAxis(_rectCloneDragOriginalCenter, currentPos);
+                dx = constrainedPos.X - _annotRectDragOriginal.X;
+                dy = constrainedPos.Y - _annotRectDragOriginal.Y;
+            }
+            
             var nb = new Rect(
                 Math.Max(0, Math.Min(_annotRectDragOriginal.X + dx, cw - _annotRectDragOriginal.Width)),
                 Math.Max(0, Math.Min(_annotRectDragOriginal.Y + dy, ch - _annotRectDragOriginal.Height)),
@@ -4558,6 +4664,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             CommitDragUndo();
             _draggingAnnotRect = null;
             _annotRectBodyDragging = false;
+            _rectCloneDragInProgress = false;
             border.ReleaseMouseCapture();
             e.Handled = true;
         };
@@ -4584,6 +4691,11 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                 _annotRectDragStart = e.GetPosition(_canvas);
                 _annotRectDragOriginal = clone.Bounds;
                 _preDragSnapshot = null;
+                // Track clone drag for Shift-constraint
+                _rectCloneDragInProgress = true;
+                _rectCloneDragOriginalCenter = new Point(
+                    clone.Bounds.X + clone.Bounds.Width / 2,
+                    clone.Bounds.Y + clone.Bounds.Height / 2);
                 clone.HitZoneRect.CaptureMouse();
                 e.Handled = true;
                 return;
@@ -4605,6 +4717,15 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             var dy = pt.Y - _annotRectDragStart.Y;
             var cw = _canvas.Width;
             var ch = _canvas.Height;
+            
+            // Apply Shift-key alignment constraint if dragging a cloned rect
+            if (_rectCloneDragInProgress && (Keyboard.Modifiers & ModifierKeys.Shift) != 0) {
+                var currentPos = new Point(_annotRectDragOriginal.X + dx, _annotRectDragOriginal.Y + dy);
+                var constrainedPos = ConstrainPositionToAxis(_rectCloneDragOriginalCenter, currentPos);
+                dx = constrainedPos.X - _annotRectDragOriginal.X;
+                dy = constrainedPos.Y - _annotRectDragOriginal.Y;
+            }
+            
             var nb = new Rect(
                 Math.Max(0, Math.Min(_annotRectDragOriginal.X + dx, cw - _annotRectDragOriginal.Width)),
                 Math.Max(0, Math.Min(_annotRectDragOriginal.Y + dy, ch - _annotRectDragOriginal.Height)),
@@ -4620,6 +4741,7 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
             CommitDragUndo();
             _draggingAnnotRect = null;
             _annotRectBodyDragging = false;
+            _rectCloneDragInProgress = false;
             hitZone.ReleaseMouseCapture();
             e.Handled = true;
         };
@@ -5576,6 +5698,9 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
                     _canvasTextDragAnnotation = clone;
                     _canvasTextDragStart = e.GetPosition(_canvas);
                     _canvasTextDragOrigBounds = clone.Bounds;
+                    // Track clone drag for Shift-constraint
+                    _textCloneDragInProgress = true;
+                    _textCloneDragOriginalCenter = new Point(clone.Bounds.X + clone.Bounds.Width / 2, clone.Bounds.Y + clone.Bounds.Height / 2);
                     _canvas.CaptureMouse();
                     e.Handled = true;
                     return;
