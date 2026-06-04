@@ -2666,10 +2666,21 @@ internal sealed class ScreenshotOverlayWindow : Window
         arrow.Line.X2 = ahX;
         arrow.Line.Y2 = ahY;
 
-        // Arrowhead triangle: tip at ahX/ahY, base 16px AWAY from center.
-        // The triangle points TOWARD center (tip is the near-element vertex). ✓
-        const double HeadLen  = 16.0;
-        const double HeadHalf =  6.0;
+        // Arrowhead triangle: tip at ahX/ahY, scaled based on total arrow length.
+        // Standard arrowhead is 16px deep. If it exceeds 1/3 of arrow length, scale down.
+        const double StandardHeadLen  = 16.0;
+        const double StandardHeadHalf =  6.0;
+        
+        double fullArrowLength = arrow.ArrowLength + arrow.TailLength;
+        double maxArrowheadDepth = fullArrowLength / 3.0;
+        
+        double HeadLen = StandardHeadLen;
+        if (HeadLen > maxArrowheadDepth)
+        {
+            HeadLen = maxArrowheadDepth;
+        }
+        
+        double HeadHalf = StandardHeadHalf * HeadLen / StandardHeadLen;
         var baseX = ahX + ux * HeadLen;   // base is away from center
         var baseY = ahY + uy * HeadLen;
         var px    = -uy;                   // perpendicular

@@ -3845,14 +3845,21 @@ internal sealed class ClipboardImageEditorWindow : ChromedWindow {
         var tailX = center.X + ux * (arrow.ArrowLength + arrow.TailLength);
         var tailY = center.Y + uy * (arrow.ArrowLength + arrow.TailLength);
 
-        // Scale arrowhead proportionally to arrow length.
-        // Normal arrowhead is 16px long, 12px wide. For small arrows, scale down proportionally.
-        // Reference: 16px arrow length maps to 16px head length. Shorter arrows get proportionally smaller heads.
-        const double ReferenceArrowLen = 16.0;
-        const double ReferenceHeadLen = 16.0;
-        double scaledHeadLen = Math.Max(1.0, (arrow.ArrowLength / ReferenceArrowLen) * ReferenceHeadLen);
-        double HeadLen = Math.Min(scaledHeadLen, arrow.TailLength * 0.5);
-        double HeadHalf = 6.0 * HeadLen / ReferenceHeadLen;
+        // Scale arrowhead proportionally to total arrow length (tail → arrowhead tip).
+        // Standard arrowhead is 16px deep, 12px wide. If it exceeds 1/3 of arrow length, scale down.
+        const double StandardHeadLen = 16.0;
+        const double StandardHeadHalf = 6.0;
+        
+        double fullArrowLength = arrow.ArrowLength + arrow.TailLength;
+        double maxArrowheadDepth = fullArrowLength / 3.0;
+        
+        double HeadLen = StandardHeadLen;
+        if (HeadLen > maxArrowheadDepth)
+        {
+            HeadLen = maxArrowheadDepth;
+        }
+        
+        double HeadHalf = StandardHeadHalf * HeadLen / StandardHeadLen;
         var baseX = ahX + ux * HeadLen;
         var baseY = ahY + uy * HeadLen;
 
