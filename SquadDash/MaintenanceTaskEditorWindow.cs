@@ -349,7 +349,7 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         // Left: live preview (interactive)
-        var leftPanel = new DockPanel { Margin = new Thickness(0, 0, 4, 0), LastChildFill = true };
+        var leftPanel = new DockPanel { Margin = new Thickness(0, 0, 8, 0), LastChildFill = true };
         var previewScroll = new ScrollViewer {
             Content             = _optionsPreviewPanel,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -359,7 +359,7 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         Grid.SetColumn(leftPanel, 0);
 
         // Right: YAML editor with error line below
-        var rightPanel = new DockPanel { Margin = new Thickness(4, 0, 0, 0), LastChildFill = true };
+        var rightPanel = new DockPanel { Margin = new Thickness(0, 0, 0, 0), LastChildFill = true };
         var yamlLabel = new TextBlock { Text = "YAML", Margin = new Thickness(0, 0, 0, 2), TextAlignment = TextAlignment.Left };
         yamlLabel.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
         yamlLabel.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
@@ -415,7 +415,7 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
         Grid.SetColumn(splitter, 1);
 
         // Right: editable RichTextBox
-        var rightLabel = new TextBlock { Text = "Edit", Margin = new Thickness(4, 0, 0, 2) };
+        var rightLabel = new TextBlock { Text = "Source", Margin = new Thickness(4, 0, 0, 2) };
         rightLabel.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
         rightLabel.SetResourceReference(TextBlock.FontSizeProperty,   "FontSizeSmall");
 
@@ -948,14 +948,16 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
 
             if (opt.Choices is { Count: > 0 }) {
                 var optKey = opt.Key;
+                int choiceIndex = 0;
                 foreach (var choice in opt.Choices) {
                     var choiceValue = choice.Value;
+                    var topMargin = choiceIndex == 0 ? 3 : 2; // First button gets more top margin for breathing room
                     var rb = new RadioButton {
                         Content   = choice.Value,
                         GroupName = $"preview-{opt.Key}",
                         IsChecked = string.Equals(choice.Value, _optionValues.GetValueOrDefault(opt.Key, opt.RawValue ?? string.Empty),
                             StringComparison.OrdinalIgnoreCase),
-                        Margin    = new Thickness(8, 1, 0, 1),
+                        Margin    = new Thickness(8, topMargin, 0, 2),
                     };
                     rb.SetResourceReference(RadioButton.StyleProperty,    "ThemedRadioButtonStyle");
                     rb.SetResourceReference(RadioButton.ForegroundProperty, "ImportantText");
@@ -965,6 +967,7 @@ internal sealed class MaintenanceTaskEditorWindow : ChromedWindow {
                         UpdateMarkdownPreview();
                     };
                     _optionsPreviewPanel.Children.Add(rb);
+                    choiceIndex++;
                 }
             }
             else if (string.Equals(opt.Type, "checkbox", StringComparison.OrdinalIgnoreCase)) {
