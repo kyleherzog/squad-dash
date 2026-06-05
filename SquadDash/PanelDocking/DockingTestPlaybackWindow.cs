@@ -837,6 +837,25 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             Tag = slot,
         };
 
+        // Add context menu for debugging
+        var contextMenu = new ContextMenu();
+        var markCorrectMenuItem = new MenuItem { Header = "Mark as correct target" };
+        markCorrectMenuItem.Click += (_, _) =>
+        {
+            SquadDashTrace.Write("Docking", "=== MARKED CORRECT TARGET (RIGHT-CLICK) ===");
+            SquadDashTrace.Write("Docking", $"Label: {slot.Label}");
+            SquadDashTrace.Write("Docking", $"Position: ({slot.X}, {slot.Y})");
+            SquadDashTrace.Write("Docking", $"Size: {slot.Width}x{slot.Height}");
+            SquadDashTrace.Write("Docking", $"TargetZone: {slot.TargetZone}");
+            SquadDashTrace.Write("Docking", $"TargetOrder: {slot.TargetOrder}");
+            SquadDashTrace.Write("Docking", $"IsSyntheticInsert: {slot.IsSyntheticInsert}");
+            SquadDashTrace.Write("Docking", $"InsertKind: {slot.InsertKind}");
+            SquadDashTrace.Write("Docking", $"IsSourcePanel: {slot.IsSourcePanel}");
+            SquadDashTrace.Write("Docking", "=============================================");
+        };
+        contextMenu.Items.Add(markCorrectMenuItem);
+        border.ContextMenu = contextMenu;
+
         border.MouseEnter += (_, _) =>
         {
             border.Background = MakeBrush(groundingColor, 0.90);
