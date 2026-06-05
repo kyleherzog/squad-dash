@@ -645,31 +645,18 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         // Get target zone from the current test to highlight the target slot
         DockZone? targetZone = null;
         int? targetOrder = null;
-        SlotButtonViewModel? targetSlot = null;
         if (_currentTest is not null)
         {
             targetZone = DockingLayoutEngine.ParseZoneDisplayName(_currentTest.TargetZoneDisplay);
             targetOrder = _currentTest.TargetOrder;
             SquadDashTrace.Write("Docking", $"[PREVIEW-RENDER] Target: {targetZone}@{targetOrder}");
-            
-            // Find the best matching slot: prefer regular panels over synthetic inserts
-            if (targetZone.HasValue && targetOrder.HasValue)
-            {
-                var candidates = viewModel.Slots.Where(s => s.TargetZone == targetZone.Value && s.TargetOrder == targetOrder.Value).ToList();
-                // Prefer non-synthetic slots (regular panels) over synthetic inserts
-                targetSlot = candidates.FirstOrDefault(s => !s.IsSyntheticInsert) ?? candidates.FirstOrDefault();
-                if (targetSlot is not null)
-                {
-                    SquadDashTrace.Write("Docking", $"[PREVIEW-RENDER] Found {candidates.Count} slots matching {targetZone}@{targetOrder}; highlighting {(targetSlot.IsSyntheticInsert ? "synthetic" : "regular")} at ({targetSlot.X}, {targetSlot.Y})");
-                }
-            }
         }
 
         // Render each slot at its actual coordinates (no scaling) — same logic as DockingMapWindow
         int slotIndex = 0;
         foreach (var slot in viewModel.Slots)
         {
-            var border = BuildMapSlotElement(slot, groundingColor, polarColor, isDark, targetSlot);
+            var border = BuildMapSlotElement(slot, groundingColor, polarColor, isDark, targetZone, targetOrder);
             Canvas.SetLeft(border, slot.X);
             Canvas.SetTop(border,  slot.Y);
             _dockingMapCanvas.Children.Add(border);
@@ -800,7 +787,7 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         return result;
     }
 
-    private Border BuildMapSlotElement(SlotButtonViewModel slot, Color groundingColor, Color polarColor, bool isDark, SlotButtonViewModel? targetSlot = null)
+    private Border BuildMapSlotElement(SlotButtonViewModel slot, Color groundingColor, Color polarColor, bool isDark, DockZone? targetZone = null, int? targetOrder = null)
     {
         // Separator (decorative)
         if (slot.IsSeparator)
@@ -830,8 +817,10 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         }
 
         // Target zone slot — highlight with yellow/gold for destination visibility
-        // Only highlight if this is the specific target slot (prefer regular panels over synthetics)
-        bool isTargetSlot = targetSlot is not null && slot == targetSlot;
+        // Highlight the slot that matches the target zone and order (whether it's synthetic or a regular panel)
+        bool isTargetSlot = targetZone.HasValue && targetOrder.HasValue &&
+                            slot.TargetZone == targetZone.Value &&
+                            slot.TargetOrder == targetOrder.Value;
 
         var normalBg = MakeBrush(groundingColor, 0.70);
         var normalBorder = MakeBrush(polarColor, 0.10);
