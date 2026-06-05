@@ -952,8 +952,14 @@ internal static class DockingMapBuilder
             }
         }
         
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"  [adjacent-thin-filter-DEBUG] {sideName}: Panels on this side: {string.Join(", ", panelsOnThisSide)}");
+        
         // Check if solo-panel is the sole occupant on this entire side
         bool isSolePanelOnSide = panelsOnThisSide.Count == 1 && panelsOnThisSide.Contains(sourcePanelId);
+        
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"  [adjacent-thin-filter-DEBUG] {sideName}: panelCount={panelsOnThisSide.Count}, isSolePanelOnSide={isSolePanelOnSide}, sourcePanelId={sourcePanelId}");
         
         var sameSideFiltered = new List<SyntheticThin>();
         var sameSideRemoved = new List<SyntheticThin>();
@@ -961,20 +967,26 @@ internal static class DockingMapBuilder
         if (isSolePanelOnSide)
         {
             // Solo-panel occupies ALL zones on this side—all same-side thins are no-ops
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"  [adjacent-thin-filter] {sideName}: Solo-panel is SOLE occupant of entire side—will remove all {thins.Count} same-side thin(s)");
             foreach (var thin in thins)
             {
                 sameSideRemoved.Add(thin);
                 SquadDashTrace.Write(TraceCategory.Docking,
                     $"    [solo-panel-same-side] Filtering no-op thin (sole occupant): {thin.Kind} {DockingLayoutEngine.GetZoneDisplayName(thin.TargetZone)}@{thin.TargetOrder}");
             }
-            SquadDashTrace.Write(TraceCategory.Docking,
-                $"  [adjacent-thin-filter] {sideName}: Solo-panel is sole occupant—removing all {sameSideRemoved.Count} same-side thin(s) for {srcZoneName}");
         }
         else
         {
-            // Solo-panel occupies only some zones. Filter thins that target those zones or empty adjacent zones.
+            // Solo-panel occupies only some zones. Filter thins that target the source zone or empty adjacent zones.
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"  [adjacent-thin-filter] {sideName}: Solo-panel NOT sole occupant ({panelsOnThisSide.Count} panels on side)—will filter selectively");
+            
             DockZone? leftAdjacentZone = sourceZoneIdx > 0 ? sideZones[sourceZoneIdx - 1] : null;
             DockZone? rightAdjacentZone = sourceZoneIdx < sideZones.Count - 1 ? sideZones[sourceZoneIdx + 1] : null;
+
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"  [adjacent-thin-filter-DEBUG] {sideName}: sourceZoneIdx={sourceZoneIdx}, leftAdjacentZone={DockingLayoutEngine.GetZoneDisplayName(leftAdjacentZone ?? sourceZone)}, rightAdjacentZone={DockingLayoutEngine.GetZoneDisplayName(rightAdjacentZone ?? sourceZone)}");
 
             foreach (var thin in thins)
             {
@@ -993,6 +1005,9 @@ internal static class DockingMapBuilder
                 
                 bool isNoOp = isInsertWithinSourceZone || isEmptyAdjacentZone;
 
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"    [adjacent-thin-filter-DEBUG] {DockingLayoutEngine.GetZoneDisplayName(thin.TargetZone)}@{thin.TargetOrder}: isInsertWithinSourceZone={isInsertWithinSourceZone}, isEmptyAdjacentZone={isEmptyAdjacentZone}, isNoOp={isNoOp}");
+
                 if (isNoOp)
                 {
                     sameSideRemoved.Add(thin);
@@ -1002,6 +1017,8 @@ internal static class DockingMapBuilder
                 else
                 {
                     sameSideFiltered.Add(thin);
+                    SquadDashTrace.Write(TraceCategory.Docking,
+                        $"    [solo-panel-same-side] KEEPING thin: {thin.Kind} {DockingLayoutEngine.GetZoneDisplayName(thin.TargetZone)}@{thin.TargetOrder}");
                 }
             }
 
