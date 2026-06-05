@@ -316,6 +316,7 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
 
     private void OnTestSelected(object sender, SelectionChangedEventArgs e)
     {
+        SquadDashTrace.Write("Docking", "[PREVIEW-RENDER] OnTestSelected called");
         _phase      = PlaybackPhase.MapOpen;
         _testLoaded = false;
         _currentTest = null;
@@ -326,6 +327,7 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             _detailBlock.Text     = string.Empty;
             _stepButton.IsEnabled = false;
             SetStatus("Select a test case to begin.", StatusKind.Subtle);
+            SquadDashTrace.Write("Docking", "[PREVIEW-RENDER] No selection");
             return;
         }
 
@@ -352,8 +354,16 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
                 : null;
 
             // Build the DockingMapViewModel from the expected layout
+            SquadDashTrace.Write("Docking", $"[OnTestSelected] expectedLayout zones: {string.Join(", ", expectedLayout.Where(kv => kv.Value.Count > 0).Select(kv => $"{kv.Key}=[{string.Join(",", kv.Value)}]"))}");
+            
             var dockLayout = BuildDockLayoutFromZoneMap(sourcePanelId, expectedLayout);
+            SquadDashTrace.Write("Docking", $"[OnTestSelected] Built DockLayout with {dockLayout.Slots.Count} slots: {string.Join(", ", dockLayout.Slots.Select(s => $"{s.PanelId}@{s.Zone}:{s.Order}"))}");
+            
             var dockingMapViewModel = DockingMapBuilder.BuildDockingMap(sourcePanelId, dockLayout, null);
+            SquadDashTrace.Write("Docking", $"[OnTestSelected] Built ViewModel: PopupWidth={dockingMapViewModel.PopupWidth}, PopupHeight={dockingMapViewModel.PopupHeight}, SlotCount={dockingMapViewModel.Slots.Count}");
+            
+            foreach (var slot in dockingMapViewModel.Slots)
+                SquadDashTrace.Write("Docking", $"[OnTestSelected]   Slot: {slot.Label} at ({slot.X}, {slot.Y}) size {slot.Width}x{slot.Height}");
 
             _currentTest = new ParsedTestCase(sourcePanelId, initialLayout, expectedLayout, targetZone, targetOrder, targetIsInsert, entry.FilePath, expectedDockingMapSlots, dockingMapViewModel);
 
@@ -376,7 +386,9 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             _detailBlock.Text = sb.ToString();
 
             // Render the docking map preview based on the ViewModel
+            SquadDashTrace.Write("Docking", $"[PREVIEW-RENDER] Calling RenderDockingMapPreview with {_currentTest.DockingMapViewModel?.Slots.Count ?? 0} slots");
             RenderDockingMapPreview(_currentTest.DockingMapViewModel);
+            SquadDashTrace.Write("Docking", $"[PREVIEW-RENDER] RenderDockingMapPreview done");
         }
         catch (Exception ex)
         {
@@ -608,6 +620,7 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         {
             _dockingMapCanvas.Width = 0;
             _dockingMapCanvas.Height = 0;
+            SquadDashTrace.Write("Docking", $"[PREVIEW-RENDER] ViewModel is null or has no slots");
             return;
         }
 
@@ -619,6 +632,13 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         _dockingMapCanvas.Width = viewModel.PopupWidth;
         _dockingMapCanvas.Height = viewModel.PopupHeight;
 
+        var scrollParent = VisualTreeHelper.GetParent(_dockingMapCanvas) as ScrollViewer;
+        double parentWidth = scrollParent?.ActualWidth ?? double.NaN;
+        double parentHeight = scrollParent?.ActualHeight ?? double.NaN;
+
+        SquadDashTrace.Write("Docking", $"[PREVIEW-RENDER] Canvas size: {viewModel.PopupWidth}x{viewModel.PopupHeight}, Parent: {parentWidth}x{parentHeight}");
+        SquadDashTrace.Write("Docking", $"[PREVIEW-RENDER] Total slots: {viewModel.Slots.Count}");
+
         // Get target zone from the current test to highlight the target slot
         DockZone? targetZone = null;
         int? targetOrder = null;
@@ -626,9 +646,11 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         {
             targetZone = DockingLayoutEngine.ParseZoneDisplayName(_currentTest.TargetZoneDisplay);
             targetOrder = _currentTest.TargetOrder;
+            SquadDashTrace.Write("Docking", $"[PREVIEW-RENDER] Target: {targetZone}@{targetOrder}");
         }
 
         // Render each slot at its actual coordinates (no scaling) — same logic as DockingMapWindow
+        int slotIndex = 0;
         foreach (var slot in viewModel.Slots)
         {
             var border = BuildMapSlotElement(slot, groundingColor, polarColor, isDark, targetZone, targetOrder);
@@ -636,7 +658,12 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             Canvas.SetTop(border,  slot.Y);
             _dockingMapCanvas.Children.Add(border);
             _slotBorders[slot] = border;
+            
+            SquadDashTrace.Write("Docking", $"[PREVIEW-RENDER] Slot {slotIndex}: {slot.Label} @({slot.X},{slot.Y}) {slot.Width}x{slot.Height}");
+            slotIndex++;
         }
+        
+        SquadDashTrace.Write("Docking", $"[PREVIEW-RENDER] Done: {slotIndex} slots rendered, canvas has {_dockingMapCanvas.Children.Count} children");
     }
 
     private List<SlotButtonViewModel>? ParseExpectedDockingMap(JsonElement arrayElement, string sourcePanelId)
