@@ -674,8 +674,14 @@ internal static class DockingMapBuilder
         var sourceZone = states[sourceZoneIdx].Zone;
         DockZone? innerAdjacentZone = sourceZoneIdx > 0 ? states[sourceZoneIdx - 1].Zone : null;
         DockZone? outerAdjacentZone = sourceZoneIdx < states.Count - 1 ? states[sourceZoneIdx + 1].Zone : null;
+        int sourceItemIdx = sequence.FindIndex(item =>
+            !item.IsSynthetic &&
+            item.Zone is not null &&
+            item.Zone.Zone == sourceZone);
+        if (sourceItemIdx < 0)
+            return sequence;
 
-        bool IsAdjacentBoundaryThin(SideSequenceItem item)
+        bool IsAdjacentBoundaryThin(SideSequenceItem item, int itemIdx)
         {
             if (!item.IsSynthetic)
                 return false;
@@ -683,29 +689,24 @@ internal static class DockingMapBuilder
             if (item.TargetZone == sourceZone)
                 return item.InsertKind is SyntheticInsertKind.InsertBefore or SyntheticInsertKind.InsertAfter;
 
-            if (innerAdjacentZone.HasValue &&
-                item.TargetZone == innerAdjacentZone.Value &&
-                item.InsertKind == SyntheticInsertKind.InsertAfter)
-            {
-                return true;
-            }
+            if (Math.Abs(itemIdx - sourceItemIdx) != 1)
+                return false;
 
-            if (outerAdjacentZone.HasValue &&
-                item.TargetZone == outerAdjacentZone.Value &&
-                item.InsertKind == SyntheticInsertKind.InsertBefore)
-            {
-                return true;
-            }
-
-            return false;
+            return (innerAdjacentZone.HasValue && item.TargetZone == innerAdjacentZone.Value) ||
+                   (outerAdjacentZone.HasValue && item.TargetZone == outerAdjacentZone.Value);
         }
 
-        var filtered = sequence.Where(item => !IsAdjacentBoundaryThin(item)).ToList();
+        var filtered = sequence
+            .Select((item, index) => (item, index))
+            .Where(pair => !IsAdjacentBoundaryThin(pair.item, pair.index))
+            .Select(pair => pair.item)
+            .ToList();
         if (filtered.Count != sequence.Count)
         {
             var removed = sequence
-                .Where(IsAdjacentBoundaryThin)
-                .Select(item => $"{item.InsertKind} {DockingLayoutEngine.GetZoneDisplayName(item.TargetZone)}@{item.TargetOrder}");
+                .Select((item, index) => (item, index))
+                .Where(pair => IsAdjacentBoundaryThin(pair.item, pair.index))
+                .Select(pair => $"{pair.item.InsertKind} {DockingLayoutEngine.GetZoneDisplayName(pair.item.TargetZone)}@{pair.item.TargetOrder}");
             SquadDashTrace.Write(TraceCategory.Docking,
                 $"[adjacent-thin-layout] {sideName}: collapsed {sequence.Count - filtered.Count} adjacent synthetic thin column(s) around solo-panel {DockingLayoutEngine.GetZoneDisplayName(sourceZone)}: {string.Join(", ", removed)}");
         }
@@ -1071,6 +1072,7 @@ internal static class DockingMapBuilder
 
         DockZone? innerAdjacentZone = sourceZoneIdx > 0 ? sideZones[sourceZoneIdx - 1] : null;
         DockZone? outerAdjacentZone = sourceZoneIdx < sideZones.Count - 1 ? sideZones[sourceZoneIdx + 1] : null;
+        bool isLeftSide = sideZones.SequenceEqual(LeftSideZones);
 
         bool IsAdjacentBoundaryThin(SyntheticThin thin)
         {
@@ -1082,14 +1084,16 @@ internal static class DockingMapBuilder
                 return thin.Kind is SyntheticInsertKind.InsertBefore or SyntheticInsertKind.InsertAfter;
             }
 
-            if (innerAdjacentZone.HasValue &&
+            if (isLeftSide &&
+                innerAdjacentZone.HasValue &&
                 thin.TargetZone == innerAdjacentZone.Value &&
-                thin.Kind == SyntheticInsertKind.InsertAfter)
+                thin.Kind == SyntheticInsertKind.InsertBefore)
             {
                 return true;
             }
 
-            if (outerAdjacentZone.HasValue &&
+            if (!isLeftSide &&
+                outerAdjacentZone.HasValue &&
                 thin.TargetZone == outerAdjacentZone.Value &&
                 thin.Kind == SyntheticInsertKind.InsertBefore)
             {

@@ -80,6 +80,21 @@ internal sealed class DockingTestRecorder : IDockingMoveRecorder
         SquadDashTrace.Write(TraceCategory.Docking,
             $"[DockingTestRecorder] OnMoveCompleted: _dockingMapSlots has {_dockingMapSlots?.Count ?? 0} slots before JSON write");
 
+        bool targetWasOffered = _dockingMapSlots is not null && _dockingMapSlots.Any(slot =>
+            !slot.IsSeparator &&
+            slot.TargetZone == targetZone &&
+            slot.TargetOrder == targetOrder &&
+            slot.InsertKind == insertKind);
+        if (!targetWasOffered)
+        {
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"[DockingTestRecorder] Refusing to write test case because target was not present in pre-move docking map: " +
+                $"{DockingLayoutEngine.GetZoneDisplayName(targetZone)}@{targetOrder} insertKind={insertKind}");
+            Reset();
+            RecordingCompleted?.Invoke();
+            return;
+        }
+
         var sourceSlot = _initialLayout.Slots.FirstOrDefault(s =>
             string.Equals(s.PanelId, sourcePanelId, StringComparison.OrdinalIgnoreCase));
         var sourceZone    = sourceSlot?.Zone ?? targetZone;

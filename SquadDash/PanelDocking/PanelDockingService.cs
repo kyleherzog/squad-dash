@@ -385,13 +385,8 @@ internal sealed class PanelDockingService
             return;
         }
 
-        // Cross-zone move — check if a thin-slot drop warrants a column shift.
-        if (insertKind == SyntheticInsertKind.InsertBefore)
-            (targetZone, targetOrder) = ResolveInsertBeforeColumnShift(panelId, targetZone, targetOrder);
-        else if (insertKind == SyntheticInsertKind.InsertAfter)
-            (targetZone, targetOrder) = ResolveInsertAfterColumnShift(panelId, targetZone, targetOrder);
-
-        // Capture docking map with PRE-MOVE layout for test recording (before we update CurrentLayout below)
+        // Capture the real pre-move docking map before resolving synthetic column shifts.
+        // ResolveInsert* may shift neighboring columns as part of preparing the move.
         preMoveDockingMapForRecording = (TestRecorder is not null) ?
             DockingMapBuilder.BuildDockingMap(panelId, CurrentLayout, GetCurrentLayoutData().VisiblePanelIds) :
             null;
@@ -402,6 +397,12 @@ internal sealed class PanelDockingService
             SquadDashTrace.Write(TraceCategory.Docking, 
                 $"[docking-recorder] Cross-zone move: captured preMove docking map with {slotCount} slots");
         }
+
+        // Cross-zone move — check if a thin-slot drop warrants a column shift.
+        if (insertKind == SyntheticInsertKind.InsertBefore)
+            (targetZone, targetOrder) = ResolveInsertBeforeColumnShift(panelId, targetZone, targetOrder);
+        else if (insertKind == SyntheticInsertKind.InsertAfter)
+            (targetZone, targetOrder) = ResolveInsertAfterColumnShift(panelId, targetZone, targetOrder);
 
         // Cross-zone move — update data model.
         SquadDashTrace.Write(TraceCategory.Docking,
