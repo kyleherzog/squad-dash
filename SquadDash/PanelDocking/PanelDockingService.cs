@@ -352,13 +352,14 @@ internal sealed class PanelDockingService
                 .Concat(zoneSlots.Select((id, i) => new PanelSlot(id, targetZone, i)))
                 .ToList();
 
-            TestRecorder?.OnMoveCompleted(panelId, targetZone, targetOrder, GetCurrentLayoutData());
-
-            // For test recording: capture the docking map that was visible during the drag (pre-move layout)
+            // For test recording: set the pre-move docking map BEFORE calling OnMoveCompleted
+            // (which writes the JSON file and needs _dockingMapSlots to be populated)
             if (preMoveDockingMapForRecording is not null && TestRecorder is not null)
             {
                 TestRecorder.OnDockingMapBuilt(preMoveDockingMapForRecording.Slots);
             }
+            
+            TestRecorder?.OnMoveCompleted(panelId, targetZone, targetOrder, GetCurrentLayoutData());
 
             // WPF: reorder the panel within the zone list and rebuild the grid.
             // For the Top zone, reassign physical columns; for side zones, rebuild the row grid.
@@ -657,13 +658,14 @@ internal sealed class PanelDockingService
                 // Same-zone reorders already fired at the call site above; skip them here.
                 if (sourceZoneCapture != targetZone)
                 {
-                    TestRecorder?.OnMoveCompleted(panelId, targetZone, targetOrder, GetCurrentLayoutData());
-                    
-                    // For test recording: use the pre-move docking map that we captured before the layout changed
+                    // For test recording: set the pre-move docking map BEFORE calling OnMoveCompleted
+                    // (which writes the JSON file and needs _dockingMapSlots to be populated)
                     if (preMoveDockingMapForRecording is not null && TestRecorder is not null)
                     {
                         TestRecorder.OnDockingMapBuilt(preMoveDockingMapForRecording.Slots);
                     }
+                    
+                    TestRecorder?.OnMoveCompleted(panelId, targetZone, targetOrder, GetCurrentLayoutData());
                 }
             }
         }
