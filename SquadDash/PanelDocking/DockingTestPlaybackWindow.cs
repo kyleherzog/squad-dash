@@ -88,7 +88,7 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         _getMapViolations    = getMapViolations;
 
         Title      = "Docking Test Playback";
-        Width      = 936;
+        Width      = 1404;
         Height     = 500;
 
         var contentHolder = ApplyOuterBorder("AppSurface", "Docking Test Playback");
@@ -132,11 +132,11 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
 
         // ── Main content (list + detail + map canvas) ────────────────────────────────
         var content = new Grid { Margin = new Thickness(8, 8, 8, 4) };
-        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(330) });
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
-        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(590) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(885) });
         Grid.SetRow(content, 0);
         outer.Children.Add(content);
 
@@ -323,6 +323,10 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
 
     private void OnTestSelected(object sender, SelectionChangedEventArgs e)
     {
+        // Only respond to selection changes if this window has focus.
+        // Prevents stale events from reloading tests when window is inactive.
+        if (!IsActive) return;
+
         SquadDashTrace.Write("Docking", "[PREVIEW-RENDER] OnTestSelected called");
         _phase      = PlaybackPhase.MapOpen;
         _testLoaded = false;
