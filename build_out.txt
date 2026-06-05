@@ -1,0 +1,21 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+C:\Program Files\dotnet\sdk\10.0.300-preview.0.26177.108\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.RuntimeIdentifierInference.targets(383,5): message NETSDK1057: You are using a preview version of .NET. See: https://aka.ms/dotnet-support-policy [D:\Drive\Source\SquadDash-public\SquadDash\SquadDash.csproj]
+  VoiceHeuristics -> D:\Drive\Source\SquadDash-public\VoiceHeuristics\bin\Debug\net10.0\VoiceHeuristics.dll
+  1890
+  SquadDash build ΓÇö 1.0.0.1890 (commit #1890)
+D:\Drive\Source\SquadDash-public\SquadDash\PanelDocking\DockingMapBuilder.cs(946,58): error CS1929: 'IReadOnlyList<DockZone>' does not contain a definition for 'IndexOf' and the best extension method overload 'MemoryExtensions.IndexOf<DockZone>(ReadOnlySpan<DockZone>, DockZone)' requires a receiver of type 'System.ReadOnlySpan<SquadDash.PanelDocking.DockZone>' [D:\Drive\Source\SquadDash-public\SquadDash\SquadDash_s0xa1xqb_wpftmp.csproj]
+D:\Drive\Source\SquadDash-public\SquadDash\PanelDocking\DockingMapBuilder.cs(947,57): error CS1929: 'IReadOnlyList<DockZone>' does not contain a definition for 'IndexOf' and the best extension method overload 'MemoryExtensions.IndexOf<DockZone>(ReadOnlySpan<DockZone>, DockZone)' requires a receiver of type 'System.ReadOnlySpan<SquadDash.PanelDocking.DockZone>' [D:\Drive\Source\SquadDash-public\SquadDash\SquadDash_s0xa1xqb_wpftmp.csproj]
+D:\Drive\Source\SquadDash-public\SquadDash\PanelDocking\DockingMapBuilder.cs(966,35): error CS1929: 'IReadOnlyList<DockZone>' does not contain a definition for 'IndexOf' and the best extension method overload 'MemoryExtensions.IndexOf<DockZone>(ReadOnlySpan<DockZone>, DockZone)' requires a receiver of type 'System.ReadOnlySpan<SquadDash.PanelDocking.DockZone>' [D:\Drive\Source\SquadDash-public\SquadDash\SquadDash_s0xa1xqb_wpftmp.csproj]
+D:\Drive\Source\SquadDash-public\SquadDash\PanelDocking\DockingMapBuilder.cs(1007,102): warning CS0472: The result of the expression is always 'true' since a value of type 'DockZone' is never equal to 'null' of type 'DockZone?' [D:\Drive\Source\SquadDash-public\SquadDash\SquadDash_s0xa1xqb_wpftmp.csproj]
+
+Build FAILED.
+
+D:\Drive\Source\SquadDash-public\SquadDash\PanelDocking\DockingMapBuilder.cs(1007,102): warning CS0472: The result of the expression is always 'true' since a value of type 'DockZone' is never equal to 'null' of type 'DockZone?' [D:\Drive\Source\SquadDash-public\SquadDash\SquadDash_s0xa1xqb_wpftmp.csproj]
+D:\Drive\Source\SquadDash-public\SquadDash\PanelDocking\DockingMapBuilder.cs(946,58): error CS1929: 'IReadOnlyList<DockZone>' does not contain a definition for 'IndexOf' and the best extension method overload 'MemoryExtensions.IndexOf<DockZone>(ReadOnlySpan<DockZone>, DockZone)' requires a receiver of type 'System.ReadOnlySpan<SquadDash.PanelDocking.DockZone>' [D:\Drive\Source\SquadDash-public\SquadDash\SquadDash_s0xa1xqb_wpftmp.csproj]
+D:\Drive\Source\SquadDash-public\SquadDash\PanelDocking\DockingMapBuilder.cs(947,57): error CS1929: 'IReadOnlyList<DockZone>' does not contain a definition for 'IndexOf' and the best extension method overload 'MemoryExtensions.IndexOf<DockZone>(ReadOnlySpan<DockZone>, DockZone)' requires a receiver of type 'System.ReadOnlySpan<SquadDash.PanelDocking.DockZone>' [D:\Drive\Source\SquadDash-public\SquadDash\SquadDash_s0xa1xqb_wpftmp.csproj]
+D:\Drive\Source\SquadDash-public\SquadDash\PanelDocking\DockingMapBuilder.cs(966,35): error CS1929: 'IReadOnlyList<DockZone>' does not contain a definition for 'IndexOf' and the best extension method overload 'MemoryExtensions.IndexOf<DockZone>(ReadOnlySpan<DockZone>, DockZone)' requires a receiver of type 'System.ReadOnlySpan<SquadDash.PanelDocking.DockZone>' [D:\Drive\Source\SquadDash-public\SquadDash\SquadDash_s0xa1xqb_wpftmp.csproj]
+    1 Warning(s)
+    3 Error(s)
+
+Time Elapsed 00:00:03.30
