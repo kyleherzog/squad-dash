@@ -60,6 +60,7 @@ internal sealed class PreferencesWindow : Window {
     private readonly ComboBox _byokProviderTypeComboBox;
     private readonly PasswordBox _byokApiKeyPasswordBox;
     private readonly TextBox _byokApiKeyRevealBox;
+    private readonly CheckBox _byokOfflineModeCheckBox;
     private readonly TextBlock _byokTestStatusText;
     private readonly TextBox _cleanupPromptBox;
     // ── Sound notification controls ──────────────────────────────────────
@@ -450,6 +451,12 @@ internal sealed class PreferencesWindow : Window {
         _byokApiKeyRevealBox.SetResourceReference(TextBox.BackgroundProperty, "TextBoxBackground");
         _byokApiKeyRevealBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
         _byokApiKeyRevealBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
+        _byokOfflineModeCheckBox = new CheckBox {
+            Content = "Offline mode (sets COPILOT_OFFLINE=true — skips GitHub auth)",
+            IsChecked = currentSettings.ByokOfflineMode,
+            Margin = new Thickness(0, 10, 0, 0)
+        };
+        _byokOfflineModeCheckBox.SetResourceReference(ForegroundProperty, "BodyText");
         _byokTestStatusText = new TextBlock {
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(10, 0, 0, 0),
@@ -1161,6 +1168,7 @@ internal sealed class PreferencesWindow : Window {
             _byokApiKeyPasswordBox.Visibility = Visibility.Visible;
         };
         _customModelProviderPanel.Children.Add(revealByokLink);
+        _customModelProviderPanel.Children.Add(_byokOfflineModeCheckBox);
 
         var byokTestPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 4) };
         var byokTestButton = new Button {
@@ -1954,7 +1962,8 @@ internal sealed class PreferencesWindow : Window {
             string.IsNullOrWhiteSpace(_byokProviderUrlBox.Text.Trim()) ? null : _byokProviderUrlBox.Text.Trim(),
             string.IsNullOrWhiteSpace(_byokModelBox.Text.Trim()) ? null : _byokModelBox.Text.Trim(),
             byokProviderType,
-            string.IsNullOrWhiteSpace(byokApiKey) ? null : byokApiKey);
+            string.IsNullOrWhiteSpace(byokApiKey) ? null : byokApiKey,
+            _byokOfflineModeCheckBox.IsChecked == true);
         updated = _settingsStore.SaveCleanupPrompt(_cleanupPromptBox.Text.Trim());
         SaveVoiceReplacementsNow();
         _onSaved(updated);

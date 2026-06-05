@@ -342,14 +342,16 @@ internal sealed class ApplicationSettingsStore {
         string? providerUrl,
         string? model,
         string? providerType,
-        string? apiKey) {
+        string? apiKey,
+        bool offlineMode) {
         using var mutex = AcquireMutex();
         var current = LoadCore();
         var updated = current with {
             ByokProviderUrl = string.IsNullOrWhiteSpace(providerUrl) ? null : providerUrl.Trim(),
             ByokModel = string.IsNullOrWhiteSpace(model) ? null : model.Trim(),
             ByokProviderType = providerType is "openai" or "azure" or "anthropic" ? providerType : null,
-            ByokApiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim()
+            ByokApiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim(),
+            ByokOfflineMode = offlineMode
         };
         SaveCore(updated);
         return updated;
@@ -1120,6 +1122,9 @@ internal sealed record ApplicationSettingsSnapshot(
     /// <summary>API key for the custom provider. Sensitive — not logged.</summary>
     public string? ByokApiKey { get; init; }
 
+    /// <summary>When true, sets COPILOT_OFFLINE=true so the CLI skips GitHub authentication calls.</summary>
+    public bool ByokOfflineMode { get; init; } = false;
+
     /// <summary>
     /// Ordered list of regex find/replace rules applied to every voice phrase
     /// before it is inserted at the cursor. Rules are applied in order.
@@ -1531,6 +1536,7 @@ internal sealed record ApplicationSettingsSnapshot(
             ByokModel = string.IsNullOrWhiteSpace(ByokModel) ? null : ByokModel.Trim(),
             ByokProviderType = ByokProviderType is "openai" or "azure" or "anthropic" ? ByokProviderType : null,
             ByokApiKey = string.IsNullOrWhiteSpace(ByokApiKey) ? null : ByokApiKey.Trim(),
+            ByokOfflineMode = ByokOfflineMode,
             LoopMode = LoopMode,
             LoopContinuousContext = LoopContinuousContext,
             LoopActiveOnExit = LoopActiveOnExit,

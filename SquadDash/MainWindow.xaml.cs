@@ -25640,7 +25640,8 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             snapshot.ByokProviderUrl,
             snapshot.ByokModel,
             snapshot.ByokProviderType,
-            snapshot.ByokApiKey);
+            snapshot.ByokApiKey,
+            snapshot.ByokOfflineMode);
     }
 
     private static string? BuildCopilotDefaultModel(ApplicationSettingsSnapshot snapshot)

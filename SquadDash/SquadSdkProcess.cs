@@ -572,8 +572,11 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
             if (!string.IsNullOrEmpty(byok.ApiKey))
                 psi.EnvironmentVariables["COPILOT_PROVIDER_API_KEY"] = byok.ApiKey;
 
+            if (byok.OfflineMode)
+                psi.EnvironmentVariables["COPILOT_OFFLINE"] = "true";
+
             SquadDashTrace.Write("Bridge",
-                $"BYOK active — url={providerUrl} model={byok.Model ?? "(none)"} type={byok.ProviderType ?? "(default)"} apiKey={(string.IsNullOrEmpty(byok.ApiKey) ? "not set" : "set")}");
+                $"BYOK active — url={providerUrl} model={byok.Model ?? "(none)"} type={byok.ProviderType ?? "(default)"} apiKey={(string.IsNullOrEmpty(byok.ApiKey) ? "not set" : "set")} offline={byok.OfflineMode}");
         } else {
             SquadDashTrace.Write("Bridge", "BYOK not configured — using default GitHub Copilot provider.");
         }

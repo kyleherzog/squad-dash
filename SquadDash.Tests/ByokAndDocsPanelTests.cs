@@ -91,7 +91,7 @@ internal sealed class ByokAndDocsPanelTests {
         var settingsPath = workspace.GetPath("settings", "settings.json");
         var store = new ApplicationSettingsStore(settingsPath);
 
-        store.SaveByokSettings("https://provider.example.com", "gpt-4", "openai", "sk-secret");
+        store.SaveByokSettings("https://provider.example.com", "gpt-4", "openai", "sk-secret", offlineMode: false);
         var loaded = store.Load();
 
         Assert.Multiple(() => {
@@ -108,7 +108,7 @@ internal sealed class ByokAndDocsPanelTests {
         var settingsPath = workspace.GetPath("settings", "settings.json");
         var store = new ApplicationSettingsStore(settingsPath);
 
-        store.SaveByokSettings("   ", "  ", null, "   ");
+        store.SaveByokSettings("   ", "  ", null, "   ", offlineMode: false);
         var loaded = store.Load();
 
         Assert.Multiple(() => {
@@ -124,7 +124,7 @@ internal sealed class ByokAndDocsPanelTests {
         var settingsPath = workspace.GetPath("settings", "settings.json");
         var store = new ApplicationSettingsStore(settingsPath);
 
-        store.SaveByokSettings("https://provider.example.com", null, "invalid-provider", null);
+        store.SaveByokSettings("https://provider.example.com", null, "invalid-provider", null, offlineMode: false);
         var loaded = store.Load();
 
         Assert.That(loaded.ByokProviderType, Is.Null);
@@ -138,7 +138,7 @@ internal sealed class ByokAndDocsPanelTests {
         var settingsPath = workspace.GetPath("settings", "settings.json");
         var store = new ApplicationSettingsStore(settingsPath);
 
-        store.SaveByokSettings("https://provider.example.com", null, providerType, null);
+        store.SaveByokSettings("https://provider.example.com", null, providerType, null, offlineMode: false);
         var loaded = store.Load();
 
         Assert.That(loaded.ByokProviderType, Is.EqualTo(providerType));
@@ -150,7 +150,7 @@ internal sealed class ByokAndDocsPanelTests {
         var settingsPath = workspace.GetPath("settings", "settings.json");
         var store = new ApplicationSettingsStore(settingsPath);
 
-        store.SaveByokSettings("  https://provider.example.com  ", "  gpt-4  ", "openai", "  sk-key  ");
+        store.SaveByokSettings("  https://provider.example.com  ", "  gpt-4  ", "openai", "  sk-key  ", offlineMode: false);
         var loaded = store.Load();
 
         Assert.Multiple(() => {
@@ -158,6 +158,30 @@ internal sealed class ByokAndDocsPanelTests {
             Assert.That(loaded.ByokModel, Is.EqualTo("gpt-4"));
             Assert.That(loaded.ByokApiKey, Is.EqualTo("sk-key"));
         });
+    }
+
+    [Test]
+    public void SaveByokSettings_OfflineModeTrue_Persists() {
+        using var workspace = new TestWorkspace();
+        var settingsPath = workspace.GetPath("settings", "settings.json");
+        var store = new ApplicationSettingsStore(settingsPath);
+
+        store.SaveByokSettings("https://provider.example.com", "qwen3", "openai", null, offlineMode: true);
+        var loaded = store.Load();
+
+        Assert.That(loaded.ByokOfflineMode, Is.True);
+    }
+
+    [Test]
+    public void SaveByokSettings_OfflineModeFalse_Persists() {
+        using var workspace = new TestWorkspace();
+        var settingsPath = workspace.GetPath("settings", "settings.json");
+        var store = new ApplicationSettingsStore(settingsPath);
+
+        store.SaveByokSettings("https://provider.example.com", "qwen3", "openai", null, offlineMode: false);
+        var loaded = store.Load();
+
+        Assert.That(loaded.ByokOfflineMode, Is.False);
     }
 
     [Test]
@@ -313,6 +337,30 @@ internal sealed class ByokAndDocsPanelTests {
 
         Assert.That(psi.EnvironmentVariables.ContainsKey("COPILOT_PROVIDER_BASE_URL"), Is.False,
             "Empty ProviderUrl should not activate BYOK");
+    }
+
+    [Test]
+    public void BuildDefaultStartInfo_ByokOfflineModeTrue_InjectsCopilotOfflineVar() {
+        var sut = new SquadSdkProcess(new FakeWorkspacePaths());
+        sut.ByokProviderSettings = new ByokProviderSettings(
+            "https://provider.example.com", "qwen3", "openai", null, OfflineMode: true);
+
+        var psi = InvokeBuildDefaultStartInfo(sut);
+
+        Assert.That(psi.EnvironmentVariables["COPILOT_OFFLINE"], Is.EqualTo("true"));
+    }
+
+    [Test]
+    public void BuildDefaultStartInfo_ByokOfflineModeFalse_DoesNotInjectCopilotOfflineVar() {
+        var baselineVars = GetBaselineEnvVarKeys();
+        var sut = new SquadSdkProcess(new FakeWorkspacePaths());
+        sut.ByokProviderSettings = new ByokProviderSettings(
+            "https://provider.example.com", "qwen3", "openai", null, OfflineMode: false);
+
+        var psi = InvokeBuildDefaultStartInfo(sut);
+        var added = GetKeysAddedBeyondBaseline(psi, baselineVars);
+
+        Assert.That(added, Does.Not.Contain("COPILOT_OFFLINE"));
     }
 
     [Test]

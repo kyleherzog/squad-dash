@@ -8,4 +8,5 @@ internal sealed record ByokProviderSettings(
     string ProviderUrl,
     string? Model,
     string? ProviderType,
-    string? ApiKey);
+    string? ApiKey,
+    bool OfflineMode = false);
