@@ -354,16 +354,17 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
                 : null;
 
             // Build the DockingMapViewModel from the expected layout
+            SquadDashTrace.Write("Docking", $"[OnTestSelected] ========== BUILDING VIEWMODEL ==========");
+            SquadDashTrace.Write("Docking", $"[OnTestSelected] initialLayout zones: {string.Join(", ", initialLayout.Where(kv => kv.Value.Count > 0).Select(kv => $"{kv.Key}=[{string.Join(",", kv.Value)}]"))}");
             SquadDashTrace.Write("Docking", $"[OnTestSelected] expectedLayout zones: {string.Join(", ", expectedLayout.Where(kv => kv.Value.Count > 0).Select(kv => $"{kv.Key}=[{string.Join(",", kv.Value)}]"))}");
+            SquadDashTrace.Write("Docking", $"[OnTestSelected] expectedLayout zone count: {expectedLayout.Count}, non-empty zones: {expectedLayout.Count(kv => kv.Value.Count > 0)}");
             
             var dockLayout = BuildDockLayoutFromZoneMap(sourcePanelId, expectedLayout);
             SquadDashTrace.Write("Docking", $"[OnTestSelected] Built DockLayout with {dockLayout.Slots.Count} slots: {string.Join(", ", dockLayout.Slots.Select(s => $"{s.PanelId}@{s.Zone}:{s.Order}"))}");
             
             var dockingMapViewModel = DockingMapBuilder.BuildDockingMap(sourcePanelId, dockLayout, null);
             SquadDashTrace.Write("Docking", $"[OnTestSelected] Built ViewModel: PopupWidth={dockingMapViewModel.PopupWidth}, PopupHeight={dockingMapViewModel.PopupHeight}, SlotCount={dockingMapViewModel.Slots.Count}");
-            
-            foreach (var slot in dockingMapViewModel.Slots)
-                SquadDashTrace.Write("Docking", $"[OnTestSelected]   Slot: {slot.Label} at ({slot.X}, {slot.Y}) size {slot.Width}x{slot.Height}");
+            SquadDashTrace.Write("Docking", $"[OnTestSelected] ========== STORING VIEWMODEL ==========");
 
             _currentTest = new ParsedTestCase(sourcePanelId, initialLayout, expectedLayout, targetZone, targetOrder, targetIsInsert, entry.FilePath, expectedDockingMapSlots, dockingMapViewModel);
 
@@ -616,6 +617,8 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         _slotBorders.Clear();
         _selectedSlot = null;
 
+        SquadDashTrace.Write("Docking", $"[PREVIEW-RENDER-START] ViewModel: {(viewModel is null ? "NULL" : $"PopupWidth={viewModel.PopupWidth}, PopupHeight={viewModel.PopupHeight}, SlotCount={viewModel.Slots.Count}")}");
+
         if (viewModel is null || viewModel.Slots.Count == 0)
         {
             _dockingMapCanvas.Width = 0;
@@ -731,13 +734,14 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
 
         foreach (var (zoneName, panelIds) in zoneMap)
         {
-            if (!Enum.TryParse<DockZone>(zoneName, ignoreCase: true, out var zone))
+            var zone = ParseZoneDisplayName(zoneName);
+            if (!zone.HasValue)
                 continue;
 
             int order = 0;
             foreach (var panelId in panelIds)
             {
-                slots.Add(new PanelSlot(panelId, zone, order));
+                slots.Add(new PanelSlot(panelId, zone.Value, order));
                 order++;
             }
         }
@@ -745,6 +749,23 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         layout.Slots = slots;
         return layout;
     }
+
+    /// <summary>
+    /// Converts zone display names (e.g., "Right 1", "Left 2") to DockZone enums.
+    /// </summary>
+    private static DockZone? ParseZoneDisplayName(string displayName) => displayName switch
+    {
+        "Top"     => DockZone.Top,
+        "Left 1"  => DockZone.Left,
+        "Left 2"  => DockZone.Left2,
+        "Left 3"  => DockZone.Left3,
+        "Left 4"  => DockZone.Left4,
+        "Right 1" => DockZone.Right,
+        "Right 2" => DockZone.Right2,
+        "Right 3" => DockZone.Right3,
+        "Right 4" => DockZone.Right4,
+        _         => null,
+    };
 
     private Border BuildMapSlotElement(SlotButtonViewModel slot, Color groundingColor, Color polarColor, bool isDark, DockZone? targetZone = null, int? targetOrder = null)
     {
