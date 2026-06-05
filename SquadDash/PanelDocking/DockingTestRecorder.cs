@@ -60,12 +60,20 @@ internal sealed class DockingTestRecorder : IDockingMoveRecorder
         _dockingMapSlots = slots.ToList();
         SquadDashTrace.Write(TraceCategory.Docking, 
             $"[DockingTestRecorder] _dockingMapSlots set to list with {_dockingMapSlots.Count} items");
+        foreach (var slot in _dockingMapSlots.Take(5))
+        {
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"  - Slot: {slot.TargetZone}@{slot.TargetOrder} label='{slot.Label}' isSeparator={slot.IsSeparator}");
+        }
     }
 
     public void OnMoveCompleted(string sourcePanelId, DockZone targetZone, int targetOrder, PanelLayoutData layoutAfter)
     {
         if (_state != RecorderState.Recording) return;
         if (_initialLayout is null) return;
+
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[DockingTestRecorder] OnMoveCompleted: _dockingMapSlots has {_dockingMapSlots?.Count ?? 0} slots before JSON write");
 
         var sourceSlot = _initialLayout.Slots.FirstOrDefault(s =>
             string.Equals(s.PanelId, sourcePanelId, StringComparison.OrdinalIgnoreCase));
@@ -104,6 +112,9 @@ internal sealed class DockingTestRecorder : IDockingMoveRecorder
             .ThenBy(s => s.order)
             .ToList();
 
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[DockingTestRecorder] Built dockingMapForJson with {dockingMapForJson.Count} items for JSON file");
+
         var testCase = new
         {
             name           = $"{sourcePanelId}_{sourceZoneTag}_to_{targetZoneTag}_order{targetOrder}",
@@ -123,6 +134,9 @@ internal sealed class DockingTestRecorder : IDockingMoveRecorder
         Directory.CreateDirectory(_outputDirectory);
         var json = JsonSerializer.Serialize(testCase, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(Path.Combine(_outputDirectory, filename), json);
+
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"[DockingTestRecorder] Wrote test case to {filename}");
 
         Reset();
         RecordingCompleted?.Invoke();
