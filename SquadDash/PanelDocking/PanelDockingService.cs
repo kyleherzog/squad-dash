@@ -309,9 +309,42 @@ internal sealed class PanelDockingService
         
         // Declare variables for test recording at function scope so they're accessible in finally
         DockingMapViewModel? preMoveDockingMapForRecording = null;
+        bool syntheticColumnShiftChanged = false;
         
         try
         {
+        string LayoutSignature() => string.Join("|", CurrentLayout.Slots
+            .OrderBy(s => s.Zone)
+            .ThenBy(s => s.Order)
+            .ThenBy(s => s.PanelId, StringComparer.OrdinalIgnoreCase)
+            .Select(s => $"{s.PanelId}@{s.Zone}:{s.Order}"));
+
+        if (insertKind != SyntheticInsertKind.None)
+        {
+            // Capture the real pre-move docking map before resolving synthetic column shifts.
+            // ResolveInsert* may shift neighboring columns as part of preparing the move.
+            preMoveDockingMapForRecording = (TestRecorder is not null) ?
+                DockingMapBuilder.BuildDockingMap(panelId, CurrentLayout, GetCurrentLayoutData().VisiblePanelIds) :
+                null;
+
+            if (TestRecorder is not null)
+            {
+                var slotCount = preMoveDockingMapForRecording?.Slots.Count ?? -1;
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"[docking-recorder] Synthetic move: captured preMove docking map with {slotCount} slots");
+            }
+
+            var beforeSyntheticResolve = LayoutSignature();
+            if (insertKind == SyntheticInsertKind.InsertBefore)
+                (targetZone, targetOrder) = ResolveInsertBeforeColumnShift(panelId, targetZone, targetOrder);
+            else if (insertKind == SyntheticInsertKind.InsertAfter)
+                (targetZone, targetOrder) = ResolveInsertAfterColumnShift(panelId, targetZone, targetOrder);
+            syntheticColumnShiftChanged = !string.Equals(
+                beforeSyntheticResolve,
+                LayoutSignature(),
+                StringComparison.Ordinal);
+        }
+
         var existing = CurrentLayout.Slots.FirstOrDefault(s =>
             string.Equals(s.PanelId, panelId, StringComparison.OrdinalIgnoreCase));
 
@@ -331,7 +364,7 @@ internal sealed class PanelDockingService
             int currentIdx = zoneSlots.IndexOf(
                 zoneSlots.FirstOrDefault(id => string.Equals(id, panelId, StringComparison.OrdinalIgnoreCase)) ?? "");
             int clampedTarget = targetOrder < 0 ? zoneSlots.Count - 1 : Math.Clamp(targetOrder, 0, zoneSlots.Count - 1);
-            if (currentIdx == clampedTarget) return;
+            if (currentIdx == clampedTarget && !syntheticColumnShiftChanged) return;
 
             // Capture docking map with PRE-MOVE layout for test recording
             preMoveDockingMapForRecording = (TestRecorder is not null) ?
@@ -361,7 +394,8 @@ internal sealed class PanelDockingService
                 TestRecorder.OnDockingMapBuilt(preMoveDockingMapForRecording.Slots);
             }
             
-            TestRecorder?.OnMoveCompleted(panelId, requestedTargetZone, requestedTargetOrder, insertKind, GetCurrentLayoutData());
+            if (!syntheticColumnShiftChanged)
+                TestRecorder?.OnMoveCompleted(panelId, requestedTargetZone, requestedTargetOrder, insertKind, GetCurrentLayoutData());
 
             // WPF: reorder the panel within the zone list and rebuild the grid.
             // For the Top zone, reassign physical columns; for side zones, rebuild the row grid.
@@ -385,24 +419,16 @@ internal sealed class PanelDockingService
             return;
         }
 
-        // Capture the real pre-move docking map before resolving synthetic column shifts.
-        // ResolveInsert* may shift neighboring columns as part of preparing the move.
-        preMoveDockingMapForRecording = (TestRecorder is not null) ?
+        preMoveDockingMapForRecording ??= (TestRecorder is not null) ?
             DockingMapBuilder.BuildDockingMap(panelId, CurrentLayout, GetCurrentLayoutData().VisiblePanelIds) :
             null;
         
-        if (TestRecorder is not null)
+        if (TestRecorder is not null && insertKind == SyntheticInsertKind.None)
         {
             var slotCount = preMoveDockingMapForRecording?.Slots.Count ?? -1;
             SquadDashTrace.Write(TraceCategory.Docking, 
                 $"[docking-recorder] Cross-zone move: captured preMove docking map with {slotCount} slots");
         }
-
-        // Cross-zone move — check if a thin-slot drop warrants a column shift.
-        if (insertKind == SyntheticInsertKind.InsertBefore)
-            (targetZone, targetOrder) = ResolveInsertBeforeColumnShift(panelId, targetZone, targetOrder);
-        else if (insertKind == SyntheticInsertKind.InsertAfter)
-            (targetZone, targetOrder) = ResolveInsertAfterColumnShift(panelId, targetZone, targetOrder);
 
         // Cross-zone move — update data model.
         SquadDashTrace.Write(TraceCategory.Docking,
@@ -659,7 +685,7 @@ internal sealed class PanelDockingService
                 // Notify recorder after normalization so it captures the true final layout,
                 // not an intermediate state that normalization will immediately undo.
                 // Same-zone reorders already fired at the call site above; skip them here.
-                if (sourceZoneCapture != targetZone)
+                if (sourceZoneCapture != targetZone || syntheticColumnShiftChanged)
                 {
                     // For test recording: set the pre-move docking map BEFORE calling OnMoveCompleted
                     // (which writes the JSON file and needs _dockingMapSlots to be populated)

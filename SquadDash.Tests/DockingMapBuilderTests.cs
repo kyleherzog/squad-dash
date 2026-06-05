@@ -298,6 +298,133 @@ public class DockingMapBuilderTests
     }
 
     [Test]
+    public void BuildDockingMap_WithSoloSourceInOuterLeftZone_HidesInnerAdjacentSyntheticThin()
+    {
+        var map = Build(
+            sourcePanelId: "notes",
+            ("inbox", DockZone.Left),
+            ("loop", DockZone.Left2),
+            ("approvals", DockZone.Left2),
+            ("notes", DockZone.Left3),
+            ("maintenance", DockZone.Right),
+            ("tasks", DockZone.Right2));
+
+        var leftThins = ThinSlots(map, LeftZones);
+
+        Assert.That(leftThins.Any(t =>
+                t.TargetZone == DockZone.Left2 &&
+                t.InsertKind == SyntheticInsertKind.InsertBefore),
+            Is.False,
+            "Should hide the Left3/Left2 boundary thin immediately next to solo-panel Left3");
+        Assert.That(leftThins.Any(t =>
+                t.TargetZone == DockZone.Left3 &&
+                t.IsSyntheticInsert),
+            Is.False,
+            "Should hide source-zone boundary synthetic thins for solo-panel Left3");
+        Assert.That(leftThins.Any(t => t.TargetZone == DockZone.Left), Is.True,
+            "Should keep meaningful non-adjacent Left-side docking targets");
+
+        var violations = DockingMapBuilder.FindAdjacentThinViolations(map.Slots);
+        Assert.That(violations, Is.Empty);
+    }
+
+    [Test]
+    public void MovePanelRecorder_CapturesPreMoveMapBeforeSyntheticColumnShift()
+    {
+        var service = new PanelDockingService();
+        service.ApplyLayout(new DockLayout
+        {
+            Name = "Recorder regression",
+            Slots =
+            [
+                new PanelSlot("inbox", DockZone.Left, 0),
+                new PanelSlot("loop", DockZone.Left2, 0),
+                new PanelSlot("approvals", DockZone.Left2, 1),
+                new PanelSlot("notes", DockZone.Left3, 0),
+                new PanelSlot("maintenance", DockZone.Right, 0),
+                new PanelSlot("tasks", DockZone.Right2, 0),
+            ],
+        });
+
+        var recorder = new CapturingRecorder();
+        service.TestRecorder = recorder;
+
+        service.MovePanel("notes", DockZone.Left2, 0, SyntheticInsertKind.InsertBefore);
+
+        Assert.That(recorder.CapturedMapSlots, Is.Not.Null);
+        var sourceSlot = recorder.CapturedMapSlots!.Single(s => s.IsSourcePanel);
+        Assert.That(sourceSlot.TargetZone, Is.EqualTo(DockZone.Left3));
+        Assert.That(sourceSlot.Height, Is.GreaterThan(100),
+            "Recorder should capture the solo source column before column-shift mutation");
+        Assert.That(recorder.CapturedMapSlots.Any(s =>
+                s.TargetZone == DockZone.Left2 &&
+                s.InsertKind == SyntheticInsertKind.InsertBefore),
+            Is.False,
+            "Recorder should not persist the invalid adjacent thin next to solo-panel Left3");
+    }
+
+    [Test]
+    public void MovePanel_WithSameZoneInsertAfterLeft_SplitsSourceIntoInnerVirtualColumn()
+    {
+        var service = new PanelDockingService();
+        service.ApplyLayout(new DockLayout
+        {
+            Name = "Same-zone synthetic split",
+            Slots =
+            [
+                new PanelSlot("inbox", DockZone.Left, 0),
+                new PanelSlot("notes", DockZone.Left, 1),
+                new PanelSlot("loop", DockZone.Left2, 0),
+                new PanelSlot("approvals", DockZone.Left2, 1),
+                new PanelSlot("maintenance", DockZone.Right, 0),
+                new PanelSlot("tasks", DockZone.Right2, 0),
+            ],
+        });
+
+        var recorder = new CapturingRecorder();
+        service.TestRecorder = recorder;
+
+        service.MovePanel("notes", DockZone.Left, 2, SyntheticInsertKind.InsertAfter);
+
+        var layout = service.GetCurrentLayoutData();
+        var zones = DockingLayoutEngine.LayoutToJson(layout);
+        Assert.That(zones["Left 1"], Is.EqualTo(new[] { "notes" }));
+        Assert.That(zones["Left 2"], Is.EqualTo(new[] { "inbox" }));
+        Assert.That(zones["Left 3"], Is.EqualTo(new[] { "loop", "approvals" }));
+        Assert.That(recorder.MoveCompletedCount, Is.EqualTo(1),
+            "Synthetic same-zone column splits should record as a completed docking move");
+        Assert.That(recorder.CompletedTargetZone, Is.EqualTo(DockZone.Left));
+        Assert.That(recorder.CompletedTargetOrder, Is.EqualTo(2));
+        Assert.That(recorder.CompletedInsertKind, Is.EqualTo(SyntheticInsertKind.InsertAfter));
+    }
+
+    [Test]
+    public void MovePanel_WithMiddleSourceSameZoneInsertAfterLeft_SplitsSourceAndMovesSiblingsOutward()
+    {
+        var service = new PanelDockingService();
+        service.ApplyLayout(new DockLayout
+        {
+            Name = "Middle-source synthetic split",
+            Slots =
+            [
+                new PanelSlot("inbox", DockZone.Left, 0),
+                new PanelSlot("loop", DockZone.Left, 1),
+                new PanelSlot("notes", DockZone.Left, 2),
+                new PanelSlot("approvals", DockZone.Left2, 0),
+                new PanelSlot("maintenance", DockZone.Right, 0),
+                new PanelSlot("tasks", DockZone.Right2, 0),
+            ],
+        });
+
+        service.MovePanel("loop", DockZone.Left, 3, SyntheticInsertKind.InsertAfter);
+
+        var zones = DockingLayoutEngine.LayoutToJson(service.GetCurrentLayoutData());
+        Assert.That(zones["Left 1"], Is.EqualTo(new[] { "loop" }));
+        Assert.That(zones["Left 2"], Is.EqualTo(new[] { "inbox", "notes" }));
+        Assert.That(zones["Left 3"], Is.EqualTo(new[] { "approvals" }));
+    }
+
+    [Test]
     public void BuildDockingMap_WithComplexMultiZoneLayout_ShouldMaintainNPlusOneRule()
     {
         // Complex scenario with multiple panels on both sides and middle zone.
@@ -415,4 +542,29 @@ public class DockingMapBuilderTests
             .Where(s => !s.IsSeparator && sideZones.Contains(s.TargetZone) && s.Width < 48)
             .OrderBy(s => s.X)
             .ToList();
+
+    private sealed class CapturingRecorder : IDockingMoveRecorder
+    {
+        public IReadOnlyList<SlotButtonViewModel>? CapturedMapSlots { get; private set; }
+        public int MoveCompletedCount { get; private set; }
+        public DockZone CompletedTargetZone { get; private set; }
+        public int CompletedTargetOrder { get; private set; }
+        public SyntheticInsertKind CompletedInsertKind { get; private set; }
+
+        public void OnMoveCompleted(
+            string sourcePanelId,
+            DockZone targetZone,
+            int targetOrder,
+            SyntheticInsertKind insertKind,
+            PanelLayoutData layoutAfter)
+        {
+            MoveCompletedCount++;
+            CompletedTargetZone = targetZone;
+            CompletedTargetOrder = targetOrder;
+            CompletedInsertKind = insertKind;
+        }
+
+        public void OnDockingMapBuilt(IReadOnlyList<SlotButtonViewModel> slots) =>
+            CapturedMapSlots = slots.ToList();
+    }
 }

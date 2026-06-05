@@ -315,9 +315,9 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         }
         else
         {
-            // No previously selected item; explicitly deselect all to prevent auto-selection
-            // of the first item or new items when the file watcher detects changes.
-            _testList.SelectedIndex = -1;
+            // No previously selected item; auto-select the first test if available
+            if (_entries.Count > 0)
+                _testList.SelectedIndex = 0; // Selects and loads the first test
         }
     }
 
