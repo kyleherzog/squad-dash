@@ -945,11 +945,10 @@ internal static class DockingMapBuilder
         SquadDashTrace.Write(TraceCategory.Docking,
             $"  [adjacent-thin-filter-DEBUG] {sideName}: Finding zones with source panel '{sourcePanelId}'");
         
-        bool isSoloPanelSpanningMultipleZones = false; // Solo-panels by definition occupy exactly ONE zone
         var sameSideFiltered = new List<SyntheticThin>();
         var sameSideRemoved = new List<SyntheticThin>();
 
-        // Always use selective filtering (multi-zone should never occur)
+        // Always use selective filtering (solo-panels by definition occupy exactly ONE zone)
         SquadDashTrace.Write(TraceCategory.Docking,
             $"  [adjacent-thin-filter] {sideName}: Solo-panel occupies zone {DockingLayoutEngine.GetZoneDisplayName(sourceZone)}—filter selectively");
             
@@ -962,8 +961,8 @@ internal static class DockingMapBuilder
             foreach (var thin in thins)
             {
                 // Filter thins that are no-ops:
-                // 1. InsertAfter in the source zone (inserting within same zone)
-                // 2. Thins targeting empty adjacent zones
+                // InsertAfter on the source zone is a no-op when dragging solo panel (can't move after itself)
+                // Thins targeting empty adjacent zones are also no-ops
                 
                 bool isInsertWithinSourceZone = (thin.TargetZone == sourceZone && thin.Kind == SyntheticInsertKind.InsertAfter);
                 
