@@ -93,7 +93,7 @@ tasks:
 
   - id: code-smells
     enabled: true
-    frequency: weekly
+    frequency: weekly-Saturday
     safety: report-only
     title: Code Smell Cleanup
     instructions: |
@@ -145,7 +145,7 @@ tasks:
 
   - id: docs-review
     enabled: true
-    frequency: weekly-Monday
+    frequency: weekly-Sunday
     safety: report-only
     title: Documentation Review
     instructions: |
@@ -236,7 +236,7 @@ tasks:
 
   - id: error-handling-audit
     enabled: true
-    frequency: weekly
+    frequency: weekly-Thursday
     safety: report-only
     title: Error Handling Audit
     instructions: |
@@ -551,7 +551,7 @@ tasks:
             tooltip: Report failures only — do not change any code
   - id: security-audit
     enabled: true
-    frequency: weekly
+    frequency: weekly-Tuesday
     safety: report-only
     title: Security Vulnerability Audit
     instructions: |

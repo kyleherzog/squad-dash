@@ -939,51 +939,77 @@ internal static class DockingMapBuilder
         }
 
         // Source is alone in its zone and there are other occupied zones.
-        // For solo-panel sources, thins targeting the source zone or immediately adjacent zones
-        // are no-ops (they don't meaningfully change the layout).
-        // Filter ONLY same-zone and adjacent thins; this is separate from N+1 enforcement.
+        // For solo-panel sources: thins targeting zones with the solo-panel are no-ops.
+        // First, identify all zones on this side that contain the solo-panel.
         
-        DockZone? leftAdjacentZone = sourceZoneIdx > 0 ? sideZones[sourceZoneIdx - 1] : null;
-        DockZone? rightAdjacentZone = sourceZoneIdx < sideZones.Count - 1 ? sideZones[sourceZoneIdx + 1] : null;
-
+        var panelsOnThisSide = new HashSet<string>();
+        foreach (var zone in sideZones)
+        {
+            var panelsInZone = PanelsInZone(layout, zone);
+            foreach (var p in panelsInZone)
+            {
+                panelsOnThisSide.Add(p);
+            }
+        }
+        
+        // Check if solo-panel is the sole occupant on this entire side
+        bool isSolePanelOnSide = panelsOnThisSide.Count == 1 && panelsOnThisSide.Contains(sourcePanelId);
+        
         var sameSideFiltered = new List<SyntheticThin>();
         var sameSideRemoved = new List<SyntheticThin>();
 
-        foreach (var thin in thins)
+        if (isSolePanelOnSide)
         {
-            // For solo-panel source, filter thins that are no-ops:
-            // 1. InsertAfter in the source zone (inserting within same zone)
-            // 2. Thins targeting empty adjacent zones (visually identical to source zone)
-            // But KEEP thins on occupied adjacent zones—they're inter-zone separators
-            // Also KEEP InsertBefore on source zone—it's a boundary separator in multi-zone layouts
-            
-            bool isInsertWithinSourceZone = (thin.TargetZone == sourceZone && thin.Kind == SyntheticInsertKind.InsertAfter);
-            
-            // Only filter adjacent thins if the adjacent zone is EMPTY
-            bool isEmptyAdjacentZone = false;
-            if ((thin.TargetZone == leftAdjacentZone || thin.TargetZone == rightAdjacentZone) && thin.TargetZone != null)
-            {
-                isEmptyAdjacentZone = PanelsInZone(layout, thin.TargetZone).Count == 0;
-            }
-            
-            bool isNoOp = isInsertWithinSourceZone || isEmptyAdjacentZone;
-
-            if (isNoOp)
+            // Solo-panel occupies ALL zones on this side—all same-side thins are no-ops
+            foreach (var thin in thins)
             {
                 sameSideRemoved.Add(thin);
                 SquadDashTrace.Write(TraceCategory.Docking,
-                    $"    [solo-panel-same-side] Filtering no-op thin: {thin.Kind} {DockingLayoutEngine.GetZoneDisplayName(thin.TargetZone)}@{thin.TargetOrder}");
+                    $"    [solo-panel-same-side] Filtering no-op thin (sole occupant): {thin.Kind} {DockingLayoutEngine.GetZoneDisplayName(thin.TargetZone)}@{thin.TargetOrder}");
             }
-            else
-            {
-                sameSideFiltered.Add(thin);
-            }
-        }
-
-        if (sameSideRemoved.Count > 0)
-        {
             SquadDashTrace.Write(TraceCategory.Docking,
-                $"  [adjacent-thin-filter] {sideName}: Removed {sameSideRemoved.Count} no-op same-side thin(s) for solo-panel {srcZoneName}");
+                $"  [adjacent-thin-filter] {sideName}: Solo-panel is sole occupant—removing all {sameSideRemoved.Count} same-side thin(s) for {srcZoneName}");
+        }
+        else
+        {
+            // Solo-panel occupies only some zones. Filter thins that target those zones or empty adjacent zones.
+            DockZone? leftAdjacentZone = sourceZoneIdx > 0 ? sideZones[sourceZoneIdx - 1] : null;
+            DockZone? rightAdjacentZone = sourceZoneIdx < sideZones.Count - 1 ? sideZones[sourceZoneIdx + 1] : null;
+
+            foreach (var thin in thins)
+            {
+                // Filter thins that are no-ops:
+                // 1. InsertAfter in the source zone (inserting within same zone)
+                // 2. Thins targeting empty adjacent zones
+                
+                bool isInsertWithinSourceZone = (thin.TargetZone == sourceZone && thin.Kind == SyntheticInsertKind.InsertAfter);
+                
+                // Only filter adjacent thins if the adjacent zone is EMPTY
+                bool isEmptyAdjacentZone = false;
+                if ((thin.TargetZone == leftAdjacentZone || thin.TargetZone == rightAdjacentZone) && thin.TargetZone != null)
+                {
+                    isEmptyAdjacentZone = PanelsInZone(layout, thin.TargetZone).Count == 0;
+                }
+                
+                bool isNoOp = isInsertWithinSourceZone || isEmptyAdjacentZone;
+
+                if (isNoOp)
+                {
+                    sameSideRemoved.Add(thin);
+                    SquadDashTrace.Write(TraceCategory.Docking,
+                        $"    [solo-panel-same-side] Filtering no-op thin: {thin.Kind} {DockingLayoutEngine.GetZoneDisplayName(thin.TargetZone)}@{thin.TargetOrder}");
+                }
+                else
+                {
+                    sameSideFiltered.Add(thin);
+                }
+            }
+
+            if (sameSideRemoved.Count > 0)
+            {
+                SquadDashTrace.Write(TraceCategory.Docking,
+                    $"  [adjacent-thin-filter] {sideName}: Removed {sameSideRemoved.Count} no-op same-side thin(s) for solo-panel {srcZoneName}");
+            }
         }
 
         // Now check N+1 rule with the filtered result
@@ -993,11 +1019,10 @@ internal static class DockingMapBuilder
         }
         else
         {
-            // After filtering no-ops, we still don't have enough meaningful thins to meet N+1.
-            // This is expected when all thins are same-side no-ops.
-            // Keep the filtered result anyway—it preserves meaningful cross-side drops.
+            // After filtering, we may have fewer thins than N+1 expects.
+            // This is acceptable when solo-panel is sole occupant on the side.
             SquadDashTrace.Write(TraceCategory.Docking,
-                $"  [adjacent-thin-filter] {sideName}: Filtered result has {sameSideFiltered.Count} thins (need {expectedThins} for N+1), but removing same-side no-ops is correct");
+                $"  [adjacent-thin-filter] {sideName}: Filtered result has {sameSideFiltered.Count} thins (expected {expectedThins}), which is correct for solo-panel filtering");
             return sameSideFiltered;
         }
     }
