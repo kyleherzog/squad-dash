@@ -19,4 +19,5 @@ public sealed record SlotButtonInfo(DockZone Zone, int Order);
 internal interface IDockingMoveRecorder
 {
     void OnMoveCompleted(string sourcePanelId, DockZone targetZone, int targetOrder, PanelLayoutData layoutAfter);
+    void OnDockingMapBuilt(IReadOnlyList<SlotButtonViewModel> slots);
 }

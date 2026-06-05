@@ -63,6 +63,12 @@
 
 ## 🔴 High Priority
 
+- [ ] **[Bug] Voice dictation focus: auto-route to prompt input when transcript has focus** *(Owner: Lyra Morn)*
+  When voice dictation is activated (Ctrl double-tap) while the coordinator transcript panel has focus,
+  the dictated text is added to the transcript instead of the active prompt input box. Expected behavior:
+  immediately shift focus to the current prompt input box so dictation lands there. Affects usability
+  when reviewing transcripts while dictating new prompts.
+
 - [ ] **[Bug] Prompt history cycling (Ctrl+Up/Down) doesn't copy attachments to queued item** *(Owner: Lyra Morn)*
   When a queued prompt item is selected and the user cycles through prompt history with Ctrl+Up/Down,
   only the text content is brought in — attachments from the history entry are not copied to the queued item.

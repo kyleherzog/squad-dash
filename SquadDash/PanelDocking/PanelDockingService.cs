@@ -338,6 +338,14 @@ internal sealed class PanelDockingService
 
             TestRecorder?.OnMoveCompleted(panelId, targetZone, targetOrder, GetCurrentLayoutData());
 
+            // For test recording: also capture the docking map that would be displayed after the move.
+            if (TestRecorder is not null)
+            {
+                var dockingMapAfterMove = DockingMapBuilder.BuildDockingMap(panelId, CurrentLayout, 
+                    GetCurrentLayoutData().VisiblePanelIds);
+                TestRecorder.OnDockingMapBuilt(dockingMapAfterMove.Slots);
+            }
+
             // WPF: reorder the panel within the zone list and rebuild the grid.
             // For the Top zone, reassign physical columns; for side zones, rebuild the row grid.
             if (_panelRegistry is not null)
@@ -622,7 +630,17 @@ internal sealed class PanelDockingService
                 // not an intermediate state that normalization will immediately undo.
                 // Same-zone reorders already fired at the call site above; skip them here.
                 if (sourceZoneCapture != targetZone)
+                {
                     TestRecorder?.OnMoveCompleted(panelId, targetZone, targetOrder, GetCurrentLayoutData());
+                    
+                    // For test recording: also capture the docking map that would be displayed after the move.
+                    if (TestRecorder is not null)
+                    {
+                        var dockingMapAfterMove = DockingMapBuilder.BuildDockingMap(panelId, CurrentLayout,
+                            GetCurrentLayoutData().VisiblePanelIds);
+                        TestRecorder.OnDockingMapBuilt(dockingMapAfterMove.Slots);
+                    }
+                }
             }
         }
     }

@@ -9606,6 +9606,15 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
         var focusedTextBox     = Keyboard.FocusedElement as TextBox;
         var focusedRichTextBox = Keyboard.FocusedElement as RichTextBox;
 
+        // If the focused element is the active transcript, auto-shift focus to the prompt box
+        // so dictated text goes to the prompt input instead of the transcript.
+        if (focusedRichTextBox == ActiveTranscriptBox)
+        {
+            focusedRichTextBox = null;
+            PromptTextBox?.Focus();
+            focusedTextBox = PromptTextBox;
+        }
+
         _pttTargetRichTextBox = null;
         if (focusedRichTextBox != null)
         {

@@ -18,6 +18,7 @@ internal sealed class DockingTestRecorder : IDockingMoveRecorder
     private PanelLayoutData? _initialLayout;
     private List<SlotButtonInfo>? _slotButtons;
     private PanelLayoutData? _slotButtonLayout;
+    private List<SlotButtonViewModel>? _dockingMapSlots; // NEW: capture docking map after move
 
     private readonly string _outputDirectory;
 
@@ -35,6 +36,7 @@ internal sealed class DockingTestRecorder : IDockingMoveRecorder
         _sourcePanelId    = null;
         _slotButtons      = null;
         _slotButtonLayout = null;
+        _dockingMapSlots  = null;
         _state            = RecorderState.Recording;
     }
 
@@ -45,6 +47,15 @@ internal sealed class DockingTestRecorder : IDockingMoveRecorder
         _sourcePanelId    = sourcePanelId;
         _slotButtons      = slots;
         _slotButtonLayout = layout;
+    }
+
+    /// <summary>
+    /// Capture the docking map slots for verification in the test case.
+    /// </summary>
+    public void OnDockingMapBuilt(IReadOnlyList<SlotButtonViewModel> slots)
+    {
+        if (_state != RecorderState.Recording) return;
+        _dockingMapSlots = slots.ToList();
     }
 
     public void OnMoveCompleted(string sourcePanelId, DockZone targetZone, int targetOrder, PanelLayoutData layoutAfter)
@@ -72,6 +83,23 @@ internal sealed class DockingTestRecorder : IDockingMoveRecorder
             })
             .ToList();
 
+        var dockingMapForJson = (_dockingMapSlots ?? new List<SlotButtonViewModel>())
+            .Select(slot => new
+            {
+                zone      = DockingLayoutEngine.GetZoneDisplayName(slot.TargetZone),
+                order     = slot.TargetOrder,
+                x         = (int)slot.X,
+                y         = (int)slot.Y,
+                width     = (int)slot.Width,
+                height    = (int)slot.Height,
+                panelId   = slot.Label,
+                isSeparator = slot.IsSeparator,
+                isVirtualThin = slot.Width < 48, // Heuristic: thins are narrow (<48px)
+            })
+            .OrderBy(s => s.zone)
+            .ThenBy(s => s.order)
+            .ToList();
+
         var testCase = new
         {
             name           = $"{sourcePanelId}_{sourceZoneTag}_to_{targetZoneTag}_order{targetOrder}",
@@ -85,6 +113,7 @@ internal sealed class DockingTestRecorder : IDockingMoveRecorder
             },
             chosenPreview  = chosenPreview,
             expectedLayout = DockingLayoutEngine.LayoutToJson(layoutAfter),
+            expectedDockingMap = dockingMapForJson,
         };
 
         Directory.CreateDirectory(_outputDirectory);
@@ -108,5 +137,6 @@ internal sealed class DockingTestRecorder : IDockingMoveRecorder
         _initialLayout    = null;
         _slotButtons      = null;
         _slotButtonLayout = null;
+        _dockingMapSlots  = null;
     }
 }
