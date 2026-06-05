@@ -11964,9 +11964,9 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             var border = new Border
             {
                 Background      = new System.Windows.Media.SolidColorBrush(
-                                      System.Windows.Media.Color.FromArgb(25, 220, 50, 50)),
+                                      System.Windows.Media.Color.FromArgb(38, 0, 200, 100)),  // Translucent green
                 BorderBrush     = new System.Windows.Media.SolidColorBrush(
-                                      System.Windows.Media.Color.FromArgb(220, 220, 60, 60)),
+                                      System.Windows.Media.Color.FromArgb(220, 0, 200, 100)),  // Bright green
                 BorderThickness = new Thickness(3),
                 CornerRadius    = new CornerRadius(6),
             };

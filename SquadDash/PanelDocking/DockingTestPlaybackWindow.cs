@@ -136,7 +136,7 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
-        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(455) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(590) });
         Grid.SetRow(content, 0);
         outer.Children.Add(content);
 
@@ -652,12 +652,12 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             targetOrder = _currentTest.TargetOrder;
             SquadDashTrace.Write("Docking", $"[PREVIEW-RENDER] Target: {targetZone}@{targetOrder}");
             
-            // Find the best matching slot: prefer regular panels over synthetic inserts
+            // Find the best matching slot: prefer synthetic inserts (the actual drop targets) over regular panels
             if (targetZone.HasValue && targetOrder.HasValue)
             {
                 var candidates = viewModel.Slots.Where(s => s.TargetZone == targetZone.Value && s.TargetOrder == targetOrder.Value).ToList();
-                // Prefer non-synthetic slots (regular panels) over synthetic inserts
-                targetSlot = candidates.FirstOrDefault(s => !s.IsSyntheticInsert) ?? candidates.FirstOrDefault();
+                // Prefer synthetic inserts (the actual drop targets) over regular panels
+                targetSlot = candidates.FirstOrDefault(s => s.IsSyntheticInsert) ?? candidates.FirstOrDefault();
                 if (targetSlot is not null)
                 {
                     SquadDashTrace.Write("Docking", $"[PREVIEW-RENDER] Found {candidates.Count} slots matching {targetZone}@{targetOrder}; highlighting {(targetSlot.IsSyntheticInsert ? "synthetic" : "regular")} at ({targetSlot.X}, {targetSlot.Y})");
@@ -814,14 +814,14 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             };
         }
 
-        // Source panel — highlight with green border and thicker border for clear visibility
+        // Source panel — highlight with green border and translucent green fill for clear visibility
         if (slot.IsSourcePanel)
         {
             return new Border
             {
                 Width = slot.Width,
                 Height = slot.Height,
-                Background = MakeBrush(groundingColor, 0.20),
+                Background = MakeBrush(Color.FromRgb(0, 200, 100), 0.15),  // Translucent green
                 BorderBrush = new SolidColorBrush(Color.FromRgb(0, 200, 100)),  // Bright green
                 BorderThickness = new Thickness(3),  // Thicker for emphasis
                 CornerRadius = new CornerRadius(3),
@@ -829,7 +829,7 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             };
         }
 
-        // Target zone slot — highlight with yellow/gold for destination visibility
+        // Target zone slot — highlight with blue for destination visibility
         // Only highlight if this is the specific target slot (prefer regular panels over synthetics)
         bool isTargetSlot = targetSlot is not null && slot == targetSlot;
 
@@ -840,8 +840,8 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         {
             Width = slot.Width,
             Height = slot.Height,
-            Background = isTargetSlot ? MakeBrush(Color.FromRgb(255, 200, 0), 0.25) : normalBg,
-            BorderBrush = isTargetSlot ? new SolidColorBrush(Color.FromRgb(255, 200, 0)) : normalBorder,
+            Background = isTargetSlot ? MakeBrush(Color.FromRgb(30, 144, 255), 0.25) : normalBg,
+            BorderBrush = isTargetSlot ? new SolidColorBrush(Color.FromRgb(30, 144, 255)) : normalBorder,
             BorderThickness = isTargetSlot ? new Thickness(2) : new Thickness(1),
             CornerRadius = new CornerRadius(3),
             Cursor = Cursors.Hand,
@@ -904,8 +904,8 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             }
             else if (isTargetSlot)
             {
-                border.Background = MakeBrush(Color.FromRgb(255, 200, 0), 0.25);
-                border.BorderBrush = new SolidColorBrush(Color.FromRgb(255, 200, 0));
+                border.Background = MakeBrush(Color.FromRgb(30, 144, 255), 0.25);
+                border.BorderBrush = new SolidColorBrush(Color.FromRgb(30, 144, 255));
                 border.BorderThickness = new Thickness(2);
             }
             else
