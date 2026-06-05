@@ -28,9 +28,9 @@ internal static class DockingMapBuilder
     private const double TopSlotHeight     = 50;
     private const double SlotGap           = 4;
     private const double ZoneGutter        = 28;  // pill (4px) + 10px breathing room on each side; used between side zone and top zone
-    private const double InnerZoneGap      = 2;   // tight gap between sibling zone pairs (Left↔Left2, Right↔Right2)
+    private const double InnerZoneGap      = 4;   // tight gap between sibling zone pairs (Left↔Left2, Right↔Right2)
     private const double MaxInnerHeight    = 200.0; // caps popup height so stacked panels shrink gracefully
-    private const double PopupPadding      = 8;
+    private const double PopupPadding      = 4;
     private const double LabelRowHeight    = 16;    // reserved space above slots for section labels
     private static readonly DockZone[] LeftSideZones  = BuildSideZones("Left");
     private static readonly DockZone[] RightSideZones = BuildSideZones("Right");
@@ -387,7 +387,10 @@ internal static class DockingMapBuilder
         if (visible.Count == 0)
             return thins;
 
-        var sequence = BuildSideSequence(states, visible, isLeft);
+        var sequence = FilterSoloSourceAdjacentBoundaryItems(
+            BuildSideSequence(states, visible, isLeft),
+            states,
+            sideName);
         for (int i = 0; i < sequence.Count; i++)
         {
             if (i > 0)
@@ -648,6 +651,66 @@ internal static class DockingMapBuilder
             $"[build-side-seq]   Synthetic thins: [{thinDesc}]");
 
         return sequence;
+    }
+
+    private static List<SideSequenceItem> FilterSoloSourceAdjacentBoundaryItems(
+        List<SideSequenceItem> sequence,
+        IReadOnlyList<SideZoneState> states,
+        string sideName)
+    {
+        int sourceZoneIdx = -1;
+        for (int i = 0; i < states.Count; i++)
+        {
+            if (states[i].SourceInZone && states[i].Panels.Count == 1)
+            {
+                sourceZoneIdx = i;
+                break;
+            }
+        }
+
+        if (sourceZoneIdx < 0)
+            return sequence;
+
+        var sourceZone = states[sourceZoneIdx].Zone;
+        DockZone? innerAdjacentZone = sourceZoneIdx > 0 ? states[sourceZoneIdx - 1].Zone : null;
+        DockZone? outerAdjacentZone = sourceZoneIdx < states.Count - 1 ? states[sourceZoneIdx + 1].Zone : null;
+
+        bool IsAdjacentBoundaryThin(SideSequenceItem item)
+        {
+            if (!item.IsSynthetic)
+                return false;
+
+            if (item.TargetZone == sourceZone)
+                return item.InsertKind is SyntheticInsertKind.InsertBefore or SyntheticInsertKind.InsertAfter;
+
+            if (innerAdjacentZone.HasValue &&
+                item.TargetZone == innerAdjacentZone.Value &&
+                item.InsertKind == SyntheticInsertKind.InsertAfter)
+            {
+                return true;
+            }
+
+            if (outerAdjacentZone.HasValue &&
+                item.TargetZone == outerAdjacentZone.Value &&
+                item.InsertKind == SyntheticInsertKind.InsertBefore)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        var filtered = sequence.Where(item => !IsAdjacentBoundaryThin(item)).ToList();
+        if (filtered.Count != sequence.Count)
+        {
+            var removed = sequence
+                .Where(IsAdjacentBoundaryThin)
+                .Select(item => $"{item.InsertKind} {DockingLayoutEngine.GetZoneDisplayName(item.TargetZone)}@{item.TargetOrder}");
+            SquadDashTrace.Write(TraceCategory.Docking,
+                $"[adjacent-thin-layout] {sideName}: collapsed {sequence.Count - filtered.Count} adjacent synthetic thin column(s) around solo-panel {DockingLayoutEngine.GetZoneDisplayName(sourceZone)}: {string.Join(", ", removed)}");
+        }
+
+        return filtered;
     }
 
     private static IEnumerable<SideZoneState> SideVisualOrder(
@@ -923,113 +986,62 @@ internal static class DockingMapBuilder
             return new List<SyntheticThin>(thins);
         }
 
-        // Count occupied zones on this side to check N+1 rule
+        // Count occupied zones on this side for trace context. Adjacent solo-source
+        // thins are no-op targets even when removing them leaves fewer than N+1.
         int occupiedZoneCount = sideZones.Count(z => PanelsInZone(layout, z).Count > 0);
         int expectedThins = occupiedZoneCount + 1;
 
         SquadDashTrace.Write(TraceCategory.Docking,
-            $"  [=== FILTER-V2-NEW ===] {sideName}: solo-panel source zone {srcZoneName} detected. occupiedZones={occupiedZoneCount}, expectedThins={expectedThins}, actualThins={thins.Count}");
+            $"  [adjacent-thin-filter] {sideName}: solo-panel source zone {srcZoneName} detected. occupiedZones={occupiedZoneCount}, expectedThins={expectedThins}, actualThins={thins.Count}");
 
-        // Check if source is the only panel on the side
-        if (occupiedZoneCount == 1)
+        DockZone? innerAdjacentZone = sourceZoneIdx > 0 ? sideZones[sourceZoneIdx - 1] : null;
+        DockZone? outerAdjacentZone = sourceZoneIdx < sideZones.Count - 1 ? sideZones[sourceZoneIdx + 1] : null;
+
+        bool IsAdjacentBoundaryThin(SyntheticThin thin)
         {
-            SquadDashTrace.Write(TraceCategory.Docking,
-                $"  [adjacent-thin-filter] {sideName}: only one occupied zone on this side, no adjacent zones to filter");
-            return new List<SyntheticThin>(thins);
-        }
-
-        // Source is alone in its zone and there are other occupied zones.
-        // A solo-panel occupies exactly ONE zone. Only filter thins within that zone
-        // and those targeting immediately adjacent EMPTY zones.
-        
-        SquadDashTrace.Write(TraceCategory.Docking,
-            $"  [adjacent-thin-filter-DEBUG] {sideName}: Finding zones with source panel '{sourcePanelId}'");
-        
-        var sameSideFiltered = new List<SyntheticThin>();
-        var sameSideRemoved = new List<SyntheticThin>();
-
-        // Always use selective filtering (solo-panels by definition occupy exactly ONE zone)
-        SquadDashTrace.Write(TraceCategory.Docking,
-            $"  [adjacent-thin-filter] {sideName}: Solo-panel occupies zone {DockingLayoutEngine.GetZoneDisplayName(sourceZone)}—filter selectively");
-            
-            DockZone? leftAdjacentZone = sourceZoneIdx > 0 ? sideZones[sourceZoneIdx - 1] : null;
-            DockZone? rightAdjacentZone = sourceZoneIdx < sideZones.Count - 1 ? sideZones[sourceZoneIdx + 1] : null;
-
-            SquadDashTrace.Write(TraceCategory.Docking,
-                $"  [adjacent-thin-filter-DEBUG] {sideName}: sourceZoneIdx={sourceZoneIdx}, leftAdjacentZone={DockingLayoutEngine.GetZoneDisplayName(leftAdjacentZone ?? sourceZone)}, rightAdjacentZone={DockingLayoutEngine.GetZoneDisplayName(rightAdjacentZone ?? sourceZone)}");
-
-            foreach (var thin in thins)
+            if (thin.TargetZone == sourceZone)
             {
-                // Filter thins that are no-ops:
-                // 1. InsertAfter on the source zone is always a no-op
-                // 2. InsertBefore on the source zone is a no-op if there's no occupied zone to its left
-                //    (it can only serve as a separator if there's something to separate from)
-                // 3. Thins targeting empty adjacent zones are no-ops
-                
-                bool isInsertAfterSourceZone = (thin.TargetZone == sourceZone && thin.Kind == SyntheticInsertKind.InsertAfter);
-                
-                bool isInsertBeforeSourceZoneWithoutLeftOccupant = false;
-                if (thin.TargetZone == sourceZone && thin.Kind == SyntheticInsertKind.InsertBefore)
-                {
-                    // InsertBefore is a no-op only if there's NO occupied zone to the left
-                    // If there IS an occupied zone to the left, it's a separator (keep it)
-                    if (leftAdjacentZone == null)
-                    {
-                        isInsertBeforeSourceZoneWithoutLeftOccupant = true;
-                    }
-                    else
-                    {
-                        isInsertBeforeSourceZoneWithoutLeftOccupant = PanelsInZone(layout, leftAdjacentZone.Value).Count == 0;
-                    }
-                }
-                
-                bool isInsertWithinSourceZone = isInsertAfterSourceZone || isInsertBeforeSourceZoneWithoutLeftOccupant;
-                
-                // Only filter adjacent thins if the adjacent zone is EMPTY
-                bool isEmptyAdjacentZone = false;
-                if ((thin.TargetZone == leftAdjacentZone || thin.TargetZone == rightAdjacentZone) && thin.TargetZone != null)
-                {
-                    isEmptyAdjacentZone = PanelsInZone(layout, thin.TargetZone).Count == 0;
-                }
-                
-                bool isNoOp = isInsertWithinSourceZone || isEmptyAdjacentZone;
-
-                SquadDashTrace.Write(TraceCategory.Docking,
-                    $"    [adjacent-thin-filter-DEBUG] {DockingLayoutEngine.GetZoneDisplayName(thin.TargetZone)}@{thin.TargetOrder}: isInsertWithinSourceZone={isInsertWithinSourceZone}, isEmptyAdjacentZone={isEmptyAdjacentZone}, isNoOp={isNoOp}");
-
-                if (isNoOp)
-                {
-                    sameSideRemoved.Add(thin);
-                    SquadDashTrace.Write(TraceCategory.Docking,
-                        $"    [solo-panel-same-side] Filtering no-op thin: {thin.Kind} {DockingLayoutEngine.GetZoneDisplayName(thin.TargetZone)}@{thin.TargetOrder}");
-                }
-                else
-                {
-                    sameSideFiltered.Add(thin);
-                    SquadDashTrace.Write(TraceCategory.Docking,
-                        $"    [solo-panel-same-side] KEEPING thin: {thin.Kind} {DockingLayoutEngine.GetZoneDisplayName(thin.TargetZone)}@{thin.TargetOrder}");
-                }
+                // A same-zone synthetic thin is a boundary around the source column.
+                // Regular same-zone panel targets are not represented by SyntheticThin
+                // and are therefore not affected by this filter.
+                return thin.Kind is SyntheticInsertKind.InsertBefore or SyntheticInsertKind.InsertAfter;
             }
 
-            if (sameSideRemoved.Count > 0)
+            if (innerAdjacentZone.HasValue &&
+                thin.TargetZone == innerAdjacentZone.Value &&
+                thin.Kind == SyntheticInsertKind.InsertAfter)
             {
-                SquadDashTrace.Write(TraceCategory.Docking,
-                    $"  [adjacent-thin-filter] {sideName}: Removed {sameSideRemoved.Count} no-op same-side thin(s) for solo-panel {srcZoneName}");
+                return true;
             }
 
-        // Now check N+1 rule with the filtered result
-        if (sameSideFiltered.Count >= expectedThins)
-        {
-            return sameSideFiltered;
+            if (outerAdjacentZone.HasValue &&
+                thin.TargetZone == outerAdjacentZone.Value &&
+                thin.Kind == SyntheticInsertKind.InsertBefore)
+            {
+                return true;
+            }
+
+            return false;
         }
-        else
+
+        var filtered = new List<SyntheticThin>(thins.Count);
+        var removed = new List<SyntheticThin>();
+        foreach (var thin in thins)
         {
-            // After filtering, we may have fewer thins than N+1 expects.
-            // This is acceptable when solo-panel is sole occupant on the side.
+            if (IsAdjacentBoundaryThin(thin))
+                removed.Add(thin);
+            else
+                filtered.Add(thin);
+        }
+
+        if (removed.Count > 0)
+        {
             SquadDashTrace.Write(TraceCategory.Docking,
-                $"  [adjacent-thin-filter] {sideName}: Filtered result has {sameSideFiltered.Count} thins (expected {expectedThins}), which is correct for solo-panel filtering");
-            return sameSideFiltered;
+                $"  [adjacent-thin-filter] {sideName}: removed {removed.Count} adjacent synthetic thin(s) around solo-panel {srcZoneName}: " +
+                string.Join(", ", removed.Select(t => $"{t.Kind} {DockingLayoutEngine.GetZoneDisplayName(t.TargetZone)}@{t.TargetOrder}")));
         }
+
+        return filtered;
     }
 
     /// <summary>

@@ -13,7 +13,7 @@ internal sealed class DockingMapWindow : Window
     private readonly PanelDockingService _dockingService;
     private readonly string _workspacePath;
     private readonly Brush? _hoverBrush;
-    private readonly (DockZone Zone, int Order, bool IsInsert)? _targetSlot;
+    private readonly (DockZone Zone, int Order, SyntheticInsertKind InsertKind)? _targetSlot;
 
     private Window? _previewOverlay;
 
@@ -23,7 +23,7 @@ internal sealed class DockingMapWindow : Window
         string workspacePath,
         ResourceDictionary appResources,
         Brush? hoverBrush = null,
-        (DockZone Zone, int Order, bool IsInsert)? targetSlot = null)
+        (DockZone Zone, int Order, SyntheticInsertKind InsertKind)? targetSlot = null)
     {
         _viewModel      = viewModel;
         _dockingService = dockingService;
@@ -117,7 +117,7 @@ internal sealed class DockingMapWindow : Window
         Content    = root;
     }
 
-    private const double PopupPadding = 8;
+    private const double PopupPadding = 4;
 
     private UIElement BuildSlotElement(SlotButtonViewModel slot, Color groundingColor, Color polarColor, bool isDark)
     {
@@ -149,7 +149,7 @@ internal sealed class DockingMapWindow : Window
 
         // ── Target button (interactive drop target) ─────────────────────────
         bool isPlaybackTarget = _targetSlot.HasValue
-            && slot.IsSyntheticInsert   == _targetSlot.Value.IsInsert
+            && slot.InsertKind == _targetSlot.Value.InsertKind
             && slot.TargetZone  == _targetSlot.Value.Zone
             && slot.TargetOrder == _targetSlot.Value.Order;
 

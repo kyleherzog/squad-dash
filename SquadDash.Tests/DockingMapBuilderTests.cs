@@ -182,16 +182,12 @@ public class DockingMapBuilderTests
 
         var rightThins = ThinSlots(map, RightZones);
 
-        // With 4 occupied zones, we need N+1=5 thins. We should have 5+ thins total.
-        // Right2 has only the source (inbox). Immediately adjacent zones:
-        // - Right3 (tier 2) is empty - this is immediately adjacent to the source zone
-        // If we have more than N+1 thins, we should filter Right3
-        var right3Thin = rightThins.FirstOrDefault(t => t.TargetZone == DockZone.Right3);
-        if (rightThins.Count > 5) // Only expect filtering if we have excess thins
-        {
-            Assert.That(right3Thin, Is.Null,
-                "Should not show thin slot for Right3 when it's immediately adjacent to source zone Right2 (excess thins to filter)");
-        }
+        Assert.That(rightThins.Any(t => t.TargetZone == DockZone.Right2 && t.IsSyntheticInsert), Is.False,
+            "Should not show source-zone boundary synthetic thins for solo-panel Right2");
+        Assert.That(rightThins.Any(t => t.TargetZone == DockZone.Right3 && t.InsertKind == SyntheticInsertKind.InsertBefore), Is.False,
+            "Should not show the Right2/Right3 boundary thin adjacent to solo-panel Right2");
+        Assert.That(rightThins.Any(t => t.TargetZone == DockZone.Right4), Is.True,
+            "Should keep meaningful non-adjacent Right4 target");
     }
 
     [Test]
@@ -241,13 +237,44 @@ public class DockingMapBuilderTests
 
         var leftThins = ThinSlots(map, LeftZones);
 
-        // With 4 occupied zones on Left, we need at least 5 thins for N+1 rule
-        Assert.That(leftThins.Count, Is.GreaterThanOrEqualTo(5), 
-            "Should have at least N+1 thins for 4 occupied zones");
-        
-        // Verify no violations
+        Assert.That(leftThins.Any(t => t.TargetZone == DockZone.Left3 && t.IsSyntheticInsert), Is.False,
+            "Should not show source-zone boundary synthetic thins for solo-panel Left3");
+        Assert.That(leftThins.Any(t => t.TargetZone == DockZone.Left4 && t.InsertKind == SyntheticInsertKind.InsertBefore), Is.False,
+            "Should not show the Left3/Left4 boundary thin adjacent to solo-panel Left3");
+        Assert.That(leftThins.Any(t => t.TargetZone == DockZone.Left), Is.True,
+            "Should keep meaningful non-adjacent Left target");
+
         var violations = DockingMapBuilder.FindAdjacentThinViolations(map.Slots);
-        Assert.That(violations, Is.Empty, "Should not have layout violations");
+        Assert.That(violations.Where(v => !v.Contains("N+1")), Is.Empty, "Should not have non-N+1 layout violations");
+    }
+
+    [Test]
+    public void BuildDockingMap_WithSourceAloneInRight3_HidesBothAdjacentBoundaryThins()
+    {
+        var map = Build(
+            sourcePanelId: "inbox",
+            ("loop", DockZone.Top),
+            ("approvals", DockZone.Top),
+            ("notes", DockZone.Top),
+            ("maintenance", DockZone.Right),
+            ("tasks", DockZone.Right2),
+            ("inbox", DockZone.Right3));
+
+        var rightThins = ThinSlots(map, RightZones);
+
+        Assert.That(rightThins.Any(t => t.TargetZone == DockZone.Right3 && t.InsertKind == SyntheticInsertKind.InsertBefore), Is.False,
+            "Should hide the Right2/Right3 boundary thin adjacent to solo-panel Right3");
+        Assert.That(rightThins.Any(t => t.TargetZone == DockZone.Right3 && t.InsertKind == SyntheticInsertKind.InsertAfter), Is.False,
+            "Should hide the Right3/Right4 boundary thin adjacent to solo-panel Right3");
+        Assert.That(rightThins.Any(t => t.TargetZone == DockZone.Right), Is.True,
+            "Should keep non-adjacent/meaningful Right-side docking targets");
+
+        var tasksSlot = map.Slots.Single(s => s.TargetZone == DockZone.Right2 && s.Label == "Tasks");
+        var inboxSlot = map.Slots.Single(s => s.TargetZone == DockZone.Right3 && s.IsSourcePanel);
+        Assert.That(inboxSlot.X - (tasksSlot.X + tasksSlot.Width), Is.EqualTo(4).Within(0.01),
+            "Collapsed adjacent thins should leave only the normal 4px inter-zone gap");
+        Assert.That(map.PopupWidth - (inboxSlot.X + inboxSlot.Width), Is.EqualTo(8).Within(0.01),
+            "The rightmost source panel should sit 4px from the window edge after accounting for both popup paddings");
     }
 
     [Test]

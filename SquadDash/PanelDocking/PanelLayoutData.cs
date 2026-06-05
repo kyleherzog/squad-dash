@@ -18,6 +18,11 @@ public sealed record SlotButtonInfo(DockZone Zone, int Order);
 // without creating a compile-time dependency on the dev-only DockingTestRecorder class.
 internal interface IDockingMoveRecorder
 {
-    void OnMoveCompleted(string sourcePanelId, DockZone targetZone, int targetOrder, PanelLayoutData layoutAfter);
+    void OnMoveCompleted(
+        string sourcePanelId,
+        DockZone targetZone,
+        int targetOrder,
+        SyntheticInsertKind insertKind,
+        PanelLayoutData layoutAfter);
     void OnDockingMapBuilt(IReadOnlyList<SlotButtonViewModel> slots);
 }

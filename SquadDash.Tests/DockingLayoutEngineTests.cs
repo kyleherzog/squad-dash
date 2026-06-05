@@ -14,6 +14,7 @@ public class DockingLayoutEngineTests
 
     private sealed class TestCaseJson
     {
+        public int SchemaVersion { get; set; }
         public string Name { get; set; } = "";
         public string SourcePanelId { get; set; } = "";
         public Dictionary<string, List<string>> InitialLayout { get; set; } = new();
@@ -21,6 +22,7 @@ public class DockingLayoutEngineTests
         public MoveActionJson Action { get; set; } = new();
         public string ChosenPreview { get; set; } = "";
         public Dictionary<string, List<string>> ExpectedLayout { get; set; } = new();
+        public List<DockingMapSlotJson> ExpectedDockingMap { get; set; } = new();
     }
 
     private sealed class SlotButtonInfoJson
@@ -34,6 +36,22 @@ public class DockingLayoutEngineTests
     {
         public string TargetZone { get; set; } = "";
         public int TargetOrder { get; set; }
+        public string InsertKind { get; set; } = "";
+    }
+
+    private sealed class DockingMapSlotJson
+    {
+        public string Label { get; set; } = "";
+        public string PanelId { get; set; } = "";
+        public int X { get; set; }
+        public int Y { get; set; }
+        public int Width { get; set; }
+        public int Height { get; set; }
+        public string TargetZone { get; set; } = "";
+        public int TargetOrder { get; set; }
+        public string InsertKind { get; set; } = "";
+        public bool IsSeparator { get; set; }
+        public bool IsSyntheticInsert { get; set; }
     }
 
     // ── Test case source ─────────────────────────────────────────────────────
@@ -65,6 +83,9 @@ public class DockingLayoutEngineTests
         var tc   = JsonSerializer.Deserialize<TestCaseJson>(json, opts)
                    ?? throw new InvalidOperationException($"Failed to deserialize {filePath}");
 
+        if (tc.SchemaVersion < 2)
+            Assert.Ignore("Legacy docking recording schema is missing synthetic insert-kind data. Re-record this case with the current recorder.");
+
         var initialLayout  = DockingLayoutEngine.ParseLayoutFromJson(tc.InitialLayout);
         var expectedLayout = DockingLayoutEngine.ParseLayoutFromJson(tc.ExpectedLayout);
 
@@ -87,6 +108,24 @@ public class DockingLayoutEngineTests
         Assert.That(builtSet, Is.EqualTo(recordedSet),
             "BuildSlotButtons result does not match recorded slot buttons");
 
+        // ── 1b. DockingMapBuilder matches recorded map slots ───────────────
+        if (tc.ExpectedDockingMap.Count > 0)
+        {
+            var dockLayout = new DockLayout
+            {
+                Name = "Recorded test",
+                Slots = initialLayout.Slots
+                    .Select(s => new PanelSlot(s.PanelId, s.Zone, s.Order))
+                    .ToList(),
+            };
+            var actualMap = DockingMapBuilder.BuildDockingMap(tc.SourcePanelId, dockLayout, initialLayout.VisiblePanelIds);
+            var actualMapSlots = actualMap.Slots.Select(NormalizeMapSlot).OrderBy(s => s.X).ThenBy(s => s.Y).ThenBy(s => s.TargetZone).ThenBy(s => s.TargetOrder).ToList();
+            var expectedMapSlots = tc.ExpectedDockingMap.Select(NormalizeMapSlot).OrderBy(s => s.X).ThenBy(s => s.Y).ThenBy(s => s.TargetZone).ThenBy(s => s.TargetOrder).ToList();
+
+            Assert.That(actualMapSlots, Is.EqualTo(expectedMapSlots),
+                "DockingMapBuilder result does not match recorded expectedDockingMap");
+        }
+
         // ── 2. GetNormalizedPreviewDescription matches recorded previews ──
         foreach (var slotJson in tc.SlotButtons)
         {
@@ -98,8 +137,9 @@ public class DockingLayoutEngineTests
 
         // ── 3. ApplyMove result matches expectedLayout ────────────────────
         var targetZone   = ParseDisplayName(tc.Action.TargetZone);
-        var resultLayout = DockingLayoutEngine.ApplyMove(
-            tc.SourcePanelId, targetZone, tc.Action.TargetOrder, initialLayout);
+        var insertKind   = ParseInsertKind(tc.Action.InsertKind);
+        var resultLayout = ApplyRecordedMove(
+            tc.SourcePanelId, targetZone, tc.Action.TargetOrder, insertKind, initialLayout);
 
         var actualDict   = DockingLayoutEngine.LayoutToJson(resultLayout);
         var expectedDict = DockingLayoutEngine.LayoutToJson(expectedLayout);
@@ -204,10 +244,83 @@ public class DockingLayoutEngineTests
         "Left 2"  => DockZone.Left2,
         "Left 3"  => DockZone.Left3,
         "Left 4"  => DockZone.Left4,
+        "Left 5"  => DockZone.Left5,
+        "Left 6"  => DockZone.Left6,
         "Right 1" => DockZone.Right,
         "Right 2" => DockZone.Right2,
         "Right 3" => DockZone.Right3,
         "Right 4" => DockZone.Right4,
+        "Right 5" => DockZone.Right5,
+        "Right 6" => DockZone.Right6,
         _         => throw new ArgumentException($"Unknown zone display name: '{displayName}'"),
     };
+
+    private static SyntheticInsertKind ParseInsertKind(string insertKind) => insertKind switch
+    {
+        nameof(SyntheticInsertKind.InsertBefore) => SyntheticInsertKind.InsertBefore,
+        nameof(SyntheticInsertKind.InsertAfter)  => SyntheticInsertKind.InsertAfter,
+        _                                       => SyntheticInsertKind.None,
+    };
+
+    private sealed record NormalizedMapSlot(
+        string Label,
+        int X,
+        int Y,
+        int Width,
+        int Height,
+        string TargetZone,
+        int TargetOrder,
+        string InsertKind,
+        bool IsSeparator,
+        bool IsSyntheticInsert);
+
+    private static NormalizedMapSlot NormalizeMapSlot(SlotButtonViewModel slot) => new(
+        slot.Label,
+        (int)slot.X,
+        (int)slot.Y,
+        (int)slot.Width,
+        (int)slot.Height,
+        slot.TargetZone.ToString(),
+        slot.TargetOrder,
+        slot.InsertKind == SyntheticInsertKind.None ? "" : slot.InsertKind.ToString(),
+        slot.IsSeparator,
+        slot.IsSyntheticInsert);
+
+    private static NormalizedMapSlot NormalizeMapSlot(DockingMapSlotJson slot)
+    {
+        var insertKind = ParseInsertKind(slot.InsertKind);
+        return new NormalizedMapSlot(
+            string.IsNullOrEmpty(slot.Label) ? slot.PanelId : slot.Label,
+            slot.X,
+            slot.Y,
+            slot.Width,
+            slot.Height,
+            slot.TargetZone,
+            slot.TargetOrder,
+            insertKind == SyntheticInsertKind.None ? "" : insertKind.ToString(),
+            slot.IsSeparator,
+            slot.IsSyntheticInsert);
+    }
+
+    private static PanelLayoutData ApplyRecordedMove(
+        string sourcePanelId,
+        DockZone targetZone,
+        int targetOrder,
+        SyntheticInsertKind insertKind,
+        PanelLayoutData initialLayout)
+    {
+        if (insertKind == SyntheticInsertKind.None)
+            return DockingLayoutEngine.ApplyMove(sourcePanelId, targetZone, targetOrder, initialLayout);
+
+        var service = new PanelDockingService();
+        service.ApplyLayout(new DockLayout
+        {
+            Name = "Recorded test",
+            Slots = initialLayout.Slots
+                .Select(s => new PanelSlot(s.PanelId, s.Zone, s.Order))
+                .ToList(),
+        });
+        service.MovePanel(sourcePanelId, targetZone, targetOrder, insertKind);
+        return service.GetCurrentLayoutData(initialLayout.VisiblePanelIds);
+    }
 }

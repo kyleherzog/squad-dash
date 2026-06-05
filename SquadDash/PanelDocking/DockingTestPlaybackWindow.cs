@@ -25,18 +25,18 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         Dictionary<string, List<string>> ExpectedLayout,
         string TargetZoneDisplay,
         int TargetOrder,
-        bool TargetIsInsert,
+        SyntheticInsertKind TargetInsertKind,
         string FilePath,
         List<SlotButtonViewModel>? ExpectedDockingMapSlots = null,
         DockingMapViewModel? DockingMapViewModel = null);
 
     private readonly string _testCaseFolder;
     private readonly Action<Dictionary<string, List<string>>> _applyLayout;
-    private readonly Action<string, (DockZone Zone, int Order, bool IsInsert)> _openDockingMap;
+    private readonly Action<string, (DockZone Zone, int Order, SyntheticInsertKind InsertKind)> _openDockingMap;
     private readonly Action<string, string> _addFileToChat;
-    private readonly Action<string, DockZone, int> _executeMove;
+    private readonly Action<string, DockZone, int, SyntheticInsertKind> _executeMove;
     private readonly Func<Dictionary<string, List<string>>> _getCurrentLayout;
-    private readonly Action<string, DockZone, int>? _showDropPreview;
+    private readonly Action<string, DockZone, int, SyntheticInsertKind>? _showDropPreview;
     private readonly Action? _hideDropPreview;
     private readonly Action<string>? _showSourceHighlight;
     private readonly Action? _hideSourceHighlight;
@@ -61,12 +61,12 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
     public DockingTestPlaybackWindow(
         string testCaseFolder,
         Action<Dictionary<string, List<string>>> applyLayout,
-        Action<string, (DockZone Zone, int Order, bool IsInsert)> openDockingMap,
+        Action<string, (DockZone Zone, int Order, SyntheticInsertKind InsertKind)> openDockingMap,
         Action<string, string> addFileToChat,
-        Action<string, DockZone, int> executeMove,
+        Action<string, DockZone, int, SyntheticInsertKind> executeMove,
         Func<Dictionary<string, List<string>>> getCurrentLayout,
         ResourceDictionary appResources,
-        Action<string, DockZone, int>? showDropPreview = null,
+        Action<string, DockZone, int, SyntheticInsertKind>? showDropPreview = null,
         Action? hideDropPreview = null,
         Action<string>? showSourceHighlight = null,
         Action? hideSourceHighlight = null,
@@ -338,13 +338,15 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
+            var schemaVersion = root.TryGetProperty("schemaVersion", out var svProp) ? svProp.GetInt32() : 0;
             var sourcePanelId  = root.GetProperty("sourcePanelId").GetString() ?? "";
             var initialLayout  = ParseZoneMap(root.GetProperty("initialLayout"));
             var action         = root.GetProperty("action");
             var targetZone     = action.GetProperty("targetZone").GetString() ?? "";
             var targetOrder    = action.GetProperty("targetOrder").GetInt32();
-            var targetIsInsert = action.TryGetProperty("insertKind", out var ikProp)
-                              && ikProp.GetString() is { Length: > 0 };
+            var targetInsertKind = action.TryGetProperty("insertKind", out var ikProp)
+                ? ParseInsertKind(ikProp.GetString())
+                : SyntheticInsertKind.None;
             var expectedLayout = root.TryGetProperty("expectedLayout", out var elProp)
                 ? ParseZoneMap(elProp)
                 : new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
@@ -366,11 +368,14 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             SquadDashTrace.Write("Docking", $"[OnTestSelected] Built ViewModel: PopupWidth={dockingMapViewModel.PopupWidth}, PopupHeight={dockingMapViewModel.PopupHeight}, SlotCount={dockingMapViewModel.Slots.Count}");
             SquadDashTrace.Write("Docking", $"[OnTestSelected] ========== STORING VIEWMODEL ==========");
 
-            _currentTest = new ParsedTestCase(sourcePanelId, initialLayout, expectedLayout, targetZone, targetOrder, targetIsInsert, entry.FilePath, expectedDockingMapSlots, dockingMapViewModel);
+            _currentTest = new ParsedTestCase(sourcePanelId, initialLayout, expectedLayout, targetZone, targetOrder, targetInsertKind, entry.FilePath, expectedDockingMapSlots, dockingMapViewModel);
 
             var sb = new System.Text.StringBuilder();
             sb.AppendLine($"Source  : {sourcePanelId}");
-            sb.AppendLine($"Action  : move → {targetZone} @ order {targetOrder}");
+            sb.AppendLine($"Action  : move → {targetZone} @ order {targetOrder}" +
+                          (targetInsertKind == SyntheticInsertKind.None ? "" : $" ({targetInsertKind})"));
+            if (schemaVersion < 2)
+                sb.AppendLine("Schema  : legacy recording; synthetic insert-kind may be missing");
             sb.AppendLine();
 
             sb.AppendLine("Initial layout:");
@@ -419,13 +424,13 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         Dispatcher.InvokeAsync(() => _showSourceHighlight?.Invoke(capturedTest.SourcePanelId),
             System.Windows.Threading.DispatcherPriority.Render);
 
-        _openDockingMap(_currentTest.SourcePanelId, (zone, _currentTest.TargetOrder, _currentTest.TargetIsInsert));
+        _openDockingMap(_currentTest.SourcePanelId, (zone, _currentTest.TargetOrder, _currentTest.TargetInsertKind));
 
         // Defer the drop-preview overlay to Render priority so WPF has completed its
         // layout/arrange pass after _applyLayout moved panels — GetDropPreviewRect reads
         // panel screen positions via PointToScreen and returns stale coords if called
         // before the render pass. _openDockingMap already defers internally for the same reason.
-        Dispatcher.InvokeAsync(() => _showDropPreview?.Invoke(capturedTest.SourcePanelId, capturedZone, capturedTest.TargetOrder),
+        Dispatcher.InvokeAsync(() => _showDropPreview?.Invoke(capturedTest.SourcePanelId, capturedZone, capturedTest.TargetOrder, capturedTest.TargetInsertKind),
             System.Windows.Threading.DispatcherPriority.Render);
 
         // Check for adjacent-thin violations in the generated docking map.
@@ -481,7 +486,7 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
                 _hideSourceHighlight?.Invoke();
                 _closeMapWindow?.Invoke();
                 var zone = DockingLayoutEngine.ParseZoneDisplayName(_currentTest.TargetZoneDisplay);
-                _executeMove(_currentTest.SourcePanelId, zone, _currentTest.TargetOrder);
+                _executeMove(_currentTest.SourcePanelId, zone, _currentTest.TargetOrder, _currentTest.TargetInsertKind);
                 _phase = PlaybackPhase.MoveExecuted;
                 var actual = _getCurrentLayout();
                 var (ok, details) = CompareZoneMaps(_currentTest.ExpectedLayout, actual);
@@ -656,8 +661,9 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             if (targetZone.HasValue && targetOrder.HasValue)
             {
                 var candidates = viewModel.Slots.Where(s => s.TargetZone == targetZone.Value && s.TargetOrder == targetOrder.Value).ToList();
-                // Prefer synthetic inserts (the actual drop targets) over regular panels
-                targetSlot = candidates.FirstOrDefault(s => s.IsSyntheticInsert) ?? candidates.FirstOrDefault();
+                targetSlot = candidates.FirstOrDefault(s => s.InsertKind == _currentTest.TargetInsertKind)
+                    ?? candidates.FirstOrDefault(s => s.IsSyntheticInsert == (_currentTest.TargetInsertKind != SyntheticInsertKind.None))
+                    ?? candidates.FirstOrDefault();
                 if (targetSlot is not null)
                 {
                     SquadDashTrace.Write("Docking", $"[PREVIEW-RENDER] Found {candidates.Count} slots matching {targetZone}@{targetOrder}; highlighting {(targetSlot.IsSyntheticInsert ? "synthetic" : "regular")} at ({targetSlot.X}, {targetSlot.Y})");
@@ -691,31 +697,31 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             {
                 if (item.ValueKind != JsonValueKind.Object) continue;
 
-                var label = item.TryGetProperty("label", out var lp) ? lp.GetString() : "";
+                var label = item.TryGetProperty("label", out var lp) ? lp.GetString() : null;
                 var panelId = item.TryGetProperty("panelId", out var pid) ? pid.GetString() : label;
+                label ??= panelId ?? "";
                 var isSource = string.Equals(panelId, sourcePanelId, StringComparison.OrdinalIgnoreCase);  // Case-insensitive match
                 var isExpansion = item.TryGetProperty("isExpansionButton", out var ieb) && ieb.GetBoolean();
                 var x = item.TryGetProperty("x", out var xp) ? xp.GetDouble() : 0;
                 var y = item.TryGetProperty("y", out var yp) ? yp.GetDouble() : 0;
                 var width = item.TryGetProperty("width", out var wp) ? wp.GetDouble() : 48;
                 var height = item.TryGetProperty("height", out var hp) ? hp.GetDouble() : 48;
-                var zoneStr = item.TryGetProperty("targetZone", out var zp) ? zp.GetString() : "Top";
-                var order = item.TryGetProperty("targetOrder", out var op) ? op.GetInt32() : 0;
+                var zoneStr = item.TryGetProperty("targetZone", out var zp)
+                    ? zp.GetString()
+                    : item.TryGetProperty("zone", out var legacyZp) ? legacyZp.GetString() : "Top";
+                var order = item.TryGetProperty("targetOrder", out var op)
+                    ? op.GetInt32()
+                    : item.TryGetProperty("order", out var legacyOp) ? legacyOp.GetInt32() : 0;
                 var insertKindStr = item.TryGetProperty("insertKind", out var ikp) ? ikp.GetString() : "";
                 var isSeparator = item.TryGetProperty("isSeparator", out var isp2) && isp2.GetBoolean();
 
                 if (!Enum.TryParse<DockZone>(zoneStr, ignoreCase: true, out var zone))
-                    zone = DockZone.Top;
+                    zone = ParseZoneDisplayName(zoneStr) ?? DockZone.Top;
 
-                var insertKind = insertKindStr switch
-                {
-                    "InsertBefore" => SyntheticInsertKind.InsertBefore,
-                    "InsertAfter" => SyntheticInsertKind.InsertAfter,
-                    _ => SyntheticInsertKind.None
-                };
+                var insertKind = ParseInsertKind(insertKindStr);
 
                 var slot = new SlotButtonViewModel(
-                    label ?? "",
+                    label,
                     isSource,
                     isExpansion,
                     x,
@@ -790,15 +796,26 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             "left 2"  => (DockZone?)DockZone.Left2,
             "left 3"  => (DockZone?)DockZone.Left3,
             "left 4"  => (DockZone?)DockZone.Left4,
+            "left 5"  => (DockZone?)DockZone.Left5,
+            "left 6"  => (DockZone?)DockZone.Left6,
             "right 1" => (DockZone?)DockZone.Right,
             "right 2" => (DockZone?)DockZone.Right2,
             "right 3" => (DockZone?)DockZone.Right3,
             "right 4" => (DockZone?)DockZone.Right4,
+            "right 5" => (DockZone?)DockZone.Right5,
+            "right 6" => (DockZone?)DockZone.Right6,
             _         => null,
         };
         SquadDashTrace.Write("Docking", $"[ParseZoneDisplayName] Output: {(result.HasValue ? result.Value.ToString() : "NULL")}");
         return result;
     }
+
+    private static SyntheticInsertKind ParseInsertKind(string? insertKind) => insertKind switch
+    {
+        nameof(SyntheticInsertKind.InsertBefore) => SyntheticInsertKind.InsertBefore,
+        nameof(SyntheticInsertKind.InsertAfter)  => SyntheticInsertKind.InsertAfter,
+        _                                       => SyntheticInsertKind.None,
+    };
 
     private Border BuildMapSlotElement(SlotButtonViewModel slot, Color groundingColor, Color polarColor, bool isDark, SlotButtonViewModel? targetSlot = null)
     {
@@ -854,14 +871,7 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         markCorrectMenuItem.Click += (_, _) =>
         {
             SquadDashTrace.Write("Docking", "=== MARKED CORRECT TARGET (RIGHT-CLICK) ===");
-            SquadDashTrace.Write("Docking", $"Label: {slot.Label}");
-            SquadDashTrace.Write("Docking", $"Position: ({slot.X}, {slot.Y})");
-            SquadDashTrace.Write("Docking", $"Size: {slot.Width}x{slot.Height}");
-            SquadDashTrace.Write("Docking", $"TargetZone: {slot.TargetZone}");
-            SquadDashTrace.Write("Docking", $"TargetOrder: {slot.TargetOrder}");
-            SquadDashTrace.Write("Docking", $"IsSyntheticInsert: {slot.IsSyntheticInsert}");
-            SquadDashTrace.Write("Docking", $"InsertKind: {slot.InsertKind}");
-            SquadDashTrace.Write("Docking", $"IsSourcePanel: {slot.IsSourcePanel}");
+            LogSlotDiagnostic(slot);
             SquadDashTrace.Write("Docking", "=============================================");
         };
         contextMenu.Items.Add(markCorrectMenuItem);
@@ -874,14 +884,10 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             markUnwantedMenuItem.Click += (_, _) =>
             {
                 SquadDashTrace.Write("Docking", "=== MARK AS UNWANTED SYNTHETIC (SHOULD REMOVE) ===");
-                SquadDashTrace.Write("Docking", $"Position: ({slot.X}, {slot.Y})");
-                SquadDashTrace.Write("Docking", $"Size: {slot.Width}x{slot.Height}");
-                SquadDashTrace.Write("Docking", $"TargetZone: {slot.TargetZone}");
-                SquadDashTrace.Write("Docking", $"TargetOrder: {slot.TargetOrder}");
-                SquadDashTrace.Write("Docking", $"InsertKind: {slot.InsertKind}");
+                LogSlotDiagnostic(slot);
                 SquadDashTrace.Write("Docking", "");
                 SquadDashTrace.Write("Docking", "ACTION: Remove from expectedDockingMap:");
-                SquadDashTrace.Write("Docking", $"  Delete the entry with zone='{slot.TargetZone}' and order={slot.TargetOrder}");
+                SquadDashTrace.Write("Docking", $"  Delete the entry with targetZone='{slot.TargetZone}', targetOrder={slot.TargetOrder}, insertKind='{slot.InsertKind}'");
                 SquadDashTrace.Write("Docking", "==================================================");
             };
             contextMenu.Items.Add(markUnwantedMenuItem);
@@ -916,6 +922,27 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         };
 
         return border;
+    }
+
+    private void LogSlotDiagnostic(SlotButtonViewModel slot)
+    {
+        SquadDashTrace.Write("Docking", $"File: {_currentTest?.FilePath ?? "(none)"}");
+        SquadDashTrace.Write("Docking", $"SourcePanelId: {slot.SourcePanelId}");
+        SquadDashTrace.Write("Docking", $"Label: {slot.Label}");
+        SquadDashTrace.Write("Docking", $"Position: ({slot.X}, {slot.Y})");
+        SquadDashTrace.Write("Docking", $"Size: {slot.Width}x{slot.Height}");
+        SquadDashTrace.Write("Docking", $"DisplayZone: {DockingLayoutEngine.GetZoneDisplayName(slot.TargetZone)}");
+        SquadDashTrace.Write("Docking", $"TargetZone: {slot.TargetZone}");
+        SquadDashTrace.Write("Docking", $"TargetOrder: {slot.TargetOrder}");
+        SquadDashTrace.Write("Docking", $"IsSyntheticInsert: {slot.IsSyntheticInsert}");
+        SquadDashTrace.Write("Docking", $"InsertKind: {slot.InsertKind}");
+        SquadDashTrace.Write("Docking", $"IsSourcePanel: {slot.IsSourcePanel}");
+        SquadDashTrace.Write("Docking", $"IsSeparator: {slot.IsSeparator}");
+        if (_currentTest is not null)
+        {
+            SquadDashTrace.Write("Docking",
+                $"RecordedAction: {_currentTest.TargetZoneDisplay}@{_currentTest.TargetOrder} insertKind={_currentTest.TargetInsertKind}");
+        }
     }
 
     private static SolidColorBrush MakeBrush(Color color, double opacity) =>
@@ -1031,16 +1058,21 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
                 slotsArray.Add(new
                 {
                     label = slot.Label,
+                    panelId = slot.Label,
                     isSourcePanel = slot.IsSourcePanel,
                     isExpansionButton = slot.IsExpansionButton,
                     x = slot.X,
                     y = slot.Y,
                     width = slot.Width,
                     height = slot.Height,
+                    zone = DockingLayoutEngine.GetZoneDisplayName(slot.TargetZone),
+                    order = slot.TargetOrder,
                     targetZone = slot.TargetZone.ToString(),
                     targetOrder = slot.TargetOrder,
-                    insertKind = slot.InsertKind.ToString(),
-                    isSeparator = slot.IsSeparator
+                    insertKind = slot.InsertKind == SyntheticInsertKind.None ? "" : slot.InsertKind.ToString(),
+                    isSeparator = slot.IsSeparator,
+                    isSyntheticInsert = slot.IsSyntheticInsert,
+                    isVirtualThin = slot.IsSyntheticInsert
                 });
             }
             

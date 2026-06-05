@@ -12112,11 +12112,11 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                 }
                 catch (Exception ex) { HandleUiCallbackException("DockingTestPlayback.AddToChat", ex); }
             }),
-            (panelId, targetZone, targetOrder) => Dispatcher.Invoke(() =>
+            (panelId, targetZone, targetOrder, insertKind) => Dispatcher.Invoke(() =>
             {
                 try
                 {
-                    _dockingService.MovePanel(panelId, targetZone, targetOrder);
+                    _dockingService.MovePanel(panelId, targetZone, targetOrder, insertKind);
                     if (_currentWorkspace is not null)
                         _dockingService.SaveLayout(_currentWorkspace.FolderPath);
                 }
@@ -12128,12 +12128,12 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                 return SquadDash.PanelDocking.DockingLayoutEngine.LayoutToJson(layoutData);
             },
             Application.Current.Resources,
-            (panelId, targetZone, targetOrder) => Dispatcher.Invoke(() =>
+            (panelId, targetZone, targetOrder, insertKind) => Dispatcher.Invoke(() =>
             {
                 try
                 {
                     if (hoverBrush is null) return;
-                    var rect = _dockingService.GetDropPreviewRect(panelId, targetZone, targetOrder);
+                    var rect = _dockingService.GetDropPreviewRect(panelId, targetZone, targetOrder, insertKind);
                     if (rect.IsEmpty) return;
                     EnsureDropPreviewOverlay();
                     dropPreviewOverlay!.Left   = rect.Left;

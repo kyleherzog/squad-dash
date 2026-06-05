@@ -301,6 +301,8 @@ internal sealed class PanelDockingService
     {
         bool isTopLevel = !_isMovingPanel;
         _isMovingPanel = true;
+        var requestedTargetZone = targetZone;
+        var requestedTargetOrder = targetOrder;
         // Capture source zone before try so the finally block can check it.
         DockZone? sourceZoneCapture = CurrentLayout.Slots
             .FirstOrDefault(s => string.Equals(s.PanelId, panelId, StringComparison.OrdinalIgnoreCase))?.Zone;
@@ -359,7 +361,7 @@ internal sealed class PanelDockingService
                 TestRecorder.OnDockingMapBuilt(preMoveDockingMapForRecording.Slots);
             }
             
-            TestRecorder?.OnMoveCompleted(panelId, targetZone, targetOrder, GetCurrentLayoutData());
+            TestRecorder?.OnMoveCompleted(panelId, requestedTargetZone, requestedTargetOrder, insertKind, GetCurrentLayoutData());
 
             // WPF: reorder the panel within the zone list and rebuild the grid.
             // For the Top zone, reassign physical columns; for side zones, rebuild the row grid.
@@ -665,7 +667,7 @@ internal sealed class PanelDockingService
                         TestRecorder.OnDockingMapBuilt(preMoveDockingMapForRecording.Slots);
                     }
                     
-                    TestRecorder?.OnMoveCompleted(panelId, targetZone, targetOrder, GetCurrentLayoutData());
+                    TestRecorder?.OnMoveCompleted(panelId, requestedTargetZone, requestedTargetOrder, insertKind, GetCurrentLayoutData());
                 }
             }
         }
@@ -1820,7 +1822,11 @@ internal sealed class PanelDockingService
     /// <paramref name="sourcePanelId"/> is being dragged. Used by the docking test
     /// playback window to show the preview without requiring a live docking-map hover.
     /// </summary>
-    public Rect GetDropPreviewRect(string sourcePanelId, DockZone targetZone, int targetOrder)
+    public Rect GetDropPreviewRect(
+        string sourcePanelId,
+        DockZone targetZone,
+        int targetOrder,
+        SyntheticInsertKind insertKind = SyntheticInsertKind.None)
     {
         var slot = new SlotButtonViewModel(
             Label:            string.Empty,
@@ -1832,7 +1838,10 @@ internal sealed class PanelDockingService
             Height:           0,
             TargetZone:       targetZone,
             TargetOrder:      targetOrder,
-            SourcePanelId:    sourcePanelId);
+            SourcePanelId:    sourcePanelId)
+        {
+            InsertKind = insertKind
+        };
         return GetSlotScreenRect(slot);
     }
 

@@ -67,7 +67,12 @@ internal sealed class DockingTestRecorder : IDockingMoveRecorder
         }
     }
 
-    public void OnMoveCompleted(string sourcePanelId, DockZone targetZone, int targetOrder, PanelLayoutData layoutAfter)
+    public void OnMoveCompleted(
+        string sourcePanelId,
+        DockZone targetZone,
+        int targetOrder,
+        SyntheticInsertKind insertKind,
+        PanelLayoutData layoutAfter)
     {
         if (_state != RecorderState.Recording) return;
         if (_initialLayout is null) return;
@@ -98,18 +103,27 @@ internal sealed class DockingTestRecorder : IDockingMoveRecorder
         var dockingMapForJson = (_dockingMapSlots ?? new List<SlotButtonViewModel>())
             .Select(slot => new
             {
-                zone      = DockingLayoutEngine.GetZoneDisplayName(slot.TargetZone),
-                order     = slot.TargetOrder,
-                x         = (int)slot.X,
-                y         = (int)slot.Y,
-                width     = (int)slot.Width,
-                height    = (int)slot.Height,
-                panelId   = slot.Label,
-                isSeparator = slot.IsSeparator,
-                isVirtualThin = slot.Width < 48, // Heuristic: thins are narrow (<48px)
+                label             = slot.Label,
+                panelId           = slot.Label,
+                isSourcePanel     = slot.IsSourcePanel,
+                isExpansionButton = slot.IsExpansionButton,
+                x                 = (int)slot.X,
+                y                 = (int)slot.Y,
+                width             = (int)slot.Width,
+                height            = (int)slot.Height,
+                zone              = DockingLayoutEngine.GetZoneDisplayName(slot.TargetZone),
+                order             = slot.TargetOrder,
+                targetZone        = slot.TargetZone.ToString(),
+                targetOrder       = slot.TargetOrder,
+                insertKind        = slot.InsertKind == SyntheticInsertKind.None ? "" : slot.InsertKind.ToString(),
+                isSeparator       = slot.IsSeparator,
+                isSyntheticInsert = slot.IsSyntheticInsert,
+                isVirtualThin     = slot.IsSyntheticInsert,
             })
-            .OrderBy(s => s.zone)
-            .ThenBy(s => s.order)
+            .OrderBy(s => s.x)
+            .ThenBy(s => s.y)
+            .ThenBy(s => s.targetZone)
+            .ThenBy(s => s.targetOrder)
             .ToList();
 
         SquadDashTrace.Write(TraceCategory.Docking,
@@ -117,6 +131,7 @@ internal sealed class DockingTestRecorder : IDockingMoveRecorder
 
         var testCase = new
         {
+            schemaVersion  = 2,
             name           = $"{sourcePanelId}_{sourceZoneTag}_to_{targetZoneTag}_order{targetOrder}",
             sourcePanelId  = sourcePanelId,
             initialLayout  = DockingLayoutEngine.LayoutToJson(_initialLayout),
@@ -125,6 +140,7 @@ internal sealed class DockingTestRecorder : IDockingMoveRecorder
             {
                 targetZone  = DockingLayoutEngine.GetZoneDisplayName(targetZone),
                 targetOrder = targetOrder,
+                insertKind  = insertKind == SyntheticInsertKind.None ? "" : insertKind.ToString(),
             },
             chosenPreview  = chosenPreview,
             expectedLayout = DockingLayoutEngine.LayoutToJson(layoutAfter),
