@@ -732,9 +732,12 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         var layout = new DockLayout { Name = "Preview" };
         var slots = new List<PanelSlot>();
 
+        SquadDashTrace.Write("Docking", $"[BuildDockLayoutFromZoneMap] Processing {zoneMap.Count} zone entries");
         foreach (var (zoneName, panelIds) in zoneMap)
         {
             var zone = ParseZoneDisplayName(zoneName);
+            SquadDashTrace.Write("Docking", $"[BuildDockLayoutFromZoneMap] Zone '{zoneName}' -> {(zone.HasValue ? zone.Value.ToString() : "NULL")} ({panelIds.Count} panels)");
+            
             if (!zone.HasValue)
                 continue;
 
@@ -742,30 +745,47 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             foreach (var panelId in panelIds)
             {
                 slots.Add(new PanelSlot(panelId, zone.Value, order));
+                SquadDashTrace.Write("Docking", $"[BuildDockLayoutFromZoneMap]   Added: {panelId}@{zone.Value}:{order}");
                 order++;
             }
         }
 
+        SquadDashTrace.Write("Docking", $"[BuildDockLayoutFromZoneMap] Final DockLayout: {slots.Count} slots");
         layout.Slots = slots;
         return layout;
     }
 
     /// <summary>
     /// Converts zone display names (e.g., "Right 1", "Left 2") to DockZone enums.
+    /// Handles variations in spacing and casing.
     /// </summary>
-    private static DockZone? ParseZoneDisplayName(string displayName) => displayName switch
+    private static DockZone? ParseZoneDisplayName(string? displayName)
     {
-        "Top"     => DockZone.Top,
-        "Left 1"  => DockZone.Left,
-        "Left 2"  => DockZone.Left2,
-        "Left 3"  => DockZone.Left3,
-        "Left 4"  => DockZone.Left4,
-        "Right 1" => DockZone.Right,
-        "Right 2" => DockZone.Right2,
-        "Right 3" => DockZone.Right3,
-        "Right 4" => DockZone.Right4,
-        _         => null,
-    };
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            SquadDashTrace.Write("Docking", $"[ParseZoneDisplayName] Input: null or empty");
+            return null;
+        }
+
+        var normalized = displayName.Trim().ToLowerInvariant();
+        SquadDashTrace.Write("Docking", $"[ParseZoneDisplayName] Input: '{displayName}' → normalized: '{normalized}'");
+        
+        var result = normalized switch
+        {
+            "top"     => (DockZone?)DockZone.Top,
+            "left 1"  => (DockZone?)DockZone.Left,
+            "left 2"  => (DockZone?)DockZone.Left2,
+            "left 3"  => (DockZone?)DockZone.Left3,
+            "left 4"  => (DockZone?)DockZone.Left4,
+            "right 1" => (DockZone?)DockZone.Right,
+            "right 2" => (DockZone?)DockZone.Right2,
+            "right 3" => (DockZone?)DockZone.Right3,
+            "right 4" => (DockZone?)DockZone.Right4,
+            _         => null,
+        };
+        SquadDashTrace.Write("Docking", $"[ParseZoneDisplayName] Output: {(result.HasValue ? result.Value.ToString() : "NULL")}");
+        return result;
+    }
 
     private Border BuildMapSlotElement(SlotButtonViewModel slot, Color groundingColor, Color polarColor, bool isDark, DockZone? targetZone = null, int? targetOrder = null)
     {
