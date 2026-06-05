@@ -359,7 +359,7 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             SquadDashTrace.Write("Docking", $"[OnTestSelected] expectedLayout zones: {string.Join(", ", expectedLayout.Where(kv => kv.Value.Count > 0).Select(kv => $"{kv.Key}=[{string.Join(",", kv.Value)}]"))}");
             SquadDashTrace.Write("Docking", $"[OnTestSelected] expectedLayout zone count: {expectedLayout.Count}, non-empty zones: {expectedLayout.Count(kv => kv.Value.Count > 0)}");
             
-            var dockLayout = BuildDockLayoutFromZoneMap(sourcePanelId, expectedLayout);
+            var dockLayout = BuildDockLayoutFromZoneMap(sourcePanelId, initialLayout);
             SquadDashTrace.Write("Docking", $"[OnTestSelected] Built DockLayout with {dockLayout.Slots.Count} slots: {string.Join(", ", dockLayout.Slots.Select(s => $"{s.PanelId}@{s.Zone}:{s.Order}"))}");
             
             var dockingMapViewModel = DockingMapBuilder.BuildDockingMap(sourcePanelId, dockLayout, null);
