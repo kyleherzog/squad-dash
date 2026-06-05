@@ -961,10 +961,29 @@ internal static class DockingMapBuilder
             foreach (var thin in thins)
             {
                 // Filter thins that are no-ops:
-                // InsertAfter on the source zone is a no-op when dragging solo panel (can't move after itself)
-                // Thins targeting empty adjacent zones are also no-ops
+                // 1. InsertAfter on the source zone is always a no-op
+                // 2. InsertBefore on the source zone is a no-op if there's no occupied zone to its left
+                //    (it can only serve as a separator if there's something to separate from)
+                // 3. Thins targeting empty adjacent zones are no-ops
                 
-                bool isInsertWithinSourceZone = (thin.TargetZone == sourceZone && thin.Kind == SyntheticInsertKind.InsertAfter);
+                bool isInsertAfterSourceZone = (thin.TargetZone == sourceZone && thin.Kind == SyntheticInsertKind.InsertAfter);
+                
+                bool isInsertBeforeSourceZoneWithoutLeftOccupant = false;
+                if (thin.TargetZone == sourceZone && thin.Kind == SyntheticInsertKind.InsertBefore)
+                {
+                    // InsertBefore is a no-op only if there's NO occupied zone to the left
+                    // If there IS an occupied zone to the left, it's a separator (keep it)
+                    if (leftAdjacentZone == null)
+                    {
+                        isInsertBeforeSourceZoneWithoutLeftOccupant = true;
+                    }
+                    else
+                    {
+                        isInsertBeforeSourceZoneWithoutLeftOccupant = PanelsInZone(layout, leftAdjacentZone.Value).Count == 0;
+                    }
+                }
+                
+                bool isInsertWithinSourceZone = isInsertAfterSourceZone || isInsertBeforeSourceZoneWithoutLeftOccupant;
                 
                 // Only filter adjacent thins if the adjacent zone is EMPTY
                 bool isEmptyAdjacentZone = false;
