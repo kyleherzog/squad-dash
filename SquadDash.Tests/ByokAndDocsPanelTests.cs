@@ -59,6 +59,8 @@ internal sealed class ByokAndDocsPanelTests {
         var snapshot = ApplicationSettingsSnapshot.Empty;
 
         Assert.Multiple(() => {
+            Assert.That(snapshot.ModelProvider, Is.EqualTo(ModelProvider.GitHubCopilot));
+            Assert.That(snapshot.CopilotDefaultModel, Is.EqualTo(ApplicationSettingsSnapshot.DefaultCopilotModel));
             Assert.That(snapshot.ByokProviderUrl, Is.Null);
             Assert.That(snapshot.ByokModel, Is.Null);
             Assert.That(snapshot.ByokProviderType, Is.Null);
@@ -155,6 +157,48 @@ internal sealed class ByokAndDocsPanelTests {
             Assert.That(loaded.ByokProviderUrl, Is.EqualTo("https://provider.example.com"));
             Assert.That(loaded.ByokModel, Is.EqualTo("gpt-4"));
             Assert.That(loaded.ByokApiKey, Is.EqualTo("sk-key"));
+        });
+    }
+
+    [Test]
+    public void SaveModelSettings_PersistsGitHubCopilotModel() {
+        using var workspace = new TestWorkspace();
+        var settingsPath = workspace.GetPath("settings", "settings.json");
+        var store = new ApplicationSettingsStore(settingsPath);
+
+        store.SaveModelSettings(ModelProvider.GitHubCopilot, "  claude-opus-4.6  ");
+        var loaded = store.Load();
+
+        Assert.Multiple(() => {
+            Assert.That(loaded.ModelProvider, Is.EqualTo(ModelProvider.GitHubCopilot));
+            Assert.That(loaded.CopilotDefaultModel, Is.EqualTo("claude-opus-4.6"));
+        });
+    }
+
+    [Test]
+    public void SaveModelSettings_BlankModelRestoresDefaultCopilotModel() {
+        using var workspace = new TestWorkspace();
+        var settingsPath = workspace.GetPath("settings", "settings.json");
+        var store = new ApplicationSettingsStore(settingsPath);
+
+        store.SaveModelSettings(ModelProvider.GitHubCopilot, "   ");
+        var loaded = store.Load();
+
+        Assert.That(loaded.CopilotDefaultModel, Is.EqualTo(ApplicationSettingsSnapshot.DefaultCopilotModel));
+    }
+
+    [Test]
+    public void SaveModelSettings_CustomProviderPreservesCopilotModelPreference() {
+        using var workspace = new TestWorkspace();
+        var settingsPath = workspace.GetPath("settings", "settings.json");
+        var store = new ApplicationSettingsStore(settingsPath);
+
+        store.SaveModelSettings(ModelProvider.Custom, "claude-sonnet-4.5");
+        var loaded = store.Load();
+
+        Assert.Multiple(() => {
+            Assert.That(loaded.ModelProvider, Is.EqualTo(ModelProvider.Custom));
+            Assert.That(loaded.CopilotDefaultModel, Is.EqualTo("claude-sonnet-4.5"));
         });
     }
 

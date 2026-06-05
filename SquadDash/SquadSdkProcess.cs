@@ -54,6 +54,12 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
     /// </summary>
     internal ByokProviderSettings? ByokProviderSettings { get; set; }
 
+    /// <summary>
+    /// Optional GitHub Copilot model override passed to new SDK sessions. Null means
+    /// the bridge lets the Copilot/Squad runtime choose automatically.
+    /// </summary>
+    internal string? CopilotDefaultModel { get; set; }
+
     internal SquadSdkProcess(IWorkspacePaths workspacePaths)
         : this(processStartInfoFactory: null, options: null, workspacePaths: workspacePaths) {
     }
@@ -136,7 +142,8 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
                 workingDirectory,
                 sessionId,
                 configDirectory,
-                requestId);
+                requestId,
+                Model: CopilotDefaultModel);
             await RunBridgeRequestOnceAsync(
                 request,
                 requestId,
@@ -177,7 +184,8 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
                 workingDirectory,
                 coordinatorSessionId,
                 configDirectory,
-                requestId);
+                requestId,
+                Model: CopilotDefaultModel);
             await RunBridgeRequestOnceAsync(
                 request,
                 requestId,
@@ -287,7 +295,8 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
             workingDirectory,
             sessionId,
             configDirectory,
-            requestId);
+            requestId,
+            Model: CopilotDefaultModel);
         await RunBridgeRequestOnceAsync(
             request,
             requestId,
@@ -1384,7 +1393,7 @@ public sealed class SquadSdkProcess : IAsyncDisposable {
         try {
             process.Start();
 
-            var request = new SquadSdkPromptRequest(prompt, workingDirectory, sessionId);
+            var request = new SquadSdkPromptRequest(prompt, workingDirectory, sessionId, Model: CopilotDefaultModel);
             var payload = JsonSerializer.Serialize(request);
             await process.StandardInput.WriteLineAsync(payload).ConfigureAwait(false);
             await process.StandardInput.FlushAsync().ConfigureAwait(false);
@@ -1528,7 +1537,8 @@ internal sealed record SquadSdkPromptRequest(
     [property: JsonPropertyName("sessionId")] string? SessionId = null,
     [property: JsonPropertyName("configDir")] string? ConfigDirectory = null,
     [property: JsonPropertyName("requestId"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RequestId = null,
-    [property: JsonPropertyName("type")] string Type = "prompt");
+    [property: JsonPropertyName("type")] string Type = "prompt",
+    [property: JsonPropertyName("model"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Model = null);
 
 internal sealed record SquadSdkDelegateRequest(
     [property: JsonPropertyName("selectedOption")] string SelectedOption,
@@ -1537,7 +1547,8 @@ internal sealed record SquadSdkDelegateRequest(
     [property: JsonPropertyName("sessionId")] string SessionId,
     [property: JsonPropertyName("configDir")] string? ConfigDirectory = null,
     [property: JsonPropertyName("requestId"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RequestId = null,
-    [property: JsonPropertyName("type")] string Type = "delegate");
+    [property: JsonPropertyName("type")] string Type = "delegate",
+    [property: JsonPropertyName("model"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Model = null);
 
 internal sealed record SquadSdkNamedAgentRequest(
     [property: JsonPropertyName("targetAgent")] string TargetAgent,
@@ -1547,7 +1558,8 @@ internal sealed record SquadSdkNamedAgentRequest(
     [property: JsonPropertyName("sessionId")] string? SessionId = null,
     [property: JsonPropertyName("configDir")] string? ConfigDirectory = null,
     [property: JsonPropertyName("requestId"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RequestId = null,
-    [property: JsonPropertyName("type")] string Type = "named_agent");
+    [property: JsonPropertyName("type")] string Type = "named_agent",
+    [property: JsonPropertyName("model"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Model = null);
 
 internal sealed record SquadSdkAbortRequest(
     [property: JsonPropertyName("requestId")] string RequestId,

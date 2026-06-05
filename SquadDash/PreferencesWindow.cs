@@ -45,6 +45,11 @@ internal sealed class PreferencesWindow : Window {
     private readonly ComboBox _tunnelModeComboBox;
     private readonly PasswordBox _tunnelTokenPasswordBox;
     private readonly TextBox _tunnelTokenRevealBox;
+    private readonly RadioButton _githubCopilotProviderRadio;
+    private readonly RadioButton _customModelProviderRadio;
+    private readonly ComboBox _copilotModelComboBox;
+    private readonly StackPanel _githubCopilotModelPanel;
+    private readonly StackPanel _customModelProviderPanel;
     private readonly TextBox _byokProviderUrlBox;
     private readonly TextBox _byokModelBox;
     private readonly ComboBox _byokProviderTypeComboBox;
@@ -70,6 +75,28 @@ internal sealed class PreferencesWindow : Window {
     private readonly CheckBox _soundQuickRepliesShownCheckBox;
     private readonly TextBox  _soundQuickRepliesShownPathBox;
     private readonly ObservableCollection<VoiceReplacementRuleViewModel> _voiceReplacementRules;
+
+    private static readonly string[] KnownCopilotModelOptions = {
+        ApplicationSettingsSnapshot.DefaultCopilotModel,
+        "auto",
+        "claude-sonnet-4.5",
+        "claude-sonnet-4",
+        "claude-opus-4.6",
+        "claude-opus-4.5",
+        "claude-haiku-4.5",
+        "gpt-5.4",
+        "gpt-5.4-mini",
+        "gpt-5.3-codex",
+        "gpt-5.2-codex",
+        "gpt-5.2",
+        "gpt-5.1-codex-max",
+        "gpt-5.1-codex",
+        "gpt-5.1",
+        "gpt-5.1-codex-mini",
+        "gpt-5-mini",
+        "gpt-4.1",
+        "gemini-3-pro-preview"
+    };
 
     private readonly UIElement[] _pages;
     private readonly Dictionary<int, TreeViewItem> _leafItems;
@@ -318,6 +345,43 @@ internal sealed class PreferencesWindow : Window {
         _tunnelTokenRevealBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
         _tunnelTokenRevealBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
 
+        var useCustomModelProvider = currentSettings.ModelProvider == ModelProvider.Custom;
+        _githubCopilotProviderRadio = new RadioButton {
+            Content = "GitHub Copilot",
+            GroupName = "ModelProvider",
+            IsChecked = !useCustomModelProvider,
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        _githubCopilotProviderRadio.SetResourceReference(Control.StyleProperty, "ThemedRadioButtonStyle");
+        _customModelProviderRadio = new RadioButton {
+            Content = "Custom Model",
+            GroupName = "ModelProvider",
+            IsChecked = useCustomModelProvider,
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        _customModelProviderRadio.SetResourceReference(Control.StyleProperty, "ThemedRadioButtonStyle");
+
+        _copilotModelComboBox = new ComboBox {
+            Height = 30,
+            Margin = new Thickness(0, 0, 0, 12),
+            IsEditable = true,
+            IsTextSearchEnabled = true
+        };
+        _copilotModelComboBox.SetResourceReference(StyleProperty, "ThemedComboBoxStyle");
+        foreach (var model in KnownCopilotModelOptions)
+            _copilotModelComboBox.Items.Add(model);
+        var savedCopilotModel = ApplicationSettingsSnapshot.NormalizeCopilotDefaultModel(currentSettings.CopilotDefaultModel);
+        if (!KnownCopilotModelOptions.Contains(savedCopilotModel, StringComparer.OrdinalIgnoreCase))
+            _copilotModelComboBox.Items.Add(savedCopilotModel);
+        _copilotModelComboBox.Text = savedCopilotModel;
+
+        _githubCopilotModelPanel = new StackPanel {
+            Visibility = useCustomModelProvider ? Visibility.Collapsed : Visibility.Visible
+        };
+        _customModelProviderPanel = new StackPanel {
+            Visibility = useCustomModelProvider ? Visibility.Visible : Visibility.Collapsed
+        };
+
         _byokProviderUrlBox = new TextBox {
             Text = currentSettings.ByokProviderUrl ?? string.Empty,
             Padding = new Thickness(6, 4, 6, 4),
@@ -495,7 +559,7 @@ internal sealed class PreferencesWindow : Window {
             ("Push to Talk",      BuildPushToTalkPage()),
             ("Replacements",      BuildTextReplacementsPage()),
             ("Remote Access",     BuildRemoteAccessPage()),
-            ("Custom Model",      BuildByokPage()),
+            ("Model",             BuildByokPage()),
             ("Notifications",     BuildNotificationsPage(currentSettings)),
             ("Sound Alerts",      BuildSoundsPage(currentSettings)),
             ("TTS Provider",      BuildTtsProviderPage(currentSettings)),
@@ -580,7 +644,7 @@ internal sealed class PreferencesWindow : Window {
 
         tree.Items.Add(MakeGroup("Voice & Speech", "Provider", "Push to Talk", "Replacements"));
         tree.Items.Add(MakeGroup("Sound",          "Sound Alerts", "TTS Provider"));
-        tree.Items.Add(MakeGroup("AI",             "Commands", "Custom Model"));
+        tree.Items.Add(MakeGroup("AI",             "Commands", "Model"));
         tree.Items.Add(MakeGroup("Connectivity",   "Remote Access", "Notifications"));
 
         foreach (var standalone in new[] { "Dev / Diag." })
@@ -1015,10 +1079,10 @@ internal sealed class PreferencesWindow : Window {
     private UIElement BuildByokPage() {
         var form = new StackPanel { Margin = new Thickness(20, 16, 20, 20) };
 
-        AddSectionHeader(form, "Custom Model Provider (BYOK)");
+        AddSectionHeader(form, "Model");
 
         var hint = new TextBlock {
-            Text = "Override the default Copilot model with a custom provider (e.g. Ollama). Leave blank to use GitHub Copilot.",
+            Text = "Choose the AI provider used by Squad Dash. GitHub Copilot uses your Copilot account and can be pinned to a specific model; Custom Model uses your own compatible provider settings.",
             TextWrapping = TextWrapping.Wrap,
             FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Margin = new Thickness(0, 0, 0, 12)
@@ -1026,18 +1090,34 @@ internal sealed class PreferencesWindow : Window {
         hint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
         form.Children.Add(hint);
 
+        AddLabel(form, "Provider:");
+        form.Children.Add(_githubCopilotProviderRadio);
+        form.Children.Add(_customModelProviderRadio);
+
+        AddLabel(_githubCopilotModelPanel, "Default Model:", topMargin: 8);
+        _githubCopilotModelPanel.Children.Add(_copilotModelComboBox);
+        var copilotHint = new TextBlock {
+            Text = "Use auto to let GitHub Copilot choose. Type a model ID if it is not listed yet.",
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = (double)Application.Current.Resources["FontSizeSmall"],
+            Margin = new Thickness(0, -8, 0, 12)
+        };
+        copilotHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
+        _githubCopilotModelPanel.Children.Add(copilotHint);
+        form.Children.Add(_githubCopilotModelPanel);
+
         var byokDevWarning = new TextBlock {
-            Text = "Note: this feature is still in development and is not yet functional.",
+            Text = "Custom provider support is experimental. Use an OpenAI-compatible endpoint such as Ollama /v1.",
             TextWrapping = TextWrapping.Wrap,
             FontWeight = FontWeights.Bold,
             FontSize = (double)Application.Current.Resources["FontSizeSmall"],
             Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x8C, 0x00)),
-            Margin = new Thickness(0, 0, 0, 12)
+            Margin = new Thickness(0, 8, 0, 12)
         };
-        form.Children.Add(byokDevWarning);
+        _customModelProviderPanel.Children.Add(byokDevWarning);
 
-        AddLabel(form, "Provider URL:");
-        form.Children.Add(_byokProviderUrlBox);
+        AddLabel(_customModelProviderPanel, "Provider URL:");
+        _customModelProviderPanel.Children.Add(_byokProviderUrlBox);
 
         var urlHint = new TextBlock {
             Text = "e.g. http://localhost:11434/v1",
@@ -1045,19 +1125,19 @@ internal sealed class PreferencesWindow : Window {
             Margin = new Thickness(0, 3, 0, 12)
         };
         urlHint.SetResourceReference(TextBlock.ForegroundProperty, "BodyText");
-        form.Children.Add(urlHint);
+        _customModelProviderPanel.Children.Add(urlHint);
 
-        AddLabel(form, "Model:");
-        form.Children.Add(_byokModelBox);
+        AddLabel(_customModelProviderPanel, "Model:");
+        _customModelProviderPanel.Children.Add(_byokModelBox);
 
-        AddLabel(form, "Provider Type:");
-        form.Children.Add(_byokProviderTypeComboBox);
+        AddLabel(_customModelProviderPanel, "Provider Type:");
+        _customModelProviderPanel.Children.Add(_byokProviderTypeComboBox);
 
-        AddLabel(form, "API Key (optional):");
+        AddLabel(_customModelProviderPanel, "API Key (optional):");
         var byokApiKeyHost = new Grid();
         byokApiKeyHost.Children.Add(_byokApiKeyPasswordBox);
         byokApiKeyHost.Children.Add(_byokApiKeyRevealBox);
-        form.Children.Add(byokApiKeyHost);
+        _customModelProviderPanel.Children.Add(byokApiKeyHost);
 
         var revealByokLink = MakeRevealLink("(reveal key)");
         revealByokLink.MouseLeftButtonDown += (_, _) => {
@@ -1070,7 +1150,7 @@ internal sealed class PreferencesWindow : Window {
             _byokApiKeyRevealBox.Visibility = Visibility.Collapsed;
             _byokApiKeyPasswordBox.Visibility = Visibility.Visible;
         };
-        form.Children.Add(revealByokLink);
+        _customModelProviderPanel.Children.Add(revealByokLink);
 
         var byokTestPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 4) };
         var byokTestButton = new Button {
@@ -1082,9 +1162,20 @@ internal sealed class PreferencesWindow : Window {
         byokTestButton.Click += ByokTestButton_Click;
         byokTestPanel.Children.Add(byokTestButton);
         byokTestPanel.Children.Add(_byokTestStatusText);
-        form.Children.Add(byokTestPanel);
+        _customModelProviderPanel.Children.Add(byokTestPanel);
+
+        form.Children.Add(_customModelProviderPanel);
+
+        _githubCopilotProviderRadio.Checked += (_, _) => UpdateModelProviderSectionVisibility();
+        _customModelProviderRadio.Checked += (_, _) => UpdateModelProviderSectionVisibility();
 
         return WrapInScrollViewer(form);
+    }
+
+    private void UpdateModelProviderSectionVisibility() {
+        var useCustomModelProvider = _customModelProviderRadio.IsChecked == true;
+        _githubCopilotModelPanel.Visibility = useCustomModelProvider ? Visibility.Collapsed : Visibility.Visible;
+        _customModelProviderPanel.Visibility = useCustomModelProvider ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private UIElement BuildNotificationsPage(ApplicationSettingsSnapshot currentSettings) {
@@ -1696,6 +1787,9 @@ internal sealed class PreferencesWindow : Window {
         var tunnelMode = (_tunnelModeComboBox.SelectedItem as ComboBoxItem)?.Tag as string;
         var tunnelToken = _tunnelTokenRevealBox.IsVisible ? _tunnelTokenRevealBox.Text : _tunnelTokenPasswordBox.Password;
         updated = _settingsStore.SaveTunnelSettings(tunnelMode, string.IsNullOrWhiteSpace(tunnelToken) ? null : tunnelToken);
+        updated = _settingsStore.SaveModelSettings(
+            _customModelProviderRadio.IsChecked == true ? ModelProvider.Custom : ModelProvider.GitHubCopilot,
+            ReadCopilotDefaultModelInput());
         var byokProviderType = (_byokProviderTypeComboBox.SelectedItem as ComboBoxItem)?.Tag as string;
         var byokApiKey = _byokApiKeyRevealBox.IsVisible ? _byokApiKeyRevealBox.Text : _byokApiKeyPasswordBox.Password;
         updated = _settingsStore.SaveByokSettings(
@@ -1720,6 +1814,11 @@ internal sealed class PreferencesWindow : Window {
             SquadDashTrace.Write("Preferences", $"SetEnvironmentVariable failed: {ex.Message}");
         }
     }
+
+    private string ReadCopilotDefaultModelInput() =>
+        string.IsNullOrWhiteSpace(_copilotModelComboBox.Text)
+            ? ApplicationSettingsSnapshot.DefaultCopilotModel
+            : _copilotModelComboBox.Text.Trim();
 
     public static PreferencesWindow Open(
         Window? owner,

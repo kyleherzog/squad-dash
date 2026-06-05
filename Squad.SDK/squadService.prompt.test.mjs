@@ -69,6 +69,34 @@ test("permission approval returns a supported response shape", () => {
     assert.match(approvePermissionRequest().kind, /^(approved|approve-once)$/);
 });
 
+test("runPrompt passes explicit model to session config", async () => {
+    let capturedConfig;
+    const session = {
+        sessionId: "session-model",
+        on() {},
+        getBackgroundTasks: async () => [],
+        sendAndWait: async () => ({ content: "done" })
+    };
+    const service = new SquadBridgeService();
+    service.clientCwd = "D:\\Drive\\Source\\SquadDash-public";
+    service.client = {
+        createSession: async config => {
+            capturedConfig = config;
+            return session;
+        }
+    };
+
+    await service.runPrompt(
+        "status?",
+        {},
+        {
+            cwd: "D:\\Drive\\Source\\SquadDash-public",
+            model: "  claude-sonnet-4.6  "
+        });
+
+    assert.equal(capturedConfig.model, "claude-sonnet-4.6");
+});
+
 test("pending restart self-build hook disables run-slot deployment", () => {
     const rewrite = maybeRewritePendingRestartSelfBuildToolArgs(
         "powershell",

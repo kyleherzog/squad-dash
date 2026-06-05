@@ -21,6 +21,7 @@ type PromptRequest = {
     cwd: string;
     sessionId?: string;
     configDir?: string;
+    model?: string;
 };
 
 type DelegateRequest = {
@@ -31,6 +32,7 @@ type DelegateRequest = {
     cwd: string;
     sessionId: string;
     configDir?: string;
+    model?: string;
 };
 
 type NamedAgentRequest = {
@@ -42,6 +44,7 @@ type NamedAgentRequest = {
     cwd: string;
     sessionId?: string;
     configDir?: string;
+    model?: string;
 };
 
 type AbortRequest = {
@@ -374,6 +377,7 @@ function tryParsePromptRequest(parsed: Partial<PromptRequest>): PromptRequest | 
     const requestId = extractRequiredOrUUID(parsed.requestId);
     const sessionId = extractOptionalString(parsed.sessionId);
     const configDir = extractOptionalString(parsed.configDir);
+    const model = extractOptionalString(parsed.model);
 
     return {
         type: "prompt",
@@ -381,7 +385,8 @@ function tryParsePromptRequest(parsed: Partial<PromptRequest>): PromptRequest | 
         prompt,
         cwd,
         sessionId,
-        configDir
+        configDir,
+        model
     };
 }
 
@@ -402,6 +407,7 @@ function tryParseDelegateRequest(parsed: Partial<DelegateRequest>): DelegateRequ
 
     const requestId = extractRequiredOrUUID(parsed.requestId);
     const configDir = extractOptionalString(parsed.configDir);
+    const model = extractOptionalString(parsed.model);
 
     return {
         type: "delegate",
@@ -410,7 +416,8 @@ function tryParseDelegateRequest(parsed: Partial<DelegateRequest>): DelegateRequ
         targetAgent,
         cwd,
         sessionId,
-        configDir
+        configDir,
+        model
     };
 }
 
@@ -429,7 +436,8 @@ function tryParseNamedAgentRequest(parsed: Partial<NamedAgentRequest>): NamedAge
         handoffContext: extractOptionalString(parsed.handoffContext),
         cwd,
         sessionId: extractOptionalString(parsed.sessionId),
-        configDir: extractOptionalString(parsed.configDir)
+        configDir: extractOptionalString(parsed.configDir),
+        model: extractOptionalString(parsed.model)
     };
 }
 
@@ -1062,7 +1070,8 @@ async function handleNamedAgent(request: NamedAgentRequest): Promise<void> {
                 handoffContext,
                 targetAgent: handle,
                 charterContent,
-                configDir: request.configDir
+                configDir: request.configDir,
+                model: request.model
             },
             buildNamedAgentRunHandlers(request.requestId, toolCallId, handle, displayName, request.sessionId)
         );

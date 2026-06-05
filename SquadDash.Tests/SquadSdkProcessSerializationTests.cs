@@ -10,18 +10,29 @@ internal sealed class SquadSdkProcessSerializationTests {
             "status?",
             @"D:\Drive\Source\SquadUI",
             "session-123",
-            @"D:\Users\Mark\AppData\Local\SquadDash\workspaces\repo\sdk-config"));
+            @"D:\Users\Mark\AppData\Local\SquadDash\workspaces\repo\sdk-config",
+            Model: "claude-sonnet-4.6"));
 
         Assert.Multiple(() => {
             Assert.That(json, Does.Contain("\"prompt\":\"status?\""));
             Assert.That(json, Does.Contain("\"cwd\":\"D:\\\\Drive\\\\Source\\\\SquadUI\""));
             Assert.That(json, Does.Contain("\"sessionId\":\"session-123\""));
             Assert.That(json, Does.Contain("\"configDir\":\"D:\\\\Users\\\\Mark\\\\AppData\\\\Local\\\\SquadDash\\\\workspaces\\\\repo\\\\sdk-config\""));
+            Assert.That(json, Does.Contain("\"model\":\"claude-sonnet-4.6\""));
             Assert.That(json, Does.Not.Contain("\"Prompt\""));
             Assert.That(json, Does.Not.Contain("\"Cwd\""));
             Assert.That(json, Does.Not.Contain("\"SessionId\""));
             Assert.That(json, Does.Not.Contain("\"ConfigDirectory\""));
         });
+    }
+
+    [Test]
+    public void PromptRequest_NullModel_OmitsModelProperty() {
+        var json = JsonSerializer.Serialize(new SquadSdkPromptRequest(
+            "status?",
+            @"D:\Drive\Source\SquadUI"));
+
+        Assert.That(json, Does.Not.Contain("\"model\""));
     }
 
     [Test]
@@ -31,7 +42,8 @@ internal sealed class SquadSdkProcessSerializationTests {
             "lyra-morn",
             @"D:\Drive\Source\SquadUI",
             "session-456",
-            @"D:\Users\Mark\AppData\Local\SquadDash\workspaces\repo\sdk-config"));
+            @"D:\Users\Mark\AppData\Local\SquadDash\workspaces\repo\sdk-config",
+            Model: "claude-sonnet-4.6"));
 
         Assert.Multiple(() => {
             Assert.That(json, Does.Contain("\"selectedOption\":\"Hand off to Lyra\""));
@@ -39,6 +51,7 @@ internal sealed class SquadSdkProcessSerializationTests {
             Assert.That(json, Does.Contain("\"cwd\":\"D:\\\\Drive\\\\Source\\\\SquadUI\""));
             Assert.That(json, Does.Contain("\"sessionId\":\"session-456\""));
             Assert.That(json, Does.Contain("\"configDir\":\"D:\\\\Users\\\\Mark\\\\AppData\\\\Local\\\\SquadDash\\\\workspaces\\\\repo\\\\sdk-config\""));
+            Assert.That(json, Does.Contain("\"model\":\"claude-sonnet-4.6\""));
             Assert.That(json, Does.Contain("\"type\":\"delegate\""));
             Assert.That(json, Does.Not.Contain("\"SelectedOption\""));
             Assert.That(json, Does.Not.Contain("\"TargetAgent\""));

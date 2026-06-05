@@ -215,13 +215,15 @@ function tryParsePromptRequest(parsed) {
     const requestId = extractRequiredOrUUID(parsed.requestId);
     const sessionId = extractOptionalString(parsed.sessionId);
     const configDir = extractOptionalString(parsed.configDir);
+    const model = extractOptionalString(parsed.model);
     return {
         type: "prompt",
         requestId,
         prompt,
         cwd,
         sessionId,
-        configDir
+        configDir,
+        model
     };
 }
 function tryParseDelegateRequest(parsed) {
@@ -239,6 +241,7 @@ function tryParseDelegateRequest(parsed) {
         return null;
     const requestId = extractRequiredOrUUID(parsed.requestId);
     const configDir = extractOptionalString(parsed.configDir);
+    const model = extractOptionalString(parsed.model);
     return {
         type: "delegate",
         requestId,
@@ -246,7 +249,8 @@ function tryParseDelegateRequest(parsed) {
         targetAgent,
         cwd,
         sessionId,
-        configDir
+        configDir,
+        model
     };
 }
 function tryParseNamedAgentRequest(parsed) {
@@ -265,7 +269,8 @@ function tryParseNamedAgentRequest(parsed) {
         handoffContext: extractOptionalString(parsed.handoffContext),
         cwd,
         sessionId: extractOptionalString(parsed.sessionId),
-        configDir: extractOptionalString(parsed.configDir)
+        configDir: extractOptionalString(parsed.configDir),
+        model: extractOptionalString(parsed.model)
     };
 }
 function tryParseRunLoopRequest(parsed) {
@@ -848,7 +853,8 @@ async function handleNamedAgent(request) {
             handoffContext,
             targetAgent: handle,
             charterContent,
-            configDir: request.configDir
+            configDir: request.configDir,
+            model: request.model
         }, buildNamedAgentRunHandlers(request.requestId, toolCallId, handle, displayName, request.sessionId));
     }
     catch (err) {

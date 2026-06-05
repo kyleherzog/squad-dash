@@ -660,6 +660,7 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
         SquadDashTrace.Write(TraceCategory.Startup, "Constructor: begin.");
         _bridge = new SquadSdkProcess(_workspacePaths);
         _bridge.ByokProviderSettings = BuildByokSettingsFromStore();
+        _bridge.CopilotDefaultModel = BuildCopilotDefaultModel(_settingsStore.Load());
         _startupFolderArgument = startupFolder;
         _startupWorkspaceLease = startupWorkspaceLease;
         _noWorkspaceOnStart    = noWorkspaceOnStart;
@@ -12396,12 +12397,16 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                     RefreshInstallationState();
                     RefreshDeveloperRuntimeIssuePreview();
                     var previousByokSettings = _bridge.ByokProviderSettings;
+                    var previousCopilotDefaultModel = _bridge.CopilotDefaultModel;
                     var currentByokSettings = BuildByokSettings(snapshot);
+                    var currentCopilotDefaultModel = BuildCopilotDefaultModel(snapshot);
                     _bridge.ByokProviderSettings = currentByokSettings;
-                    if (!Equals(previousByokSettings, currentByokSettings))
-                        RestartBridgeForSettingsWhenIdle("preferences-byok-changed");
+                    _bridge.CopilotDefaultModel = currentCopilotDefaultModel;
+                    if (!Equals(previousByokSettings, currentByokSettings) ||
+                        !string.Equals(previousCopilotDefaultModel, currentCopilotDefaultModel, StringComparison.Ordinal))
+                        RestartBridgeForSettingsWhenIdle("preferences-model-changed");
                     else
-                        SquadDashTrace.Write("Bridge", "Preferences saved; BYOK bridge settings unchanged, no bridge restart needed.");
+                        SquadDashTrace.Write("Bridge", "Preferences saved; model bridge settings unchanged, no bridge restart needed.");
                 },
                 startPtt: (tb) => {
                     _pttTargetTextBox = tb;
@@ -25609,6 +25614,9 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
 
     private static ByokProviderSettings? BuildByokSettings(ApplicationSettingsSnapshot snapshot)
     {
+        if (snapshot.ModelProvider != ModelProvider.Custom)
+            return null;
+
         if (string.IsNullOrEmpty(snapshot.ByokProviderUrl))
             return null;
 
@@ -25617,6 +25625,17 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             snapshot.ByokModel,
             snapshot.ByokProviderType,
             snapshot.ByokApiKey);
+    }
+
+    private static string? BuildCopilotDefaultModel(ApplicationSettingsSnapshot snapshot)
+    {
+        if (snapshot.ModelProvider == ModelProvider.Custom)
+            return null;
+
+        var model = ApplicationSettingsSnapshot.NormalizeCopilotDefaultModel(snapshot.CopilotDefaultModel);
+        return string.Equals(model, "auto", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : model;
     }
 
     private void RestartBridgeForSettingsWhenIdle(string reason)

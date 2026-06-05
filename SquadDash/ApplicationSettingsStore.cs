@@ -347,6 +347,19 @@ internal sealed class ApplicationSettingsStore {
         return updated;
     }
 
+    public ApplicationSettingsSnapshot SaveModelSettings(
+        ModelProvider provider,
+        string? copilotDefaultModel) {
+        using var mutex = AcquireMutex();
+        var current = LoadCore();
+        var updated = current with {
+            ModelProvider = provider,
+            CopilotDefaultModel = ApplicationSettingsSnapshot.NormalizeCopilotDefaultModel(copilotDefaultModel)
+        };
+        SaveCore(updated);
+        return updated.Normalize();
+    }
+
     public ApplicationSettingsSnapshot SaveDeveloperIssueSimulation(
         string workspaceFolder,
         DeveloperStartupIssueSimulation startupIssueSimulation,
@@ -1011,6 +1024,8 @@ internal sealed record ApplicationSettingsSnapshot(
     }
     public string? Theme { get; init; }
     public string? LastUsedModel { get; init; }
+    public ModelProvider ModelProvider { get; init; } = ModelProvider.GitHubCopilot;
+    public string? CopilotDefaultModel { get; init; } = DefaultCopilotModel;
     public bool TasksWindowOpen { get; init; }
     public bool TraceWindowOpen { get; init; }
     public bool ApprovalWindowOpen { get; init; }
@@ -1285,6 +1300,8 @@ internal sealed record ApplicationSettingsSnapshot(
     public IReadOnlyDictionary<string, int> AccentHueOffsetByWorkspace { get; init; } =
         new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
+    public const string DefaultCopilotModel = "claude-sonnet-4.6";
+
     public static ApplicationSettingsSnapshot Empty{ get; } =
         new(
             null,
@@ -1469,6 +1486,10 @@ internal sealed record ApplicationSettingsSnapshot(
             DocSourceFontSize = NormalizeFontSize(DocSourceFontSize),
             Theme = Theme is "Light" or "Dark" or "Auto" ? Theme : null,
             LastUsedModel = string.IsNullOrWhiteSpace(LastUsedModel) ? null : LastUsedModel.Trim(),
+            ModelProvider = ModelProvider is ModelProvider.Custom
+                ? ModelProvider.Custom
+                : ModelProvider.GitHubCopilot,
+            CopilotDefaultModel = NormalizeCopilotDefaultModel(CopilotDefaultModel),
             TasksWindowOpen = TasksWindowOpen,
             TraceWindowOpen = TraceWindowOpen,
             ApprovalWindowOpen = ApprovalWindowOpen,
@@ -1555,6 +1576,11 @@ internal sealed record ApplicationSettingsSnapshot(
             ? fontSize
             : 14;
     }
+
+    internal static string NormalizeCopilotDefaultModel(string? model) =>
+        string.IsNullOrWhiteSpace(model)
+            ? DefaultCopilotModel
+            : model.Trim();
 }
 
 public enum LoopMode { NativeAgents, SquadCli }
@@ -1562,6 +1588,8 @@ public enum LoopMode { NativeAgents, SquadCli }
 internal enum SpeechProvider { Azure, OpenAI }
 
 internal enum TtsProvider { Azure, OpenAI }
+
+internal enum ModelProvider { GitHubCopilot, Custom }
 
 /// <summary>Corresponds to OpenAI's <c>tts-1</c> (Standard) and <c>tts-1-hd</c> (HD) models.</summary>
 internal enum OpenAiTtsModel { Standard, HD }

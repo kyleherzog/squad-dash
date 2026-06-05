@@ -14,6 +14,10 @@ const GenericIdentityKeys = new Set([
     "task",
     "worker"
 ]);
+function normalizeOptionalString(value) {
+    const trimmed = value?.trim();
+    return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
 const PendingRestartDeploymentEnv = {
     appRoot: "SQUADDASH_APP_ROOT",
     restartRequestPath: "SQUADDASH_RESTART_REQUEST_PATH"
@@ -876,6 +880,7 @@ export class SquadBridgeService {
             cwd: request.cwd,
             sessionId: request.sessionId,
             configDir: request.configDir,
+            model: request.model,
             requireSameSession: true
         }, buildDelegationHiddenContext(request.selectedOption, request.targetAgent));
     }
@@ -884,6 +889,7 @@ export class SquadBridgeService {
             cwd: request.cwd,
             sessionId: request.namedAgentSessionId,
             configDir: request.configDir,
+            model: request.model,
             requireSameSession: false
         });
     }
@@ -1194,6 +1200,7 @@ export class SquadBridgeService {
             streaming: true,
             workingDirectory: options.cwd,
             configDir: options.configDir,
+            model: normalizeOptionalString(options.model),
             hooks: {
                 onPreToolUse: (input) => {
                     const rewrite = maybeRewritePowerShellToolArgs(input.toolName, input.toolArgs, input.cwd, process.env, existsSync);

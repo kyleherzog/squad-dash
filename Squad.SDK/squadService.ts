@@ -9,6 +9,7 @@ export type SquadPromptRequest = {
     cwd: string;
     sessionId?: string;
     configDir?: string;
+    model?: string;
 };
 
 type SquadSessionRequest = SquadPromptRequest & {
@@ -19,6 +20,7 @@ export type SquadDelegationRequest = {
     cwd: string;
     sessionId: string;
     configDir?: string;
+    model?: string;
     selectedOption: string;
     targetAgent: string;
 };
@@ -31,6 +33,7 @@ export type SquadNamedAgentRequest = {
     namedAgentSessionId?: string;
     charterContent?: string;
     configDir?: string;
+    model?: string;
 };
 
 export type SessionReadyInfo = {
@@ -244,6 +247,11 @@ const GenericIdentityKeys = new Set([
     "task",
     "worker"
 ]);
+
+function normalizeOptionalString(value: string | undefined): string | undefined {
+    const trimmed = value?.trim();
+    return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
 
 const PendingRestartDeploymentEnv = {
     appRoot: "SQUADDASH_APP_ROOT",
@@ -1368,6 +1376,7 @@ export class SquadBridgeService {
                 cwd: request.cwd,
                 sessionId: request.sessionId,
                 configDir: request.configDir,
+                model: request.model,
                 requireSameSession: true
             },
             buildDelegationHiddenContext(request.selectedOption, request.targetAgent));
@@ -1384,6 +1393,7 @@ export class SquadBridgeService {
                 cwd: request.cwd,
                 sessionId: request.namedAgentSessionId,
                 configDir: request.configDir,
+                model: request.model,
                 requireSameSession: false
             });
     }
@@ -1795,6 +1805,7 @@ export class SquadBridgeService {
             streaming: true,
             workingDirectory: options.cwd,
             configDir: options.configDir,
+            model: normalizeOptionalString(options.model),
             hooks: {
                 onPreToolUse: (input: { toolName: string; toolArgs: unknown; cwd?: string }) => {
                     const rewrite = maybeRewritePowerShellToolArgs(
