@@ -865,6 +865,28 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             SquadDashTrace.Write("Docking", "=============================================");
         };
         contextMenu.Items.Add(markCorrectMenuItem);
+        
+        // Add menu item for synthetic inserts to mark as unwanted
+        if (slot.IsSyntheticInsert)
+        {
+            contextMenu.Items.Add(new Separator());
+            var markUnwantedMenuItem = new MenuItem { Header = "Mark as should NOT be shown (remove from test)" };
+            markUnwantedMenuItem.Click += (_, _) =>
+            {
+                SquadDashTrace.Write("Docking", "=== MARK AS UNWANTED SYNTHETIC (SHOULD REMOVE) ===");
+                SquadDashTrace.Write("Docking", $"Position: ({slot.X}, {slot.Y})");
+                SquadDashTrace.Write("Docking", $"Size: {slot.Width}x{slot.Height}");
+                SquadDashTrace.Write("Docking", $"TargetZone: {slot.TargetZone}");
+                SquadDashTrace.Write("Docking", $"TargetOrder: {slot.TargetOrder}");
+                SquadDashTrace.Write("Docking", $"InsertKind: {slot.InsertKind}");
+                SquadDashTrace.Write("Docking", "");
+                SquadDashTrace.Write("Docking", "ACTION: Remove from expectedDockingMap:");
+                SquadDashTrace.Write("Docking", $"  Delete the entry with zone='{slot.TargetZone}' and order={slot.TargetOrder}");
+                SquadDashTrace.Write("Docking", "==================================================");
+            };
+            contextMenu.Items.Add(markUnwantedMenuItem);
+        }
+        
         border.ContextMenu = contextMenu;
 
         border.MouseEnter += (_, _) =>
