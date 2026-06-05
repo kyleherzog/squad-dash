@@ -85,9 +85,7 @@ internal sealed class DockingMapWindow : Window
             BorderBrush     = new SolidColorBrush(borderColor),
             BorderThickness = new Thickness(1),
             CornerRadius    = new CornerRadius(4),
-            Padding         = new Thickness(6),
-            Width           = _viewModel.PopupWidth,
-            Height          = _viewModel.PopupHeight,
+            Padding         = new Thickness(PopupPadding),
             Effect          = new DropShadowEffect
             {
                 BlurRadius  = 8,
@@ -99,8 +97,8 @@ internal sealed class DockingMapWindow : Window
 
         var canvas = new Canvas
         {
-            Width  = _viewModel.PopupWidth  - PopupPadding * 2,
-            Height = _viewModel.PopupHeight - PopupPadding * 2,
+            Width  = _viewModel.PopupWidth,
+            Height = _viewModel.PopupHeight,
         };
 
         foreach (var slot in _viewModel.Slots)
@@ -123,7 +121,7 @@ internal sealed class DockingMapWindow : Window
         Content    = root;
     }
 
-    private const double PopupPadding = 4;
+    private const double PopupPadding = 6;
 
     private UIElement BuildSlotElement(SlotButtonViewModel slot, Color groundingColor, Color polarColor, bool isDark)
     {

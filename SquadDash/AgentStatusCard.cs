@@ -39,11 +39,15 @@ internal sealed class AgentStatusCard : INotifyPropertyChanged, IHaveUniqueName 
                     if (weakRef.TryGetTarget(out var card)) {
                         card.OnPropertyChanged(nameof(AvatarImageVisibility));
                         card.OnPropertyChanged(nameof(InitialVisibility));
+                        card.OnPropertyChanged(nameof(AvatarsHidden));
                     }
                 }
             }
         }
     }
+
+    /// <summary>True when the "Show Agent Avatars" setting is off — drives compact Padding/CornerRadius via DataTrigger.</summary>
+    public bool AvatarsHidden => !_avatarsSettingEnabled;
 
     private string _displayName;
     private string _roleText;
