@@ -27,7 +27,8 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         int TargetOrder,
         bool TargetIsInsert,
         string FilePath,
-        List<SlotButtonViewModel>? ExpectedDockingMapSlots = null);
+        List<SlotButtonViewModel>? ExpectedDockingMapSlots = null,
+        DockingMapViewModel? DockingMapViewModel = null);
 
     private readonly string _testCaseFolder;
     private readonly Action<Dictionary<string, List<string>>> _applyLayout;
@@ -135,7 +136,7 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
-        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(350) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(455) });
         Grid.SetRow(content, 0);
         outer.Children.Add(content);
 
@@ -345,15 +346,16 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             var expectedLayout = root.TryGetProperty("expectedLayout", out var elProp)
                 ? ParseZoneMap(elProp)
                 : new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            
+            var expectedDockingMapSlots = root.TryGetProperty("expectedDockingMap", out var edmProp)
+                ? ParseExpectedDockingMap(edmProp, sourcePanelId)
+                : null;
 
-            // Parse expectedDockingMap if present
-            List<SlotButtonViewModel>? expectedDockingMapSlots = null;
-            if (root.TryGetProperty("expectedDockingMap", out var edmProp) && edmProp.ValueKind == JsonValueKind.Array)
-            {
-                expectedDockingMapSlots = ParseExpectedDockingMap(edmProp, sourcePanelId);
-            }
+            // Build the DockingMapViewModel from the expected layout
+            var dockLayout = BuildDockLayoutFromZoneMap(sourcePanelId, expectedLayout);
+            var dockingMapViewModel = DockingMapBuilder.BuildDockingMap(sourcePanelId, dockLayout, null);
 
-            _currentTest = new ParsedTestCase(sourcePanelId, initialLayout, expectedLayout, targetZone, targetOrder, targetIsInsert, entry.FilePath, expectedDockingMapSlots);
+            _currentTest = new ParsedTestCase(sourcePanelId, initialLayout, expectedLayout, targetZone, targetOrder, targetIsInsert, entry.FilePath, expectedDockingMapSlots, dockingMapViewModel);
 
             var sb = new System.Text.StringBuilder();
             sb.AppendLine($"Source  : {sourcePanelId}");
@@ -373,8 +375,8 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
 
             _detailBlock.Text = sb.ToString();
 
-            // Render the docking map preview if available
-            RenderDockingMapPreview(_currentTest.ExpectedDockingMapSlots);
+            // Render the docking map preview based on the ViewModel
+            RenderDockingMapPreview(_currentTest.DockingMapViewModel);
         }
         catch (Exception ex)
         {
@@ -596,6 +598,47 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         return null;
     }
 
+    private void RenderDockingMapPreview(DockingMapViewModel? viewModel)
+    {
+        _dockingMapCanvas.Children.Clear();
+        _slotBorders.Clear();
+        _selectedSlot = null;
+
+        if (viewModel is null || viewModel.Slots.Count == 0)
+        {
+            _dockingMapCanvas.Width = 0;
+            _dockingMapCanvas.Height = 0;
+            return;
+        }
+
+        bool isDark = AgentStatusCard.IsDarkTheme;
+        Color groundingColor = isDark ? Colors.Black : Colors.White;
+        Color polarColor = isDark ? Colors.White : Colors.Black;
+
+        // Set canvas size from the ViewModel (already calculated correctly by DockingMapBuilder)
+        _dockingMapCanvas.Width = viewModel.PopupWidth;
+        _dockingMapCanvas.Height = viewModel.PopupHeight;
+
+        // Get target zone from the current test to highlight the target slot
+        DockZone? targetZone = null;
+        int? targetOrder = null;
+        if (_currentTest is not null)
+        {
+            targetZone = DockingLayoutEngine.ParseZoneDisplayName(_currentTest.TargetZoneDisplay);
+            targetOrder = _currentTest.TargetOrder;
+        }
+
+        // Render each slot at its actual coordinates (no scaling) — same logic as DockingMapWindow
+        foreach (var slot in viewModel.Slots)
+        {
+            var border = BuildMapSlotElement(slot, groundingColor, polarColor, isDark, targetZone, targetOrder);
+            Canvas.SetLeft(border, slot.X);
+            Canvas.SetTop(border,  slot.Y);
+            _dockingMapCanvas.Children.Add(border);
+            _slotBorders[slot] = border;
+        }
+    }
+
     private List<SlotButtonViewModel>? ParseExpectedDockingMap(JsonElement arrayElement, string sourcePanelId)
     {
         var slots = new List<SlotButtonViewModel>();
@@ -606,7 +649,8 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
                 if (item.ValueKind != JsonValueKind.Object) continue;
 
                 var label = item.TryGetProperty("label", out var lp) ? lp.GetString() : "";
-                var isSource = item.TryGetProperty("isSourcePanel", out var isp) && isp.GetBoolean();
+                var panelId = item.TryGetProperty("panelId", out var pid) ? pid.GetString() : label;
+                var isSource = string.Equals(panelId, sourcePanelId, StringComparison.OrdinalIgnoreCase);  // Case-insensitive match
                 var isExpansion = item.TryGetProperty("isExpansionButton", out var ieb) && ieb.GetBoolean();
                 var x = item.TryGetProperty("x", out var xp) ? xp.GetDouble() : 0;
                 var y = item.TryGetProperty("y", out var yp) ? yp.GetDouble() : 0;
@@ -650,40 +694,32 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         return slots.Count > 0 ? slots : null;
     }
 
-    private void RenderDockingMapPreview(List<SlotButtonViewModel>? slots)
+    /// <summary>
+    /// Converts a zone map (Dictionary&lt;string, List&lt;string&gt;&gt;) to a DockLayout object.
+    /// </summary>
+    private static DockLayout BuildDockLayoutFromZoneMap(string sourcePanelId, Dictionary<string, List<string>> zoneMap)
     {
-        _dockingMapCanvas.Children.Clear();
-        _slotBorders.Clear();
-        _selectedSlot = null;
+        var layout = new DockLayout { Name = "Preview" };
+        var slots = new List<PanelSlot>();
 
-        if (slots is null || slots.Count == 0)
+        foreach (var (zoneName, panelIds) in zoneMap)
         {
-            _dockingMapCanvas.Width = 0;
-            _dockingMapCanvas.Height = 0;
-            return;
+            if (!Enum.TryParse<DockZone>(zoneName, ignoreCase: true, out var zone))
+                continue;
+
+            int order = 0;
+            foreach (var panelId in panelIds)
+            {
+                slots.Add(new PanelSlot(panelId, zone, order));
+                order++;
+            }
         }
 
-        bool isDark = AgentStatusCard.IsDarkTheme;
-        Color groundingColor = isDark ? Colors.Black : Colors.White;
-        Color polarColor = isDark ? Colors.White : Colors.Black;
-
-        // Calculate canvas size based on slots
-        double maxX = slots.Max(s => s.X + s.Width) + 8;
-        double maxY = slots.Max(s => s.Y + s.Height) + 8;
-        _dockingMapCanvas.Width = Math.Max(maxX, 300);
-        _dockingMapCanvas.Height = Math.Max(maxY, 200);
-
-        foreach (var slot in slots)
-        {
-            var border = BuildMapSlotElement(slot, groundingColor, polarColor, isDark);
-            Canvas.SetLeft(border, slot.X);
-            Canvas.SetTop(border, slot.Y);
-            _dockingMapCanvas.Children.Add(border);
-            _slotBorders[slot] = border;
-        }
+        layout.Slots = slots;
+        return layout;
     }
 
-    private Border BuildMapSlotElement(SlotButtonViewModel slot, Color groundingColor, Color polarColor, bool isDark)
+    private Border BuildMapSlotElement(SlotButtonViewModel slot, Color groundingColor, Color polarColor, bool isDark, DockZone? targetZone = null, int? targetOrder = null)
     {
         // Separator (decorative)
         if (slot.IsSeparator)
@@ -697,7 +733,7 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             };
         }
 
-        // Source panel
+        // Source panel — highlight with green border and thicker border for clear visibility
         if (slot.IsSourcePanel)
         {
             return new Border
@@ -705,14 +741,18 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
                 Width = slot.Width,
                 Height = slot.Height,
                 Background = MakeBrush(groundingColor, 0.20),
-                BorderBrush = MakeBrush(polarColor, 0.10),
-                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0, 200, 100)),  // Bright green
+                BorderThickness = new Thickness(3),  // Thicker for emphasis
                 CornerRadius = new CornerRadius(3),
                 Tag = slot,
             };
         }
 
-        // Target button
+        // Target zone slot — highlight with yellow/gold for destination visibility
+        bool isTargetSlot = targetZone.HasValue && targetOrder.HasValue &&
+                            slot.TargetZone == targetZone.Value &&
+                            slot.TargetOrder == targetOrder.Value;
+
         var normalBg = MakeBrush(groundingColor, 0.70);
         var normalBorder = MakeBrush(polarColor, 0.10);
 
@@ -720,9 +760,9 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         {
             Width = slot.Width,
             Height = slot.Height,
-            Background = normalBg,
-            BorderBrush = normalBorder,
-            BorderThickness = new Thickness(1),
+            Background = isTargetSlot ? MakeBrush(Color.FromRgb(255, 200, 0), 0.25) : normalBg,
+            BorderBrush = isTargetSlot ? new SolidColorBrush(Color.FromRgb(255, 200, 0)) : normalBorder,
+            BorderThickness = isTargetSlot ? new Thickness(2) : new Thickness(1),
             CornerRadius = new CornerRadius(3),
             Cursor = Cursors.Hand,
             Tag = slot,
@@ -740,6 +780,12 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             {
                 border.Background = MakeBrush(Colors.Orange, 0.25);
                 border.BorderBrush = MakeBrush(Colors.Orange, 0.85);
+            }
+            else if (isTargetSlot)
+            {
+                border.Background = MakeBrush(Color.FromRgb(255, 200, 0), 0.25);
+                border.BorderBrush = new SolidColorBrush(Color.FromRgb(255, 200, 0));
+                border.BorderThickness = new Thickness(2);
             }
             else
             {
