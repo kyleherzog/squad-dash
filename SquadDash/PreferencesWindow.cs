@@ -452,7 +452,7 @@ internal sealed class PreferencesWindow : Window {
         _byokApiKeyRevealBox.SetResourceReference(TextBox.BorderBrushProperty, "InputBorder");
         _byokApiKeyRevealBox.SetResourceReference(TextBox.ForegroundProperty, "LabelText");
         _byokOfflineModeCheckBox = new CheckBox {
-            Content = "Offline mode (sets COPILOT_OFFLINE=true — skips GitHub auth)",
+            Content = "Offline mode (sets COPILOT__OFFLINE=true — skips GitHub auth)",
             IsChecked = currentSettings.ByokOfflineMode,
             Margin = new Thickness(0, 10, 0, 0)
         };
