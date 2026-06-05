@@ -199,7 +199,6 @@ internal sealed class PromptExecutionController {
     internal Func<string?>? GetHostCommandCatalogInstruction { get; set; }
 
     // ── Owned fields ──────────────────────────────────────────────────────
-    private bool             _clearConfirmationPending;
     private bool             _universeSelectionPending;
     private DateTimeOffset?  _currentPromptStartedAt;
     private DateTimeOffset?  _lastPromptActivityAt;
@@ -864,16 +863,6 @@ internal sealed class PromptExecutionController {
         bool addToHistory,
         bool clearPromptBox) {
         var trimmed = prompt.Trim();
-
-        // Intercept clear confirmation responses first
-        if (_clearConfirmationPending) {
-            if (string.Equals(trimmed, "Yes", StringComparison.OrdinalIgnoreCase))
-                return HandleClearConfirmed(prompt, clearPromptBox);
-            if (string.Equals(trimmed, "No", StringComparison.OrdinalIgnoreCase))
-                return HandleClearCancelled(prompt, clearPromptBox);
-            // Any other input cancels the pending confirmation
-            _clearConfirmationPending = false;
-        }
 
         // Intercept universe selection responses — only if the input matches a known option.
         // Free-typed text cancels the pending prompt and falls through to normal processing.
@@ -1629,29 +1618,21 @@ internal sealed class PromptExecutionController {
     private bool HandleLocalClearCommand(string prompt, bool addToHistory, bool clearPromptBox) {
         SquadDashTrace.Write("UI", "Local command intercepted prompt=/clear");
 
-        if (addToHistory)
-            _conversationManager.AddPromptToHistory(prompt);
+        var result = MessageBox.Show(
+            "Are you sure you want to clear the transcript?",
+            "Clear Transcript",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question,
+            MessageBoxResult.No);
 
-        _transcriptSink.SelectTranscriptThread(_transcriptSink.CoordinatorThread);
-        _transcriptSink.BeginTranscriptTurn(prompt);
-
-        if (clearPromptBox)
-            _promptBoxState.ClearPromptTextBox();
-
-        _clearConfirmationPending = true;
-        _transcriptSink.AppendLine("Are you sure you want to clear this transcript?\n\n[Yes] [No]", null);
-
-        _transcriptSink.FinalizeCurrentTurnResponse();
-        _conversationManager.SaveCurrentTurnToConversation(DateTimeOffset.Now, "local-clear-confirmation");
-        SquadDashTrace.Write("Persistence", "Coordinator CurrentTurn cleared reason=local-clear-confirmation");
-        _transcriptSink.CoordinatorThread.CurrentTurn = null;
-        _transcriptSink.ScrollToEndIfAtBottom();
-        return true;
+        if (result == MessageBoxResult.Yes)
+            return HandleClearConfirmed(prompt, clearPromptBox);
+        else
+            return true;
     }
 
     private bool HandleClearConfirmed(string prompt, bool clearPromptBox) {
         SquadDashTrace.Write("UI", "Clear transcript confirmed by user");
-        _clearConfirmationPending = false;
 
         if (clearPromptBox)
             _promptBoxState.ClearPromptTextBox();
@@ -1666,23 +1647,6 @@ internal sealed class PromptExecutionController {
         }
 
         _clearSessionView();
-        return true;
-    }
-
-    private bool HandleClearCancelled(string prompt, bool clearPromptBox) {
-        SquadDashTrace.Write("UI", "Clear transcript cancelled by user");
-        _clearConfirmationPending = false;
-
-        if (clearPromptBox)
-            _promptBoxState.ClearPromptTextBox();
-
-        _transcriptSink.SelectTranscriptThread(_transcriptSink.CoordinatorThread);
-        _transcriptSink.BeginTranscriptTurn(prompt);
-        _transcriptSink.AppendLine("Transcript clear cancelled.", null);
-        _transcriptSink.FinalizeCurrentTurnResponse();
-        _conversationManager.SaveCurrentTurnToConversation(DateTimeOffset.Now, "local-command-turn");
-        SquadDashTrace.Write("Persistence", "Coordinator CurrentTurn cleared reason=local-clear-cancelled");
-        _transcriptSink.CoordinatorThread.CurrentTurn = null;
         return true;
     }
 
