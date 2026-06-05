@@ -70,13 +70,14 @@ internal sealed class DockingMapWindow : Window
         Color groundingColor = isDark ? Colors.Black : Colors.White;
         Color polarColor     = isDark ? Colors.White : Colors.Black;
 
-        Color bgColor = appResources.Contains("PopupSurface") && appResources["PopupSurface"] is SolidColorBrush ps
-            ? ps.Color
-            : (isDark ? Color.FromRgb(42, 37, 32) : Color.FromRgb(255, 255, 255));
+        // Use AppSurface (tinted, matches window background) and InputBorder (matches PromptBorder style).
+        Color bgColor = appResources.Contains("AppSurface") && appResources["AppSurface"] is SolidColorBrush appsurface
+            ? appsurface.Color
+            : (isDark ? Color.FromRgb(26, 23, 20) : Color.FromRgb(244, 239, 231));
 
-        Color borderColor = appResources.Contains("PopupBorder") && appResources["PopupBorder"] is SolidColorBrush pb
-            ? pb.Color
-            : (isDark ? Color.FromRgb(74, 68, 64) : Color.FromRgb(204, 204, 204));
+        Color borderColor = appResources.Contains("InputBorder") && appResources["InputBorder"] is SolidColorBrush ib
+            ? ib.Color
+            : (isDark ? Color.FromRgb(62, 54, 48) : Color.FromRgb(216, 204, 186));
 
         var root = new Border
         {
@@ -84,7 +85,7 @@ internal sealed class DockingMapWindow : Window
             BorderBrush     = new SolidColorBrush(borderColor),
             BorderThickness = new Thickness(1),
             CornerRadius    = new CornerRadius(4),
-            Padding         = new Thickness(PopupPadding + 2),
+            Padding         = new Thickness(6),
             Width           = _viewModel.PopupWidth,
             Height          = _viewModel.PopupHeight,
             Effect          = new DropShadowEffect
