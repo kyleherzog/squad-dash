@@ -166,6 +166,9 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         var addToChatItem    = new MenuItem { Header = "Add to Chat" };
         addToChatItem.Click += OnAddToChat;
         contextMenu.Items.Add(addToChatItem);
+        var copyPathItem     = new MenuItem { Header = "Copy Path to Clipboard" };
+        copyPathItem.Click  += OnCopyPathToClipboard;
+        contextMenu.Items.Add(copyPathItem);
         _testList.ContextMenu = contextMenu;
 
         Grid.SetColumn(_testList, 0);
@@ -535,6 +538,13 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         if (idx < 0 || idx >= _entries.Count) return;
         var entry = _entries[idx];
         _addFileToChat(entry.FilePath, entry.DisplayName);
+    }
+
+    private void OnCopyPathToClipboard(object sender, RoutedEventArgs e)
+    {
+        int idx = _testList.SelectedIndex;
+        if (idx < 0 || idx >= _entries.Count) return;
+        Clipboard.SetText(_entries[idx].FilePath);
     }
 
     private void UpdateStepButton()
