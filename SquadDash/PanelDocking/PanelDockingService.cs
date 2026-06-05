@@ -101,6 +101,10 @@ internal sealed class PanelDockingService
     // expanding too wide when moved here (consistent with MaxWidth="320" in MainWindow.xaml).
     private const double TopZonePanelMaxWidth = 320;
 
+    // Width of the thin insertion-indicator strip used for both top-zone and empty side-zone
+    // docking previews, keeping the visual language consistent across all drop targets.
+    private const double InsertionIndicatorWidth = 8;
+
     // Saves each panel's original XAML Height binding so it can be restored when the
     // panel moves back to the Top zone after having been in a Left/Right zone.
     private readonly Dictionary<string, MultiBinding?> _savedHeightBindings =
@@ -1836,7 +1840,7 @@ internal sealed class PanelDockingService
     /// <para>
     /// • Column slot (N existing panels) → column's left/right bounds, height divided into
     ///   (N+1) equal bands; targetOrder selects the band (append slot = last band).<br/>
-    /// • Empty column zone              → 64px wide strip at the column's near edge.<br/>
+    /// • Empty column zone              → 8px wide strip (same width as the top-zone insertion indicator) at the column's near edge.<br/>
     /// • Top zone slot, source in top   → full panel screen rect (replace/reorder).<br/>
     /// • Top zone slot, source elsewhere → thin vertical insertion strip.<br/>
     /// • Empty top zone                 → thin horizontal strip across the top-zone grid.
@@ -2001,7 +2005,7 @@ internal sealed class PanelDockingService
             // Left2 → neighbor is the Left zone scroll-viewer (if visible) else center
             // Right  → neighbor is the center
             // Right2 → neighbor is the Right zone scroll-viewer (if visible) else center
-            const double StripWidth = 64;
+            double StripWidth = InsertionIndicatorWidth;
 
             Rect neighborRect = GetInnerNeighborRect(zone);
             SquadDashTrace.Write(TraceCategory.Docking,
@@ -2013,8 +2017,8 @@ internal sealed class PanelDockingService
             if (!neighborRect.IsEmpty)
             {
                 // For Left/Right: when the column is collapsed (empty), the center grid extends
-                // to the window edge, so neighborRect.Left ≈ 0 and Left - 64 is off-screen.
-                // Overlap the center grid's near edge by 64px so the strip is always visible.
+                // to the window edge, so neighborRect.Left ≈ 0 and Left - 8 is off-screen.
+                // Overlap the center grid's near edge by 8px so the strip is always visible.
                 // For Left2/Right2: neighbor is the Left/Right scroll-viewer whose far edge is
                 // already at the window boundary — same overlap treatment.
                 double x = zone switch
@@ -2099,7 +2103,7 @@ internal sealed class PanelDockingService
             return GetColumnSlotRect(zone, 0, panelsInZone);
         }
 
-        const double StripWidth = 64;
+        double StripWidth = InsertionIndicatorWidth;
 
         // InsertBefore = left edge of the zone column (toward center for right-side zones,
         // toward outer for left-side zones).  InsertAfter = right edge.
@@ -2174,7 +2178,7 @@ internal sealed class PanelDockingService
         var gridRect = GetScreenRect(_topZoneGrid);
         if (gridRect.IsEmpty) return Rect.Empty;
 
-        const double StripW = 8;
+        double StripW = InsertionIndicatorWidth;
 
         if (panelsInZone.Count == 0)
         {
