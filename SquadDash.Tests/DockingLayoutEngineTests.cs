@@ -309,9 +309,6 @@ public class DockingLayoutEngineTests
         SyntheticInsertKind insertKind,
         PanelLayoutData initialLayout)
     {
-        if (insertKind == SyntheticInsertKind.None)
-            return DockingLayoutEngine.ApplyMove(sourcePanelId, targetZone, targetOrder, initialLayout);
-
         var service = new PanelDockingService();
         service.ApplyLayout(new DockLayout
         {

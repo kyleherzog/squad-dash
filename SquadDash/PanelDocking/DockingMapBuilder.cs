@@ -780,8 +780,8 @@ internal static class DockingMapBuilder
     /// <summary>
     /// Scans the slot list for layout violations:
     /// (1) Adjacent thin slots on the same side — two narrow drop-target columns side by side.
-    /// (2) N+1 thin rule — for N occupied zones on a side, exactly N+1 thin drop-targets are required.
-    ///     Applies for N >= 1 (single occupied zone still needs an outer AND an inner thin).
+    /// (2) N+1 thin rule — for N occupied zones on a side, exactly N+1 thin drop-targets are required,
+    ///     minus solo-source boundary thins that were intentionally suppressed because they are no-op targets.
     /// (3) No-op outer thin — source is the sole, innermost-occupied panel on a side and a Rule-D
     ///     thin for the immediately adjacent outer zone is present.  Dropping there would leave the
     ///     panel at the same visual position (source zone collapses, adjacent zone opens in its place).
@@ -805,16 +805,18 @@ internal static class DockingMapBuilder
                 sideSlots.Count(s => s.Width >= ColSlotWidth) == 1 &&
                 sideSlots.Any(s => s.Width >= ColSlotWidth && s.IsSourcePanel);
 
-            // N+1 rule: N occupied zones → N+1 thin drop-targets required (N >= 1)
+            // N+1 rule: N occupied zones → N+1 thin drop-targets required (N >= 1),
+            // minus adjacent solo-source boundary thins intentionally hidden as no-op targets.
             if (occupiedZoneCount >= 1 && !sourceIsOnlySidePanel)
             {
-                int expectedThins = occupiedZoneCount + 1;
+                int suppressedSoloSourceThins = CountSuppressedSoloSourceBoundaryThins(sideSlots, sideZones);
+                int expectedThins = Math.Max(0, occupiedZoneCount + 1 - suppressedSoloSourceThins);
                 SquadDashTrace.Write(TraceCategory.Docking,
-                    $"[docking-trace] N+1 check {sideName}: occupiedZones={occupiedZoneCount}, expected={expectedThins}, actual={thinSlots.Count}");
+                    $"[docking-trace] N+1 check {sideName}: occupiedZones={occupiedZoneCount}, suppressedSoloSourceThins={suppressedSoloSourceThins}, expected={expectedThins}, actual={thinSlots.Count}");
                 if (thinSlots.Count != expectedThins)
                 {
                     SquadDashTrace.Write(TraceCategory.Docking,
-                        $"[docking-trace] Thin generation blocked — extra thins were added AFTER filter. Investigate source.");
+                        $"[docking-trace] Thin generation mismatch after solo-source suppression. Investigate source.");
                     violations.Add(
                         $"{sideName}: N+1 rule violated — {occupiedZoneCount} occupied zone(s) require {expectedThins} thin slot(s), got {thinSlots.Count}");
                 }
@@ -877,6 +879,79 @@ internal static class DockingMapBuilder
         }
 
         return violations;
+    }
+
+    private static int CountSuppressedSoloSourceBoundaryThins(
+        IReadOnlyList<SlotButtonViewModel> sideSlots,
+        IReadOnlyList<DockZone> sideZones)
+    {
+        var sourceSlot = sideSlots.FirstOrDefault(s =>
+            !s.IsSeparator &&
+            s.IsSourcePanel &&
+            s.Width >= ColSlotWidth);
+        if (sourceSlot is null)
+            return 0;
+
+        int sourceIdx = Array.IndexOf(sideZones.ToArray(), sourceSlot.TargetZone);
+        if (sourceIdx < 0)
+            return 0;
+
+        bool sourceIsSoloInZone = sideSlots.Count(s =>
+            !s.IsSeparator &&
+            s.TargetZone == sourceSlot.TargetZone &&
+            s.Width >= ColSlotWidth) == 1;
+        if (!sourceIsSoloInZone)
+            return 0;
+
+        var occupiedIndexes = sideZones
+            .Select((zone, index) => (zone, index))
+            .Where(item => sideSlots.Any(s =>
+                !s.IsSeparator &&
+                s.TargetZone == item.zone &&
+                s.Width >= ColSlotWidth))
+            .Select(item => item.index)
+            .ToList();
+        if (occupiedIndexes.Count <= 1)
+            return 0;
+
+        int minOccupiedIdx = occupiedIndexes.Min();
+        int maxOccupiedIdx = occupiedIndexes.Max();
+
+        bool HasVisibleEmptyThin(DockZone zone) => sideSlots.Any(s =>
+            !s.IsSeparator &&
+            s.TargetZone == zone &&
+            s.Width < ColSlotWidth &&
+            !s.IsSyntheticInsert);
+
+        bool BoundaryOnInnerSideWouldBeSynthetic()
+        {
+            if (sourceIdx > minOccupiedIdx)
+                return occupiedIndexes.Contains(sourceIdx - 1);
+
+            if (sourceIdx == 0)
+                return true;
+
+            return !HasVisibleEmptyThin(sideZones[sourceIdx - 1]);
+        }
+
+        bool BoundaryOnOuterSideWouldBeSynthetic()
+        {
+            if (sourceIdx < maxOccupiedIdx)
+                return occupiedIndexes.Contains(sourceIdx + 1);
+
+            if (sourceIdx >= sideZones.Count - 1)
+                return true;
+
+            return !HasVisibleEmptyThin(sideZones[sourceIdx + 1]);
+        }
+
+        int suppressed = 0;
+        if (BoundaryOnInnerSideWouldBeSynthetic())
+            suppressed++;
+        if (BoundaryOnOuterSideWouldBeSynthetic())
+            suppressed++;
+
+        return suppressed;
     }
 
     private static List<string> PanelsInZone(DockLayout layout, DockZone zone) =>

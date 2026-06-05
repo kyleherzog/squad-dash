@@ -12026,6 +12026,57 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
             ["loop"]        = LoopPanelBorder,
         };
 
+        bool TryGetPanelScreenRect(string panelId, out Rect rect)
+        {
+            rect = Rect.Empty;
+            if (!panelBorderMap.TryGetValue(panelId, out var fe) || !fe.IsVisible)
+                return false;
+
+            fe.UpdateLayout();
+            if (fe.ActualWidth < 2 || fe.ActualHeight < 2)
+                return false;
+
+            var topLeft = fe.PointToScreen(new Point(0, 0));
+            rect = new Rect(topLeft.X, topLeft.Y, fe.ActualWidth, fe.ActualHeight);
+            return true;
+        }
+
+        Rect GetFallbackPanelScreenRect()
+        {
+            var fallback = PointToScreen(new Point(ActualWidth / 2, ActualHeight / 2));
+            return new Rect(fallback.X, fallback.Y, 1, 1);
+        }
+
+        void RunWhenPanelBoundsReady(string panelId, string operationName, Action<Rect> action, int attempt = 0)
+        {
+            var priority = attempt == 0
+                ? System.Windows.Threading.DispatcherPriority.Loaded
+                : System.Windows.Threading.DispatcherPriority.ContextIdle;
+
+            Dispatcher.InvokeAsync(() =>
+            {
+                try
+                {
+                    if (TryGetPanelScreenRect(panelId, out var rect))
+                    {
+                        action(rect);
+                        return;
+                    }
+
+                    if (attempt < 4)
+                    {
+                        RunWhenPanelBoundsReady(panelId, operationName, action, attempt + 1);
+                        return;
+                    }
+
+                    SquadDashTrace.Write(TraceCategory.Docking,
+                        $"DockingTestPlayback.{operationName}: using fallback bounds for '{panelId}' after {attempt + 1} attempts");
+                    action(GetFallbackPanelScreenRect());
+                }
+                catch (Exception ex) { HandleUiCallbackException($"DockingTestPlayback.{operationName}", ex); }
+            }, priority);
+        }
+
         var window = new SquadDash.PanelDocking.DockingTestPlaybackWindow(
             folderPath,
             zoneMap => Dispatcher.Invoke(() =>
@@ -12042,56 +12093,35 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                         currentMapWindow.Close();
                 });
 
-                // Defer map creation and positioning to Render priority so WPF has time to
-                // finish its layout/arrange pass after ApplyTestLayout moved panels around.
-                // Without this, PointToScreen returns stale coordinates from the old layout.
-                Dispatcher.InvokeAsync(() =>
+                // Wait until the source panel has real arranged bounds after ApplyTestLayout;
+                // first-click playback can otherwise read a zero-height/stale panel rect.
+                RunWhenPanelBoundsReady(panelId, "OpenMap", sourceRect =>
                 {
-                    try
+                    var layoutData = _dockingService.GetCurrentLayoutData();
+                    var visibleIds = layoutData.VisiblePanelIds;
+                    var viewModel = SquadDash.PanelDocking.DockingMapBuilder.BuildDockingMap(
+                        panelId, _dockingService.CurrentLayout, visibleIds);
+                    var mapWindow = new SquadDash.PanelDocking.DockingMapWindow(
+                        viewModel, _dockingService,
+                        _currentWorkspace?.FolderPath ?? string.Empty,
+                        Application.Current.Resources,
+                        hoverBrush,
+                        target);
+                    mapWindow.Owner = this;
+                    mapWindow.Closed += (_, _) =>
                     {
-                        var layoutData = _dockingService.GetCurrentLayoutData();
-                        var visibleIds = layoutData.VisiblePanelIds;
-                        var viewModel = SquadDash.PanelDocking.DockingMapBuilder.BuildDockingMap(
-                            panelId, _dockingService.CurrentLayout, visibleIds);
-                        var mapWindow = new SquadDash.PanelDocking.DockingMapWindow(
-                            viewModel, _dockingService,
-                            _currentWorkspace?.FolderPath ?? string.Empty,
-                            Application.Current.Resources,
-                            hoverBrush,
-                            target);
-                        mapWindow.Owner = this;
-                        mapWindow.Closed += (_, _) =>
-                        {
-                            if (ReferenceEquals(currentMapWindow, mapWindow)) currentMapWindow = null;
-                            UpdateMainGridSideMargins();
-                        };
+                        if (ReferenceEquals(currentMapWindow, mapWindow)) currentMapWindow = null;
+                        UpdateMainGridSideMargins();
+                    };
 
-                        // Position the map so its top edge is 40px below the source panel's
-                        // top edge, centered horizontally over the panel.
-                        double centerX, panelTop;
-                        if (panelBorderMap.TryGetValue(panelId, out var srcBorder) && srcBorder.IsVisible)
-                        {
-                            var tl = srcBorder.PointToScreen(new Point(0, 0));
-                            centerX  = tl.X + srcBorder.ActualWidth / 2;
-                            panelTop = tl.Y;
-                        }
-                        else
-                        {
-                            var fallback = PointToScreen(new Point(ActualWidth / 2, ActualHeight / 2));
-                            centerX  = fallback.X;
-                            panelTop = fallback.Y;
-                        }
-
-                        currentMapWindow = mapWindow;
-                        // ShowActivated = false keeps keyboard focus on the playback window's
-                        // ListBox so arrow-key navigation continues to work while the map is open.
-                        // Don't call Activate() — that would steal focus and trigger Deactivated
-                        // close-on-blur before the user can press another arrow key.
-                        mapWindow.ShowActivated = false;
-                        mapWindow.ShowAtPanelTopCenter(centerX, panelTop);
-                    }
-                    catch (Exception ex) { HandleUiCallbackException("DockingTestPlayback.OpenMap", ex); }
-                }, System.Windows.Threading.DispatcherPriority.Render);
+                    currentMapWindow = mapWindow;
+                    // ShowActivated = false keeps keyboard focus on the playback window's
+                    // ListBox so arrow-key navigation continues to work while the map is open.
+                    // Don't call Activate() — that would steal focus and trigger Deactivated
+                    // close-on-blur before the user can press another arrow key.
+                    mapWindow.ShowActivated = false;
+                    mapWindow.ShowAtPanelTopCenter(sourceRect.Left + sourceRect.Width / 2, sourceRect.Top);
+                });
             },
             (filePath, description) => Dispatcher.Invoke(() =>
             {
@@ -12166,21 +12196,15 @@ public partial class MainWindow : Window, ILiveElementLocator, IWorkspaceContext
                     return System.Array.Empty<string>();
                 }
             }),
-            showSourceHighlight: panelId => Dispatcher.InvokeAsync(() =>
+            showSourceHighlight: panelId => RunWhenPanelBoundsReady(panelId, "ShowSourceHighlight", sourceRect =>
             {
-                try
-                {
-                    if (!panelBorderMap.TryGetValue(panelId, out var fe)) return;
-                    EnsureSourceHighlightOverlay();
-                    var topLeft = fe.PointToScreen(new System.Windows.Point(0, 0));
-                    sourceHighlightOverlay!.Left   = topLeft.X;
-                    sourceHighlightOverlay.Top    = topLeft.Y;
-                    sourceHighlightOverlay.Width  = fe.ActualWidth;
-                    sourceHighlightOverlay.Height = fe.ActualHeight;
-                    sourceHighlightOverlay.Show();
-                }
-                catch (Exception ex) { HandleUiCallbackException("DockingTestPlayback.ShowSourceHighlight", ex); }
-            }, System.Windows.Threading.DispatcherPriority.Render),
+                EnsureSourceHighlightOverlay();
+                sourceHighlightOverlay!.Left   = sourceRect.Left;
+                sourceHighlightOverlay.Top    = sourceRect.Top;
+                sourceHighlightOverlay.Width  = Math.Max(sourceRect.Width, 1);
+                sourceHighlightOverlay.Height = Math.Max(sourceRect.Height, 1);
+                sourceHighlightOverlay.Show();
+            }),
             hideSourceHighlight: () => Dispatcher.Invoke(() =>
             {
                 try { sourceHighlightOverlay?.Hide(); }

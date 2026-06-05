@@ -278,6 +278,26 @@ public class DockingMapBuilderTests
     }
 
     [Test]
+    public void FindAdjacentThinViolations_WithSoloSourceBoundaryThinsSuppressed_DoesNotReportFalseNPlusOneViolation()
+    {
+        var map = Build(
+            sourcePanelId: "approvals",
+            ("approvals", DockZone.Left),
+            ("inbox", DockZone.Left2),
+            ("loop", DockZone.Left2),
+            ("notes", DockZone.Left2),
+            ("maintenance", DockZone.Right),
+            ("tasks", DockZone.Right2));
+
+        var leftThins = ThinSlots(map, LeftZones);
+        Assert.That(leftThins.Count, Is.EqualTo(1));
+        Assert.That(leftThins.Single().TargetZone, Is.EqualTo(DockZone.Left3));
+
+        var violations = DockingMapBuilder.FindAdjacentThinViolations(map.Slots);
+        Assert.That(violations, Is.Empty);
+    }
+
+    [Test]
     public void BuildDockingMap_WithComplexMultiZoneLayout_ShouldMaintainNPlusOneRule()
     {
         // Complex scenario with multiple panels on both sides and middle zone.
