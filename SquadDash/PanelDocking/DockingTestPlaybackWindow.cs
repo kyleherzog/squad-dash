@@ -4,6 +4,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace SquadDash.PanelDocking;
@@ -24,7 +25,9 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         Dictionary<string, List<string>> ExpectedLayout,
         string TargetZoneDisplay,
         int TargetOrder,
-        bool TargetIsInsert);
+        bool TargetIsInsert,
+        string FilePath,
+        List<SlotButtonViewModel>? ExpectedDockingMapSlots = null);
 
     private readonly string _testCaseFolder;
     private readonly Action<Dictionary<string, List<string>>> _applyLayout;
@@ -41,13 +44,17 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
 
     private ListBox _testList = null!;
     private TextBlock _detailBlock = null!;
+    private Canvas _dockingMapCanvas = null!;
     private Button _stepButton = null!;
     private TextBlock _statusLabel = null!;
+    private ScrollViewer _detailScroll = null!;
 
     private PlaybackPhase _phase = PlaybackPhase.MapOpen;
     private bool _testLoaded = false;
     private ParsedTestCase? _currentTest;
     private readonly List<TestCaseEntry> _entries = [];
+    private SlotButtonViewModel? _selectedSlot = null;
+    private readonly Dictionary<SlotButtonViewModel, Border> _slotBorders = new();
     private FileSystemWatcher? _watcher;
 
     public DockingTestPlaybackWindow(
@@ -122,11 +129,13 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         outer.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         outer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        // ── Main content (list + detail) ────────────────────────────────────
+        // ── Main content (list + detail + map canvas) ────────────────────────────────
         var content = new Grid { Margin = new Thickness(8, 8, 8, 4) };
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(350) });
         Grid.SetRow(content, 0);
         outer.Children.Add(content);
 
@@ -162,12 +171,12 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         content.Children.Add(_testList);
 
         // Detail panel
-        var detailScroll = new ScrollViewer
+        _detailScroll = new ScrollViewer
         {
             VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
-        detailScroll.SetResourceReference(ScrollViewer.BackgroundProperty, "AppSurface");
+        _detailScroll.SetResourceReference(ScrollViewer.BackgroundProperty, "AppSurface");
 
         _detailBlock = new TextBlock
         {
@@ -178,9 +187,31 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
         };
         _detailBlock.SetResourceReference(TextBlock.ForegroundProperty, "LabelText");
 
-        detailScroll.Content = _detailBlock;
-        Grid.SetColumn(detailScroll, 2);
-        content.Children.Add(detailScroll);
+        _detailScroll.Content = _detailBlock;
+        Grid.SetColumn(_detailScroll, 2);
+        content.Children.Add(_detailScroll);
+
+        // Docking map canvas (scrollable)
+        var mapScroll = new ScrollViewer
+        {
+            VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            BorderThickness = new Thickness(1),
+        };
+        mapScroll.SetResourceReference(ScrollViewer.BackgroundProperty, "AppSurface");
+        mapScroll.SetResourceReference(ScrollViewer.BorderBrushProperty, "PanelBorder");
+
+        _dockingMapCanvas = new Canvas
+        {
+            Background = new SolidColorBrush(Colors.Transparent),
+        };
+        _dockingMapCanvas.MouseLeftButtonDown += OnCanvasMouseDown;
+        _dockingMapCanvas.KeyDown += OnCanvasKeyDown;
+        _dockingMapCanvas.Focusable = true;
+
+        mapScroll.Content = _dockingMapCanvas;
+        Grid.SetColumn(mapScroll, 4);
+        content.Children.Add(mapScroll);
 
         // ── Bottom bar (status + clear-overlay + step button) ────────────────
         var bottomBar = new Grid { Margin = new Thickness(8, 4, 8, 8) };
@@ -315,7 +346,14 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
                 ? ParseZoneMap(elProp)
                 : new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
-            _currentTest = new ParsedTestCase(sourcePanelId, initialLayout, expectedLayout, targetZone, targetOrder, targetIsInsert);
+            // Parse expectedDockingMap if present
+            List<SlotButtonViewModel>? expectedDockingMapSlots = null;
+            if (root.TryGetProperty("expectedDockingMap", out var edmProp) && edmProp.ValueKind == JsonValueKind.Array)
+            {
+                expectedDockingMapSlots = ParseExpectedDockingMap(edmProp, sourcePanelId);
+            }
+
+            _currentTest = new ParsedTestCase(sourcePanelId, initialLayout, expectedLayout, targetZone, targetOrder, targetIsInsert, entry.FilePath, expectedDockingMapSlots);
 
             var sb = new System.Text.StringBuilder();
             sb.AppendLine($"Source  : {sourcePanelId}");
@@ -334,6 +372,9 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
                     sb.AppendLine($"  {kv.Key,-8}: {string.Join(", ", kv.Value)}");
 
             _detailBlock.Text = sb.ToString();
+
+            // Render the docking map preview if available
+            RenderDockingMapPreview(_currentTest.ExpectedDockingMapSlots);
         }
         catch (Exception ex)
         {
@@ -553,5 +594,297 @@ internal sealed class DockingTestPlaybackWindow : ChromedWindow
             current = System.Windows.Media.VisualTreeHelper.GetParent(current);
         }
         return null;
+    }
+
+    private List<SlotButtonViewModel>? ParseExpectedDockingMap(JsonElement arrayElement, string sourcePanelId)
+    {
+        var slots = new List<SlotButtonViewModel>();
+        try
+        {
+            foreach (var item in arrayElement.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object) continue;
+
+                var label = item.TryGetProperty("label", out var lp) ? lp.GetString() : "";
+                var isSource = item.TryGetProperty("isSourcePanel", out var isp) && isp.GetBoolean();
+                var isExpansion = item.TryGetProperty("isExpansionButton", out var ieb) && ieb.GetBoolean();
+                var x = item.TryGetProperty("x", out var xp) ? xp.GetDouble() : 0;
+                var y = item.TryGetProperty("y", out var yp) ? yp.GetDouble() : 0;
+                var width = item.TryGetProperty("width", out var wp) ? wp.GetDouble() : 48;
+                var height = item.TryGetProperty("height", out var hp) ? hp.GetDouble() : 48;
+                var zoneStr = item.TryGetProperty("targetZone", out var zp) ? zp.GetString() : "Top";
+                var order = item.TryGetProperty("targetOrder", out var op) ? op.GetInt32() : 0;
+                var insertKindStr = item.TryGetProperty("insertKind", out var ikp) ? ikp.GetString() : "";
+                var isSeparator = item.TryGetProperty("isSeparator", out var isp2) && isp2.GetBoolean();
+
+                if (!Enum.TryParse<DockZone>(zoneStr, ignoreCase: true, out var zone))
+                    zone = DockZone.Top;
+
+                var insertKind = insertKindStr switch
+                {
+                    "InsertBefore" => SyntheticInsertKind.InsertBefore,
+                    "InsertAfter" => SyntheticInsertKind.InsertAfter,
+                    _ => SyntheticInsertKind.None
+                };
+
+                var slot = new SlotButtonViewModel(
+                    label ?? "",
+                    isSource,
+                    isExpansion,
+                    x,
+                    y,
+                    width,
+                    height,
+                    zone,
+                    order,
+                    sourcePanelId)
+                {
+                    IsSeparator = isSeparator,
+                    InsertKind = insertKind
+                };
+                slots.Add(slot);
+            }
+        }
+        catch { /* ignore parse errors */ }
+
+        return slots.Count > 0 ? slots : null;
+    }
+
+    private void RenderDockingMapPreview(List<SlotButtonViewModel>? slots)
+    {
+        _dockingMapCanvas.Children.Clear();
+        _slotBorders.Clear();
+        _selectedSlot = null;
+
+        if (slots is null || slots.Count == 0)
+        {
+            _dockingMapCanvas.Width = 0;
+            _dockingMapCanvas.Height = 0;
+            return;
+        }
+
+        bool isDark = AgentStatusCard.IsDarkTheme;
+        Color groundingColor = isDark ? Colors.Black : Colors.White;
+        Color polarColor = isDark ? Colors.White : Colors.Black;
+
+        // Calculate canvas size based on slots
+        double maxX = slots.Max(s => s.X + s.Width) + 8;
+        double maxY = slots.Max(s => s.Y + s.Height) + 8;
+        _dockingMapCanvas.Width = Math.Max(maxX, 300);
+        _dockingMapCanvas.Height = Math.Max(maxY, 200);
+
+        foreach (var slot in slots)
+        {
+            var border = BuildMapSlotElement(slot, groundingColor, polarColor, isDark);
+            Canvas.SetLeft(border, slot.X);
+            Canvas.SetTop(border, slot.Y);
+            _dockingMapCanvas.Children.Add(border);
+            _slotBorders[slot] = border;
+        }
+    }
+
+    private Border BuildMapSlotElement(SlotButtonViewModel slot, Color groundingColor, Color polarColor, bool isDark)
+    {
+        // Separator (decorative)
+        if (slot.IsSeparator)
+        {
+            return new Border
+            {
+                Width = slot.Width,
+                Height = slot.Height,
+                Background = MakeBrush(polarColor, isDark ? 0.15 : 0.30),
+                CornerRadius = new CornerRadius(slot.Width / 2.0),
+            };
+        }
+
+        // Source panel
+        if (slot.IsSourcePanel)
+        {
+            return new Border
+            {
+                Width = slot.Width,
+                Height = slot.Height,
+                Background = MakeBrush(groundingColor, 0.20),
+                BorderBrush = MakeBrush(polarColor, 0.10),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(3),
+                Tag = slot,
+            };
+        }
+
+        // Target button
+        var normalBg = MakeBrush(groundingColor, 0.70);
+        var normalBorder = MakeBrush(polarColor, 0.10);
+
+        var border = new Border
+        {
+            Width = slot.Width,
+            Height = slot.Height,
+            Background = normalBg,
+            BorderBrush = normalBorder,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(3),
+            Cursor = Cursors.Hand,
+            Tag = slot,
+        };
+
+        border.MouseEnter += (_, _) =>
+        {
+            border.Background = MakeBrush(groundingColor, 0.90);
+            border.BorderBrush = MakeBrush(polarColor, 0.50);
+        };
+
+        border.MouseLeave += (_, _) =>
+        {
+            if (_selectedSlot == slot)
+            {
+                border.Background = MakeBrush(Colors.Orange, 0.25);
+                border.BorderBrush = MakeBrush(Colors.Orange, 0.85);
+            }
+            else
+            {
+                border.Background = normalBg;
+                border.BorderBrush = normalBorder;
+            }
+        };
+
+        return border;
+    }
+
+    private static SolidColorBrush MakeBrush(Color color, double opacity) =>
+        new SolidColorBrush(Color.FromArgb((byte)Math.Round(opacity * 255), color.R, color.G, color.B));
+
+    private void OnCanvasMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        var pos = e.GetPosition(_dockingMapCanvas);
+
+        // Find which slot was clicked
+        SlotButtonViewModel? clickedSlot = null;
+        foreach (var kvp in _slotBorders)
+        {
+            var slot = kvp.Key;
+            if (pos.X >= slot.X && pos.X < slot.X + slot.Width &&
+                pos.Y >= slot.Y && pos.Y < slot.Y + slot.Height)
+            {
+                clickedSlot = slot;
+                break;
+            }
+        }
+
+        // Update selection
+        if (_selectedSlot != null && _slotBorders.TryGetValue(_selectedSlot, out var oldBorder))
+        {
+            oldBorder.BorderThickness = new Thickness(1);
+            bool isDark = AgentStatusCard.IsDarkTheme;
+            Color polarColor = isDark ? Colors.White : Colors.Black;
+            Color groundingColor = isDark ? Colors.Black : Colors.White;
+            oldBorder.BorderBrush = MakeBrush(polarColor, 0.10);
+            oldBorder.Background = MakeBrush(groundingColor, 0.70);
+        }
+
+        _selectedSlot = clickedSlot;
+        if (_selectedSlot != null && _slotBorders.TryGetValue(_selectedSlot, out var newBorder))
+        {
+            newBorder.BorderThickness = new Thickness(3);
+            newBorder.BorderBrush = new SolidColorBrush(Colors.Orange);
+            newBorder.Background = MakeBrush(Colors.Orange, 0.25);
+        }
+
+        _dockingMapCanvas.Focus();
+        e.Handled = true;
+    }
+
+    private void OnCanvasKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Delete && _selectedSlot != null)
+        {
+            DeleteSelectedSlot();
+            e.Handled = true;
+        }
+    }
+
+    private void DeleteSelectedSlot()
+    {
+        if (_selectedSlot == null || _currentTest == null)
+            return;
+
+        var slotsToDelete = _currentTest.ExpectedDockingMapSlots
+            ?.Where(s => s.Label == _selectedSlot.Label && 
+                         s.X == _selectedSlot.X && 
+                         s.Y == _selectedSlot.Y && 
+                         s.TargetZone == _selectedSlot.TargetZone &&
+                         s.TargetOrder == _selectedSlot.TargetOrder)
+            .ToList();
+
+        if (slotsToDelete is not null && slotsToDelete.Count > 0)
+        {
+            foreach (var slot in slotsToDelete)
+                _currentTest.ExpectedDockingMapSlots?.Remove(slot);
+
+            // Serialize and persist
+            SaveExpectedDockingMapToJson();
+
+            // Reload to show updated state
+            LoadTestCases();
+            _testList.SelectedIndex = _entries.FindIndex(e => e.FilePath == _currentTest.FilePath);
+        }
+    }
+
+    private void SaveExpectedDockingMapToJson()
+    {
+        if (_currentTest == null || _currentTest.ExpectedDockingMapSlots == null)
+            return;
+
+        try
+        {
+            var json = File.ReadAllText(_currentTest.FilePath);
+            
+            // Parse as JSON and rebuild
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            
+            // Create a new JSON object with all properties
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            var dict = new System.Collections.Generic.Dictionary<string, object?>();
+            
+            // Copy all existing properties except expectedDockingMap
+            foreach (var prop in root.EnumerateObject())
+            {
+                if (prop.Name != "expectedDockingMap")
+                {
+                    // For nested objects and arrays, we need to preserve them as JsonElement
+                    dict[prop.Name] = JsonSerializer.Deserialize<object>(prop.Value.GetRawText());
+                }
+            }
+            
+            // Build the new docking map array
+            var slotsArray = new System.Collections.Generic.List<object>();
+            foreach (var slot in _currentTest.ExpectedDockingMapSlots)
+            {
+                slotsArray.Add(new
+                {
+                    label = slot.Label,
+                    isSourcePanel = slot.IsSourcePanel,
+                    isExpansionButton = slot.IsExpansionButton,
+                    x = slot.X,
+                    y = slot.Y,
+                    width = slot.Width,
+                    height = slot.Height,
+                    targetZone = slot.TargetZone.ToString(),
+                    targetOrder = slot.TargetOrder,
+                    insertKind = slot.InsertKind.ToString(),
+                    isSeparator = slot.IsSeparator
+                });
+            }
+            
+            dict["expectedDockingMap"] = slotsArray;
+            
+            var updatedJson = JsonSerializer.Serialize(dict, options);
+            File.WriteAllText(_currentTest.FilePath, updatedJson);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error saving expectedDockingMap: {ex.Message}");
+        }
     }
 }

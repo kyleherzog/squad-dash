@@ -1,0 +1,38 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+C:\Program Files\dotnet\sdk\10.0.300-preview.0.26177.108\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.RuntimeIdentifierInference.targets(383,5): message NETSDK1057: You are using a preview version of .NET. See: https://aka.ms/dotnet-support-policy [D:\Drive\Source\SquadDash-public\SquadDash\SquadDash.csproj]
+C:\Program Files\dotnet\sdk\10.0.300-preview.0.26177.108\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.RuntimeIdentifierInference.targets(383,5): message NETSDK1057: You are using a preview version of .NET. See: https://aka.ms/dotnet-support-policy [D:\Drive\Source\SquadDash-public\VoiceHeuristics\VoiceHeuristics.csproj]
+C:\Program Files\dotnet\sdk\10.0.300-preview.0.26177.108\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.RuntimeIdentifierInference.targets(383,5): message NETSDK1057: You are using a preview version of .NET. See: https://aka.ms/dotnet-support-policy [D:\Drive\Source\SquadDash-public\SquadDash.Tests\SquadDash.Tests.csproj]
+  WorkingDirectory: D:\Drive\Source\SquadDash-public\Squad.SDK
+  ProcessStartInfo.WorkingDirectory: D:\Drive\Source\SquadDash-public\Squad.SDK\
+  VoiceHeuristics -> D:\Drive\Source\SquadDash-public\VoiceHeuristics\bin\Debug\net10.0\VoiceHeuristics.dll
+  SquadDash.Tests -> D:\Drive\Source\SquadDash-public\SquadDash.Tests\bin\Debug\net10.0-windows\SquadDash.Tests.dll
+  1898
+  SquadDash build ΓÇö 1.0.0.1898 (commit #1898)
+C:\Users\Mark\.nuget\packages\microsoft.visualstudio.javascript.sdk\1.0.4338480\Sdk\Sdk.targets(293,3): warning : Creating Warning @opentelemetry/sdk-node, (Package: @bradygaster/squad-sdk, Severity: high) [D:\Drive\Source\SquadDash-public\Squad.SDK\Squad.SDK.esproj]
+C:\Users\Mark\.nuget\packages\microsoft.visualstudio.javascript.sdk\1.0.4338480\Sdk\Sdk.targets(293,3): warning : Creating Warning Prometheus exporter process crash via malformed HTTP request, (Package: @opentelemetry/exporter-prometheus, Severity: high) [D:\Drive\Source\SquadDash-public\Squad.SDK\Squad.SDK.esproj]
+C:\Users\Mark\.nuget\packages\microsoft.visualstudio.javascript.sdk\1.0.4338480\Sdk\Sdk.targets(293,3): warning : Creating Warning @opentelemetry/exporter-prometheus, (Package: @opentelemetry/sdk-node, Severity: high) [D:\Drive\Source\SquadDash-public\Squad.SDK\Squad.SDK.esproj]
+C:\Users\Mark\.nuget\packages\microsoft.visualstudio.javascript.sdk\1.0.4338480\Sdk\Sdk.targets(293,3): warning : Creating Warning brace-expansion: Large numeric range defeats documented `max` DoS protection, (Package: brace-expansion, Severity: moderate) [D:\Drive\Source\SquadDash-public\Squad.SDK\Squad.SDK.esproj]
+C:\Users\Mark\.nuget\packages\microsoft.visualstudio.javascript.sdk\1.0.4338480\Sdk\Sdk.targets(293,3): warning : Creating Warning tmp has Path Traversal via unsanitized prefix/postfix that enables directory escape, (Package: tmp, Severity: high) [D:\Drive\Source\SquadDash-public\Squad.SDK\Squad.SDK.esproj]
+C:\Users\Mark\.nuget\packages\microsoft.visualstudio.javascript.sdk\1.0.4338480\Sdk\Sdk.targets(293,3): warning : Creating Warning ws: Uninitialized memory disclosure, (Package: ws, Severity: moderate) [D:\Drive\Source\SquadDash-public\Squad.SDK\Squad.SDK.esproj]
+  
+  > squad.sdk@1.0.0 build
+  > tsc --build
+  
+D:\Drive\Source\SquadDash-public\SquadDash\PanelDocking\DockingTestPlaybackWindow.cs(633,21): error CS1739: The best overload for 'SlotButtonViewModel' does not have a parameter named 'label' [D:\Drive\Source\SquadDash-public\SquadDash\SquadDash_wc2pfzbg_wpftmp.csproj]
+D:\Drive\Source\SquadDash-public\SquadDash\PanelDocking\DockingMapBuilder.cs(990,102): warning CS0472: The result of the expression is always 'true' since a value of type 'DockZone' is never equal to 'null' of type 'DockZone?' [D:\Drive\Source\SquadDash-public\SquadDash\SquadDash_wc2pfzbg_wpftmp.csproj]
+
+Build FAILED.
+
+C:\Users\Mark\.nuget\packages\microsoft.visualstudio.javascript.sdk\1.0.4338480\Sdk\Sdk.targets(293,3): warning : Creating Warning @opentelemetry/sdk-node, (Package: @bradygaster/squad-sdk, Severity: high) [D:\Drive\Source\SquadDash-public\Squad.SDK\Squad.SDK.esproj]
+C:\Users\Mark\.nuget\packages\microsoft.visualstudio.javascript.sdk\1.0.4338480\Sdk\Sdk.targets(293,3): warning : Creating Warning Prometheus exporter process crash via malformed HTTP request, (Package: @opentelemetry/exporter-prometheus, Severity: high) [D:\Drive\Source\SquadDash-public\Squad.SDK\Squad.SDK.esproj]
+C:\Users\Mark\.nuget\packages\microsoft.visualstudio.javascript.sdk\1.0.4338480\Sdk\Sdk.targets(293,3): warning : Creating Warning @opentelemetry/exporter-prometheus, (Package: @opentelemetry/sdk-node, Severity: high) [D:\Drive\Source\SquadDash-public\Squad.SDK\Squad.SDK.esproj]
+C:\Users\Mark\.nuget\packages\microsoft.visualstudio.javascript.sdk\1.0.4338480\Sdk\Sdk.targets(293,3): warning : Creating Warning brace-expansion: Large numeric range defeats documented `max` DoS protection, (Package: brace-expansion, Severity: moderate) [D:\Drive\Source\SquadDash-public\Squad.SDK\Squad.SDK.esproj]
+C:\Users\Mark\.nuget\packages\microsoft.visualstudio.javascript.sdk\1.0.4338480\Sdk\Sdk.targets(293,3): warning : Creating Warning tmp has Path Traversal via unsanitized prefix/postfix that enables directory escape, (Package: tmp, Severity: high) [D:\Drive\Source\SquadDash-public\Squad.SDK\Squad.SDK.esproj]
+C:\Users\Mark\.nuget\packages\microsoft.visualstudio.javascript.sdk\1.0.4338480\Sdk\Sdk.targets(293,3): warning : Creating Warning ws: Uninitialized memory disclosure, (Package: ws, Severity: moderate) [D:\Drive\Source\SquadDash-public\Squad.SDK\Squad.SDK.esproj]
+D:\Drive\Source\SquadDash-public\SquadDash\PanelDocking\DockingMapBuilder.cs(990,102): warning CS0472: The result of the expression is always 'true' since a value of type 'DockZone' is never equal to 'null' of type 'DockZone?' [D:\Drive\Source\SquadDash-public\SquadDash\SquadDash_wc2pfzbg_wpftmp.csproj]
+D:\Drive\Source\SquadDash-public\SquadDash\PanelDocking\DockingTestPlaybackWindow.cs(633,21): error CS1739: The best overload for 'SlotButtonViewModel' does not have a parameter named 'label' [D:\Drive\Source\SquadDash-public\SquadDash\SquadDash_wc2pfzbg_wpftmp.csproj]
+    7 Warning(s)
+    1 Error(s)
+
+Time Elapsed 00:00:08.18
