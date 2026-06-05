@@ -151,28 +151,7 @@
       "isSeparator": false,
       "isVirtualThin": false
     },
-    {
-      "zone": "Right 2",
-      "order": 0,
-      "x": 312,
-      "y": 16,
-      "width": 16,
-      "height": 128,
-      "panelId": "\u2014",
-      "isSeparator": false,
-      "isVirtualThin": true
-    },
-    {
-      "zone": "Right 3",
-      "order": 0,
-      "x": 0,
-      "y": 16,
-      "width": 16,
-      "height": 128,
-      "panelId": "\u2014",
-      "isSeparator": false,
-      "isVirtualThin": true
-    },
+
     {
       "zone": "Right 3",
       "order": 0,
