@@ -104,6 +104,7 @@ internal sealed class PanelDockingService
     // Width of the thin insertion-indicator strip used for both top-zone and empty side-zone
     // docking previews, keeping the visual language consistent across all drop targets.
     private const double InsertionIndicatorWidth = 8;
+    private const double InsertionIndicatorWindowInset = 4;
 
     // Saves each panel's original XAML Height binding so it can be restored when the
     // panel moves back to the Top zone after having been in a Left/Right zone.
@@ -2038,7 +2039,12 @@ internal sealed class PanelDockingService
                 double stripTop    = neighborRect.Top;
                 double stripHeight = neighborRect.Height;
 
+                DependencyObject? previewAnchor = container as DependencyObject ?? zoneGrid ?? _topZoneGrid;
                 var result = new Rect(x, stripTop, StripWidth, stripHeight);
+                if (!SideHasVisiblePanels(zone))
+                    result = ExpandPreviewHeightToOwnerWindow(result, previewAnchor);
+
+                result = ClampPreviewRectToOwnerWindow(result, previewAnchor);
                 SquadDashTrace.Write(TraceCategory.Docking,
                     $"GetColumnSlotRect(empty): zone={zone} x={x:F0} neighborRect={neighborRect} " +
                     $"stripTop={stripTop:F0} stripH={stripHeight:F0} → strip={result}");
@@ -2100,7 +2106,9 @@ internal sealed class PanelDockingService
         double stripTop    = columnRect.Top;
         double stripHeight = columnRect.Height;
 
-        var result = new Rect(stripX, stripTop, StripWidth, stripHeight);
+        var result = ClampPreviewRectToOwnerWindow(
+            new Rect(stripX, stripTop, StripWidth, stripHeight),
+            container as DependencyObject ?? zoneGrid);
         SquadDashTrace.Write(TraceCategory.Docking,
             $"GetSyntheticInsertScreenRect: zone={zone} kind={kind} columnRect={columnRect} → strip={result}");
         return result;
@@ -2171,7 +2179,9 @@ internal sealed class PanelDockingService
                         stripHeight = Math.Max(240, winRect2.Height / 3);
                 }
             }
-            return new Rect(gridRect.Right, gridRect.Top, StripW, stripHeight);
+            return ClampPreviewRectToOwnerWindow(
+                new Rect(gridRect.Right, gridRect.Top, StripW, stripHeight),
+                _topZoneGrid);
         }
 
         if (targetOrder < panelsInZone.Count)
@@ -2181,7 +2191,9 @@ internal sealed class PanelDockingService
             {
                 var r = GetScreenRect(el);
                 if (!r.IsEmpty)
-                    return new Rect(r.Left - StripW - 2, gridRect.Top, StripW, gridRect.Height);
+                    return ClampPreviewRectToOwnerWindow(
+                        new Rect(r.Left - StripW - 2, gridRect.Top, StripW, gridRect.Height),
+                        _topZoneGrid);
             }
         }
         else
@@ -2194,11 +2206,85 @@ internal sealed class PanelDockingService
                 var r = GetScreenRect(el);
                 if (!r.IsEmpty) rightX = r.Right + 2;
             }
-            return new Rect(rightX, gridRect.Top, StripW, gridRect.Height);
+            return ClampPreviewRectToOwnerWindow(
+                new Rect(rightX, gridRect.Top, StripW, gridRect.Height),
+                _topZoneGrid);
         }
 
         return Rect.Empty;
     }
+
+    private Rect ClampPreviewRectToOwnerWindow(Rect rect, DependencyObject? anchor)
+    {
+        if (rect.IsEmpty || anchor is null)
+            return rect;
+
+        var window = Window.GetWindow(anchor);
+        if (window is not FrameworkElement windowElement)
+            return rect;
+
+        var windowRect = GetScreenRect(windowElement);
+        if (windowRect.IsEmpty || rect.Width <= 0 || rect.Width > windowRect.Width)
+            return rect;
+
+        double minLeft = windowRect.Left + InsertionIndicatorWindowInset;
+        double maxLeft = windowRect.Right - rect.Width - InsertionIndicatorWindowInset;
+        if (maxLeft < minLeft)
+            return rect;
+
+        var clampedLeft = Math.Clamp(rect.Left, minLeft, maxLeft);
+        if (Math.Abs(clampedLeft - rect.Left) < 0.01)
+            return rect;
+
+        var clamped = new Rect(clampedLeft, rect.Top, rect.Width, rect.Height);
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"ClampPreviewRectToOwnerWindow: rect={rect} window={windowRect} → {clamped}");
+        return clamped;
+    }
+
+    private Rect ExpandPreviewHeightToOwnerWindow(Rect rect, DependencyObject? anchor)
+    {
+        if (rect.IsEmpty || anchor is null)
+            return rect;
+
+        var window = Window.GetWindow(anchor);
+        if (window is not FrameworkElement windowElement)
+            return rect;
+
+        var windowRect = GetScreenRect(windowElement);
+        if (windowRect.IsEmpty || windowRect.Bottom <= rect.Top)
+            return rect;
+
+        double expandedHeight = windowRect.Bottom - rect.Top;
+        if (expandedHeight <= rect.Height)
+            return rect;
+
+        var expanded = new Rect(rect.Left, rect.Top, rect.Width, expandedHeight);
+        SquadDashTrace.Write(TraceCategory.Docking,
+            $"ExpandPreviewHeightToOwnerWindow: rect={rect} window={windowRect} → {expanded}");
+        return expanded;
+    }
+
+    private bool SideHasVisiblePanels(DockZone zone)
+    {
+        if (_panelRegistry is null)
+            return false;
+
+        return CurrentLayout.Slots.Any(s =>
+            IsSameDockSide(s.Zone, zone) &&
+            _panelRegistry.TryGetValue(s.PanelId, out var el) &&
+            el.IsVisible);
+    }
+
+    private static bool IsSameDockSide(DockZone first, DockZone second) =>
+        (IsLeftSideZone(first) && IsLeftSideZone(second)) ||
+        (IsRightSideZone(first) && IsRightSideZone(second));
+
+    private static bool IsLeftSideZone(DockZone zone) => zone is
+        DockZone.Left or DockZone.Left2 or DockZone.Left3 or DockZone.Left4 or DockZone.Left5 or DockZone.Left6;
+
+    private static bool IsRightSideZone(DockZone zone) => zone is
+        DockZone.Right or DockZone.Right2 or DockZone.Right3 or DockZone.Right4 or DockZone.Right5 or DockZone.Right6;
 
     private static Rect GetScreenRect(FrameworkElement el)
     {

@@ -414,68 +414,7 @@ internal static class DockingMapBuilder
         SquadDashTrace.Write(TraceCategory.Docking,
             $"[docking-trace] LayoutSide {sideName}: Generated thins: {thinsDesc}");
 
-        // Generate cross-side thins only if this side has no occupied zones (except possibly within-side thins)
-        var occupiedOnThisSide = states.Where(s => s.Occupied).ToList();
-        if (occupiedOnThisSide.Count == 0)
-        {
-            GenerateCrossSideThins(thins, isLeft, topPanels, otherSideStates, currentLayout, sourcePanelId);
-        }
-
         return thins;
-    }
-
-    /// <summary>
-    /// Generates cross-side thin slots that allow moving panels to other occupied sides.
-    /// For example, if processing the Right side and the Top zone has panels, adds a thin for Top.
-    /// Similarly, if the Left side has occupied zones, adds thins for those zones.
-    /// </summary>
-    private static void GenerateCrossSideThins(
-        List<SyntheticThin> thins,
-        bool isLeft,
-        List<string> topPanels,
-        List<SideZoneState> otherSideStates,
-        DockLayout currentLayout,
-        string sourcePanelId)
-    {
-        var sideName = isLeft ? "Left" : "Right";
-        var otherSideName = isLeft ? "Right" : "Left";
-
-        // Check if Top zone has panels
-        if (topPanels.Count > 0)
-        {
-            // Don't add duplicate cross-side thins if they already exist
-            if (!thins.Any(t => t.TargetZone == DockZone.Top))
-            {
-                SquadDashTrace.Write(TraceCategory.Docking,
-                    $"[cross-side-thin] {sideName} side: Top zone is occupied, adding cross-side thin to Top@0");
-                
-                // Add a thin at the beginning for the Top zone
-                // Using a position of 0.0 as placeholder - the actual X position is recalculated in AddSyntheticThinSlots
-                thins.Add(new SyntheticThin(0.0, DockZone.Top, 0, SyntheticInsertKind.InsertBefore));
-            }
-        }
-
-        // Check for occupied zones on the other side
-        var occupiedOtherZones = otherSideStates.Where(s => s.Occupied && !s.Suppressed).ToList();
-        if (occupiedOtherZones.Count > 0)
-        {
-            var occupiedZonesDesc = string.Join(", ", occupiedOtherZones.Select(z => z.Zone));
-            SquadDashTrace.Write(TraceCategory.Docking,
-                $"[cross-side-thin] {sideName} side: {otherSideName} side has occupied zones: [{occupiedZonesDesc}]");
-
-            // Add thins for each occupied zone on the other side
-            foreach (var otherZone in occupiedOtherZones)
-            {
-                // Don't add duplicate cross-side thins if they already exist
-                if (!thins.Any(t => t.TargetZone == otherZone.Zone))
-                {
-                    SquadDashTrace.Write(TraceCategory.Docking,
-                        $"[cross-side-thin]   Adding cross-side thin to {otherZone.Zone}@0");
-                    
-                    thins.Add(new SyntheticThin(0.0, otherZone.Zone, 0, SyntheticInsertKind.InsertBefore));
-                }
-            }
-        }
     }
 
     private static List<SideSequenceItem> BuildSideSequence(
